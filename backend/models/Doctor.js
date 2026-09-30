@@ -1,12 +1,50 @@
 const mongoose = require('mongoose');
-const { options, ref, text } = require('./receptionistFields');
 
-const doctorSchema = new mongoose.Schema({
-  user: { ...ref('User'), unique: true },
-  registrationNumber: { ...text(40), uppercase: true, unique: true },
-  specialty: text(),
-  department: text(),
-  isActive: { type: Boolean, default: true },
-}, options);
+const doctorSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    specialization: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    department: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    room: {
+      type: String,
+      trim: true,
+    },
+    status: {
+      type: String,
+      enum: ['active', 'on_break', 'offline'],
+      default: 'offline',
+    },
+    dailyCapacity: {
+      type: Number,
+      default: 30,
+    },
+    avgConsultMinutes: {
+      type: Number,
+      default: 10,
+    },
+    workingHours: {
+      start: { type: String, default: '08:00' },
+      end: { type: String, default: '16:30' },
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Index for filtering doctors by department and status
+doctorSchema.index({ department: 1, status: 1 });
 
 module.exports = mongoose.model('Doctor', doctorSchema);
