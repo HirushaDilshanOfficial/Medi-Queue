@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
+const patientRoutes = require('./routes/patientRoutes');
+const doctorRoutes = require('./routes/doctorRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -16,6 +18,10 @@ app.use(express.json());
 
 // Routes
 app.use('/api/v1/auth', authRoutes);
+
+// Patient module
+app.use('/api/v1/patients', patientRoutes);
+app.use('/api/v1/doctors', doctorRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);
