@@ -31,7 +31,7 @@ export function ReportRow({ report, onPress, onDelete }: Props) {
         style={({ pressed }) => [styles.main, pressed && onPress ? styles.pressed : null]}
       >
         <View style={styles.iconWrap}>
-          <DesignImage name="clipboard" size={18} />
+          <DesignImage name="clipboard" size={18} color={PatientTheme.brand} />
         </View>
 
         <View style={styles.text}>
@@ -92,7 +92,7 @@ export function ReportActivityRow({
   return (
     <View style={styles.activityRow}>
       <View style={styles.activityIcon}>
-        <DesignImage name={icon} size={14} />
+          <DesignImage name={icon} size={14} color={PatientTheme.brandMid} />
       </View>
       <View style={styles.activityText}>
         <Text style={styles.activityTitle} numberOfLines={1}>

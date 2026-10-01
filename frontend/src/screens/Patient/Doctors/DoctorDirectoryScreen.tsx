@@ -147,7 +147,7 @@ export function DoctorDirectoryScreen() {
           <>
             <View style={styles.searchRow}>
               <View style={styles.search}>
-                <DesignImage name="search" size={15} />
+                <DesignImage name="search" size={15} color={PatientTheme.textMuted} />
                 <TextInput
                   value={search}
                   onChangeText={setSearch}

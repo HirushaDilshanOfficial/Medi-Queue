@@ -13,7 +13,7 @@ export function BookingBanner({ metaPrimary, metaSecondary, onPress }: Props) {
   return (
     <View style={styles.root}>
       <View style={styles.topRow}>
-        <DesignImage name="hourglass" size={14} />
+          <DesignImage name="hourglass" size={14} color={PatientTheme.warning} />
         <Text style={styles.kicker} numberOfLines={1}>
           Instant OPD Slot Reservation
         </Text>

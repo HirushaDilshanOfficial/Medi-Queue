@@ -27,13 +27,14 @@ export function QualityStrip({ stats }: Props) {
 }
 
 const styles = StyleSheet.create({
+  // Asiri presents its quality figures as navy stat boxes separated by a 2px
+  // cyan rule, rather than a light card with hairline dividers.
   root: {
     flexDirection: 'row',
-    backgroundColor: PatientTheme.surface,
+    backgroundColor: PatientTheme.brand,
     borderRadius: PatientTheme.radiusLg,
-    borderWidth: 1,
-    borderColor: PatientTheme.border,
-    paddingVertical: PatientTheme.spaceMd,
+    paddingVertical: PatientTheme.spaceLg,
+    overflow: 'hidden',
   },
   cell: {
     flex: 1,
@@ -41,17 +42,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: PatientTheme.spaceSm,
   },
   cellBorder: {
-    borderLeftWidth: 1,
-    borderLeftColor: PatientTheme.border,
+    borderLeftWidth: 2,
+    borderLeftColor: PatientTheme.accentLine,
   },
   value: {
-    color: PatientTheme.brand,
-    fontSize: PatientTheme.designType.section,
-    fontWeight: '800',
+    color: PatientTheme.textOnBrand,
+    fontSize: PatientTheme.fontSizeHeading + 4,
+    fontWeight: PatientTheme.weight.heavy,
   },
   label: {
     marginTop: 2,
-    color: PatientTheme.textSecondary,
+    color: PatientTheme.accentSoft,
     fontSize: PatientTheme.designType.caption,
     textAlign: 'center',
   },

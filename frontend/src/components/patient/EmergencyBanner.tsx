@@ -22,7 +22,7 @@ export function EmergencyBanner({ helpline }: Props) {
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
       <View style={styles.iconWrap}>
-        <DesignImage name="medical" size={20} />
+          <DesignImage name="medical" size={20} color={PatientTheme.emergency} />
       </View>
       <View style={styles.text}>
         <Text style={styles.title}>24/7 Emergency &amp; Helpline</Text>

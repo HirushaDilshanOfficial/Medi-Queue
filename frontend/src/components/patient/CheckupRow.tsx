@@ -19,7 +19,7 @@ export function CheckupRow({ title, badge, icon = 'calendar', onPress }: Props) 
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
       <View style={styles.iconWrap}>
-        <DesignImage name={icon} size={16} />
+          <DesignImage name={icon} size={16} color={PatientTheme.brand} />
       </View>
       <Text style={styles.title} numberOfLines={1}>
         {title}

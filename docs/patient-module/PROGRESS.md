@@ -7,31 +7,69 @@ and staff-queue code is not modified. Authentication is owned by another team.
 
 ## Design source of truth
 
-The five Figma exports in `HighFedilityUI/` are the UI reference. Colours were extracted
-directly from the PDF content streams (`scn` operators) rather than guessed, and they
-**differ from the provisional palette** in the original written plan:
+> **Superseded.** The five Figma exports in `HighFedilityUI/` were the original
+> reference, but by agreement they are **no longer the source of truth**. The visual
+> language is now derived from the public Asiri Health design system, adapted for a
+> mobile patient app. The old PDF-derived values are kept below for history only.
+> Note that `HighFedilityUI/` is not present in the current repository.
+
+### Current: Asiri-inspired tokens
+
+Taken from `https://asirihealth.com/public/frontend/asiri_health/css/asiri.css`:
+
+| Role | Hex | Notes |
+| --- | --- | --- |
+| Brand (navy) | `#002B4C` | top bar, footer, stat boxes, headings |
+| Brand deep | `#001A2E` | gradient terminus |
+| Brand raised | `#0D2E4F` | |
+| Brand hover | `#0D5CA3` | link hover |
+| Accent (teal) | `#47CCC8` | 5px card underlines, avatar rings |
+| Accent soft (mint) | `#62D2C3` | secondary accent |
+| Brand mid | `#3FBCB9` | |
+| Brand sky (periwinkle) | `#8393CA` | primary button fill |
+| Hairline | `#00FFFF` | **decorative only** — 2px rules and dividers, never text |
+| Emergency | `#FF2525` | hotline and Accident & Emergency |
+| Warning | `#E5A748` | |
+| Page background | `#F4F6F8` | |
+| Surface / muted | `#FFFFFF` / `#F5F5F5` | |
+| Text primary | `#002B4C` | Asiri sets headings in navy |
+| Text secondary / muted | `#5A6570` / `#999999` | |
+
+Pure `#00FFFF` fails contrast on white, so `accentLine` is restricted to borders and
+dividers. Success/danger greens and reds are kept app-appropriate rather than copied.
+
+Asiri's other signatures carried over: navy stat boxes with 2px cyan dividers
+(`QualityStrip`), pill controls, heavy `800`–`900` display weights (`PatientTheme.weight`),
+and teal-ringed avatars (`DashboardHeader`).
+
+**Attribution.** Medi-Queue is not affiliated with or endorsed by Asiri Health. Only
+the generic visual language is borrowed. No Asiri logo, photograph, or trademark is used;
+all Medi-Queue artwork and naming is original.
+
+### Iconography
+
+The 23 flat 96×96 PNG icons were replaced with an **original 24×24 stroke set** in
+`frontend/src/components/patient/icons/PatientIcons.tsx` (one shared grid, 1.8 stroke,
+round caps). They are tintable via a `color` prop, so no icon carries a baked-in colour.
+`DesignImage` keeps its existing `name`/`size`/`style` API, so all call sites are
+unchanged. The three photo tiles (`wellness`, `screening`, `spine` rasters used by
+`EventCard`) are still `require`d from `dashboardContent.ts` and are unchanged.
+
+### Previous: Figma PDF (superseded)
+
+Colours were originally extracted from the PDF content streams (`scn` operators):
 
 | Role | Hex |
 | --- | --- |
 | Page background | `#F3FAFF` |
-| Card / surface | `#FFFFFF` |
-| Brand deep | `#004C5B` |
-| Brand | `#00696E` |
-| Brand mid / raised | `#1A6779` / `#176577` |
-| Accent (bright cyan) | `#84F4FB` |
-| Accent soft | `#B6EBFB` |
-| Surface tints | `#E6F6FF`, `#E0F0F9` |
-| Borders | `#DAEBF3`, `#CAD0D5` |
+| Brand deep / brand | `#004C5B` / `#00696E` |
+| Accent / accent soft | `#84F4FB` / `#B6EBFB` |
 | Text primary | `#0E1E23` |
-| Text secondary | `#6F797C` |
 
-All of these live in `frontend/src/constants/PatientTheme.ts`. The shared
-`Colors.ts` is untouched.
-
-Gradients and shadows are baked into the PDF rasters, so they are re-created in
-`PatientTheme` as `gradientQueue` / `gradientHeader` / `gradientCard` plus two
-elevation presets. Exact font families could not be recovered (the PDF text uses
-subset font encodings), so system fonts with the extracted weight scale are used.
+Gradients and shadows are re-created in `PatientTheme` as `gradientQueue` /
+`gradientHeader` / `gradientCard` plus two elevation presets. Font families could not
+be recovered (the PDF uses subset encodings), so system fonts with the extracted
+weight scale are used. The shared `Colors.ts` remains untouched.
 
 ## Login handoff contract (owned by the auth team)
 

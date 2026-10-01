@@ -288,7 +288,7 @@ function Tag({
 }) {
   return (
     <View style={[styles.tag, { backgroundColor: tone }]}>
-      <DesignImage name={icon} size={11} />
+      <DesignImage name={icon} size={11} color={PatientTheme.brandMid} />
       <Text style={[styles.tagLabel, { color }]}>{label}</Text>
     </View>
   );

@@ -41,7 +41,7 @@ export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
   return (
     <View style={styles.root}>
       <LinearGradient
-        colors={['#004C5B', '#00696E', '#0E1E23']}
+        colors={PatientTheme.gradientQueue}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.top}
@@ -63,7 +63,7 @@ export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
 
         <Text style={styles.headline}>{headline}</Text>
         <View style={styles.sublineRow}>
-          <DesignImage name="clock" size={13} />
+          <DesignImage name="clock" size={13} color={PatientTheme.accentSoft} />
           <Text style={styles.subline}>{subline}</Text>
         </View>
 
@@ -123,7 +123,7 @@ function Detail({
 }) {
   return (
     <View style={styles.detail}>
-      <DesignImage name={icon} size={14} />
+      <DesignImage name={icon} size={14} color={PatientTheme.brandMid} />
       <View style={styles.detailText}>
         <Text style={styles.detailLabel}>{label}</Text>
         <Text style={styles.detailValue} numberOfLines={1}>

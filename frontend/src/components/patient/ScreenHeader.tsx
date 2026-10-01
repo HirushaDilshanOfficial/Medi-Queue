@@ -26,7 +26,7 @@ export function ScreenHeader({ title, subtitle, showBack = false, action }: Prop
           hitSlop={8}
           style={({ pressed }) => [styles.back, pressed && styles.pressed]}
         >
-          <DesignImage name="arrow" size={18} style={styles.chevron} />
+          <DesignImage name="arrow" size={18} color={PatientTheme.brand} style={styles.chevron} />
         </Pressable>
       ) : null}
 

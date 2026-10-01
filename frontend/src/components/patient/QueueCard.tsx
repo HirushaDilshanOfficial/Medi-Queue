@@ -38,13 +38,13 @@ export function QueueCard({
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
       <LinearGradient
-        colors={['#1A6779', '#176577', '#0E1E23']}
+        colors={PatientTheme.gradientQueue}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.body}
       >
         <View style={styles.headerRow}>
-          <DesignImage name="ticket" size={20} />
+          <DesignImage name="ticket" size={20} color={PatientTheme.accent} />
           <View style={styles.headerText}>
             <Text style={styles.label}>{hasPass ? 'ACTIVE QUEUE' : 'LIVE QUEUE'}</Text>
             <Text style={styles.clinic} numberOfLines={1}>
@@ -67,20 +67,20 @@ export function QueueCard({
                 <Text style={styles.number}>{tokenNumber}</Text>
               </View>
               <View style={styles.roomBlock}>
-                <DesignImage name="badge" size={14} />
+                <DesignImage name="badge" size={14} color={PatientTheme.accentSoft} />
                 <Text style={styles.room}>{room ?? 'Room assigned at the desk'}</Text>
               </View>
             </View>
 
             <View style={styles.etaRow}>
-              <DesignImage name="clock" size={13} />
+              <DesignImage name="clock" size={13} color={PatientTheme.accentSoft} />
               <Text style={styles.eta}>{eta ?? 'We will update your turn shortly'}</Text>
             </View>
           </>
         ) : (
           <View style={styles.checkInRow}>
             <Text style={styles.checkInLabel}>Open the queue to check in</Text>
-            <DesignImage name="arrow" size={16} style={styles.checkInArrow} />
+            <DesignImage name="arrow" size={16} color={PatientTheme.accent} style={styles.checkInArrow} />
           </View>
         )}
       </LinearGradient>

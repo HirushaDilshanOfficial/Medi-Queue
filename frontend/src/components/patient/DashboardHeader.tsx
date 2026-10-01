@@ -18,7 +18,7 @@ export function DashboardHeader({
 }: Props) {
   return (
     <View style={styles.root}>
-      <DesignImage name="medical" size={30} style={styles.logo} />
+      <DesignImage name="medical" size={30} color={PatientTheme.accent} style={styles.logo} />
       <View style={styles.titles}>
         <Text style={styles.eyebrow}>NATIONAL OPD</Text>
         <Text style={styles.title}>Home Dashboard</Text>
@@ -37,7 +37,7 @@ export function DashboardHeader({
           hitSlop={8}
           style={styles.iconButton}
         >
-          <DesignImage name="bell" size={20} />
+          <DesignImage name="bell" size={20} color={PatientTheme.brand} />
         </Pressable>
 
         <Pressable
@@ -120,6 +120,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: PatientTheme.brand,
+    // Asiri rings avatars in the teal accent.
+    borderWidth: 2,
+    borderColor: PatientTheme.accent,
   },
   avatarText: {
     color: PatientTheme.textOnBrand,

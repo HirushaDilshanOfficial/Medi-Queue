@@ -47,7 +47,7 @@ export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn
 
       {live && appointment.status === 'checked_in' ? (
         <View style={styles.liveStrip}>
-          <DesignImage name="ticket" size={13} />
+          <DesignImage name="ticket" size={13} color={PatientTheme.brandMid} />
           <Text style={styles.liveText}>
             Queue {appointment.tokenNumber ? `A-${String(appointment.tokenNumber).padStart(3, '0')}` : ''} ·{' '}
             {live.position <= 1 ? 'You are next' : `${live.peopleAhead} ahead`}

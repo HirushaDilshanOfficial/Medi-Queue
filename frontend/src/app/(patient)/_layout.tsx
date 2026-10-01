@@ -7,8 +7,8 @@ import { DesignImage, type DesignImageName } from '../../components/patient/Desi
 type IconProps = { color: ColorValue; size: number };
 
 function tabIcon(name: DesignImageName) {
-  return function TabBarIcon({ size }: IconProps) {
-    return <DesignImage name={name} size={size} />;
+  return function TabBarIcon({ color, size }: IconProps) {
+    return <DesignImage name={name} size={size} color={color} />;
   };
 }
 
@@ -34,7 +34,7 @@ export default function PatientTabsLayout() {
         },
         tabBarLabelStyle: {
           fontSize: PatientTheme.designType.caption,
-          fontWeight: '700',
+          fontWeight: PatientTheme.weight.bold,
         },
       }}
     >

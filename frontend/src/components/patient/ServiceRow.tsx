@@ -21,7 +21,7 @@ export function ServiceRow({ label, caption, badge, icon, onPress, style }: Prop
       style={({ pressed }) => [styles.root, pressed && styles.pressed, style]}
     >
       <View style={styles.iconWrap}>
-        <DesignImage name={icon} size={20} />
+        <DesignImage name={icon} size={20} color={PatientTheme.brand} />
       </View>
       <View style={styles.text}>
         <Text style={styles.label} numberOfLines={1}>
@@ -38,7 +38,7 @@ export function ServiceRow({ label, caption, badge, icon, onPress, style }: Prop
           <Text style={styles.badgeText}>{badge}</Text>
         </View>
       ) : (
-        <DesignImage name="arrow" size={14} style={styles.arrow} />
+        <DesignImage name="arrow" size={14} color={PatientTheme.brandMid} style={styles.arrow} />
       )}
     </Pressable>
   );
@@ -60,12 +60,12 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: PatientTheme.surfaceMuted,
+    backgroundColor: PatientTheme.surfaceCool,
   },
   text: {
     flex: 1,
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   label: {
     color: PatientTheme.textPrimary,
     fontSize: PatientTheme.designType.body,
-    fontWeight: '600',
+    fontWeight: PatientTheme.weight.bold,
   },
   caption: {
     marginTop: 1,
@@ -89,9 +89,9 @@ const styles = StyleSheet.create({
   badgeText: {
     color: PatientTheme.success,
     fontSize: PatientTheme.designType.caption,
-    fontWeight: '700',
+    fontWeight: PatientTheme.weight.semibold,
   },
   arrow: {
-    opacity: 0.5,
+    opacity: 0.7,
   },
 });

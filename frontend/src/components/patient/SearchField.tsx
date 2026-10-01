@@ -15,7 +15,7 @@ export function SearchField({ onPress }: Props) {
       accessibilityLabel="Search doctor or clinic"
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
-      <DesignImage name="search" size={18} />
+          <DesignImage name="search" size={18} color={PatientTheme.textMuted} />
       <Text style={styles.placeholder}>Search doctor or clinic</Text>
     </Pressable>
   );

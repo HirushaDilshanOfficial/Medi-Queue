@@ -178,7 +178,7 @@ export function LiveQueueScreen() {
         ) : todaysAppointment ? (
           <View style={styles.checkInCard}>
             <View style={styles.checkInHeader}>
-              <DesignImage name="calendar" size={20} />
+              <DesignImage name="calendar" size={20} color={PatientTheme.brand} />
               <View style={styles.checkInText}>
                 <Text style={styles.checkInTitle}>You have a booking today</Text>
                 <Text style={styles.checkInSub}>
@@ -307,7 +307,7 @@ function Notice({
 
   return (
     <View style={[styles.notice, { backgroundColor: palette.background }]}>
-      <DesignImage name={icon} size={16} />
+      <DesignImage name={icon} size={16} color={palette.color} />
       <View style={styles.noticeText}>
         <Text style={[styles.noticeTitle, { color: palette.color }]}>{title}</Text>
         <Text style={styles.noticeBody}>{body}</Text>

@@ -19,7 +19,7 @@ export function SpecialtyCard({ label, icon, onPress, width = 82 }: Props) {
       style={({ pressed }) => [styles.root, { width }, pressed && styles.pressed]}
     >
       <View style={styles.iconBubble}>
-        <DesignImage name={icon} size={26} />
+          <DesignImage name={icon} size={26} color={PatientTheme.brand} />
       </View>
       <Text style={styles.label} numberOfLines={2}>
         {label}

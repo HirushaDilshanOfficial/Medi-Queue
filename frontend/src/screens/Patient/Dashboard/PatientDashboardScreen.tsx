@@ -241,7 +241,7 @@ export function PatientDashboardScreen() {
               label={tile.label}
               caption={tile.caption}
               width={tileW}
-              icon={<DesignImage name={tile.icon} size={24} />}
+              icon={<DesignImage name={tile.icon} size={24} color={PatientTheme.brand} />}
               onPress={() => router.push('/(patient)/doctors')}
             />
           ))}

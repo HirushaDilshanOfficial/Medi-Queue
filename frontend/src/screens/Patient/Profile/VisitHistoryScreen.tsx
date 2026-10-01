@@ -163,7 +163,7 @@ function VisitCard({ visit }: { visit: VisitRecord }) {
 
       {visit.reportCount > 0 ? (
         <View style={styles.reportLink}>
-          <DesignImage name="clipboard" size={12} />
+          <DesignImage name="clipboard" size={12} color={PatientTheme.brandMid} />
           <Text style={styles.reportLinkText}>
             {visit.reportCount} {visit.reportCount === 1 ? 'report' : 'reports'} filed
           </Text>

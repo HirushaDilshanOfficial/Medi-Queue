@@ -46,21 +46,21 @@ export function DoctorCard({ doctor, onPress }: Props) {
 
         <View style={styles.metaRow}>
           <View style={styles.metaItem}>
-            <DesignImage name="badge" size={12} />
+            <DesignImage name="badge" size={12} color={PatientTheme.brandMid} />
             <Text style={styles.meta} numberOfLines={1}>
               {doctor.department}
             </Text>
           </View>
           {doctor.room ? (
             <View style={styles.metaItem}>
-              <DesignImage name="home" size={12} />
+              <DesignImage name="home" size={12} color={PatientTheme.textMuted} />
               <Text style={styles.meta}>{doctor.room}</Text>
             </View>
           ) : null}
         </View>
       </View>
 
-      <DesignImage name="arrow" size={16} style={styles.chevron} />
+      <DesignImage name="arrow" size={16} color={PatientTheme.brandMid} style={styles.chevron} />
     </Pressable>
   );
 }

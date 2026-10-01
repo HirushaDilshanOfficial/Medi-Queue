@@ -26,7 +26,7 @@ type MessageProps = {
 export function MessageState({ icon = 'stethoscope', title, description, actionLabel, onAction }: MessageProps) {
   return (
     <View style={styles.centered}>
-      <DesignImage name={icon} size={44} />
+      <DesignImage name={icon} size={44} color={PatientTheme.brandMid} />
       <Text style={styles.centeredTitle}>{title}</Text>
       <Text style={styles.centeredBody}>{description}</Text>
       {actionLabel && onAction ? (
