@@ -31,4 +31,17 @@ const protect = async (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+// Role-based access control — use AFTER protect so req.user is available
+const authorizeRoles = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      res.status(403);
+      return next(
+        new Error(`Access denied. Required role(s): ${roles.join(', ')}`)
+      );
+    }
+    next();
+  };
+};
+
+module.exports = { protect, authorizeRoles };
