@@ -5,27 +5,38 @@ import { PatientTheme } from '../../constants/PatientTheme';
 type QuickActionProps = {
   label: string;
   caption?: string;
-  icon: string;
+  icon: React.ReactNode;
   onPress?: () => void;
   style?: ViewStyle;
+  width?: number;
 };
 
-export function QuickAction({ label, caption, icon, onPress, style }: QuickActionProps) {
+export function QuickAction({
+  label,
+  caption,
+  icon,
+  onPress,
+  style,
+  width = 82,
+}: QuickActionProps) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [styles.container, pressed && styles.pressed, style]}
+      style={({ pressed }) => [
+        styles.container,
+        { width },
+        pressed && styles.pressed,
+        style,
+      ]}
     >
-      <View style={styles.iconWrap}>
-        <Text style={styles.icon}>{icon}</Text>
-      </View>
-      <Text style={styles.label} numberOfLines={1}>
+      <View style={styles.iconWrap}>{icon}</View>
+      <Text style={styles.label} numberOfLines={2}>
         {label}
       </Text>
       {caption ? (
-        <Text style={styles.caption} numberOfLines={1}>
+        <Text style={styles.caption} numberOfLines={2}>
           {caption}
         </Text>
       ) : null}
@@ -35,40 +46,34 @@ export function QuickAction({ label, caption, icon, onPress, style }: QuickActio
 
 const styles = StyleSheet.create({
   container: {
-    width: 104,
     backgroundColor: PatientTheme.surface,
     borderRadius: PatientTheme.radiusLg,
     borderWidth: 1,
     borderColor: PatientTheme.border,
     paddingVertical: PatientTheme.spaceMd,
     paddingHorizontal: PatientTheme.spaceSm,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   pressed: {
     opacity: 0.75,
   },
   iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: PatientTheme.surfaceMuted,
-    alignItems: 'center',
+    width: 32,
+    height: 32,
+    alignItems: 'flex-start',
     justifyContent: 'center',
     marginBottom: PatientTheme.spaceSm,
   },
-  icon: {
-    fontSize: 20,
-  },
   label: {
-    fontSize: PatientTheme.fontSizeCaption,
+    fontSize: PatientTheme.designType.caption,
     fontWeight: '700',
     color: PatientTheme.textPrimary,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   caption: {
     marginTop: 2,
-    fontSize: PatientTheme.fontSizeMicro,
+    fontSize: PatientTheme.designType.caption,
     color: PatientTheme.textSecondary,
-    textAlign: 'center',
+    textAlign: 'left',
   },
 });

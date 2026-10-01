@@ -1,6 +1,7 @@
 // Medi-Queue — Patient module theme
-// Palette values are extracted directly from the Figma exports in HighFedilityUI/,
-// so this file intentionally does not reuse the shared Colors.ts palette.
+// Palette values are extracted directly from the Patient Dashboard design PDF
+// (C:\Users\my\Downloads\Untitled (7)\Patient Dashboard.pdf), so this file
+// intentionally does not reuse the shared Colors.ts palette.
 
 export const PatientTheme = {
   // Brand
@@ -10,6 +11,7 @@ export const PatientTheme = {
   brandRaised: '#176577',
   accent: '#84F4FB',
   accentSoft: '#B6EBFB',
+  brandSky: '#8DD0E5',
 
   // Neutrals
   background: '#F3FAFF',
@@ -56,7 +58,7 @@ export const PatientTheme = {
   spaceXl: 24,
   spaceXxl: 32,
 
-  // Type scale
+  // Type scale (legacy, kept for the other patient screens)
   fontSizeDisplay: 34,
   fontSizeTitle: 24,
   fontSizeHeading: 18,
@@ -64,6 +66,16 @@ export const PatientTheme = {
   fontSizeBody: 14,
   fontSizeCaption: 12,
   fontSizeMicro: 10,
+
+  // Type scale extracted from the Patient Dashboard design PDF.
+  // Layout is authored against these, so keep them separate from the legacy scale.
+  designType: {
+    hero: 22,
+    section: 18,
+    item: 14,
+    body: 12,
+    caption: 11,
+  } as const,
 
   // Shadows
   shadowCard: {

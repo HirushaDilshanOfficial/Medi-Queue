@@ -1,13 +1,21 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Text, type ColorValue } from 'react-native';
+import type { ColorValue } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
+import { DesignImage, type DesignImageName } from '../../components/patient/DesignImage';
 
 type IconProps = { color: ColorValue; size: number };
 
-function TabIcon({ glyph, color, size }: IconProps & { glyph: string }) {
-  return <Text style={{ color, fontSize: size }}>{glyph}</Text>;
+function tabIcon(name: DesignImageName) {
+  return function TabBarIcon({ size }: IconProps) {
+    return <DesignImage name={name} size={size} />;
+  };
 }
+
+const HomeIcon = tabIcon('home');
+const DoctorsIcon = tabIcon('stethoscope');
+const QueueIcon = tabIcon('ticket');
+const ProfileIcon = tabIcon('profile');
 
 export default function PatientTabsLayout() {
   return (
@@ -25,7 +33,7 @@ export default function PatientTabsLayout() {
           paddingTop: 8,
         },
         tabBarLabelStyle: {
-          fontSize: PatientTheme.fontSizeMicro,
+          fontSize: PatientTheme.designType.caption,
           fontWeight: '700',
         },
       }}
@@ -34,36 +42,28 @@ export default function PatientTabsLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon glyph="🏠" color={color} size={size} />
-          ),
+          tabBarIcon: HomeIcon,
         }}
       />
       <Tabs.Screen
         name="doctors"
         options={{
           title: 'Doctors',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon glyph="🔍" color={color} size={size} />
-          ),
+          tabBarIcon: DoctorsIcon,
         }}
       />
       <Tabs.Screen
         name="queue"
         options={{
           title: 'Queue',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon glyph="🎫" color={color} size={size} />
-          ),
+          tabBarIcon: QueueIcon,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon glyph="👤" color={color} size={size} />
-          ),
+          tabBarIcon: ProfileIcon,
         }}
       />
     </Tabs>

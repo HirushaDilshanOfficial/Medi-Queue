@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -14,22 +14,42 @@ import { PatientTheme } from '../../../constants/PatientTheme';
 import { patientApi } from '../../../services/patientApi';
 import { HttpError } from '../../../services/http';
 import type { DashboardPayload } from '../../../types/patient';
-import { GradientCard, Card } from '../../../components/patient/GradientCard';
-import { StatCard } from '../../../components/patient/StatCard';
+import { DashboardHeader } from '../../../components/patient/DashboardHeader';
+import { GreetingBlock } from '../../../components/patient/GreetingBlock';
+import { QueueCard } from '../../../components/patient/QueueCard';
+import { BookingBanner } from '../../../components/patient/BookingBanner';
+import { SearchField } from '../../../components/patient/SearchField';
+import { CheckupRow } from '../../../components/patient/CheckupRow';
 import { QuickAction } from '../../../components/patient/QuickAction';
-import { Badge } from '../../../components/patient/Badge';
+import { SectionHeader } from '../../../components/patient/SectionHeader';
+import { SpecialtyCard } from '../../../components/patient/SpecialtyCard';
+import { EventCard } from '../../../components/patient/EventCard';
+import { DesignImage } from '../../../components/patient/DesignImage';
+import {
+  ACTION_TILES,
+  SPECIALTIES,
+  EVENTS,
+  DESIGN_FALLBACK,
+} from './dashboardContent';
 
-function greetingFor(hour: number): string {
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+const TILE_GAP = 8;
+const GRID_GAP = PatientTheme.spaceMd;
+
+function firstNameOf(fullName: string | null | undefined): string | null {
+  if (!fullName) return null;
+  const trimmed = fullName.trim();
+  if (!trimmed) return null;
+  return trimmed.split(/\s+/)[0];
 }
 
-function firstNameOf(fullName: string | null | undefined): string {
-  if (!fullName) return 'there';
-  const trimmed = fullName.trim();
-  if (!trimmed) return 'there';
-  return trimmed.split(/\s+/)[0];
+function tileWidth(count: number): number {
+  const available = 414 - 32 - TILE_GAP * (count - 1);
+  return Math.floor(available / count);
+}
+
+function gridWidth(count: number, columns: number): number {
+  const available = 414 - 32 - GRID_GAP * (columns - 1);
+  return Math.floor(available / columns);
 }
 
 export function PatientDashboardScreen() {
@@ -40,6 +60,13 @@ export function PatientDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  // Keep the daypart label correct if the app stays open across noon or evening.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'refresh') setRefreshing(true);
@@ -86,15 +113,37 @@ export function PatientDashboardScreen() {
   }, []);
 
   const patient = data?.patient ?? null;
-  const stats = data?.stats ?? null;
   const next = data?.nextAppointment ?? null;
+  const activePass = data?.stats?.activePass ?? null;
+
+  const greetingName = useMemo(
+    () => firstNameOf(patient?.fullName) ?? DESIGN_FALLBACK.greetingName,
+    [patient?.fullName],
+  );
+
+  const tileW = useMemo(() => tileWidth(ACTION_TILES.length), []);
+  const specialtyW = useMemo(() => gridWidth(SPECIALTIES.length, 4), []);
+  const eventW = useMemo(() => gridWidth(EVENTS.length, 2), []);
+
+  const queueClinicName = activePass?.department
+    ? `${activePass.department} Queue`
+    : DESIGN_FALLBACK.clinicName;
+  const queueSubline = activePass
+    ? `Current Queue ${activePass.position} of ${activePass.status}`
+    : DESIGN_FALLBACK.clinicSubline;
+  const queueToken = activePass?.tokenNumber ?? DESIGN_FALLBACK.tokenNumber;
+
+  const checkupTitle = next?.doctorName
+    ? `Checkup with ${next.doctorName}`
+    : DESIGN_FALLBACK.checkupTitle;
+  const checkupBadge = next?.date ?? DESIGN_FALLBACK.checkupBadge;
 
   return (
     <View style={styles.root}>
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + PatientTheme.spaceLg },
+          { paddingTop: insets.top + PatientTheme.spaceMd },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -106,40 +155,9 @@ export function PatientDashboardScreen() {
           />
         }
       >
-        {/* ---- HEADER / GREETING ---- */}
-        <GradientCard variant="header" style={styles.header}>
-          <View style={styles.headerTop}>
-            <View style={styles.headerText}>
-              <Text style={styles.greeting}>
-                {greetingFor(new Date().getHours())}
-              </Text>
-              <Text style={styles.name} numberOfLines={1}>
-                {patient ? firstNameOf(patient.fullName) : 'there'}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => router.push('/(patient)/profile')}
-              accessibilityRole="button"
-              accessibilityLabel="Open profile"
-              style={styles.avatar}
-            >
-              <Text style={styles.avatarText}>
-                {patient ? firstNameOf(patient.fullName)[0]?.toUpperCase() : 'P'}
-              </Text>
-            </Pressable>
-          </View>
+        <DashboardHeader />
 
-          <View style={styles.headerMeta}>
-            <Badge
-              label={patient?.district || 'Sri Lanka'}
-              tone="brand"
-              style={styles.headerBadge}
-            />
-            {patient?.bloodGroup ? (
-              <Badge label={patient.bloodGroup} tone="brand" style={styles.headerBadge} />
-            ) : null}
-          </View>
-        </GradientCard>
+        <GreetingBlock name={greetingName} hour={now.getHours()} />
 
         {loading ? (
           <View style={styles.loader}>
@@ -149,155 +167,101 @@ export function PatientDashboardScreen() {
         ) : null}
 
         {error && !loading ? (
-          <Card style={styles.errorCard}>
+          <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>We could not load your dashboard</Text>
             <Text style={styles.errorBody}>{error}</Text>
-            <Pressable onPress={() => load('initial')} style={styles.retryButton}>
+            <Pressable
+              onPress={() => load('initial')}
+              accessibilityRole="button"
+              style={styles.retryButton}
+            >
               <Text style={styles.retryText}>Try again</Text>
             </Pressable>
-          </Card>
+          </View>
         ) : null}
 
-        {/* ---- NEXT APPOINTMENT / ACTIVE PASS ---- */}
-        {next ? (
-          <GradientCard variant="brand" style={styles.passCard}>
-            <View style={styles.passHeader}>
-              <View>
-                <Text style={styles.passLabel}>Next appointment</Text>
-                <Text style={styles.passDoctor} numberOfLines={1}>
-                  {next.doctorName}
-                </Text>
-              </View>
-              <Badge label={next.status} tone="success" />
-            </View>
+        <QueueCard
+          clinicName={queueClinicName}
+          clinicSubline={queueSubline}
+          tokenNumber={queueToken}
+          room={DESIGN_FALLBACK.room}
+          eta={DESIGN_FALLBACK.eta}
+          onPress={() => router.push('/(patient)/queue')}
+        />
 
-            <View style={styles.passDivider} />
+        <BookingBanner
+          metaPrimary={DESIGN_FALLBACK.bookingMetaPrimary}
+          metaSecondary={DESIGN_FALLBACK.bookingMetaSecondary}
+          onPress={() => router.push('/(patient)/doctors')}
+        />
 
-            <View style={styles.passRow}>
-              <View style={styles.passMeta}>
-                <Text style={styles.passMetaLabel}>Department</Text>
-                <Text style={styles.passMetaValue} numberOfLines={1}>
-                  {next.department}
-                </Text>
-              </View>
-              <View style={styles.passMeta}>
-                <Text style={styles.passMetaLabel}>Date</Text>
-                <Text style={styles.passMetaValue} numberOfLines={1}>
-                  {next.date}
-                </Text>
-              </View>
-              <View style={styles.passMeta}>
-                <Text style={styles.passMetaLabel}>Time</Text>
-                <Text style={styles.passMetaValue} numberOfLines={1}>
-                  {next.slotTime}
-                </Text>
-              </View>
-            </View>
+        <SearchField onPress={() => router.push('/(patient)/doctors')} />
 
-            <Pressable
-              onPress={() => router.push('/(patient)/queue')}
-              style={styles.passButton}
-              accessibilityRole="button"
-            >
-              <Text style={styles.passButtonText}>View queue pass</Text>
-            </Pressable>
-          </GradientCard>
-        ) : null}
+        <CheckupRow
+          title={checkupTitle}
+          badge={checkupBadge}
+          onPress={() => router.push('/(patient)/profile')}
+        />
 
-        {/* ---- QUICK ACTIONS ---- */}
-        <Text style={styles.sectionTitle}>Quick actions</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.actionsRow}
-        >
-          <QuickAction
-            label="Find a doctor"
-            caption="Browse OPD"
-            icon="🔍"
-            onPress={() => router.push('/(patient)/doctors')}
-          />
-          <QuickAction
-            label="Book OPD"
-            caption="Pick a slot"
-            icon="📅"
-            onPress={() => router.push('/(patient)/doctors')}
-          />
-          <QuickAction
-            label="My queue"
-            caption="Live pass"
-            icon="🎫"
-            onPress={() => router.push('/(patient)/queue')}
-          />
-          <QuickAction
-            label="My profile"
-            caption="History"
-            icon="👤"
-            onPress={() => router.push('/(patient)/profile')}
-          />
-        </ScrollView>
-
-        {/* ---- STATS ---- */}
-        <Text style={styles.sectionTitle}>At a glance</Text>
-        <View style={styles.statsRow}>
-          <StatCard
-            value={stats?.activeDoctors ?? 0}
-            label="Doctors on duty"
-            icon="👨‍⚕️"
-          />
-          <StatCard
-            value={stats?.departments ?? 0}
-            label="Departments"
-            icon="🏥"
-            style={styles.statGap}
-          />
-          <StatCard
-            value={stats?.upcomingAppointments ?? 0}
-            label="Upcoming"
-            icon="🗓️"
-            style={styles.statGap}
-          />
+        <View style={styles.tilesRow}>
+          {ACTION_TILES.map((tile) => (
+            <QuickAction
+              key={tile.key}
+              label={tile.label}
+              caption={tile.caption}
+              width={tileW}
+              icon={<DesignImage name={tile.icon} size={24} />}
+              onPress={() => router.push('/(patient)/doctors')}
+            />
+          ))}
         </View>
 
-        {/* ---- PROFILE SUMMARY ---- */}
-        {patient ? (
-          <>
-            <Text style={styles.sectionTitle}>Your details</Text>
-            <Card>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Full name</Text>
-                <Text style={styles.detailValue} numberOfLines={1}>
-                  {patient.fullName}
-                </Text>
-              </View>
-              <View style={styles.hairline} />
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>NIC</Text>
-                <Text style={styles.detailValue} numberOfLines={1}>
-                  {patient.nic || 'Not added'}
-                </Text>
-              </View>
-              <View style={styles.hairline} />
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Phone</Text>
-                <Text style={styles.detailValue} numberOfLines={1}>
-                  {patient.phone || 'Not added'}
-                </Text>
-              </View>
-              {patient.allergies.length ? (
-                <>
-                  <View style={styles.hairline} />
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Allergies</Text>
-                    <Text style={styles.detailValue} numberOfLines={1}>
-                      {patient.allergies.join(', ')}
-                    </Text>
-                  </View>
-                </>
-              ) : null}
-            </Card>
-          </>
-        ) : null}
+        <View style={styles.section}>
+          <SectionHeader
+            title="Hospital Clinics"
+            onSeeAllPress={() => router.push('/(patient)/doctors')}
+          />
+          <View style={styles.specialtyGrid}>
+            {SPECIALTIES.map((specialty) => (
+              <SpecialtyCard
+                key={specialty.key}
+                label={specialty.label}
+                icon={specialty.icon}
+                width={specialtyW}
+                onPress={() => router.push('/(patient)/doctors')}
+              />
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader
+            title="Events & Health Insights"
+            onSeeAllPress={() => router.push('/(patient)/profile')}
+          />
+          <EventCard
+            title={EVENTS[0].title}
+            description={EVENTS[0].description}
+            schedule={EVENTS[0].schedule}
+            image={EVENTS[0].image}
+            badge={EVENTS[0].badge}
+            onPress={() => router.push('/(patient)/profile')}
+          />
+          <View style={styles.eventRow}>
+            {EVENTS.slice(1).map((event) => (
+              <EventCard
+                key={event.key}
+                title={event.title}
+                description={event.description}
+                schedule={event.schedule}
+                image={event.image}
+                badge={event.badge}
+                style={{ width: eventW }}
+                onPress={() => router.push('/(patient)/profile')}
+              />
+            ))}
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -309,54 +273,9 @@ const styles = StyleSheet.create({
     backgroundColor: PatientTheme.background,
   },
   content: {
-    paddingHorizontal: PatientTheme.spaceLg,
+    paddingHorizontal: 16,
     paddingBottom: PatientTheme.spaceXxl,
     gap: PatientTheme.spaceMd,
-  },
-  header: {
-    padding: PatientTheme.spaceLg,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: PatientTheme.spaceMd,
-  },
-  headerText: {
-    flex: 1,
-  },
-  greeting: {
-    color: PatientTheme.accentSoft,
-    fontSize: PatientTheme.fontSizeCaption,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  name: {
-    marginTop: PatientTheme.spaceXs,
-    color: PatientTheme.textOnBrand,
-    fontSize: PatientTheme.fontSizeDisplay,
-    fontWeight: '800',
-  },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: PatientTheme.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: PatientTheme.brandDeep,
-    fontSize: PatientTheme.fontSizeHeading,
-    fontWeight: '800',
-  },
-  headerMeta: {
-    flexDirection: 'row',
-    gap: PatientTheme.spaceSm,
-    marginTop: PatientTheme.spaceMd,
-  },
-  headerBadge: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   loader: {
     alignItems: 'center',
@@ -365,21 +284,24 @@ const styles = StyleSheet.create({
   },
   loaderText: {
     color: PatientTheme.textSecondary,
-    fontSize: PatientTheme.fontSizeBody,
+    fontSize: PatientTheme.designType.body,
   },
   errorCard: {
-    borderColor: PatientTheme.dangerSoft,
     backgroundColor: PatientTheme.dangerSoft,
+    borderColor: PatientTheme.dangerSoft,
+    borderRadius: PatientTheme.radiusLg,
+    padding: PatientTheme.spaceLg,
+    borderWidth: 1,
   },
   errorTitle: {
     color: PatientTheme.danger,
-    fontSize: PatientTheme.fontSizeSubheading,
+    fontSize: PatientTheme.designType.item,
     fontWeight: '700',
   },
   errorBody: {
     marginTop: PatientTheme.spaceXs,
     color: PatientTheme.textSecondary,
-    fontSize: PatientTheme.fontSizeBody,
+    fontSize: PatientTheme.designType.body,
   },
   retryButton: {
     marginTop: PatientTheme.spaceMd,
@@ -391,102 +313,24 @@ const styles = StyleSheet.create({
   },
   retryText: {
     color: PatientTheme.textOnBrand,
-    fontSize: PatientTheme.fontSizeCaption,
+    fontSize: PatientTheme.designType.caption,
     fontWeight: '700',
   },
-  sectionTitle: {
+  tilesRow: {
+    flexDirection: 'row',
+    gap: TILE_GAP,
+  },
+  section: {
     marginTop: PatientTheme.spaceSm,
-    color: PatientTheme.textPrimary,
-    fontSize: PatientTheme.fontSizeSubheading,
-    fontWeight: '700',
-  },
-  actionsRow: {
-    gap: PatientTheme.spaceMd,
-    paddingRight: PatientTheme.spaceLg,
-  },
-  statsRow: {
-    flexDirection: 'row',
-  },
-  statGap: {
-    marginLeft: PatientTheme.spaceMd,
-  },
-  passCard: {
-    padding: PatientTheme.spaceLg,
-  },
-  passHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     gap: PatientTheme.spaceMd,
   },
-  passLabel: {
-    color: PatientTheme.accentSoft,
-    fontSize: PatientTheme.fontSizeMicro,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  passDoctor: {
-    marginTop: PatientTheme.spaceXs,
-    color: PatientTheme.textOnBrand,
-    fontSize: PatientTheme.fontSizeHeading,
-    fontWeight: '800',
-  },
-  passDivider: {
-    height: 1,
-    marginVertical: PatientTheme.spaceMd,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-  },
-  passRow: {
+  specialtyGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: PatientTheme.spaceSm,
+    flexWrap: 'wrap',
+    gap: GRID_GAP,
   },
-  passMeta: {
-    flex: 1,
-  },
-  passMetaLabel: {
-    color: PatientTheme.accentSoft,
-    fontSize: PatientTheme.fontSizeMicro,
-  },
-  passMetaValue: {
-    marginTop: 2,
-    color: PatientTheme.textOnBrand,
-    fontSize: PatientTheme.fontSizeBody,
-    fontWeight: '700',
-  },
-  passButton: {
-    marginTop: PatientTheme.spaceLg,
-    backgroundColor: PatientTheme.accent,
-    borderRadius: PatientTheme.radiusPill,
-    paddingVertical: PatientTheme.spaceMd,
-    alignItems: 'center',
-  },
-  passButtonText: {
-    color: PatientTheme.brandDeep,
-    fontSize: PatientTheme.fontSizeBody,
-    fontWeight: '800',
-  },
-  detailRow: {
+  eventRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: PatientTheme.spaceMd,
-    paddingVertical: PatientTheme.spaceSm,
-  },
-  detailLabel: {
-    color: PatientTheme.textSecondary,
-    fontSize: PatientTheme.fontSizeBody,
-  },
-  detailValue: {
-    flex: 1,
-    textAlign: 'right',
-    color: PatientTheme.textPrimary,
-    fontSize: PatientTheme.fontSizeBody,
-    fontWeight: '600',
-  },
-  hairline: {
-    height: 1,
-    backgroundColor: PatientTheme.border,
+    gap: GRID_GAP,
   },
 });
