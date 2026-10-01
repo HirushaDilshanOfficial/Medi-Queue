@@ -14,6 +14,7 @@ import {
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { login } from '../../services/authService';
+import { setAuthToken } from '../../services/http';
 
 // Actual Login Form - Email & Password
 export default function LoginScreen() {
@@ -32,13 +33,19 @@ export default function LoginScreen() {
 
     try {
       const userData = await login(email, password);
-      
+
+      // Persist the JWT for the role dashboards that need it (patient module reads
+      // the same key via services/http.ts).
+      await setAuthToken(userData.token);
+
       // Successfully logged in
       Alert.alert('Success', `Welcome back, ${userData.fullName}!`);
-      
-      // Navigate based on role (for now we only have MOH dashboard created)
+
+      // Navigate based on role
       if (userData.role === 'MOH') {
         router.replace('/(moh)/dashboard');
+      } else if (userData.role === 'Patient') {
+        router.replace('/(patient)');
       } else {
         // TODO: Navigate to other dashboards when they are created
         Alert.alert('Notice', `Logged in as ${userData.role}, but dashboard is not created yet.`);
