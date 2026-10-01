@@ -60,6 +60,8 @@ New models (no existing model is modified):
   (avatar, qualifications, rating, fee, languages).
 - `OpdAppointment`, `OpdQueueEntry`, `OpdQueueCounter` — see Part 2 below for why the
   shared `Appointment` model cannot be used.
+- `OpdMedicalReport` — a report the patient lodged; see Part 4 for why it stores
+  metadata only.
 
 Existing `Doctor`, `Patient`, `Schedule`, `Slot`, `Appointment` and `QueueEntry` are
 read only by this module. All `Doctor` field assumptions are isolated in
@@ -70,7 +72,11 @@ Routes (all require `protect` + role `Patient`):
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/v1/patients/me` | Signed-in patient profile |
+| PATCH | `/api/v1/patients/me` | Edit own profile (Part 4) |
 | GET | `/api/v1/patients/me/dashboard` | Dashboard aggregate |
+| GET | `/api/v1/patients/me/history` | Past visits (Part 4) |
+| GET/POST | `/api/v1/patients/me/reports` | Medical reports (Part 4) |
+| DELETE | `/api/v1/patients/me/reports/:id` | Remove a report (Part 4) |
 | GET | `/api/v1/doctors` | Directory; `department`, `search`, `available`, `sort` |
 | GET | `/api/v1/doctors/departments` | Filter chips |
 | GET | `/api/v1/doctors/:id` | Single doctor |
@@ -185,7 +191,88 @@ The dashboard now reads the real `activePass` / `nextAppointment` from
 a `hasPass` state: with no live pass the design's token number would have been a fabrication,
 so the card becomes a check-in prompt instead.
 
-### Part 4 — profile, history, reports, uploads, editing  ⬜
+### Part 4 — profile, history, reports, uploads, editing  ✅
+
+#### Why reports store metadata and not the file
+
+There is no doctor-side upload flow in the codebase for reports to reference, so
+the two available readings of "uploads" were: doctor-issued reports (which need
+a write path owned by another team, leaving the patient app reading from an
+always-empty table) or patient-lodged reports. **The patient lodges them** — a
+lab result, an outside referral, a discharge summary — and the file itself is
+never uploaded here.
+
+Storing the binary was rejected deliberately. Accepting a file would mean a
+binary store, an upload size limit, virus scanning and a retention policy, none
+of which this module owns or can be operated by the app. So `OpdMedicalReport`
+records what the document *is* (`title`, `category`, `reportDate`, `performedOn`,
+`notes`, `fileName`) and the document stays in the hospital's records system.
+`fileName` is what lets staff match the row to a document they already hold.
+
+This also means Part 4 needs no new dependency and no new infrastructure.
+
+#### The profile edit boundary
+
+`PATCH /patients/me` accepts only: `phone`, `email`, `birthday`, `gender`,
+`address`, `district`, `bloodGroup`, `allergies`, `favouriteDepartment`,
+`remindersEnabled`, `emergencyContact`. Anything else is a 400.
+
+Four fields are refused even though the patient can see them:
+
+- `user`, `patient` — link columns owned by `loadPatientProfile`.
+- `nic` — the key used to attach this profile to a receptionist `Patient` row.
+  Allowing it to be edited would let a patient re-point their identity at
+  someone else's record.
+- `fullName` — belongs to registration, not a self-service form.
+
+`fullName` and `nic` are still returned by `GET /patients/me`; they are just not
+editable, and the edit screen says so rather than silently omitting them.
+
+Two normalisations happen server-side so a value cannot be stored two ways:
+email is lower-cased, blood group upper-cased (`"o+"` → `"O+"`).
+
+`buildProfilePatch` returns **only the keys the client sent**. A PATCH on a
+partially filled profile must not blank out the fields it left out, so "absent"
+and "set to null" have to stay distinguishable. That distinction is why
+`cleanText` returns `null` for "clear this" and `undefined` for "reject this
+input" — conflating the two makes a field impossible to clear, which was a real
+bug the tests caught.
+
+#### Report status is not the patient's to set
+
+`status` (`pending` → `reviewed`) is excluded from the accepted body. A patient
+must not be able to mark their own report as already seen by a doctor. Deleting
+a report is scoped by `profile` in the query, so one patient cannot remove
+another's row by guessing an id, and the optional `appointmentId` is checked for
+ownership after a shape check — a well-formed id belonging to someone else is
+rejected.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| PATCH | `/api/v1/patients/me` | Edit own profile |
+| GET | `/api/v1/patients/me/history` | Past visits + summary counts |
+| GET | `/api/v1/patients/me/reports` | Reports the patient lodged |
+| POST | `/api/v1/patients/me/reports` | Lodge a report |
+| DELETE | `/api/v1/patients/me/reports/:id` | Remove a report |
+
+A visit becomes "history" once its date has passed, and history deliberately
+includes `cancelled` and `no_show` — a patient looking back wants the record of
+what they booked, not a flattering version of it.
+
+The dashboard's `recentActivity`, previously a hardcoded `[]`, is now derived:
+appointments and reports merged, sorted by time, windowed to 90 days and capped
+at 6, so a patient with years of history is not served hundreds of rows the
+dashboard cannot show.
+
+Frontend: `PatientProfileScreen` (replaces the Part 4 placeholder), with
+`EditProfileScreen`, `VisitHistoryScreen`, `MedicalReportsScreen` and
+`AddReportScreen` behind hidden tab routes, plus `FormField` (`FormField`,
+`ChipGroup`, `SwitchRow`) and `ReportRow`. `src/types/patient.ts` gains
+`MedicalReport`, `ReportDraft`, `ProfileDraft`, `VisitRecord`, `HistoryPayload`,
+`HistorySummary` and `RecentActivityItem`.
+
+`ChipGroup`'s generic excludes `null` even though every field it edits allows
+it, because "not set" is represented by a null value rather than by an option.
 
 ## Verification
 
@@ -193,14 +280,18 @@ so the card becomes a check-in prompt instead.
   errors remain in `src/services/authService.ts` (untouched teammate file, fails on
   `heshani-dev` too).
 - `npx expo lint` — clean, including the React Compiler `react-hooks` rules.
-- `npx expo export --platform web` — 20 static routes build, including `/doctor/[id]`.
+- `npx expo export --platform web` — 28 static routes build, including `/doctor/[id]`
+  and the four Part 4 profile routes.
 - `node --test test/opdBookingAndQueue.test.js` — 12 pass / 0 fail. Hermetic: no database
   needed, since Mongoose `validateSync` and index definitions work offline.
+- `node --test test/opdProfileAndReports.test.js` — 19 pass / 0 fail, same hermetic
+  approach. Covers the edit boundary, the absent-vs-null distinction, enum and length
+  validation, the `status` refusal, and agreement between the validators and the schemas.
 - `node --test test/receptionistValidation.test.js` — 29 pass / 31 fail, unchanged
   pre-existing baseline (failures are schema-contract mismatches in teammate tests).
 - Backend `require` check on all new modules — loads OK; `server.js` boots.
 
-Three real defects were found and fixed while writing the tests, rather than being caught
+Five real defects were found and fixed while writing the tests, rather than being caught
 later:
 
 1. `generatePassCode()` returned 16 characters while the schema requires `minlength: 24`,
@@ -208,10 +299,14 @@ later:
 2. Slot availability treated any booking as filling the slot, ignoring `Slot.capacity`.
 3. The room was read from `Doctor.room`, but the room for a given clinic session lives on
    `Schedule.room`.
+4. `cleanText` used one return value for both "clear this field" and "invalid input", which
+   made every optional field impossible to clear once you tried.
+5. `emergencyContact: { name: '', phone: '' }` stored a half-empty object instead of
+   clearing the contact.
 
 ### Still to verify
 
-The end-to-end API run in the table below only covers Part 1. Parts 2–3 have not been run
+The end-to-end API run in the table below only covers Part 1. Parts 2–4 have not been run
 against a live database, because the shared Atlas database has 0 doctors, so the directory
 has nothing to show and a booking cannot be created. `backend/scripts/seedDemoClinic.js`
 exists to fix that and is guarded by `DEMO_SEED=1` so it cannot write by accident:

@@ -41,6 +41,7 @@ export type DashboardStats = {
   departments: number;
   upcomingAppointments: number | null;
   completedVisits: number | null;
+  reports: number | null;
   activePass: QueuePassSummary | null;
 };
 
@@ -68,7 +69,88 @@ export type DashboardPayload = {
   patient: PatientProfile;
   stats: DashboardStats;
   nextAppointment: NextAppointment;
-  recentActivity: unknown[];
+  recentActivity: RecentActivityItem[];
+};
+
+// One row in the dashboard's activity feed. `type` drives the icon and wording,
+// so the client never has to infer intent from a status string.
+export type RecentActivityItem = {
+  type: 'appointment' | 'report';
+  at: string;
+  id: string;
+  title: string;
+  date: string | null;
+  dateLabel: string | null;
+  status: string;
+};
+
+export type ReportStatus = 'pending' | 'reviewed';
+
+// A report the patient has lodged. Only the description of the document is
+// stored; the file itself stays in the hospital's records system.
+export type MedicalReport = {
+  id: string;
+  appointmentId: string | null;
+  title: string;
+  category: string;
+  reportDate: string | null;
+  performedOn: string | null;
+  notes: string | null;
+  fileName: string | null;
+  status: ReportStatus;
+  createdAt: string | null;
+};
+
+export type ReportDraft = {
+  appointmentId?: string | null;
+  title: string;
+  category?: string;
+  reportDate?: string | null;
+  performedOn?: string | null;
+  notes?: string | null;
+  fileName?: string | null;
+};
+
+export type HistorySummary = {
+  totalVisits: number;
+  cancelled: number;
+  noShow: number;
+  reports: number;
+};
+
+// A past visit. Same shape as an Appointment, but past visits are never
+// reschedulable or cancellable, and they carry how many reports are filed
+// against them.
+export type VisitRecord = Appointment & {
+  canReschedule: false;
+  canCancel: false;
+  reportCount: number;
+};
+
+export type HistoryPayload = {
+  visits: VisitRecord[];
+  reports: MedicalReport[];
+  summary: HistorySummary;
+};
+
+// The editable subset of the profile. `fullName` and `nic` are absent by design:
+// the backend refuses them, so the form must not offer them.
+export type ProfileDraft = {
+  phone?: string | null;
+  email?: string | null;
+  birthday?: string | null;
+  gender?: Gender;
+  address?: string | null;
+  district?: string | null;
+  bloodGroup?: BloodGroup;
+  allergies?: string[];
+  favouriteDepartment?: string | null;
+  remindersEnabled?: boolean;
+  emergencyContact?: {
+    name?: string | null;
+    relationship?: string | null;
+    phone?: string | null;
+  } | null;
 };
 
 export type Doctor = {

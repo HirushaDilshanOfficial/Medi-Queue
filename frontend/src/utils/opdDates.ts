@@ -79,3 +79,54 @@ export function waitLabel(waitMinutes: number): string {
   const minutes = waitMinutes % 60;
   return minutes ? `About ${hours}h ${minutes} min` : `About ${hours}h`;
 }
+
+// "6 Mar 2026" for report and history dates. These arrive as full ISO
+// timestamps rather than "YYYY-MM-DD" keys, so they are formatted in the
+// patient's own timezone: a report dated at the clinic should read as the day
+// the patient experienced it, not a day shifted by the phone's timezone.
+export function timestampLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+// "Today" / "3 days ago" for the activity feed, where the exact date matters
+// less than how recent something is.
+export function relativeTimestampLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) return timestampLabel(iso);
+
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours === 1 ? 'An hour ago' : `${hours} hours ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+
+  return timestampLabel(iso);
+}
+
+// An ISO timestamp to the "YYYY-MM-DD" value a date input expects. The
+// conversion happens in local time to match what the patient sees in the field.
+export function isoToInputDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}

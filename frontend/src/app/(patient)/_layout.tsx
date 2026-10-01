@@ -72,10 +72,48 @@ export default function PatientTabsLayout() {
         no tab entry so the four-tab bar is unchanged, and it draws its own header
         to match the flat dashboard styling.
       */}
+      {/*
+        Booking and rescheduling both land here. It is a tab-navigator screen with
+        no tab entry so the four-tab bar is unchanged, and it draws its own header
+        to match the flat dashboard styling.
+      */}
       <Tabs.Screen
         name="doctor/[id]"
         options={{
           title: 'Book',
+          href: null,
+        }}
+      />
+
+      {/*
+        Part 4 detail screens. Same reasoning: pushed on top of the profile tab
+        with their own headers, so none of them appear in the tab bar.
+      */}
+      <Tabs.Screen
+        name="profile/edit"
+        options={{
+          title: 'Edit profile',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="profile/history"
+        options={{
+          title: 'Visit history',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="profile/reports"
+        options={{
+          title: 'Medical reports',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="profile/report/new"
+        options={{
+          title: 'Lodge a report',
           href: null,
         }}
       />
