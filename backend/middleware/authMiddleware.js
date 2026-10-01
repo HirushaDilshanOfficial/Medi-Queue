@@ -9,26 +9,36 @@ const protect = async (req, res, next) => {
     req.headers.authorization.startsWith('Bearer')
   ) {
     try {
-      // Get token from header
       token = req.headers.authorization.split(' ')[1];
 
-      // Verify token
+      // Decode token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
 
-      // Get user from the token
+      // Add user to request object
       req.user = await User.findById(decoded.id).select('-password');
 
       next();
     } catch (error) {
-      res.status(401);
-      next(new Error('Not authorized, token failed'));
+      console.error(error);
+      res.status(401).json({ message: 'Not authorized, token failed' });
     }
   }
 
   if (!token) {
-    res.status(401);
-    next(new Error('Not authorized, no token'));
+    res.status(401).json({ message: 'Not authorized, no token' });
   }
 };
 
-module.exports = { protect };
+// Role based authorization
+const authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        message: `User role '${req.user.role}' is not authorized to access this route`,
+      });
+    }
+    next();
+  };
+};
+
+module.exports = { protect, authorize };
