@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Environment
+.env
+.env.*
+!.env.example
+.env*.local
+
+# System Files
+.DS_Store
+Thumbs.db
+*.pem
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Expo & React Native (Frontend)
+frontend/.expo/
+frontend/dist/
+frontend/web-build/
+frontend/expo-env.d.ts
+frontend/.kotlin/
+frontend/.metro-health-check*
+frontend/ios/
+frontend/android/
+frontend/example/
+
+# Build & Typescript
+*.tsbuildinfo
+coverage/
+build/
+dist/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Receptionist Expo workspace
+mobile/.expo/
+mobile/ios/
+mobile/android/
+mobile/expo-env.d.ts
