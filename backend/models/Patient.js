@@ -72,7 +72,7 @@ const patientSchema = new mongoose.Schema(
 );
 
 // Indexes for fast lookup
-patientSchema.index({ nic: 1 });
+// nic index is auto-created by unique + sparse on the schema field
 patientSchema.index({ phone: 1 });
 
 module.exports = mongoose.model('Patient', patientSchema);
