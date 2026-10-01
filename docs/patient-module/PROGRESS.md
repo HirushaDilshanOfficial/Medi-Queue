@@ -1,6 +1,6 @@
 # Patient Module — Implementation Progress
 
-Branch: `patient-module` (based on `heshani-dev`)
+Branch: `heshani-dev`
 
 Scope: the patient-facing Expo app only. Existing MOH, receptionist, doctor-management
 and staff-queue code is not modified. Authentication is owned by another team.
@@ -58,6 +58,8 @@ New models (no existing model is modified):
   a receptionist-side `Patient` record by NIC.
 - `OpdDoctorProfile` — presentation-only extras keyed by the shared `Doctor` id
   (avatar, qualifications, rating, fee, languages).
+- `OpdAppointment`, `OpdQueueEntry`, `OpdQueueCounter` — see Part 2 below for why the
+  shared `Appointment` model cannot be used.
 
 Existing `Doctor`, `Patient`, `Schedule`, `Slot`, `Appointment` and `QueueEntry` are
 read only by this module. All `Doctor` field assumptions are isolated in
@@ -102,19 +104,127 @@ Dashboard response shape reserves `nextAppointment`, `upcomingAppointments`,
 `completedVisits` and `activePass`; they are `null` until Parts 2–3 add the appointment
 and queue models.
 
-### Part 2 — doctor directory, booking, token, reschedule/cancel  ⬜
-### Part 3 — live queue, stable pass, QR, alerts  ⬜
+### Part 2 — doctor directory, booking, token, reschedule/cancel  ✅
+
+#### Why the shared `Appointment` model is not used
+
+`Appointment.patient` is a required `ref: 'Patient'`, and `Patient` is the receptionist-side
+record. The shared database has 0 `Patient` rows, because app patients are provisioned
+against `User` / `OpdPatientProfile` and most never get a receptionist record. Writing to it
+would fail for exactly the patients the app serves. Three additive models were added
+instead; no existing model is modified.
+
+- `OpdAppointment` — booking, keyed on `OpdPatientProfile`. Snapshots the doctor name and
+  department so a pass survives a later rename. Unique partial index on
+  `{ profile, doctor, date, slotTime } where isActive` is the double-booking guard, and
+  `isActive` is kept in sync from `status` by pre-hooks.
+- `OpdQueueEntry` — one row per appointment. Unique on `passCode` and on
+  `{ department, queueDate, tokenNumber }`.
+- `OpdQueueCounter` — one row per department per day. Tokens are issued by a single atomic
+  `findOneAndUpdate($inc)`, so two simultaneous check-ins cannot collide.
+
+Booking rules:
+
+- Bookable days are derived from `Slot` rows, never from `Schedule`, so a day with no
+  generated slots is never offered.
+- `Slot.capacity` is honoured (the model defines it, default 1, and no existing code used
+  it). Availability compares live booking count against the slot's own capacity.
+- Booking horizon is 14 days, inclusive.
+- One live booking per patient per doctor per day.
+- Rescheduling to the same day keeps the queue token; moving to a new day releases the old
+  token and the patient re-checks-in. A token is only released if it is the most recent one
+  issued, so a number already shown to a later patient is never handed out twice.
+- Cancelling releases a still-waiting token. A token the doctor has already called is kept.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/bookings/summary` | Dashboard counts + next appointment |
+| GET | `/api/v1/bookings?scope=upcoming\|past\|all` | My bookings, with live queue state |
+| POST | `/api/v1/bookings` | Create a booking |
+| PATCH | `/api/v1/bookings/:id/cancel` | Cancel |
+| PATCH | `/api/v1/bookings/:id/reschedule` | Move to another date/time |
+| GET | `/api/v1/bookings/doctors/:id/days` | Days with free capacity |
+| GET | `/api/v1/bookings/doctors/:id/slots?date=` | Times for one day |
+
+Frontend: `src/services/bookingApi.ts`, `src/screens/Patient/Doctors/DoctorDirectoryScreen.tsx`
+(directory + a "My bookings" tab), `src/screens/Patient/Doctors/DoctorBookingScreen.tsx`
+(also the reschedule flow via a `rescheduleId` param), and the `DoctorCard`, `DayStrip`,
+`SlotGrid`, `AppointmentCard`, `ScreenHeader`, `ScreenStates` components.
+`/(patient)/doctor/[id]` is registered as a tab screen with `href: null`, so the four-tab
+bar is unchanged.
+
+### Part 3 — live queue, stable pass, QR, alerts  ✅
+
+- `GET /api/v1/queue/my-pass` — current pass; returns `pass: null` when there is none, which
+  is the normal state rather than an error.
+- `GET /api/v1/queue/my-pass/live` — lightweight polling endpoint returning position, ETA
+  and who is in the room.
+- `POST /api/v1/queue/check-in` — collect a token. Same-day only.
+- `DELETE /api/v1/queue/my-pass` — leave the queue and release the token.
+- `GET /api/v1/queue/board?department=` and `GET /api/v1/queue/departments` — "now serving".
+
+Position is derived server-side: it counts every active entry ahead of this one, ordered
+urgent-before-normal then by token, so calling a patient moves everyone behind them forward.
+ETA uses the serving pace captured at check-in and discounts the part-served consultation
+already in the room, and is deliberately not recomputed on read so it does not jump around.
+
+The pass QR encodes only the opaque `passCode`, never the token or any patient detail, so a
+screenshot cannot be used to guess someone's place in the queue. A pass that cannot be
+scanned is still usable: the code is printed under it.
+
+Frontend: `src/services/queueApi.ts`, `src/screens/Patient/Queue/LiveQueueScreen.tsx`,
+`QueuePassCard`, `PassQr`, `src/hooks/usePolling.ts` (15s, pauses on blur and in the
+background, backs off on failure), `src/hooks/useAsyncResource.ts` (stale-response guard),
+`src/utils/opdDates.ts` (Colombo calendar keys, matching the backend).
+
+New deps: `react-native-svg` 15.15.4 and `react-native-qrcode-svg` 6.3.26. `react-native-svg`
+is in Expo Go for SDK 57 (`inExpoGo: true`), so no development build is required.
+
+The dashboard now reads the real `activePass` / `nextAppointment` from
+`GET /patients/me/dashboard`, which previously returned `null` for both. `QueueCard` gained
+a `hasPass` state: with no live pass the design's token number would have been a fabrication,
+so the card becomes a check-in prompt instead.
+
 ### Part 4 — profile, history, reports, uploads, editing  ⬜
 
 ## Verification
 
-- `npx tsc --noEmit` — clean for all Part 1 files. Three pre-existing implicit-`any`
+- `npx tsc --noEmit` — clean for all Part 1–3 files. Three pre-existing implicit-`any`
   errors remain in `src/services/authService.ts` (untouched teammate file, fails on
   `heshani-dev` too).
-- `npx expo lint` — clean.
-- Backend `require` check on all new modules — loads OK; `server.js` syntax OK.
+- `npx expo lint` — clean, including the React Compiler `react-hooks` rules.
+- `npx expo export --platform web` — 20 static routes build, including `/doctor/[id]`.
+- `node --test test/opdBookingAndQueue.test.js` — 12 pass / 0 fail. Hermetic: no database
+  needed, since Mongoose `validateSync` and index definitions work offline.
 - `node --test test/receptionistValidation.test.js` — 29 pass / 31 fail, unchanged
   pre-existing baseline (failures are schema-contract mismatches in teammate tests).
+- Backend `require` check on all new modules — loads OK; `server.js` boots.
+
+Three real defects were found and fixed while writing the tests, rather than being caught
+later:
+
+1. `generatePassCode()` returned 16 characters while the schema requires `minlength: 24`,
+   so **every** check-in would have failed validation.
+2. Slot availability treated any booking as filling the slot, ignoring `Slot.capacity`.
+3. The room was read from `Doctor.room`, but the room for a given clinic session lives on
+   `Schedule.room`.
+
+### Still to verify
+
+The end-to-end API run in the table below only covers Part 1. Parts 2–3 have not been run
+against a live database, because the shared Atlas database has 0 doctors, so the directory
+has nothing to show and a booking cannot be created. `backend/scripts/seedDemoClinic.js`
+exists to fix that and is guarded by `DEMO_SEED=1` so it cannot write by accident:
+
+```bash
+DEMO_SEED=1 node scripts/seedDemoClinic.js          # upsert 6 demo doctors + 14 days of slots
+DEMO_SEED=1 node scripts/seedDemoClinic.js --reset  # remove only those 6 doctors
+```
+
+It upserts by doctor name, so running it twice is a no-op, and `--reset` only ever deletes
+the six doctors it creates. It has **not** been run against the shared database, because
+that is a team database and the write should be agreed first.
+
 
 ### End-to-end check against the shared Atlas database
 

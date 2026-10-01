@@ -66,6 +66,19 @@ export default function PatientTabsLayout() {
           tabBarIcon: ProfileIcon,
         }}
       />
+
+      {/*
+        Booking and rescheduling both land here. It is a tab-navigator screen with
+        no tab entry so the four-tab bar is unchanged, and it draws its own header
+        to match the flat dashboard styling.
+      */}
+      <Tabs.Screen
+        name="doctor/[id]"
+        options={{
+          title: 'Book',
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

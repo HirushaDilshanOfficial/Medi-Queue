@@ -5,6 +5,8 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const patientRoutes = require('./routes/patientRoutes');
 const doctorRoutes = require('./routes/doctorRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
+const queueRoutes = require('./routes/queueRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -22,6 +24,8 @@ app.use('/api/v1/auth', authRoutes);
 // Patient module
 app.use('/api/v1/patients', patientRoutes);
 app.use('/api/v1/doctors', doctorRoutes);
+app.use('/api/v1/bookings', bookingRoutes);
+app.use('/api/v1/queue', queueRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

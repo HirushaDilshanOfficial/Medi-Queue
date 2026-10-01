@@ -133,18 +133,34 @@ export function PatientDashboardScreen() {
   const activeDoctors = data?.stats?.activeDoctors ?? DESIGN_FALLBACK.doctorsOnline;
   const avatarInitial = (greetingName[0] ?? 'P').toUpperCase();
 
+  const hasPass = Boolean(activePass);
+
   const queueClinicName = activePass?.department
     ? `${activePass.department} Queue`
     : DESIGN_FALLBACK.clinicName;
+
+  // `position` counts the patient themself, so the number of people ahead is one
+  // less. Both branches avoid saying "0 of waiting".
+  const ahead = activePass?.position ? Math.max(0, activePass.position - 1) : 0;
   const queueSubline = activePass
-    ? `Current Queue ${activePass.position} of ${activePass.status}`
+    ? ahead === 0
+      ? 'You are next'
+      : `${ahead} ${ahead === 1 ? 'person' : 'people'} ahead of you`
     : DESIGN_FALLBACK.clinicSubline;
+
   const queueToken = activePass?.tokenNumber ?? DESIGN_FALLBACK.tokenNumber;
+  const queueRoom = activePass?.room ?? DESIGN_FALLBACK.room;
+  const queueEta = activePass?.estimatedTurnAt ?? null;
 
   const checkupTitle = next?.doctorName
     ? `Checkup with ${next.doctorName}`
     : DESIGN_FALLBACK.checkupTitle;
-  const checkupBadge = next?.date ?? DESIGN_FALLBACK.checkupBadge;
+  const checkupBadge = next?.dateLabel ?? DESIGN_FALLBACK.checkupBadge;
+
+  const bookingMetaPrimary = next
+    ? `Next: ${next.dateLabel ?? next.date} at ${next.slotTime}`
+    : 'No upcoming booking';
+  const bookingMetaSecondary = `${activeDoctors} doctors on duty today`;
 
   return (
     <View style={styles.root}>
@@ -198,14 +214,15 @@ export function PatientDashboardScreen() {
           clinicName={queueClinicName}
           clinicSubline={queueSubline}
           tokenNumber={queueToken}
-          room={DESIGN_FALLBACK.room}
-          eta={DESIGN_FALLBACK.eta}
+          room={queueRoom}
+          eta={queueEta}
+          hasPass={hasPass}
           onPress={() => router.push('/(patient)/queue')}
         />
 
         <BookingBanner
-          metaPrimary={DESIGN_FALLBACK.bookingMetaPrimary}
-          metaSecondary={DESIGN_FALLBACK.bookingMetaSecondary}
+          metaPrimary={bookingMetaPrimary}
+          metaSecondary={bookingMetaSecondary}
           onPress={() => router.push('/(patient)/doctors')}
         />
 
