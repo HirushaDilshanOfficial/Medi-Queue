@@ -24,9 +24,14 @@ import { QuickAction } from '../../../components/patient/QuickAction';
 import { SectionHeader } from '../../../components/patient/SectionHeader';
 import { SpecialtyCard } from '../../../components/patient/SpecialtyCard';
 import { EventCard } from '../../../components/patient/EventCard';
+import { EmergencyBanner } from '../../../components/patient/EmergencyBanner';
+import { QualityStrip } from '../../../components/patient/QualityStrip';
+import { ServiceRow } from '../../../components/patient/ServiceRow';
 import { DesignImage } from '../../../components/patient/DesignImage';
 import {
   ACTION_TILES,
+  HOSPITAL_SERVICES,
+  QUALITY_STATS,
   SPECIALTIES,
   EVENTS,
   DESIGN_FALLBACK,
@@ -125,6 +130,9 @@ export function PatientDashboardScreen() {
   const specialtyW = useMemo(() => gridWidth(SPECIALTIES.length, 4), []);
   const eventW = useMemo(() => gridWidth(EVENTS.length, 2), []);
 
+  const activeDoctors = data?.stats?.activeDoctors ?? DESIGN_FALLBACK.doctorsOnline;
+  const avatarInitial = (greetingName[0] ?? 'P').toUpperCase();
+
   const queueClinicName = activePass?.department
     ? `${activePass.department} Queue`
     : DESIGN_FALLBACK.clinicName;
@@ -155,9 +163,15 @@ export function PatientDashboardScreen() {
           />
         }
       >
-        <DashboardHeader />
+        <DashboardHeader
+          activeDoctors={activeDoctors}
+          avatarInitial={avatarInitial}
+          onProfilePress={() => router.push('/(patient)/profile')}
+        />
 
         <GreetingBlock name={greetingName} hour={now.getHours()} />
+
+        <EmergencyBanner helpline={DESIGN_FALLBACK.helpline} />
 
         {loading ? (
           <View style={styles.loader}>
@@ -214,6 +228,27 @@ export function PatientDashboardScreen() {
               onPress={() => router.push('/(patient)/doctors')}
             />
           ))}
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader title="Hospital Services" />
+          <View style={styles.serviceList}>
+            {HOSPITAL_SERVICES.map((service) => (
+              <ServiceRow
+                key={service.key}
+                label={service.label}
+                caption={service.caption}
+                icon={service.icon}
+                badge={service.key === 'lab-reports' ? '2 new' : undefined}
+                onPress={() => router.push('/(patient)/doctors')}
+              />
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader title="Care Quality" />
+          <QualityStrip stats={QUALITY_STATS} />
         </View>
 
         <View style={styles.section}>
@@ -319,6 +354,9 @@ const styles = StyleSheet.create({
   tilesRow: {
     flexDirection: 'row',
     gap: TILE_GAP,
+  },
+  serviceList: {
+    gap: PatientTheme.spaceSm,
   },
   section: {
     marginTop: PatientTheme.spaceSm,

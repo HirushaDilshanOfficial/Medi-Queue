@@ -12,6 +12,27 @@ export const ACTION_TILES = [
   { key: 'medicine-queue', label: 'Medicine', caption: 'Queue Submit', icon: 'pill' },
 ] as const;
 
+// Core services a real hospital app puts one tap away, modelled on the
+// service set Sri Lankan private hospital groups publish (ongoing number,
+// pre-registration, lab reports, consultation booking, pharmacy, payment).
+export const HOSPITAL_SERVICES = [
+  { key: 'ongoing-number', label: 'Ongoing', caption: 'Number', icon: 'hourglass' },
+  { key: 'pre-registration', label: 'Pre-', caption: 'Registration', icon: 'clipboard' },
+  { key: 'lab-reports', label: 'Lab', caption: 'Reports', icon: 'screening' },
+  { key: 'pharmacy', label: 'Online', caption: 'Pharmacy', icon: 'pill' },
+  { key: 'payment', label: 'Pay', caption: 'Bills', icon: 'badge' },
+  { key: 'wellness', label: 'Wellness', caption: 'Packages', icon: 'heart' },
+  { key: 'feedback', label: 'Patient', caption: 'Feedback', icon: 'help' },
+  { key: 'ambulance', label: 'Ambulance', caption: '24/7', icon: 'medical' },
+] as const;
+
+// Quality indicators surfaced the way hospital groups publish them.
+export const QUALITY_STATS = [
+  { key: 'satisfaction', value: '94.8%', label: 'Satisfaction' },
+  { key: 'hand-hygiene', value: '88.3%', label: 'Hand Hygiene' },
+  { key: 'infection', value: '0.09%', label: 'Infection Rate' },
+] as const;
+
 export const SPECIALTIES = [
   { key: 'orthopedic', label: 'Orthopedic', icon: 'spine' },
   { key: 'neurology', label: 'Neurology', icon: 'brain' },
@@ -63,4 +84,5 @@ export const DESIGN_FALLBACK = {
   bookingMetaPrimary: 'General & Specialist',
   bookingMetaSecondary: 'Today Available',
   doctorsOnline: 12,
+  helpline: '1313',
 } as const;

@@ -4,10 +4,18 @@ import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage } from './DesignImage';
 
 type Props = {
+  activeDoctors: number;
   onBellPress?: () => void;
+  onProfilePress?: () => void;
+  avatarInitial: string;
 };
 
-export function DashboardHeader({ onBellPress }: Props) {
+export function DashboardHeader({
+  activeDoctors,
+  onBellPress,
+  onProfilePress,
+  avatarInitial,
+}: Props) {
   return (
     <View style={styles.root}>
       <DesignImage name="medical" size={30} style={styles.logo} />
@@ -15,15 +23,33 @@ export function DashboardHeader({ onBellPress }: Props) {
         <Text style={styles.eyebrow}>NATIONAL OPD</Text>
         <Text style={styles.title}>Home Dashboard</Text>
       </View>
-      <Pressable
-        onPress={onBellPress}
-        accessibilityRole="button"
-        accessibilityLabel="Notifications"
-        hitSlop={8}
-        style={styles.bell}
-      >
-        <DesignImage name="bell" size={22} />
-      </Pressable>
+
+      <View style={styles.actions}>
+        <View style={styles.onlinePill}>
+          <View style={styles.onlineDot} />
+          <Text style={styles.onlineText}>{activeDoctors} online</Text>
+        </View>
+
+        <Pressable
+          onPress={onBellPress}
+          accessibilityRole="button"
+          accessibilityLabel="Notifications"
+          hitSlop={8}
+          style={styles.iconButton}
+        >
+          <DesignImage name="bell" size={20} />
+        </Pressable>
+
+        <Pressable
+          onPress={onProfilePress}
+          accessibilityRole="button"
+          accessibilityLabel="Open profile"
+          hitSlop={8}
+          style={styles.avatar}
+        >
+          <Text style={styles.avatarText}>{avatarInitial}</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -52,14 +78,52 @@ const styles = StyleSheet.create({
     fontSize: PatientTheme.designType.section,
     fontWeight: '800',
   },
-  bell: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: PatientTheme.spaceSm,
+  },
+  onlinePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: PatientTheme.spaceSm,
+    paddingVertical: 4,
+    borderRadius: PatientTheme.radiusPill,
+    backgroundColor: PatientTheme.successSoft,
+  },
+  onlineDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: PatientTheme.success,
+  },
+  onlineText: {
+    color: PatientTheme.success,
+    fontSize: PatientTheme.designType.caption,
+    fontWeight: '700',
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: PatientTheme.surface,
     borderWidth: 1,
     borderColor: PatientTheme.border,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: PatientTheme.brand,
+  },
+  avatarText: {
+    color: PatientTheme.textOnBrand,
+    fontSize: PatientTheme.designType.body,
+    fontWeight: '800',
   },
 });
