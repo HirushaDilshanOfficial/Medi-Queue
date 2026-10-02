@@ -10,6 +10,7 @@ export default function RootLayout() {
       <Stack.Screen name="(auth)/register" />
       <Stack.Screen name="(moh)/dashboard" />
       <Stack.Screen name="(doctor)/dashboard" />
+      <Stack.Screen name="(doctor)/queue" />
     </Stack>
   );
 }

@@ -13,7 +13,7 @@ import {
   Image,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import {
   fetchDoctorDashboard,
@@ -93,7 +93,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   const handleTabPress = (tab: 'home' | 'queue' | 'records' | 'schedule' | 'rx') => {
     setActiveTab(tab);
     if (tab === 'queue') {
-      Alert.alert('Patient Queue', 'Patient Queue & Next Call screen will open here.');
+      router.push('/(doctor)/queue');
     } else if (tab === 'records') {
       Alert.alert('Patient Records', 'Patient Records screen will open here.');
     } else if (tab === 'schedule') {
@@ -328,7 +328,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         {/* ---- 6. UP NEXT IN QUEUE SECTION ---- */}
         <View style={styles.queueHeaderRow}>
           <Text style={styles.sectionHeaderTitle}>UP NEXT IN QUEUE</Text>
-          <TouchableOpacity onPress={() => Alert.alert('Full Queue', 'Full Patient Queue screen will open.')}>
+          <TouchableOpacity onPress={() => router.push('/(doctor)/queue')}>
             <Text style={styles.fullQueueLink}>Full Queue &gt;</Text>
           </TouchableOpacity>
         </View>
@@ -370,31 +370,47 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       <View style={styles.bottomTabBar}>
         {/* Home */}
         <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('home')}>
-          <Ionicons name="home" size={22} color={activeTab === 'home' ? '#0d6371' : '#64748b'} />
+          <Ionicons name="home-outline" size={22} color={activeTab === 'home' ? '#0d6371' : '#64748b'} />
           <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>Home</Text>
         </TouchableOpacity>
 
         {/* Queue */}
         <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('queue')}>
-          <Ionicons name="list-outline" size={22} color={activeTab === 'queue' ? '#0d6371' : '#64748b'} />
+          <MaterialCommunityIcons
+            name="ticket-confirmation-outline"
+            size={23}
+            color={activeTab === 'queue' ? '#0d6371' : '#64748b'}
+          />
           <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>Queue</Text>
         </TouchableOpacity>
 
         {/* Records */}
         <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('records')}>
-          <Ionicons name="folder-outline" size={22} color={activeTab === 'records' ? '#0d6371' : '#64748b'} />
+          <MaterialCommunityIcons
+            name="folder-account-outline"
+            size={22}
+            color={activeTab === 'records' ? '#0d6371' : '#64748b'}
+          />
           <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>Records</Text>
         </TouchableOpacity>
 
         {/* Schedule */}
         <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('schedule')}>
-          <Ionicons name="calendar-outline" size={22} color={activeTab === 'schedule' ? '#0d6371' : '#64748b'} />
+          <MaterialCommunityIcons
+            name="calendar-month-outline"
+            size={22}
+            color={activeTab === 'schedule' ? '#0d6371' : '#64748b'}
+          />
           <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>Schedule</Text>
         </TouchableOpacity>
 
         {/* Rx */}
         <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('rx')}>
-          <Ionicons name="document-text-outline" size={22} color={activeTab === 'rx' ? '#0d6371' : '#64748b'} />
+          <MaterialCommunityIcons
+            name="clipboard-edit-outline"
+            size={22}
+            color={activeTab === 'rx' ? '#0d6371' : '#64748b'}
+          />
           <Text style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}>Rx</Text>
         </TouchableOpacity>
       </View>
