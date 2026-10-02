@@ -8,7 +8,8 @@ const connectDB = async () => {
     });
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    console.warn(`MongoDB Connection Notice: ${error.message}. Server running with dev fallback data.`);
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
   }
 };
 
