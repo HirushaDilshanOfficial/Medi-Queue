@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  ActivityIndicator
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
+import { API_URL } from '../../config';
 
 export default function HospitalDashboardScreen() {
   const params = useLocalSearchParams();
@@ -19,41 +21,37 @@ export default function HospitalDashboardScreen() {
   const [chartType, setChartType] = useState('Weekly');
   const hospitalName = name || 'General Hospital';
 
-  // Dummy Data for charts
-  const weeklyData = [
-    { label: 'Mon', value: 80 },
-    { label: 'Tue', value: 95 },
-    { label: 'Wed', value: 100 },
-    { label: 'Thu', value: 90 },
-    { label: 'Fri', value: 85 },
-    { label: 'Sat', value: 50 },
-    { label: 'Sun', value: 45 },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState(null);
 
-  const monthlyData = [
-    { label: 'Week 1', value: 70 },
-    { label: 'Week 2', value: 85 },
-    { label: 'Week 3', value: 100 },
-    { label: 'Week 4', value: 95 },
-  ];
+  useEffect(() => {
+    if (id) {
+      fetchDashboardStats();
+    }
+  }, [id]);
 
-  const sixMonthsData = [
-    { label: 'Jan', value: 60 },
-    { label: 'Feb', value: 75 },
-    { label: 'Mar', value: 80 },
-    { label: 'Apr', value: 100 },
-    { label: 'May', value: 90 },
-    { label: 'Jun', value: 85 },
-  ];
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/hospitals/${id}/dashboard`);
+      const data = await res.json();
+      setDashboardData(data);
+    } catch (error) {
+      console.error('Failed to fetch dashboard data', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getChartData = () => {
-    if (chartType === 'Monthly') return monthlyData;
-    if (chartType === '6 Months') return sixMonthsData;
-    return weeklyData;
+    if (!dashboardData || !dashboardData.chartData) return [];
+    if (chartType === 'Monthly') return dashboardData.chartData.monthly;
+    if (chartType === '6 Months') return dashboardData.chartData.sixMonths;
+    return dashboardData.chartData.weekly;
   };
 
   const chartData = getChartData();
-  const maxValue = Math.max(...chartData.map(d => d.value));
+  const maxValue = chartData.length > 0 ? Math.max(...chartData.map(d => d.value)) : 1;
 
   return (
     <View style={styles.container}>
@@ -98,56 +96,67 @@ export default function HospitalDashboardScreen() {
         </View>
 
         {/* 4 Grid Cards */}
-        <View style={styles.gridContainer}>
-          
-          <View style={styles.gridCard}>
-            <Text style={styles.cardTitle}>TODAY'S PATIENTS</Text>
-            <Text style={styles.cardValue}>4,290</Text>
-            <Text style={styles.cardHighlight}>↗ +5% vs yesterday</Text>
-            <Text style={styles.cardSubText}>Walk-in 3.1k • Booked 1.1k</Text>
+        {loading ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={{ marginTop: 10, color: '#666' }}>Loading dashboard data...</Text>
           </View>
+        ) : dashboardData && (
+          <>
+            <View style={styles.gridContainer}>
+              <View style={styles.gridCard}>
+                <Text style={styles.cardTitle}>TODAY'S PATIENTS</Text>
+                <Text style={styles.cardValue}>{dashboardData.todayPatients.total.toLocaleString()}</Text>
+                <Text style={styles.cardHighlight}>{dashboardData.todayPatients.growth} vs yesterday</Text>
+                <Text style={styles.cardSubText}>Walk-in {dashboardData.todayPatients.walkIn} • Booked {dashboardData.todayPatients.booked}</Text>
+              </View>
 
-          <View style={styles.gridCard}>
-            <Text style={styles.cardTitle}>AVG WAIT TIME</Text>
-            <Text style={styles.cardValue}>22<Text style={styles.cardValueSmall}>mins</Text></Text>
-            <View style={styles.badgeOptimal}>
-              <Text style={styles.badgeOptimalText}>Optimal ({"<30m"})</Text>
+              <View style={styles.gridCard}>
+                <Text style={styles.cardTitle}>AVG WAIT TIME</Text>
+                <Text style={styles.cardValue}>{dashboardData.avgWaitTime.minutes}<Text style={styles.cardValueSmall}>mins</Text></Text>
+                <View style={dashboardData.avgWaitTime.status === 'Optimal' ? styles.badgeOptimal : styles.badgeNormal}>
+                  <Text style={styles.badgeOptimalText}>
+                    {dashboardData.avgWaitTime.status === 'Optimal' ? 'Optimal (<30m)' : 'High (>30m)'}
+                  </Text>
+                </View>
+                <Text style={styles.cardSubText}>
+                  {dashboardData.avgWaitTime.status === 'Optimal' ? 'Target threshold met' : 'Above target threshold'}
+                </Text>
+              </View>
+
+              <View style={styles.gridCard}>
+                <Text style={styles.cardTitle}>STAFF ON DUTY</Text>
+                <Text style={styles.cardValue}>{dashboardData.staffOnDuty.total}</Text>
+                <Text style={styles.cardHighlight}>{dashboardData.staffOnDuty.activePercent}% roster active</Text>
+                <Text style={styles.cardSubText}>Doctors: {dashboardData.staffOnDuty.doctors} • Nurses: {dashboardData.staffOnDuty.nurses}</Text>
+              </View>
+
+              <View style={styles.gridCard}>
+                <Text style={styles.cardTitle}>ACTIVE QUEUES</Text>
+                <Text style={styles.cardValue}>{dashboardData.activeQueues.total}</Text>
+                <View style={styles.badgeNormal}>
+                  <Text style={styles.badgeNormalText}>{dashboardData.activeQueues.status}</Text>
+                </View>
+                <Text style={styles.cardSubText}>{dashboardData.activeQueues.total} departments active</Text>
+              </View>
             </View>
-            <Text style={styles.cardSubText}>Target threshold met</Text>
-          </View>
 
-          <View style={styles.gridCard}>
-            <Text style={styles.cardTitle}>STAFF ON DUTY</Text>
-            <Text style={styles.cardValue}>492</Text>
-            <Text style={styles.cardHighlight}>92% roster active</Text>
-            <Text style={styles.cardSubText}>Doctors: 142 • Nurses: 350</Text>
-          </View>
-
-          <View style={styles.gridCard}>
-            <Text style={styles.cardTitle}>ACTIVE QUEUES</Text>
-            <Text style={styles.cardValue}>24</Text>
-            <View style={styles.badgeNormal}>
-              <Text style={styles.badgeNormalText}>All Normal</Text>
+            {/* Progress Bar Section */}
+            <View style={styles.progressSection}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressTitle}>Consultation Progress</Text>
+                <Text style={styles.progressValue}>{dashboardData.consultationProgress.percentage}%</Text>
+              </View>
+              <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarFill, { width: `${dashboardData.consultationProgress.percentage}%` }]} />
+              </View>
+              <View style={styles.progressFooter}>
+                <Text style={styles.progressFooterText}>{dashboardData.consultationProgress.completed} completed on schedule</Text>
+                <Text style={styles.progressFooterHighlight}>{dashboardData.consultationProgress.inSession} in session</Text>
+              </View>
             </View>
-            <Text style={styles.cardSubText}>24 of 26 departments active</Text>
-          </View>
-
-        </View>
-
-        {/* Progress Bar Section */}
-        <View style={styles.progressSection}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressTitle}>Consultation Progress</Text>
-            <Text style={styles.progressValue}>84.2%</Text>
-          </View>
-          <View style={styles.progressBarBg}>
-            <View style={styles.progressBarFill} />
-          </View>
-          <View style={styles.progressFooter}>
-            <Text style={styles.progressFooterText}>3,612 completed on schedule</Text>
-            <Text style={styles.progressFooterHighlight}>678 in session</Text>
-          </View>
-        </View>
+          </>
+        )}
 
         {/* Chart Section */}
         <View style={styles.chartSection}>
