@@ -165,7 +165,12 @@ export default function ManageHospitalsScreen() {
               <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>No hospitals registered yet.</Text>
             ) : (
               (activeFilter === 'All' ? hospitals : hospitals.filter(h => h.type === activeFilter)).map((hospital) => (
-                <View key={hospital._id} style={styles.hospitalCard}>
+                <TouchableOpacity 
+                  key={hospital._id} 
+                  style={styles.hospitalCard}
+                  activeOpacity={0.7}
+                  onPress={() => router.push(`/(moh)/hospital-dashboard?id=${hospital._id}&name=${encodeURIComponent(hospital.name)}`)}
+                >
                   <View style={styles.cardHeader}>
                     <View style={styles.hospitalIconContainer}>
                       <Text style={styles.hospitalIcon}>🏥</Text>
@@ -205,7 +210,7 @@ export default function ManageHospitalsScreen() {
                       </Text>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))
             )}
 
