@@ -31,7 +31,7 @@ const loginUser = async (req, res) => {
 // @access  Public
 const registerPatient = async (req, res) => {
   try {
-    const { fullName, email, password, nic, birthday, gender, phone } = req.body;
+    const { fullName, email, password, nic, birthday, gender, phone, bloodGroup } = req.body;
 
     const userExists = await User.findOne({ email });
 
@@ -48,6 +48,7 @@ const registerPatient = async (req, res) => {
       birthday,
       gender,
       phone,
+      bloodGroup,
     });
 
     if (user) {
