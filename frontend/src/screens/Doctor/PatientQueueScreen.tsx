@@ -112,11 +112,40 @@ export default function PatientQueueScreen() {
   const handleTabPress = (tab: 'home' | 'queue' | 'records' | 'schedule' | 'rx') => {
     setActiveTab(tab);
     if (tab === 'home') {
-      router.push('/(doctor)/dashboard');
+      try {
+        router.push('/(doctor)/dashboard' as any);
+      } catch (e) {
+        router.push('/dashboard' as any);
+      }
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          if (!window.location.pathname.includes('dashboard')) {
+            window.location.href = '/(doctor)/dashboard';
+          }
+        }, 120);
+      }
     } else if (tab === 'records') {
-      Alert.alert('Patient Records', 'Patient Records screen will open here.');
+      Alert.alert(
+        'Doctor Records & Schedule',
+        'Would you like to open the Doctor Schedule & Timeline?',
+        [
+          { text: 'Open Schedule', onPress: () => handleTabPress('schedule') },
+          { text: 'Close', style: 'cancel' },
+        ]
+      );
     } else if (tab === 'schedule') {
-      Alert.alert('Doctor Schedule', 'Doctor Schedule screen will open here.');
+      try {
+        router.push('/(doctor)/schedule' as any);
+      } catch (e) {
+        router.push('/schedule' as any);
+      }
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          if (!window.location.pathname.includes('schedule')) {
+            window.location.href = '/(doctor)/schedule';
+          }
+        }, 120);
+      }
     } else if (tab === 'rx') {
       Alert.alert('Prescription', 'Patient Prescription & Details screen will open here.');
     }
@@ -216,6 +245,29 @@ export default function PatientQueueScreen() {
               {doctor?.room || 'Room 3B'} • {metrics?.waitingCount ?? 14} Patients Waiting
             </Text>
           </View>
+
+          {/* Quick Doctor Schedule Link Button */}
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(255, 255, 255, 0.22)',
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+              borderRadius: 20,
+              alignSelf: 'flex-start',
+              marginTop: 10,
+              borderWidth: 1,
+              borderColor: 'rgba(255, 255, 255, 0.4)',
+            }}
+            onPress={() => handleTabPress('schedule')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="calendar-outline" size={15} color="#ffffff" style={{ marginRight: 6 }} />
+            <Text style={{ fontSize: 12, color: '#ffffff', fontWeight: '700' }}>
+              Open Doctor Schedule (Timeline) →
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* ---- FLOATING "NOW IN CONSULTATION" CARD ---- */}

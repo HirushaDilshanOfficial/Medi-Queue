@@ -427,11 +427,245 @@ const callSpecificPatient = async (req, res) => {
   }
 };
 
+// Realistic mock schedule session state matching Figma design
+let scheduleSessionState = {
+  doctor: {
+    name: 'Dr. Emilia Emelson',
+    room: 'Room 3B Online',
+    status: 'active',
+    avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
+  },
+  dateHeader: 'WEDNESDAY, NOV 20, 2024',
+  selectedDayKey: '2024-11-20',
+  weekDays: [
+    { dayName: 'Mon', dayNumber: 18, dateKey: '2024-11-18' },
+    { dayName: 'Tue', dayNumber: 19, dateKey: '2024-11-19' },
+    { dayName: 'Wed', dayNumber: 20, dateKey: '2024-11-20', isToday: true, isSelected: true },
+    { dayName: 'Thu', dayNumber: 21, dateKey: '2024-11-21' },
+    { dayName: 'Fri', dayNumber: 22, dateKey: '2024-11-22' },
+  ],
+  shift: {
+    title: 'Morning OPD Shift',
+    timeRange: '08:30 AM – 01:00 PM',
+    room: 'Room 3B Ortho',
+    status: 'In Progress',
+    consultedCount: 18,
+    waitingCount: 14,
+    totalCapacity: 32,
+    avgMinutesPerPatient: 9,
+    remainingWalkinSlots: 4,
+    isOnBreak: false,
+  },
+  timeline: [
+    {
+      id: 'slot-1',
+      time: '09:00 AM',
+      timeHour: '09:00',
+      timePeriod: 'AM',
+      patientName: 'Priyantha Silva',
+      reason: 'Fever & Cough • Token #026',
+      tokenNumber: 26,
+      status: 'done',
+    },
+    {
+      id: 'slot-2',
+      time: '09:30 AM',
+      timeHour: '09:30',
+      timePeriod: 'AM',
+      patientName: 'Aurelia Sisca',
+      reason: 'Post-op Check • Token #027',
+      tokenNumber: 27,
+      status: 'done',
+    },
+    {
+      id: 'slot-3',
+      time: '10:00 AM',
+      timeHour: '10:00',
+      timePeriod: 'AM',
+      patientName: 'Kamal Gunaratne',
+      reason: 'Spine checkup • 10:00 AM',
+      tokenNumber: 28,
+      status: 'now_attending',
+      isNowAttending: true,
+      elapsedMinutes: 6,
+      locationStatus: 'In Room',
+      age: 48,
+      gender: 'Male',
+      vitals: {
+        bloodPressure: '124/82',
+        heartRate: '76 bpm',
+        temperature: '98.6°F',
+        spO2: '98%',
+      },
+      fileRecord: 'REC-841',
+    },
+    {
+      id: 'slot-4',
+      time: '10:30 AM',
+      timeHour: '10:30',
+      timePeriod: 'AM',
+      patientName: 'Rohan Mendis',
+      reason: 'Hypertension review • Token #030',
+      tokenNumber: 30,
+      status: 'waiting',
+      age: 54,
+      gender: 'Male',
+    },
+    {
+      id: 'slot-5',
+      time: '11:00 AM',
+      timeHour: '11:00',
+      timePeriod: 'AM',
+      patientName: 'Dilshan Madushanka',
+      reason: 'Acute knee sprain • Token #031',
+      tokenNumber: 31,
+      status: 'waiting',
+      age: 28,
+      gender: 'Male',
+    },
+    {
+      id: 'slot-6',
+      time: '11:30 AM',
+      timeHour: '11:30',
+      timePeriod: 'AM',
+      patientName: 'Sanduni Perera',
+      reason: 'Routine Ortho • Token #032',
+      tokenNumber: 32,
+      status: 'scheduled',
+      age: 41,
+      gender: 'Female',
+    },
+  ],
+};
+
+// @desc    Get Doctor Schedule for calendar day
+// @route   GET /api/v1/doctor/schedule
+// @access  Public / Protected
+const getDoctorSchedule = async (req, res) => {
+  try {
+    const { dateKey } = req.query;
+    if (dateKey && dateKey !== '2024-11-20') {
+      const selectedDayObj = scheduleSessionState.weekDays.find((d) => d.dateKey === dateKey);
+      const dayName = selectedDayObj ? selectedDayObj.dayName.toUpperCase() : 'SELECTED';
+      return res.status(200).json({
+        success: true,
+        data: {
+          ...scheduleSessionState,
+          dateHeader: `${dayName}DAY, NOV ${selectedDayObj?.dayNumber || 21}, 2024`,
+          selectedDayKey: dateKey,
+          timeline: [
+            {
+              id: `slot-other-1`,
+              time: '08:30 AM',
+              timeHour: '08:30',
+              timePeriod: 'AM',
+              patientName: 'Bandara Wijesekara',
+              reason: 'Ortho Follow-up • Token #001',
+              tokenNumber: 1,
+              status: 'scheduled',
+            },
+            {
+              id: `slot-other-2`,
+              time: '09:00 AM',
+              timeHour: '09:00',
+              timePeriod: 'AM',
+              patientName: 'Anoma Jayawardena',
+              reason: 'Joint Stiffness • Token #002',
+              tokenNumber: 2,
+              status: 'scheduled',
+            },
+            {
+              id: `slot-other-3`,
+              time: '09:30 AM',
+              timeHour: '09:30',
+              timePeriod: 'AM',
+              patientName: 'Saman Kumara',
+              reason: 'Fracture Review • Token #003',
+              tokenNumber: 3,
+              status: 'scheduled',
+            },
+          ],
+        },
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: scheduleSessionState,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Add Walk-in Slot to current schedule
+// @route   POST /api/v1/doctor/walkin-slot
+// @access  Public / Protected
+const addWalkInSlot = async (req, res) => {
+  try {
+    const { patientName, reason, priority = 'walkin', age = 35, gender = 'Other' } = req.body;
+    if (!patientName) {
+      return res.status(400).json({ success: false, message: 'Patient name is required' });
+    }
+
+    const nextToken = (scheduleSessionState.shift.totalCapacity || 32) + 1;
+    const newSlot = {
+      id: `slot-walkin-${Date.now()}`,
+      time: '12:00 PM',
+      timeHour: '12:00',
+      timePeriod: 'PM',
+      patientName,
+      reason: `${reason || 'Emergency Walk-in'} • Token #${String(nextToken).padStart(3, '0')}`,
+      tokenNumber: nextToken,
+      status: 'waiting',
+      age,
+      gender,
+    };
+
+    scheduleSessionState.timeline.push(newSlot);
+    scheduleSessionState.shift.totalCapacity += 1;
+    scheduleSessionState.shift.waitingCount += 1;
+    scheduleSessionState.shift.remainingWalkinSlots = Math.max(0, scheduleSessionState.shift.remainingWalkinSlots - 1);
+
+    return res.status(201).json({
+      success: true,
+      message: `Walk-in slot added successfully for ${patientName} (Token #${nextToken})`,
+      slot: newSlot,
+      data: scheduleSessionState,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Toggle break state
+// @route   POST /api/v1/doctor/break
+// @access  Public / Protected
+const toggleDoctorBreak = async (req, res) => {
+  try {
+    const { minutes = 15 } = req.body;
+    scheduleSessionState.shift.isOnBreak = !scheduleSessionState.shift.isOnBreak;
+    scheduleSessionState.shift.status = scheduleSessionState.shift.isOnBreak ? 'On Break' : 'In Progress';
+
+    return res.status(200).json({
+      success: true,
+      message: scheduleSessionState.shift.isOnBreak ? `Doctor took ${minutes}m break` : 'Doctor resumed shift',
+      isOnBreak: scheduleSessionState.shift.isOnBreak,
+      data: scheduleSessionState,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getDoctorDashboard,
   updateDoctorStatus,
   callNextPatient,
   ringChime,
   callSpecificPatient,
+  getDoctorSchedule,
+  addWalkInSlot,
+  toggleDoctorBreak,
 };
 

@@ -93,11 +93,33 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   const handleTabPress = (tab: 'home' | 'queue' | 'records' | 'schedule' | 'rx') => {
     setActiveTab(tab);
     if (tab === 'queue') {
-      router.push('/(doctor)/queue');
+      try {
+        router.push('/(doctor)/queue' as any);
+      } catch (e) {
+        router.push('/queue' as any);
+      }
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          if (!window.location.pathname.includes('queue')) {
+            window.location.href = '/(doctor)/queue';
+          }
+        }, 120);
+      }
     } else if (tab === 'records') {
       Alert.alert('Patient Records', 'Patient Records screen will open here.');
     } else if (tab === 'schedule') {
-      Alert.alert('Doctor Schedule', 'Doctor Schedule screen will open here.');
+      try {
+        router.push('/(doctor)/schedule' as any);
+      } catch (e) {
+        router.push('/schedule' as any);
+      }
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          if (!window.location.pathname.includes('schedule')) {
+            window.location.href = '/(doctor)/schedule';
+          }
+        }, 120);
+      }
     } else if (tab === 'rx') {
       Alert.alert('Prescription', 'Patient Prescription & Details screen will open here.');
     }
@@ -322,6 +344,17 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               <Ionicons name="cafe-outline" size={20} color="#0d6371" />
             </View>
             <Text style={styles.quickActionLabel}>15m Break</Text>
+          </TouchableOpacity>
+
+          {/* My Schedule */}
+          <TouchableOpacity
+            style={styles.quickActionCard}
+            onPress={() => router.push('/(doctor)/schedule')}
+          >
+            <View style={[styles.quickActionIconCircle, { backgroundColor: '#e0f6f8' }]}>
+              <MaterialCommunityIcons name="calendar-month-outline" size={20} color="#0d6371" />
+            </View>
+            <Text style={[styles.quickActionLabel, { fontWeight: '700', color: '#0d6371' }]}>Schedule</Text>
           </TouchableOpacity>
         </View>
 

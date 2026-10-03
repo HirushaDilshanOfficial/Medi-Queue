@@ -6,6 +6,9 @@ const {
   callNextPatient,
   ringChime,
   callSpecificPatient,
+  getDoctorSchedule,
+  addWalkInSlot,
+  toggleDoctorBreak,
 } = require('../controllers/doctorController');
 
 // Doctor Dashboard Endpoints
@@ -14,5 +17,10 @@ router.patch('/status', updateDoctorStatus);
 router.post('/call-next', callNextPatient);
 router.post('/chime', ringChime);
 router.post('/call-token', callSpecificPatient);
+
+// Doctor Schedule Endpoints
+router.get('/schedule', getDoctorSchedule);
+router.post('/walkin-slot', addWalkInSlot);
+router.post('/break', toggleDoctorBreak);
 
 module.exports = router;
