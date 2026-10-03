@@ -22,7 +22,7 @@ export default function HospitalDashboardScreen() {
   const hospitalName = name || 'General Hospital';
 
   const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
 
   useEffect(() => {
     if (id) {
