@@ -39,6 +39,15 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
     },
+    bloodGroup: {
+      type: String,
+      enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
+    },
+    status: {
+      type: String,
+      enum: ['Active', 'Inactive'],
+      default: 'Active',
+    },
   },
   {
     timestamps: true,

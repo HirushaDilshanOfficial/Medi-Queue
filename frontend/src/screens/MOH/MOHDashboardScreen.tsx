@@ -17,10 +17,10 @@ import { Colors } from '../../constants/Colors';
 export default function MOHDashboardScreen() {
   const quickActions = [
     { id: 1, icon: '🏥', label: 'Hospitals', route: '/(moh)/manage-hospitals' as any },
-    { id: 2, icon: '👨‍⚕️', label: 'Doctors', route: null },
+    { id: 2, icon: '🤒', label: 'Patients', route: '/(moh)/manage-patients' as any },
     { id: 3, icon: '👩‍💼', label: 'Staff', route: '/(moh)/manage-staff' as any },
-    { id: 4, icon: '📊', label: 'Reports', route: null },
-    { id: 5, icon: '⚙️', label: 'Settings', route: null },
+    { id: 4, icon: '⚠️', label: 'Alerts', route: '/(moh)/alerts' as any },
+    { id: 5, icon: '📊', label: 'Reports', route: '/(moh)/reports' as any },
   ];
 
   const hospitalClinics = [
@@ -59,7 +59,7 @@ export default function MOHDashboardScreen() {
               </View>
             </View>
             <View style={styles.headerIcons}>
-              <TouchableOpacity style={styles.iconButton}>
+              <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/(moh)/alerts')}>
                 <Text style={styles.iconText}>🔔</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconButton} onPress={() => router.replace('/(auth)/login')}>
