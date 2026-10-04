@@ -128,7 +128,7 @@ export default function ProfileScreen() {
             <View style={styles.settingsCard}>
               <Text style={styles.sectionTitle}>Settings</Text>
               
-              <TouchableOpacity style={styles.settingItem}>
+              <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/(moh)/edit-profile')}>
                 <View style={styles.settingItemLeft}>
                   <Text style={styles.settingIcon}>✏️</Text>
                   <Text style={styles.settingText}>Edit Profile</Text>

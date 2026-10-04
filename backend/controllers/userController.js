@@ -115,9 +115,47 @@ const getUserProfile = asyncHandler(async (req, res) => {
   });
 });
 
+const updateUserProfile = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (user) {
+    user.fullName = req.body.fullName || user.fullName;
+    user.email = req.body.email || user.email;
+    user.phone = req.body.phone || user.phone;
+    user.nic = req.body.nic || user.nic;
+    user.bloodGroup = req.body.bloodGroup || user.bloodGroup;
+    user.birthday = req.body.birthday || user.birthday;
+    user.gender = req.body.gender || user.gender;
+
+    if (req.body.password) {
+      user.password = req.body.password;
+    }
+
+    const updatedUser = await user.save();
+
+    res.json({
+      _id: updatedUser._id,
+      name: updatedUser.fullName,
+      fullName: updatedUser.fullName,
+      email: updatedUser.email,
+      role: updatedUser.role,
+      phone: updatedUser.phone,
+      nic: updatedUser.nic,
+      bloodGroup: updatedUser.bloodGroup,
+      birthday: updatedUser.birthday,
+      gender: updatedUser.gender,
+      status: updatedUser.status,
+      token: generateToken(updatedUser._id),
+    });
+  } else {
+    throw createError('User not found', 404);
+  }
+});
+
 module.exports = {
   registerUser,
   loginUser,
   getUserProfile,
+  updateUserProfile,
 };
 
