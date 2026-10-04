@@ -327,6 +327,84 @@ export interface DoctorScheduleData {
   timeline: ScheduleTimelineItem[];
 }
 
+// Real-time Date & Time Utility Helpers
+export const toDateKey = (date: Date = new Date()): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+export const formatRealtimeDateHeader = (date: Date = new Date()): string => {
+  const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const dayName = days[date.getDay()];
+  const monthName = months[date.getMonth()];
+  const dayNum = date.getDate();
+  const year = date.getFullYear();
+  return `${dayName}, ${monthName} ${dayNum}, ${year}`;
+};
+
+export const formatRealtimeClock = (date: Date = new Date()): string => {
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const strMinutes = minutes < 10 ? '0' + minutes : minutes;
+  const strHours = hours < 10 ? '0' + hours : hours;
+  return `${strHours}:${strMinutes} ${ampm}`;
+};
+
+export const getRealtimeWeekDays = (baseDate: Date = new Date()): WeekDayItem[] => {
+  const today = new Date(baseDate);
+  const dayOfWeek = today.getDay(); // 0 is Sun, 1 is Mon ... 6 is Sat
+  const dayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const todayKey = toDateKey(today);
+
+  // If weekday (Mon-Fri)
+  if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek - 1));
+    const result: WeekDayItem[] = [];
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const k = toDateKey(d);
+      result.push({
+        dayName: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][i],
+        dayNumber: d.getDate(),
+        dateKey: k,
+        isToday: k === todayKey,
+        isSelected: k === todayKey,
+      });
+    }
+    return result;
+  }
+
+  // If weekend (Sunday or Saturday), show 5 days including today
+  const start = new Date(today);
+  if (dayOfWeek === 6) {
+    // Saturday: Fri, Sat, Sun, Mon, Tue
+    start.setDate(today.getDate() - 1);
+  } // Sunday: Sun, Mon, Tue, Wed, Thu
+
+  const result: WeekDayItem[] = [];
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const k = toDateKey(d);
+    result.push({
+      dayName: dayNamesShort[d.getDay()],
+      dayNumber: d.getDate(),
+      dateKey: k,
+      isToday: k === todayKey,
+      isSelected: k === todayKey,
+    });
+  }
+  return result;
+};
+
 export const fallbackScheduleData: DoctorScheduleData = {
   doctor: {
     name: 'Dr. Emilia Emelson',
@@ -334,15 +412,9 @@ export const fallbackScheduleData: DoctorScheduleData = {
     status: 'active',
     avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
   },
-  dateHeader: 'WEDNESDAY, NOV 20, 2024',
-  selectedDayKey: '2024-11-20',
-  weekDays: [
-    { dayName: 'Mon', dayNumber: 18, dateKey: '2024-11-18' },
-    { dayName: 'Tue', dayNumber: 19, dateKey: '2024-11-19' },
-    { dayName: 'Wed', dayNumber: 20, dateKey: '2024-11-20', isToday: true, isSelected: true },
-    { dayName: 'Thu', dayNumber: 21, dateKey: '2024-11-21' },
-    { dayName: 'Fri', dayNumber: 22, dateKey: '2024-11-22' },
-  ],
+  dateHeader: formatRealtimeDateHeader(new Date()),
+  selectedDayKey: toDateKey(new Date()),
+  weekDays: getRealtimeWeekDays(new Date()),
   shift: {
     title: 'Morning OPD Shift',
     timeRange: '08:30 AM – 01:00 PM',

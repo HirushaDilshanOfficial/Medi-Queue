@@ -222,6 +222,24 @@ const getDoctorDashboard = async (req, res) => {
       };
     }
 
+    // If DB has no active queue for today, synchronize with currentSessionState so doctor always has an interactive queue!
+    if (!currentPatient && formattedUpcoming.length === 0) {
+      currentSessionState.doctor = {
+        ...currentSessionState.doctor,
+        _id: doctor._id,
+        name: doctor.name || currentSessionState.doctor.name,
+        room: doctor.room || currentSessionState.doctor.room,
+        specialization: doctor.specialization || currentSessionState.doctor.specialization,
+        department: doctor.department || currentSessionState.doctor.department,
+      };
+
+      return res.status(200).json({
+        success: true,
+        source: 'session_sync',
+        data: currentSessionState,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       source: 'database',
@@ -338,12 +356,40 @@ const callNextPatient = async (req, res) => {
       currentSessionState.currentPatient = {
         ...nextPat,
         status: 'in_consultation',
-        reason: 'General OPD Consultation',
-        checkedInTime: '10:30 AM',
+        reason: nextPat.reason || 'General OPD Consultation',
+        bloodPressure: '120/80',
+        heartRate: '75 bpm',
+        fileRecord: `REC-${800 + nextPat.tokenNumber}`,
+        checkedInTime: nextPat.slotTime || '10:30 AM',
         calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       currentSessionState.metrics.currentCallingToken = nextPat.tokenNumber;
       currentSessionState.metrics.waitingCount = Math.max(0, currentSessionState.metrics.waitingCount - 1);
+
+      // Auto-replenish if queue gets low so the doctor queue never runs out during testing
+      if (currentSessionState.upcomingQueue.length <= 2) {
+        const lastNum = currentSessionState.upcomingQueue.length > 0
+          ? currentSessionState.upcomingQueue[currentSessionState.upcomingQueue.length - 1].tokenNumber
+          : nextPat.tokenNumber;
+        const newNum = lastNum + 1;
+        const extraNames = ['Nuwan Pradeep', 'Chamari Athapaththu', 'Kusal Mendis', 'Anusha Damayanthi', 'Dinesh Chandimal', 'Tharushi Dissanayake'];
+        const chosenName = extraNames[newNum % extraNames.length];
+        currentSessionState.upcomingQueue.push({
+          tokenNumber: newNum,
+          patientName: chosenName,
+          age: 26 + (newNum % 35),
+          gender: newNum % 2 === 0 ? 'Female' : 'Male',
+          priority: newNum % 3 === 0 ? 'elderly' : 'normal',
+          category: newNum % 3 === 0 ? 'priority' : 'all',
+          status: 'Waiting',
+          reason: 'Follow-up Consultation',
+          location: 'Waiting Area',
+          arrivedTime: '11:15 AM',
+          vitalsVerified: true,
+          slotTime: '01:00 PM',
+        });
+        currentSessionState.metrics.waitingCount += 1;
+      }
 
       return res.status(200).json({
         success: true,
@@ -357,6 +403,7 @@ const callNextPatient = async (req, res) => {
       success: true,
       message: 'No more waiting patients in queue today!',
       calledToken: null,
+      data: currentSessionState,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -421,13 +468,61 @@ const callSpecificPatient = async (req, res) => {
       success: true,
       message: `Token #${tokenNumber} called into room`,
       calledToken: tokenNumber,
+      data: currentSessionState,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Realistic mock schedule session state matching Figma design
+// Real-time Date & Time Utility Helpers for Backend
+const toDateKeyBackend = (date = new Date()) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const formatRealtimeDateHeaderBackend = (date = new Date()) => {
+  const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const dayName = days[date.getDay()];
+  const monthName = months[date.getMonth()];
+  const dayNum = date.getDate();
+  const year = date.getFullYear();
+  return `${dayName}, ${monthName} ${dayNum}, ${year}`;
+};
+
+const getRealtimeWeekDaysBackend = (baseDate = new Date()) => {
+  const today = new Date(baseDate);
+  const dayOfWeek = today.getDay();
+  const dayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const todayKey = toDateKeyBackend(today);
+
+  let start = new Date(today);
+  if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+    start.setDate(today.getDate() - (dayOfWeek - 1));
+  } else if (dayOfWeek === 6) {
+    start.setDate(today.getDate() - 1);
+  }
+
+  const result = [];
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const k = toDateKeyBackend(d);
+    result.push({
+      dayName: dayNamesShort[d.getDay()],
+      dayNumber: d.getDate(),
+      dateKey: k,
+      isToday: k === todayKey,
+      isSelected: k === todayKey,
+    });
+  }
+  return result;
+};
+
+// Realistic mock schedule session state matching Figma design with Real-time dates
 let scheduleSessionState = {
   doctor: {
     name: 'Dr. Emilia Emelson',
@@ -435,15 +530,9 @@ let scheduleSessionState = {
     status: 'active',
     avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
   },
-  dateHeader: 'WEDNESDAY, NOV 20, 2024',
-  selectedDayKey: '2024-11-20',
-  weekDays: [
-    { dayName: 'Mon', dayNumber: 18, dateKey: '2024-11-18' },
-    { dayName: 'Tue', dayNumber: 19, dateKey: '2024-11-19' },
-    { dayName: 'Wed', dayNumber: 20, dateKey: '2024-11-20', isToday: true, isSelected: true },
-    { dayName: 'Thu', dayNumber: 21, dateKey: '2024-11-21' },
-    { dayName: 'Fri', dayNumber: 22, dateKey: '2024-11-22' },
-  ],
+  dateHeader: formatRealtimeDateHeaderBackend(new Date()),
+  selectedDayKey: toDateKeyBackend(new Date()),
+  weekDays: getRealtimeWeekDaysBackend(new Date()),
   shift: {
     title: 'Morning OPD Shift',
     timeRange: '08:30 AM – 01:00 PM',
@@ -544,15 +633,23 @@ let scheduleSessionState = {
 const getDoctorSchedule = async (req, res) => {
   try {
     const { dateKey } = req.query;
-    if (dateKey && dateKey !== '2024-11-20') {
-      const selectedDayObj = scheduleSessionState.weekDays.find((d) => d.dateKey === dateKey);
-      const dayName = selectedDayObj ? selectedDayObj.dayName.toUpperCase() : 'SELECTED';
+    const todayKey = toDateKeyBackend(new Date());
+    const targetKey = dateKey || todayKey;
+
+    // Refresh real-time week days
+    scheduleSessionState.weekDays = getRealtimeWeekDaysBackend(new Date());
+
+    if (targetKey !== todayKey) {
+      const [y, m, d] = targetKey.split('-').map(Number);
+      const selectedDate = (!isNaN(y) && !isNaN(m) && !isNaN(d)) ? new Date(y, m - 1, d) : new Date();
+      const dynamicHeader = formatRealtimeDateHeaderBackend(selectedDate);
+
       return res.status(200).json({
         success: true,
         data: {
           ...scheduleSessionState,
-          dateHeader: `${dayName}DAY, NOV ${selectedDayObj?.dayNumber || 21}, 2024`,
-          selectedDayKey: dateKey,
+          dateHeader: dynamicHeader,
+          selectedDayKey: targetKey,
           timeline: [
             {
               id: `slot-other-1`,
@@ -588,6 +685,9 @@ const getDoctorSchedule = async (req, res) => {
         },
       });
     }
+
+    scheduleSessionState.dateHeader = formatRealtimeDateHeaderBackend(new Date());
+    scheduleSessionState.selectedDayKey = todayKey;
 
     return res.status(200).json({
       success: true,

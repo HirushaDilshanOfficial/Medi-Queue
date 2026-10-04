@@ -23,6 +23,10 @@ import {
   DoctorScheduleData,
   ScheduleTimelineItem,
   fallbackScheduleData,
+  toDateKey,
+  formatRealtimeDateHeader,
+  formatRealtimeClock,
+  getRealtimeWeekDays,
 } from '../../services/doctorService';
 
 interface DoctorScheduleScreenProps {
@@ -33,7 +37,8 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   const [data, setData] = useState<DoctorScheduleData>(fallbackScheduleData);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedDayKey, setSelectedDayKey] = useState<string>('2024-11-20');
+  const [selectedDayKey, setSelectedDayKey] = useState<string>(toDateKey(new Date()));
+  const [liveClock, setLiveClock] = useState<string>(formatRealtimeClock(new Date()));
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('schedule');
 
   // Modals
@@ -78,6 +83,14 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     loadSchedule(selectedDayKey);
   }, [loadSchedule, selectedDayKey]);
 
+  // Live clock tick (every 10s)
+  useEffect(() => {
+    const clockTimer = setInterval(() => {
+      setLiveClock(formatRealtimeClock(new Date()));
+    }, 10000);
+    return () => clearInterval(clockTimer);
+  }, []);
+
   // Elapsed timer tick
   useEffect(() => {
     const timer = setInterval(() => {
@@ -104,15 +117,24 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
   const handleSelectDay = (dateKey: string) => {
     setSelectedDayKey(dateKey);
-    // If not Nov 20, update preview seamlessly
-    if (dateKey === '2024-11-20') {
-      setData(fallbackScheduleData);
+    const todayKey = toDateKey(new Date());
+
+    // Calculate real-time dynamic date header for the selected day
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const selectedDate = (!isNaN(y) && !isNaN(m) && !isNaN(d)) ? new Date(y, m - 1, d) : new Date();
+    const dynamicHeader = formatRealtimeDateHeader(selectedDate);
+
+    if (dateKey === todayKey) {
+      setData((prev) => ({
+        ...prev,
+        dateHeader: dynamicHeader,
+        selectedDayKey: dateKey,
+      }));
+      loadSchedule(dateKey);
     } else {
-      const foundDay = data.weekDays.find((d) => d.dateKey === dateKey);
-      const dayName = foundDay ? foundDay.dayName.toUpperCase() : 'SELECTED';
       setData({
         ...fallbackScheduleData,
-        dateHeader: `${dayName}DAY, NOV ${foundDay?.dayNumber || 21}, 2024`,
+        dateHeader: dynamicHeader,
         selectedDayKey: dateKey,
         timeline: [
           {
@@ -375,7 +397,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
         <View style={styles.dateAndHeaderSection}>
           <View style={styles.dateSubRow}>
             <Ionicons name="calendar-outline" size={15} color="#0d6371" style={{ marginRight: 6 }} />
-            <Text style={styles.dateSubText}>{data.dateHeader || 'WEDNESDAY, NOV 20, 2024'}</Text>
+            <Text style={styles.dateSubText}>{data.dateHeader || formatRealtimeDateHeader(new Date())}</Text>
           </View>
 
           <View style={styles.titleWithFilterRow}>
@@ -509,7 +531,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               <Text style={styles.patientsCountText}>{totalCapacity} Patients</Text>
             </View>
           </View>
-          <Text style={styles.currentSlotText}>Current: Slot 10:00 AM</Text>
+          <Text style={styles.currentSlotText}>Current: {liveClock}</Text>
         </View>
 
         {/* ========================================================= */}

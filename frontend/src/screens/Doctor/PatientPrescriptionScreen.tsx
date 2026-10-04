@@ -129,7 +129,17 @@ export default function PatientPrescriptionScreen() {
   };
 
   // Remove diagnosis chip
-  const handleRemoveDiagnosis = (id: string) => {
+  const handleRemoveDiagnosis = (id: string, name?: string) => {
+    // On web, Alert.alert multi-button callbacks don't fire — use window.confirm instead
+    if (Platform.OS === 'web') {
+      const ok = (window as any).confirm(`Remove "${name || 'this diagnosis'}" from the diagnosis list?`);
+      if (!ok) return;
+      setData((prev) => ({
+        ...prev,
+        diagnoses: prev.diagnoses.filter((d) => d.id !== id),
+      }));
+      return;
+    }
     setData((prev) => ({
       ...prev,
       diagnoses: prev.diagnoses.filter((d) => d.id !== id),
@@ -158,6 +168,16 @@ export default function PatientPrescriptionScreen() {
 
   // Remove medicine item
   const handleRemoveMedicine = (id: string, name: string) => {
+    // On web, Alert.alert multi-button callbacks don't fire — use window.confirm instead
+    if (Platform.OS === 'web') {
+      const ok = (window as any).confirm(`Remove ${name} from this prescription?`);
+      if (!ok) return;
+      setData((prev) => ({
+        ...prev,
+        prescriptions: prev.prescriptions.filter((m) => m.id !== id),
+      }));
+      return;
+    }
     Alert.alert(
       'Remove Medicine',
       `Are you sure you want to remove ${name} from this prescription?`,
@@ -414,7 +434,7 @@ export default function PatientPrescriptionScreen() {
                       {diag.displayName}
                     </Text>
                     <TouchableOpacity
-                      onPress={() => handleRemoveDiagnosis(diag.id)}
+                      onPress={() => handleRemoveDiagnosis(diag.id, diag.displayName)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={styles.chipRemoveBtn}
                     >
