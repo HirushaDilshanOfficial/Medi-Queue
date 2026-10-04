@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import {
-  View,
+import { View,
   Text,
   StyleSheet,
   ScrollView,
@@ -8,14 +7,22 @@ import {
   StatusBar,
   TextInput,
   Modal,
-  Alert,
-} from 'react-native';
+  Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
 export default function ManagePatientsScreen() {
+  const [refreshing, setRefreshing] = React.useState(false);
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    fetchPatients();
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1500);
+  }, []);
+
   const [activeFilter, setActiveFilter] = useState('All');
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,7 +145,7 @@ export default function ManagePatientsScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           
           <View style={styles.topSection}>
             <Text style={styles.sectionTitle}>Registered Patients</Text>

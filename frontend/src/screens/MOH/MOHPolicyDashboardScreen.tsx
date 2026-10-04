@@ -1,39 +1,101 @@
-import React, { useState } from 'react';
-import {
-  View,
+import React, { useState, useEffect } from 'react';
+import { View,
   Text,
   StyleSheet,
   ScrollView,
   SafeAreaView,
   StatusBar,
   TouchableOpacity,
-  Switch,
-} from 'react-native';
+  Switch, RefreshControl } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { router } from 'expo-router';
+
+import { getPolicies, updatePolicy } from '../../services/policyService';
 
 export default function MOHPolicyDashboardScreen() {
+  const [refreshing, setRefreshing] = React.useState(false);
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1500);
+  }, []);
+
   const [priorityQueue, setPriorityQueue] = useState(true);
   const [autoExpiry, setAutoExpiry] = useState(true);
   const [dataMasking, setDataMasking] = useState(true);
+  const [targetWaitTime, setTargetWaitTime] = useState(30);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPolicies();
+  }, []);
+
+  const fetchPolicies = async () => {
+    try {
+      setLoading(true);
+      const data = await getPolicies();
+      setPriorityQueue(data.priorityQueue ?? true);
+      setAutoExpiry(data.tokenAutoExpiry ?? true);
+      setDataMasking(data.dataMasking ?? true);
+      setTargetWaitTime(data.targetWaitTime ?? 30);
+    } catch (error) {
+      console.error('Error fetching policies', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggle = async (key: string, value: boolean) => {
+    // Optimistic UI update
+    if (key === 'priorityQueue') setPriorityQueue(value);
+    if (key === 'tokenAutoExpiry') setAutoExpiry(value);
+    if (key === 'dataMasking') setDataMasking(value);
+
+    try {
+      await updatePolicy({ [key]: value });
+    } catch (error) {
+      // Revert if failed
+      if (key === 'priorityQueue') setPriorityQueue(!value);
+      if (key === 'tokenAutoExpiry') setAutoExpiry(!value);
+      if (key === 'dataMasking') setDataMasking(!value);
+    }
+  };
+
+  const adjustWaitTime = async (increment: number) => {
+    const newValue = Math.max(5, targetWaitTime + increment);
+    setTargetWaitTime(newValue);
+    try {
+      await updatePolicy({ targetWaitTime: newValue });
+    } catch (error) {
+      setTargetWaitTime(targetWaitTime); // Revert
+    }
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
       <SafeAreaView style={{ flex: 0, backgroundColor: Colors.primaryDark }} />
 
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Header Section */}
         <View style={styles.headerBackground}>
           <View style={styles.headerTop}>
-            <View style={styles.headerUser}>
-              <View style={styles.avatar}>
-                <Ionicons name="shield-checkmark" size={24} color={Colors.primaryDark} />
-              </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <Ionicons name="arrow-back" size={24} color={Colors.white} />
+              </TouchableOpacity>
+              <View style={styles.headerUser}>
+                <View style={styles.avatar}>
+                  <Ionicons name="shield-checkmark" size={24} color={Colors.primaryDark} />
+                </View>
               <View>
                 <Text style={styles.headerRole}>MOH Executive</Text>
                 <Text style={styles.headerSub}>National OPD Network • Policy</Text>
               </View>
+            </View>
             </View>
             <TouchableOpacity style={styles.notificationBtn}>
               <Ionicons name="notifications-outline" size={24} color={Colors.white} />
@@ -53,12 +115,12 @@ export default function MOHPolicyDashboardScreen() {
           <View style={styles.metricsContainer}>
             <View style={styles.metricBox}>
               <Text style={styles.metricLabel}>Target Wait</Text>
-              <Text style={styles.metricValue}>30 min</Text>
+              <Text style={styles.metricValue}>{targetWaitTime} min</Text>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricBox}>
               <Text style={styles.metricLabel}>PII Masking</Text>
-              <Text style={styles.metricValue}>100%</Text>
+              <Text style={styles.metricValue}>{dataMasking ? '100%' : 'Off'}</Text>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricBox}>
@@ -122,9 +184,9 @@ export default function MOHPolicyDashboardScreen() {
                 <Text style={styles.policySubtitle}>Triggers hospital executive surge alert</Text>
               </View>
               <View style={styles.stepperControl}>
-                <TouchableOpacity style={styles.stepperBtn}><Text style={styles.stepperText}>-</Text></TouchableOpacity>
-                <Text style={styles.stepperValue}>30 min</Text>
-                <TouchableOpacity style={styles.stepperBtn}><Text style={styles.stepperText}>+</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => adjustWaitTime(-5)} style={styles.stepperBtn}><Text style={styles.stepperText}>-</Text></TouchableOpacity>
+                <Text style={styles.stepperValue}>{targetWaitTime} min</Text>
+                <TouchableOpacity onPress={() => adjustWaitTime(5)} style={styles.stepperBtn}><Text style={styles.stepperText}>+</Text></TouchableOpacity>
               </View>
             </View>
             
@@ -138,8 +200,9 @@ export default function MOHPolicyDashboardScreen() {
               <Switch
                 trackColor={{ false: '#d1d1d1', true: Colors.primaryDark }}
                 thumbColor={Colors.white}
-                onValueChange={() => setPriorityQueue(!priorityQueue)}
+                onValueChange={(val) => handleToggle('priorityQueue', val)}
                 value={priorityQueue}
+                disabled={loading}
               />
             </View>
 
@@ -153,8 +216,9 @@ export default function MOHPolicyDashboardScreen() {
               <Switch
                 trackColor={{ false: '#d1d1d1', true: Colors.primaryDark }}
                 thumbColor={Colors.white}
-                onValueChange={() => setAutoExpiry(!autoExpiry)}
+                onValueChange={(val) => handleToggle('tokenAutoExpiry', val)}
                 value={autoExpiry}
+                disabled={loading}
               />
             </View>
           </View>
@@ -174,8 +238,9 @@ export default function MOHPolicyDashboardScreen() {
               <Switch
                 trackColor={{ false: '#d1d1d1', true: Colors.primaryDark }}
                 thumbColor={Colors.white}
-                onValueChange={() => setDataMasking(!dataMasking)}
+                onValueChange={(val) => handleToggle('dataMasking', val)}
                 value={dataMasking}
+                disabled={loading}
               />
             </View>
 
@@ -231,6 +296,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 25,
+  },
+  backBtn: {
+    marginRight: 12,
+    padding: 4,
   },
   avatar: {
     width: 36,

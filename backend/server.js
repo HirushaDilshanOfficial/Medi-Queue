@@ -9,6 +9,7 @@ const hospitalRoutes = require('./routes/hospitalRoutes');
 const staffRoutes = require('./routes/staffRoutes');
 const alertRoutes = require('./routes/alertRoutes');
 const patientRoutes = require('./routes/patientRoutes');
+const policyRoutes = require('./routes/policyRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -28,6 +29,7 @@ app.use('/api/v1/hospitals', hospitalRoutes);
 app.use('/api/v1/staff', staffRoutes);
 app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/patients', patientRoutes);
+app.use('/api/v1/policies', policyRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

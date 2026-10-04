@@ -1,19 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
+import { View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  ActivityIndicator
-} from 'react-native';
+  ActivityIndicator, RefreshControl } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
 export default function HospitalDashboardScreen() {
+  const [refreshing, setRefreshing] = React.useState(false);
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1500);
+  }, []);
+
   const params = useLocalSearchParams();
   const id = params?.id;
   const name = params?.name;
@@ -77,7 +84,7 @@ export default function HospitalDashboardScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         
         {/* Status indicator */}
         <View style={styles.syncStatusContainer}>
