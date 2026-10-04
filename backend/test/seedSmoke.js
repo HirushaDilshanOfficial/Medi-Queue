@@ -11,34 +11,23 @@ async function seed() {
   await mongoose.connect(process.env.MONGO_URI);
 
   // 1. Receptionist user
-  let rec = await User.findOne({ email: 'receptionist@mediqueue.lk' });
-  if (!rec) {
-    rec = await User.create({
-      name: 'Receptionist User',
-      email: 'receptionist@mediqueue.lk',
-      password: 'password123',
-      role: 'receptionist',
-    });
-  } else {
-    rec.password = 'password123';
-    rec.role = 'receptionist';
-    await rec.save();
-  }
+  await User.deleteOne({ email: 'receptionist@mediqueue.lk' });
+  const rec = await User.create({
+    fullName: 'Receptionist User',
+    email: 'receptionist@mediqueue.lk',
+    password: 'password123',
+    role: 'Receptionist',
+  });
 
   // 2. Patient user
-  let pat = await User.findOne({ email: 'patient.test@mediqueue.lk' });
-  if (!pat) {
-    pat = await User.create({
-      name: 'Test Patient User',
-      email: 'patient.test@mediqueue.lk',
-      password: 'password123',
-      role: 'patient',
-    });
-  } else {
-    pat.password = 'password123';
-    pat.role = 'patient';
-    await pat.save();
-  }
+  await User.deleteOne({ email: 'patient.test@mediqueue.lk' });
+  const pat = await User.create({
+    fullName: 'Test Patient User',
+    email: 'patient.test@mediqueue.lk',
+    password: 'password123',
+    role: 'Patient',
+    nic: '199512345678',
+  });
 
   // 3. Active Doctor
   let doc = await Doctor.findOne({ name: 'Dr. Palitha Perera' });
