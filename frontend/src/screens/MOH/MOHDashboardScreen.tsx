@@ -1,6 +1,5 @@
 import React from 'react';
-import {
-  View,
+import { View,
   Text,
   StyleSheet,
   ScrollView,
@@ -8,13 +7,21 @@ import {
   SafeAreaView,
   TextInput,
   Platform,
-  StatusBar,
-} from 'react-native';
+  StatusBar, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 
 // MOH Dashboard - Expo Router version matching the premium UI design
 export default function MOHDashboardScreen() {
+  const [refreshing, setRefreshing] = React.useState(false);
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1500);
+  }, []);
+
   const quickActions = [
     { id: 1, icon: '🏥', label: 'Hospitals', route: '/(moh)/manage-hospitals' as any },
     { id: 2, icon: '🤒', label: 'Patients', route: '/(moh)/manage-patients' as any },
@@ -42,7 +49,7 @@ export default function MOHDashboardScreen() {
       {/* Main Safe Area */}
       <View style={{ flex: 1, backgroundColor: Colors.background }}>
         <View style={{ flex: 1, backgroundColor: Colors.background }}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
             
             {/* ---- TEAL CURVED HEADER SECTION ---- */}
         <View style={styles.headerBackground}>

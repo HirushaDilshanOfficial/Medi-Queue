@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
+import { View,
   Text,
   StyleSheet,
   ScrollView,
   SafeAreaView,
   StatusBar,
   TouchableOpacity,
-  Switch,
-} from 'react-native';
+  Switch, RefreshControl } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -16,6 +14,15 @@ import { router } from 'expo-router';
 import { getPolicies, updatePolicy } from '../../services/policyService';
 
 export default function MOHPolicyDashboardScreen() {
+  const [refreshing, setRefreshing] = React.useState(false);
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1500);
+  }, []);
+
   const [priorityQueue, setPriorityQueue] = useState(true);
   const [autoExpiry, setAutoExpiry] = useState(true);
   const [dataMasking, setDataMasking] = useState(true);
@@ -72,7 +79,7 @@ export default function MOHPolicyDashboardScreen() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
       <SafeAreaView style={{ flex: 0, backgroundColor: Colors.primaryDark }} />
 
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Header Section */}
         <View style={styles.headerBackground}>
           <View style={styles.headerTop}>
