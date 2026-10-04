@@ -1,19 +1,57 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, Platform, SafeAreaView } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
+import { BASE_URL } from '../../config';
 
 export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        router.replace('/(auth)/login');
+        return;
+      }
+
+      const response = await fetch(`${BASE_URL}/api/users/profile`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUserData(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfile();
+    }, [])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1500);
+    fetchProfile().finally(() => setRefreshing(false));
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('user');
     router.replace('/(auth)/login');
   };
 
@@ -40,10 +78,10 @@ export default function ProfileScreen() {
 
             <View style={styles.profileSection}>
               <View style={styles.avatarContainer}>
-                <Text style={styles.avatarText}>M</Text>
+                <Text style={styles.avatarText}>{userData?.fullName ? userData.fullName.charAt(0).toUpperCase() : 'U'}</Text>
               </View>
-              <Text style={styles.userNameText}>Ministry of Health</Text>
-              <Text style={styles.userRoleText}>Super Admin</Text>
+              <Text style={styles.userNameText}>{userData?.fullName || 'Loading...'}</Text>
+              <Text style={styles.userRoleText}>{userData?.role || 'Role N/A'}</Text>
             </View>
           </View>
 
@@ -58,7 +96,7 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.infoTextContainer}>
                   <Text style={styles.infoLabel}>Full Name</Text>
-                  <Text style={styles.infoValue}>Ministry of Health</Text>
+                  <Text style={styles.infoValue}>{userData?.fullName || 'N/A'}</Text>
                 </View>
               </View>
 
@@ -70,7 +108,7 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.infoTextContainer}>
                   <Text style={styles.infoLabel}>Email</Text>
-                  <Text style={styles.infoValue}>admin@moh.gov.lk</Text>
+                  <Text style={styles.infoValue}>{userData?.email || 'N/A'}</Text>
                 </View>
               </View>
 
@@ -82,7 +120,7 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.infoTextContainer}>
                   <Text style={styles.infoLabel}>Contact Number</Text>
-                  <Text style={styles.infoValue}>+94 11 269 1111</Text>
+                  <Text style={styles.infoValue}>{userData?.phone || 'N/A'}</Text>
                 </View>
               </View>
             </View>

@@ -106,6 +106,12 @@ const getUserProfile = asyncHandler(async (req, res) => {
     fullName: user.fullName,
     email: user.email,
     role: user.role,
+    phone: user.phone,
+    nic: user.nic,
+    bloodGroup: user.bloodGroup,
+    birthday: user.birthday,
+    gender: user.gender,
+    status: user.status
   });
 });
 
