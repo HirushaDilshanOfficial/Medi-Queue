@@ -125,14 +125,18 @@ export default function PatientQueueScreen() {
         }, 120);
       }
     } else if (tab === 'records') {
-      Alert.alert(
-        'Doctor Records & Schedule',
-        'Would you like to open the Doctor Schedule & Timeline?',
-        [
-          { text: 'Open Schedule', onPress: () => handleTabPress('schedule') },
-          { text: 'Close', style: 'cancel' },
-        ]
-      );
+      try {
+        router.push('/(doctor)/records' as any);
+      } catch (e) {
+        router.push('/records' as any);
+      }
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          if (!window.location.pathname.includes('records')) {
+            window.location.href = '/(doctor)/records';
+          }
+        }, 120);
+      }
     } else if (tab === 'schedule') {
       try {
         router.push('/(doctor)/schedule' as any);
@@ -147,7 +151,18 @@ export default function PatientQueueScreen() {
         }, 120);
       }
     } else if (tab === 'rx') {
-      Alert.alert('Prescription', 'Patient Prescription & Details screen will open here.');
+      try {
+        router.push('/(doctor)/prescription' as any);
+      } catch (e) {
+        router.push('/prescription' as any);
+      }
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          if (!window.location.pathname.includes('prescription')) {
+            window.location.href = '/(doctor)/prescription';
+          }
+        }, 120);
+      }
     }
   };
 
@@ -547,14 +562,19 @@ export default function PatientQueueScreen() {
           <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>Schedule</Text>
         </TouchableOpacity>
 
-        {/* Rx */}
+        {/* Prescription */}
         <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('rx')}>
           <MaterialCommunityIcons
             name="clipboard-edit-outline"
             size={22}
             color={activeTab === 'rx' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}>Rx</Text>
+          <Text
+            numberOfLines={1}
+            style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}
+          >
+            Prescription
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

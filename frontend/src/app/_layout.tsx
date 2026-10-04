@@ -12,6 +12,8 @@ export default function RootLayout() {
       <Stack.Screen name="(doctor)/dashboard" />
       <Stack.Screen name="(doctor)/queue" />
       <Stack.Screen name="(doctor)/schedule" />
+      <Stack.Screen name="(doctor)/prescription" />
+      <Stack.Screen name="(doctor)/records" />
       <Stack.Screen name="schedule" />
     </Stack>
   );

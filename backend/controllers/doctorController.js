@@ -658,6 +658,288 @@ const toggleDoctorBreak = async (req, res) => {
   }
 };
 
+// ============================================
+// PRESCRIPTION & CONSULTATION DETAILS STATE & HANDLERS
+// ============================================
+
+let prescriptionSessionState = {
+  doctor: {
+    name: 'Dr. Emilia Emelson',
+    specialization: 'Orthopedics Surgeon',
+    department: 'Orthopedics OPD',
+    room: 'Room 3B',
+    isOnline: true,
+    avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
+  },
+  patient: {
+    id: 'pat-8821',
+    opdId: 'ID #OPD-8821',
+    name: 'Kamal Gunaratne',
+    initials: 'KG',
+    gender: 'Male',
+    age: 46,
+    tokenNumber: 28,
+    tokenFormatted: 'Token #028',
+    vitals: {
+      bloodPressure: '120/80',
+      pulseRate: '74 bpm',
+      weight: '72 kg',
+    },
+  },
+  diagnoses: [
+    {
+      id: 'diag-1',
+      code: 'M54.5',
+      name: 'Lumbar Spine Spasm',
+      displayName: 'Lumbar Spine Spasm (M54.5)',
+      isPrimary: true,
+    },
+    {
+      id: 'diag-2',
+      name: 'Mechanical Low Back Pain',
+      displayName: 'Mechanical Low Back Pain',
+      isPrimary: false,
+    },
+  ],
+  clinicalNotes: 'Mild tenderness over L4-L5 paraspinal region. Straight leg raise test negative bilaterally.',
+  isNotesAutoSaved: true,
+  prescriptions: [
+    {
+      id: 'rx-1',
+      name: 'Paracetamol 500mg',
+      type: 'TABLET',
+      dosage: '1 tablet',
+      frequency: 'TDS (3x daily)',
+      frequencyCode: 'TDS',
+      duration: '5 days',
+      durationDays: 5,
+      instructions: 'After food',
+      tagType: 'food',
+    },
+    {
+      id: 'rx-2',
+      name: 'Thiocolchicoside 4mg',
+      type: 'CAPSULE',
+      dosage: '1 capsule',
+      frequency: 'BD (2x daily)',
+      frequencyCode: 'BD',
+      duration: '3 days',
+      durationDays: 3,
+      instructions: 'Muscle relaxant',
+      tagType: 'indication',
+    },
+  ],
+  referrals: [],
+};
+
+// @desc    Get patient prescription & consultation details
+// @route   GET /api/v1/doctor/prescription
+// @access  Public / Protected
+const getPrescriptionDetails = async (req, res) => {
+  try {
+    const { tokenNumber } = req.query;
+    return res.status(200).json({
+      success: true,
+      data: prescriptionSessionState,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Save prescription and send digital Rx
+// @route   POST /api/v1/doctor/prescription
+// @access  Public / Protected
+const savePrescription = async (req, res) => {
+  try {
+    const { diagnoses, clinicalNotes, prescriptions } = req.body;
+    if (diagnoses) prescriptionSessionState.diagnoses = diagnoses;
+    if (clinicalNotes !== undefined) prescriptionSessionState.clinicalNotes = clinicalNotes;
+    if (prescriptions) prescriptionSessionState.prescriptions = prescriptions;
+
+    return res.status(200).json({
+      success: true,
+      message: 'Prescription saved & Digital Rx sent to patient successfully!',
+      data: prescriptionSessionState,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Refer patient to Physiotherapy or Laboratory
+// @route   POST /api/v1/doctor/referral
+// @access  Public / Protected
+const referPatient = async (req, res) => {
+  try {
+    const { referralType = 'Physiotherapy', notes = '' } = req.body;
+    const referralEntry = {
+      id: `ref-${Date.now()}`,
+      referralType,
+      notes,
+      patientName: prescriptionSessionState.patient.name,
+      tokenNumber: prescriptionSessionState.patient.tokenNumber,
+      createdAt: new Date().toISOString(),
+    };
+    prescriptionSessionState.referrals.push(referralEntry);
+
+    return res.status(200).json({
+      success: true,
+      message: `Referral to ${referralType} recorded successfully.`,
+      referral: referralEntry,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// PATIENT ELECTRONIC HEALTH RECORDS (EHR)
+// ============================================
+
+const patientRecordsDatabase = {
+  'aurelia': {
+    id: 'pat-aurelia-029',
+    name: 'Aurelia Sisca',
+    shortName: 'Aurelia',
+    verified: true,
+    age: 32,
+    gender: 'Female',
+    bloodGroup: 'B+',
+    tokenNumber: 29,
+    tokenFormatted: '#029',
+    nic: '1993-8472901',
+    registeredTime: '08:30 AM',
+    photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200',
+    allergy: {
+      isHighRisk: true,
+      title: 'High Risk Allergy • Angioedema',
+      description: 'Sulfa Drugs (Sulfonamides, TMP-SMX). Do not administer.',
+    },
+    vitals: {
+      triageTime: 'Triage: 12 min ago',
+      bloodPressure: '118/75',
+      bloodPressureUnit: 'mmHg',
+      heartRate: '72',
+      heartRateUnit: 'bpm',
+      bodyTemp: '98.6',
+      bodyTempUnit: '°F',
+      spO2: '99%',
+      spO2Status: 'Normal',
+    },
+    imaging: {
+      subtitle: 'Recent (2 days ago)',
+      title: 'X-Ray Right Ankle',
+      description: 'AP & Lateral Views • Dr. Clara Silva',
+      imageUrl: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=300',
+      reportSummary: 'Non-displaced distal fibular micro-crack consolidation. Mild soft-tissue swelling around lateral malleolus. No acute displacement.',
+    },
+    recentVisits: [
+      {
+        id: 'rec-1',
+        title: 'Closed fracture distal fibula',
+        date: 'Nov 04, 2025',
+        details: 'Orthopedic Suite • Short-leg cast applied, non-weight bearing advice.',
+        icon: 'account-injury-outline',
+      },
+      {
+        id: 'rec-2',
+        title: 'Acute viral pharyngitis',
+        date: 'Sept 12, 2025',
+        details: 'Symptomatic care prescribed.',
+        statusBadge: 'Resolved',
+        icon: 'shield-plus-outline',
+      },
+      {
+        id: 'rec-3',
+        title: 'Annual Physical & CBC',
+        date: 'May 18, 2025',
+        details: 'All parameters normal. Vitamin D supplementation advised.',
+        statusBadge: 'Completed',
+        icon: 'clipboard-check-outline',
+      },
+    ],
+  },
+  'kamal': {
+    id: 'pat-kamal-028',
+    name: 'Kamal Gunaratne',
+    shortName: 'Kamal',
+    verified: true,
+    age: 46,
+    gender: 'Male',
+    bloodGroup: 'O+',
+    tokenNumber: 28,
+    tokenFormatted: '#028',
+    nic: '1978-5521940',
+    registeredTime: '08:15 AM',
+    photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
+    allergy: {
+      isHighRisk: false,
+      title: 'Mild Allergy • Penicillin',
+      description: 'Mild cutaneous rash reported in 2018. Prefer Cephalosporins / Macrolides.',
+    },
+    vitals: {
+      triageTime: 'Triage: 25 min ago',
+      bloodPressure: '120/80',
+      bloodPressureUnit: 'mmHg',
+      heartRate: '74',
+      heartRateUnit: 'bpm',
+      bodyTemp: '98.4',
+      bodyTempUnit: '°F',
+      spO2: '98%',
+      spO2Status: 'Normal',
+    },
+    imaging: {
+      subtitle: 'Recent (1 week ago)',
+      title: 'MRI Lumbar Spine',
+      description: 'L4-L5 Axial & Sagittal • Dr. K. Silva',
+      imageUrl: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=300',
+      reportSummary: 'Mild L4-L5 disc protrusion without significant nerve root impingement.',
+    },
+    recentVisits: [
+      {
+        id: 'rec-k1',
+        title: 'Lumbar Spine Spasm follow-up',
+        date: 'Jan 15, 2026',
+        details: 'Orthopedic Suite • Physiotherapy exercises prescribed.',
+        statusBadge: 'Active',
+        icon: 'account-injury-outline',
+      },
+      {
+        id: 'rec-k2',
+        title: 'General Health Screening',
+        date: 'Oct 10, 2025',
+        details: 'Lipid profile and fasting glucose normal.',
+        statusBadge: 'Completed',
+        icon: 'clipboard-check-outline',
+      },
+    ],
+  },
+};
+
+// @desc    Get Patient Health Records by search query or default (Aurelia)
+// @route   GET /api/v1/doctor/records
+// @access  Public / Protected
+const getPatientRecords = async (req, res) => {
+  try {
+    const { query = 'Aurelia' } = req.query;
+    const cleanQuery = query.toLowerCase().trim();
+
+    let record = patientRecordsDatabase['aurelia'];
+    if (cleanQuery.includes('kamal') || cleanQuery.includes('28')) {
+      record = patientRecordsDatabase['kamal'];
+    }
+
+    return res.status(200).json({
+      success: true,
+      query,
+      data: record,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getDoctorDashboard,
   updateDoctorStatus,
@@ -667,5 +949,10 @@ module.exports = {
   getDoctorSchedule,
   addWalkInSlot,
   toggleDoctorBreak,
+  getPrescriptionDetails,
+  savePrescription,
+  referPatient,
+  getPatientRecords,
 };
+
 
