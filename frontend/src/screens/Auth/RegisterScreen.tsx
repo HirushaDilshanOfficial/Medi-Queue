@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { AppIcon } from '../../components/AppIcon';
 
 // RegisterScreen - නව patient account හදනවා
 export default function RegisterScreen({ navigation }: any) {
@@ -60,7 +61,7 @@ export default function RegisterScreen({ navigation }: any) {
           <View style={styles.circleBottomLeft} />
 
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Back</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>Back</Text></View>
           </TouchableOpacity>
 
           <Text style={styles.headerTitle}>Create Account</Text>
@@ -110,9 +111,10 @@ export default function RegisterScreen({ navigation }: any) {
           />
 
           {/* Info note */}
-          <View style={styles.infoBox}>
-            <Text style={styles.infoText}>
-              🏥  Your account will be linked to your NIC for identity verification at the hospital.
+          <View style={[styles.infoBox, { flexDirection: 'row', alignItems: 'flex-start', gap: 8 }]} >
+            <AppIcon name="medical" size={18} color={Colors.primaryDark} />
+            <Text style={[styles.infoText, { flex: 1 }]}>
+              Your account will be linked to your NIC for identity verification at the hospital.
             </Text>
           </View>
 
@@ -125,7 +127,7 @@ export default function RegisterScreen({ navigation }: any) {
             {isLoading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.registerButtonText}>Create Account  →</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.registerButtonText}>Create Account</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
             )}
           </TouchableOpacity>
 

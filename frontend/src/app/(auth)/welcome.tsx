@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { AppIcon } from '../../components/AppIcon';
 
 // Welcome/Splash Screen
 export default function WelcomeScreen() {
@@ -21,7 +22,7 @@ export default function WelcomeScreen() {
           <View style={styles.circleBottomLeft} />
 
           <View style={styles.logoCard}>
-            <Text style={styles.logoIcon}>🏥</Text>
+            <AppIcon name="medical" size={36} color={Colors.primaryDark} />
           </View>
 
           <View style={styles.queueBadge}>
@@ -30,7 +31,7 @@ export default function WelcomeScreen() {
           </View>
 
           <View style={styles.doctorsBadge}>
-            <Text style={styles.doctorsBadgeText}>👤 CONNECTED</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><AppIcon name="profile" size={12} color={Colors.textMedium} /><Text style={styles.doctorsBadgeText}>CONNECTED</Text></View>
             <Text style={styles.doctorsBadgeNumber}>186 Doctors</Text>
           </View>
 
@@ -58,7 +59,7 @@ export default function WelcomeScreen() {
 
         {/* ---- FEATURE CARDS ---- */}
         <View style={styles.featureCard}>
-          <Text style={styles.featureIcon}>🕐</Text>
+          <AppIcon name="clock" size={24} color={Colors.primaryDark} style={{ marginRight: 14 }} />
           <View style={styles.featureText}>
             <Text style={styles.featureTitle}>Live Token Tracking</Text>
             <Text style={styles.featureDesc}>Real-time queue notifications & estimated arrival time</Text>
@@ -66,7 +67,7 @@ export default function WelcomeScreen() {
         </View>
 
         <View style={styles.featureCard}>
-          <Text style={styles.featureIcon}>📄</Text>
+          <AppIcon name="clipboard" size={24} color={Colors.primaryDark} style={{ marginRight: 14 }} />
           <View style={styles.featureText}>
             <Text style={styles.featureTitle}>Paperless Digital Pass</Text>
             <Text style={styles.featureDesc}>Instant QR verification at outpatient consultation rooms</Text>
@@ -81,7 +82,7 @@ export default function WelcomeScreen() {
             style={styles.loginButton}
             onPress={() => router.push('/(auth)/login')}
           >
-            <Text style={styles.loginButtonText}>Login  →</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.loginButtonText}>Login</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
           </TouchableOpacity>
 
           <TouchableOpacity

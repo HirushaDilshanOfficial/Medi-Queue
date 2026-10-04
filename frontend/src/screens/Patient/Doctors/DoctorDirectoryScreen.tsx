@@ -23,6 +23,7 @@ import { ScreenLoader, MessageState } from '../../../components/patient/ScreenSt
 import { DoctorCard } from '../../../components/patient/DoctorCard';
 import { AppointmentCard } from '../../../components/patient/AppointmentCard';
 import { DesignImage } from '../../../components/patient/DesignImage';
+import { AppIcon } from '../../../components/AppIcon';
 
 type Tab = 'directory' | 'bookings';
 
@@ -160,7 +161,7 @@ export function DoctorDirectoryScreen() {
                 />
                 {search ? (
                   <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear search">
-                    <Text style={styles.clear}>✕</Text>
+                    <AppIcon name="close" size={16} color={PatientTheme.textSecondary} />
                   </Pressable>
                 ) : null}
               </View>

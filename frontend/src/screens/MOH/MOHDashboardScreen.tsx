@@ -8,6 +8,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { AppIcon } from '../../components/AppIcon';
 
 // MOHDashboardScreen - Ministry of Health admin main screen
 // Features: system stats, hospital overview, reports
@@ -32,7 +33,7 @@ export default function MOHDashboardScreen({ navigation }: any) {
         <View style={styles.header}>
           <View style={styles.circleDecor} />
           <View>
-            <Text style={styles.greeting}>MOH Admin Portal 🏛️</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><AppIcon name="building" size={16} color={Colors.white} /><Text style={styles.greeting}>MOH Admin Portal</Text></View>
             <Text style={styles.userName}>Ministry of Health</Text>
             <Text style={styles.subText}>System Overview · Sri Lanka</Text>
           </View>
@@ -62,15 +63,15 @@ export default function MOHDashboardScreen({ navigation }: any) {
         <Text style={styles.sectionTitle}>Management</Text>
         <View style={styles.actionsRow}>
           <TouchableOpacity style={styles.actionCard}>
-            <Text style={styles.actionIcon}>🏥</Text>
+            <AppIcon name="medical" size={28} color={Colors.primaryDark} style={{ marginBottom: 8 }} />
             <Text style={styles.actionLabel}>Manage{'\n'}Hospitals</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionCard}>
-            <Text style={styles.actionIcon}>👨‍⚕️</Text>
+            <AppIcon name="stethoscope" size={28} color={Colors.primaryDark} style={{ marginBottom: 8 }} />
             <Text style={styles.actionLabel}>Manage{'\n'}Doctors</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionCard}>
-            <Text style={styles.actionIcon}>📊</Text>
+            <AppIcon name="chart" size={28} color={Colors.primaryDark} style={{ marginBottom: 8 }} />
             <Text style={styles.actionLabel}>View{'\n'}Reports</Text>
           </TouchableOpacity>
         </View>
