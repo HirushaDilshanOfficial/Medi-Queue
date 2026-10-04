@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
-const { searchPatients, getSlots } = require('../controllers/walkInController');
+const { searchPatients, getSlots, walkInBooking } = require('../controllers/walkInController');
 
 // All routes below require auth + receptionist role
 router.use(protect, authorizeRoles('receptionist'));
@@ -11,5 +11,8 @@ router.get('/patients/search', searchPatients);
 
 // GET /api/reception/slots?doctorId=&date=
 router.get('/slots', getSlots);
+
+// POST /api/reception/walk-in
+router.post('/walk-in', walkInBooking);
 
 module.exports = router;
