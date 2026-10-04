@@ -7,5 +7,6 @@ router.get('/', hospitalController.getAllHospitals);
 router.put('/:id', hospitalController.updateHospital);
 router.delete('/:id', hospitalController.deleteHospital);
 router.patch('/:id/toggle-status', hospitalController.toggleHospitalStatus);
+router.get('/:id/dashboard', hospitalController.getHospitalDashboardStats);
 
 module.exports = router;

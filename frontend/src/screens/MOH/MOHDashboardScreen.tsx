@@ -21,6 +21,7 @@ export default function MOHDashboardScreen() {
     { id: 3, icon: '👩‍💼', label: 'Staff', route: '/(moh)/manage-staff' as any },
     { id: 4, icon: '⚠️', label: 'Alerts', route: '/(moh)/alerts' as any },
     { id: 5, icon: '📊', label: 'Reports', route: '/(moh)/reports' as any },
+    { id: 6, icon: '🛡️', label: 'Policy', route: '/(moh)/policy' as any },
   ];
 
   const hospitalClinics = [
