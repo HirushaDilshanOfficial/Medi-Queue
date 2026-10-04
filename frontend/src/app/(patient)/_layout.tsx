@@ -62,10 +62,18 @@ export default function PatientTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="profile/index"
         options={{
           title: 'Profile',
           tabBarIcon: ProfileIcon,
+          tabBarStyle: {
+            backgroundColor: '#ffffff',
+            borderTopWidth: 0,
+            height: 64 + insets.bottom,
+            paddingBottom: Math.max(8, insets.bottom),
+            paddingTop: 8,
+            boxShadow: '0 -4px 20px -2px rgba(19,34,40,0.06)',
+          },
         }}
       />
 

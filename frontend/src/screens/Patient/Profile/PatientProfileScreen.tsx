@@ -1,426 +1,218 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Pressable,
-  Alert,
-} from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { PatientTheme } from '../../../constants/PatientTheme';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFonts } from 'expo-font';
+import Svg, { Path } from 'react-native-svg';
+import QRCode from 'react-native-qrcode-svg';
 import { patientApi } from '../../../services/patientApi';
+import { queueApi } from '../../../services/queueApi';
+import { clearAuthToken } from '../../../services/http';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
-import type { MedicalReport, PatientProfile, VisitRecord } from '../../../types/patient';
-import { ScreenHeader } from '../../../components/patient/ScreenHeader';
-import { ScreenLoader, MessageState } from '../../../components/patient/ScreenStates';
-import { ServiceRow } from '../../../components/patient/ServiceRow';
-import { Badge } from '../../../components/patient/Badge';
-import { StatCard } from '../../../components/patient/StatCard';
-import { ReportRow } from '../../../components/patient/ReportRow';
+import type { VisitRecord } from '../../../types/patient';
+import { ProfileIcon } from '../../../components/patient/ProfileIcon';
+import { AccountRow, Avatar, EmptyState, IconButton, isPrescription, Metric, PersonalInfo, VisitCard } from './ProfileParts';
+import { C, styles } from './profileStyles';
+
+const TABS = ['Visit History', 'Personal Info', 'Documents', 'Settings'] as const;
+type Tab = typeof TABS[number];
+const FILTERS = ['All Visits', 'Completed', 'Specialist Consults', 'Prescriptions'] as const;
+type Filter = typeof FILTERS[number];
+type Sheet = { title: string; body: string } | 'pass' | 'logout' | null;
 
 export function PatientProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-
-  const [refreshing, setRefreshing] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-
+  const [fontsLoaded, fontError] = useFonts({
+    ProfileInter400: require('../../../../assets/fonts/Inter-400.ttf'),
+    ProfileInter500: require('../../../../assets/fonts/Inter-500.ttf'),
+    ProfileInter600: require('../../../../assets/fonts/Inter-600.ttf'),
+    ProfileInter700: require('../../../../assets/fonts/Inter-700.ttf'),
+    ProfileInter800: require('../../../../assets/fonts/Inter-800.ttf'),
+  });
   const profile = useAsyncResource(() => patientApi.getProfile(), []);
   const history = useAsyncResource(() => patientApi.getHistory(), []);
+  const queue = useAsyncResource(() => queueApi.myPass(), []);
+  const [tab, setTab] = useState<Tab>('Visit History');
+  const [filter, setFilter] = useState<Filter>('All Visits');
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [savingReminders, setSavingReminders] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const hasFocused = useRef(false);
+  const { reload: reloadProfile } = profile;
+  const { reload: reloadHistory } = history;
+  const { reload: reloadQueue } = queue;
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([profile.reload(), history.reload()]);
-    setRefreshing(false);
-  }, [history, profile]);
+  useFocusEffect(useCallback(() => {
+    // Resource hooks perform the first load; refresh on return from editing.
+    if (hasFocused.current) { reloadProfile(); reloadHistory(); reloadQueue(); }
+    hasFocused.current = true;
+  }, [reloadProfile, reloadHistory, reloadQueue]));
 
-  const removeReport = useCallback(
-    (report: MedicalReport) => {
-      Alert.alert(
-        'Remove this report?',
-        `“${report.title}” will be taken off your list. The clinic's own copy of your record is not affected.`,
-        [
-          { text: 'Keep it', style: 'cancel' },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: async () => {
-              setDeleting(report.id);
-              try {
-                await patientApi.deleteReport(report.id);
-                await history.reload();
-              } catch (error) {
-                Alert.alert(
-                  'Could not remove',
-                  error instanceof Error ? error.message : 'Please try again.',
-                );
-              } finally {
-                setDeleting(null);
-              }
-            },
-          },
-        ],
-      );
-    },
-    [history],
-  );
-
-  const recentVisits = useMemo(
-    () => (history.data?.visits ?? []).slice(0, 3),
-    [history.data],
-  );
-
+  const patient = profile.data?.patient;
+  const visits = history.data?.visits ?? [];
   const reports = history.data?.reports ?? [];
+  const prescriptions = reports.filter(isPrescription);
+  const pass = queue.data?.pass;
+  const filteredVisits = useMemo(() => (history.data?.visits ?? []).filter(visit => {
+    if (filter === 'Completed') return visit.status === 'completed';
+    // Department names are the available specialty information in this API.
+    if (filter === 'Specialist Consults') return !/general|primary|family medicine/i.test(visit.department);
+    if (filter === 'Prescriptions') return (history.data?.reports ?? []).some(report => report.appointmentId === visit.id && isPrescription(report));
+    return true;
+  }), [history.data, filter]);
+  const editProfile = () => router.push('/(patient)/profile/edit');
+  const openReports = () => router.push('/(patient)/profile/reports');
+  const showMessage = (title: string, body: string) => { setActionError(null); setSheet({ title, body }); };
 
-  if (profile.loading && !profile.data) {
-    return (
-      <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
-        <ScreenHeader title="My profile" />
-        <ScreenLoader label="Loading your profile" />
+  const exportVisits = async (items: VisitRecord[]) => {
+    const text = ['Medi-Queue · OPD visit summary', patient?.fullName ?? '', ...items.map(visit =>
+      [visit.department, visit.doctorName, `${visit.dateLong ?? visit.date} · ${visit.slotTime}`,
+        `Status: ${visit.status.replace(/_/g, ' ')}`, visit.tokenNumber !== null ? `Queue #${visit.tokenNumber}` : '',
+        visit.reason ? `Visit reason: ${visit.reason}` : ''].filter(Boolean).join('\n'))].join('\n\n');
+    try {
+      if (Platform.OS === 'web') {
+        const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+        const anchor = document.createElement('a');
+        anchor.href = url; anchor.download = 'mediqueue-visit-summary.txt'; anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } else { await Share.share({ title: 'OPD visit summary', message: text }); }
+    } catch { showMessage('Could not export visits', 'Please try again.'); }
+  };
+
+  const updateReminders = async (enabled: boolean) => {
+    setSavingReminders(true);
+    try { profile.setData(await patientApi.updateProfile({ remindersEnabled: enabled })); }
+    catch { showMessage('Could not save reminders', 'Your preference was not changed. Please try again.'); }
+    finally { setSavingReminders(false); }
+  };
+  const logout = async () => {
+    setLoggingOut(true); setActionError(null);
+    try { await clearAuthToken(); router.replace('/(auth)/login'); }
+    catch { setActionError('Could not log out. Please try again.'); setLoggingOut(false); }
+  };
+  const notice = () => showMessage('Appointment reminders', pass
+    ? `Your queue #${pass.tokenNumber} is ${pass.status.replace(/_/g, ' ')} at ${pass.department}. Open Queue to follow your turn.`
+    : 'No active queue pass. Your reminder preference is available in Settings.');
+
+  if (!fontsLoaded && !fontError) return <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator color={C.primary} accessibilityLabel="Loading profile" /></View>;
+
+  const account = <View style={styles.section}>
+    <Text accessibilityRole="header" style={styles.sectionTitle}>Account &amp; Preferences</Text>
+    <View style={styles.accountCard}>
+      <AccountRow icon="family" title="Family & Dependents" caption="Manage linked family members"
+        onPress={() => showMessage('Family & Dependents', 'Linked family members are not available for this account yet.')} />
+      <AccountRow icon="emergency" title="Emergency & Donor Info" iconColor={C.error}
+        caption={patient?.emergencyContact ? [patient.emergencyContact.name, patient.emergencyContact.phone].filter(Boolean).join(' · ') || 'Add an emergency contact' : 'Add an emergency contact'} onPress={editProfile} />
+      <View style={styles.accountRow}>
+        <View style={styles.roundIcon}><ProfileIcon name="bell" /></View>
+        <View style={styles.grow}><Text style={styles.rowTitle}>SMS &amp; App Notifications</Text><Text style={styles.caption}>Queue reminders &amp; ready alerts</Text></View>
+        <Switch accessibilityLabel="Appointment reminders" value={patient?.remindersEnabled ?? false}
+          disabled={!patient || savingReminders} onValueChange={updateReminders}
+          trackColor={{ false: C.high, true: C.primary }} thumbColor={C.white} />
       </View>
-    );
-  }
+      <AccountRow icon="language" title="Language" caption="English"
+        onPress={() => showMessage('Language', 'English is the current app language. Additional languages are not available yet.')} />
+    </View>
+  </View>;
 
-  if (profile.error && !profile.data) {
-    return (
-      <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
-        <ScreenHeader title="My profile" />
-        <MessageState
-          icon="help"
-          title="Could not load your profile"
-          description={profile.error}
-          actionLabel="Try again"
-          onAction={profile.reload}
-        />
+  return <View style={styles.root}>
+    <View style={[styles.headerSafe, { paddingTop: insets.top }]}><View style={styles.header}>
+      <View style={styles.headerIcon}><ProfileIcon name="medical" size={20} /></View><Text style={styles.headerTitle}>Profile</Text><View style={styles.grow} />
+      <IconButton icon="bell" label="Notifications" onPress={notice} />
+      <Pressable accessibilityRole="button" accessibilityLabel="View personal information" onPress={() => setTab('Personal Info')} style={styles.headerAvatar}><Avatar patient={patient} small /></Pressable>
+    </View></View>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={Boolean(patient) && (profile.loading || history.loading || queue.loading)}
+        onRefresh={() => { reloadProfile(); reloadHistory(); reloadQueue(); }} tintColor={C.primary} colors={[C.primary]} />}>
+      <View style={styles.hero}>
+        <Svg pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 400 240" preserveAspectRatio="none">
+          <Path d="M-20 60 C80 140 180 10 280 90 C360 160 420 80 440 110 L440 0 L-20 0 Z" fill="white" opacity={0.2} />
+          <Path d="M-10 180 C110 90 210 210 320 130 C380 90 410 140 430 160 L430 240 L-10 240 Z" fill={C.aqua} opacity={0.06} />
+        </Svg>
+        <View style={styles.heroActions}>
+          <View style={styles.registeredPill}><View style={styles.aquaDot} /><Text style={styles.registeredText}>REGISTERED PATIENT</Text></View>
+          <View style={styles.horizontal}><IconButton icon="qr" label="View queue health pass" onPress={() => setSheet('pass')} light /><IconButton icon="edit" label="Edit profile" onPress={editProfile} light /></View>
+        </View>
+        <View style={styles.identity}>
+          <View style={styles.avatarFrame}><Avatar patient={patient} /></View>
+          <View style={styles.grow}>
+            <Text style={styles.patientName}>{patient?.fullName ?? (profile.loading ? 'Loading profile...' : 'Patient profile')}</Text>
+            {patient ? <><Text style={styles.patientMeta}>{[patient.nic ? `NIC: ${patient.nic}` : null,
+              patient.bloodGroup ? `Blood: ${patient.bloodGroup}` : null, patient.age !== null ? `${patient.age} Yrs` : null].filter(Boolean).join(' • ')}</Text>
+              <View style={styles.idPill}><ProfileIcon name="badge" size={14} color={C.light} /><Text style={styles.idText}>#{patient.id.toUpperCase()}</Text></View></> : null}
+          </View>
+        </View>
       </View>
-    );
-  }
-
-  return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={PatientTheme.brand} />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={{ paddingTop: insets.top + PatientTheme.spaceSm }}>
-          <ScreenHeader
-            title="My profile"
-            subtitle="Your details and your visit record"
-            action={
-              <Pressable
-                onPress={() => router.push('/(patient)/profile/edit')}
-                accessibilityRole="button"
-                accessibilityLabel="Edit profile"
-                style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}
-              >
-                <Text style={styles.editLabel}>Edit</Text>
-              </Pressable>
-            }
-          />
-        </View>
-
-        <ProfileCard patient={profile.data?.patient} />
-
-        <View style={styles.statRow}>
-          <StatCard
-            value={String(history.data?.summary.totalVisits ?? 0)}
-            label="Completed visits"
-          />
-          <StatCard value={String(history.data?.summary.reports ?? 0)} label="Reports" />
-        </View>
-
+      <View style={styles.metricWrap}><View style={styles.metrics}>
+        <Metric value={history.error || !history.data ? '—' : String(history.data.summary.totalVisits)} label="Past Visits" />
+        <Metric value={queue.error || !queue.data ? '—' : pass ? '1' : '0'} label="Active Queue" active={Boolean(pass)} />
+        <Metric value={history.error || !history.data ? '—' : String(prescriptions.length)} label="Prescriptions" />
+      </View></View>
+      {profile.error ? <View style={styles.section}><Text style={styles.error}>{profile.error}</Text><Pressable accessibilityRole="button" onPress={reloadProfile}><Text style={styles.link}>Retry profile</Text></Pressable></View> : null}
+      <View style={styles.tabsWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} accessibilityRole="tablist">
+          {TABS.map(item => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => setTab(item)}
+            style={({ pressed }) => [styles.tab, tab === item && styles.selectedTab, pressed && styles.pressed]}><Text style={[styles.tabLabel, tab === item && styles.selectedLabel]}>{item}</Text></Pressable>)}
+        </ScrollView>
+      </View>
+      {tab === 'Visit History' ? <>
+        {pass ? <Pressable accessibilityRole="button" accessibilityLabel="View active queue" onPress={() => router.push('/(patient)/queue')} style={styles.queueWrap}>
+          <LinearGradient colors={[C.container, C.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.queueBanner}>
+            <View pointerEvents="none" style={styles.queueRing} /><View style={styles.queueIcon}><ProfileIcon name="ticket" size={22} color={C.aqua} /></View>
+            <View style={styles.grow}><Text style={styles.queueTitle}>Queue #{pass.tokenNumber} {pass.status === 'in_consultation' ? 'In Progress' : pass.status === 'called' ? 'Called' : 'Waiting'}</Text>
+              <Text style={styles.queueCaption}>{pass.department}{pass.live?.estimatedTurnAt ? ` • Est. ${new Date(pass.live.estimatedTurnAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Colombo' })}` : ''}</Text></View>
+            <View style={styles.activeBadge}><Text style={styles.activeText}>Active</Text></View><View style={styles.queueArrow}><ProfileIcon name="arrow" size={20} color={C.white} /></View>
+          </LinearGradient>
+        </Pressable> : null}
+        {queue.error ? <View style={styles.section}><Text style={styles.error}>Your active queue could not be loaded.</Text></View> : null}
         <View style={styles.section}>
-          <ServiceRow
-            label="Visit history"
-            caption={
-              history.loading
-                ? 'Loading...'
-                : history.data?.summary.totalVisits
-                  ? `${history.data.summary.totalVisits} completed visits`
-                  : 'Your past appointments'
-            }
-            icon="calendar"
-            onPress={() => router.push('/(patient)/profile/history')}
-          />
-          <ServiceRow
-            label="Medical reports"
-            caption={
-              reports.length
-                ? `${reports.length} lodged with the clinic`
-                : 'Upload a lab result or referral'
-            }
-            icon="clipboard"
-            onPress={() => router.push('/(patient)/profile/reports')}
-          />
+          <View style={styles.sectionHeading}><View style={styles.grow}><Text accessibilityRole="header" style={styles.sectionTitle}>Recent OPD Visits</Text><Text style={styles.caption}>Clinical records &amp; diagnostic consults</Text></View>
+            <Pressable accessibilityRole="button" disabled={!visits.length} onPress={() => exportVisits(visits)} style={[styles.exportButton, !visits.length && styles.disabled]}><Text style={styles.link}>Export All</Text><ProfileIcon name="download" size={16} /></Pressable></View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+            {FILTERS.map(item => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: filter === item }} onPress={() => setFilter(item)} style={[styles.filter, filter === item && styles.selectedTab]}>
+              <Text style={[styles.filterLabel, filter === item && styles.selectedLabel]}>{item}{item === 'All Visits' ? ` (${visits.length})` : ''}</Text></Pressable>)}
+          </ScrollView>
+          {history.loading && !history.data ? <ActivityIndicator color={C.primary} /> : history.error ? <EmptyState title="Could not load your visits" body={history.error} onRetry={reloadHistory} /> : !filteredVisits.length ?
+            <EmptyState title={visits.length ? 'No matching visits' : 'No visits yet'} body={visits.length ? 'Choose another filter to see your records.' : 'Your past clinic appointments will appear here.'} /> :
+            filteredVisits.slice(0, 3).map(visit => <VisitCard key={visit.id} visit={visit} reports={reports.filter(report => report.appointmentId === visit.id)}
+              onExport={() => exportVisits([visit])} onNotes={() => showMessage('Visit details', `${visit.doctorName}\n${visit.department}\n\n${visit.reason ? `Visit reason: ${visit.reason}` : 'No clinical notes have been shared for this visit.'}`)} onReports={() => setTab('Documents')} />)}
+          {filteredVisits.length > 3 ? <Pressable accessibilityRole="button" onPress={() => router.push('/(patient)/profile/history')} style={styles.moreButton}><Text style={styles.link}>View all visits</Text><ProfileIcon name="arrow" size={16} /></Pressable> : null}
         </View>
-
-        {history.error ? (
-          <Text style={styles.inlineError}>
-            Could not load your visit history. Pull down to try again.
-          </Text>
-        ) : null}
-
-        {recentVisits.length ? (
-          <View style={styles.block}>
-            <Text style={styles.blockTitle}>Recent visits</Text>
-            <View style={styles.blockBody}>
-              {recentVisits.map((visit) => (
-                <VisitRow key={visit.id} visit={visit} />
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {history.data && !history.loading && !recentVisits.length ? (
-          <View style={styles.block}>
-            <Text style={styles.blockTitle}>Recent visits</Text>
-            <MessageState
-              icon="calendar"
-              title="No visits yet"
-              description="Once you have seen a doctor at the clinic, your visits will be listed here."
-            />
-          </View>
-        ) : null}
-
-        {reports.length ? (
-          <View style={styles.block}>
-            <Text style={styles.blockTitle}>Reports</Text>
-            <View style={styles.blockBody}>
-              {reports.slice(0, 2).map((report) => (
-                <ReportRow
-                  key={report.id}
-                  report={report}
-                  onDelete={deleting === report.id ? undefined : () => removeReport(report)}
-                />
-              ))}
-            </View>
-            {reports.length > 2 ? (
-              <Pressable
-                onPress={() => router.push('/(patient)/profile/reports')}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.seeAll, pressed && styles.pressed]}
-              >
-                <Text style={styles.seeAllLabel}>See all {reports.length} reports</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-
-        {deleting ? (
-          <Text style={styles.working}>Removing your report...</Text>
-        ) : null}
-      </ScrollView>
-    </View>
-  );
-}
-
-function ProfileCard({ patient }: { patient: PatientProfile | null | undefined }) {
-  if (!patient) return null;
-
-  const details = [
-    patient.age !== null ? `${patient.age} years` : null,
-    patient.gender,
-    patient.bloodGroup ? `${patient.bloodGroup} blood` : null,
-  ].filter(Boolean);
-
-  return (
-    <View style={styles.profileCard}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{initials(patient.fullName)}</Text>
-      </View>
-
-      <View style={styles.profileText}>
-        <Text style={styles.profileName} numberOfLines={2}>
-          {patient.fullName}
-        </Text>
-        {patient.nic ? <Text style={styles.profileNic}>NIC {patient.nic}</Text> : null}
-        {details.length ? (
-          <Text style={styles.profileDetails}>{details.join(' · ')}</Text>
-        ) : null}
-        {patient.district ? (
-          <Text style={styles.profileDetails} numberOfLines={1}>
-            {patient.district}
-          </Text>
-        ) : null}
-      </View>
-
-      {patient.allergies.length ? (
-        <View style={styles.allergyWrap}>
-          <Badge
-            label={patient.allergies.length === 1 ? 'Allergy' : 'Allergies'}
-            tone="warning"
-          />
-          <Text style={styles.allergyText} numberOfLines={2}>
-            {patient.allergies.join(', ')}
-          </Text>
+        <View style={styles.section}><View style={styles.vault}><View style={styles.roundIcon}><ProfileIcon name="folder" size={24} /></View>
+          <View style={styles.grow}><Text style={styles.rowTitle}>Central Health Records</Text><Text style={styles.caption}>Your clinic documents and prescriptions</Text></View>
+          <Pressable accessibilityRole="button" onPress={openReports} style={styles.vaultButton}><Text style={styles.link}>View All</Text></Pressable></View></View>
+      </> : null}
+      {tab === 'Personal Info' ? <PersonalInfo patient={patient} onEdit={editProfile} /> : null}
+      {tab === 'Documents' ? <View style={styles.section}>
+        <View style={styles.sectionHeading}><Text accessibilityRole="header" style={styles.sectionTitle}>Medical Documents</Text><Pressable accessibilityRole="button" onPress={() => router.push('/(patient)/profile/report/new')} style={styles.exportButton}><Text style={styles.link}>Add report</Text></Pressable></View>
+        {history.loading && !history.data ? <ActivityIndicator color={C.primary} /> : history.error ? <EmptyState title="Could not load documents" body={history.error} onRetry={reloadHistory} /> : reports.length ? reports.map(report =>
+          <Pressable key={report.id} accessibilityRole="button" onPress={() => showMessage(report.title, [report.category, report.reportDate, report.notes, report.fileName ? `File reference: ${report.fileName}` : null, 'The original document is held by the clinic.'].filter(Boolean).join('\n\n'))} style={styles.documentCard}>
+            <View style={styles.squareIcon}><ProfileIcon name={isPrescription(report) ? 'pill' : 'clipboard'} /></View><View style={styles.grow}><Text style={styles.rowTitle}>{report.title}</Text><Text style={styles.caption}>{report.category} • {report.status === 'reviewed' ? 'Reviewed' : 'Pending review'}</Text></View><ProfileIcon name="arrow" size={16} /></Pressable>) : <EmptyState title="No documents yet" body="Add a lab report, referral or prescription to your profile." />}
+        <Pressable accessibilityRole="button" onPress={openReports} style={styles.moreButton}><Text style={styles.link}>Manage medical reports</Text><ProfileIcon name="arrow" size={16} /></Pressable>
+      </View> : null}
+      {tab === 'Visit History' || tab === 'Settings' ? account : null}
+      {tab === 'Settings' ? <View style={styles.section}><AccountRow icon="profile" title="Profile settings" caption="Personal, health and contact details" onPress={editProfile} /></View> : null}
+      {tab === 'Visit History' || tab === 'Settings' ? <View style={styles.logoutWrap}>
+        <Pressable accessibilityRole="button" onPress={() => { setActionError(null); setSheet('logout'); }} style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}><ProfileIcon name="logout" size={20} color={C.error} /><Text style={styles.logoutLabel}>Log Out from Device</Text></Pressable>
+      </View> : null}
+    </ScrollView>
+    <Modal transparent visible={sheet !== null} animationType="slide" onRequestClose={() => { if (!loggingOut) setSheet(null); }}>
+      <View style={styles.modalOverlay}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close dialog" disabled={loggingOut} onPress={() => setSheet(null)} style={StyleSheet.absoluteFill} />
+        <View accessibilityViewIsModal style={[styles.sheet, { paddingBottom: Math.max(24, insets.bottom) }]}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sectionHeading}><View style={styles.grow}><Text accessibilityRole="header" style={styles.sectionTitle}>{sheet === 'pass' ? 'OPD Queue Health Pass' : sheet === 'logout' ? 'Log out of Medi-Queue?' : sheet?.title}</Text>
+            {sheet === 'pass' ? <Text style={styles.caption}>Scan your active pass at hospital check-in</Text> : null}</View><IconButton icon="close" label="Close dialog" onPress={() => { if (!loggingOut) setSheet(null); }} /></View>
+          {sheet === 'pass' ? pass ? <><View style={styles.qrFrame}><QRCode value={pass.qrValue} size={192} color={C.primary} /></View><View style={styles.passRecap}><Text style={styles.rowTitle}>{patient?.fullName}</Text><Text style={styles.caption}>Queue #{pass.tokenNumber} • {pass.department}</Text></View></> :
+            <Text style={styles.sheetBody}>{queue.loading ? 'Loading your queue pass...' : queue.error ? 'Your pass could not be loaded. Open Queue to try again.' : 'You do not have an active queue pass. Open Queue on the day of your appointment to check in.'}</Text> :
+            <Text style={styles.sheetBody}>{sheet === 'logout' ? 'Sign in again to access your profile and medical history.' : sheet?.body}</Text>}
+          {actionError ? <Text accessibilityRole="alert" style={styles.error}>{actionError}</Text> : null}
+          <Pressable accessibilityRole="button" disabled={loggingOut} onPress={sheet === 'logout' ? logout : () => setSheet(null)} style={[styles.sheetButton, loggingOut && styles.disabled]}><Text style={styles.sheetButtonLabel}>{sheet === 'logout' ? loggingOut ? 'Logging out...' : 'Log out' : 'Done'}</Text></Pressable>
         </View>
-      ) : null}
-    </View>
-  );
+      </View>
+    </Modal>
+  </View>;
 }
-
-function VisitRow({ visit }: { visit: VisitRecord }) {
-  return (
-    <View style={styles.visitRow}>
-      <Text style={styles.visitTitle} numberOfLines={1}>
-        {visit.doctorName}
-      </Text>
-      <Text style={styles.visitMeta} numberOfLines={1}>
-        {[visit.department, visit.dateLong ?? visit.date, visit.slotTime]
-          .filter(Boolean)
-          .join(' · ')}
-      </Text>
-      {visit.reason ? (
-        <Text style={styles.visitReason} numberOfLines={1}>
-          {visit.reason}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-}
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: PatientTheme.background,
-  },
-  scroll: {
-    paddingBottom: PatientTheme.spaceXxl,
-    gap: PatientTheme.spaceMd,
-  },
-  editButton: {
-    paddingHorizontal: PatientTheme.spaceMd,
-    paddingVertical: 6,
-    borderRadius: PatientTheme.radiusPill,
-    backgroundColor: PatientTheme.surfaceMuted,
-  },
-  editLabel: {
-    fontSize: PatientTheme.designType.body,
-    fontWeight: '700',
-    color: PatientTheme.brand,
-  },
-  profileCard: {
-    marginHorizontal: PatientTheme.spaceLg,
-    padding: PatientTheme.spaceLg,
-    borderRadius: PatientTheme.radiusXl,
-    borderWidth: 1,
-    borderColor: PatientTheme.border,
-    backgroundColor: PatientTheme.surface,
-    gap: PatientTheme.spaceSm,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: PatientTheme.brand,
-  },
-  avatarText: {
-    color: PatientTheme.textOnBrand,
-    fontSize: PatientTheme.designType.hero,
-    fontWeight: '800',
-  },
-  profileText: {
-    gap: 2,
-  },
-  profileName: {
-    fontSize: PatientTheme.designType.section,
-    fontWeight: '800',
-    color: PatientTheme.textPrimary,
-  },
-  profileNic: {
-    fontSize: PatientTheme.designType.caption,
-    color: PatientTheme.textSecondary,
-  },
-  profileDetails: {
-    fontSize: PatientTheme.designType.body,
-    color: PatientTheme.textSecondary,
-  },
-  allergyWrap: {
-    marginTop: PatientTheme.spaceXs,
-    gap: 4,
-  },
-  allergyText: {
-    fontSize: PatientTheme.designType.caption,
-    color: PatientTheme.textPrimary,
-  },
-  statRow: {
-    flexDirection: 'row',
-    gap: PatientTheme.spaceMd,
-    paddingHorizontal: PatientTheme.spaceLg,
-  },
-  section: {
-    paddingHorizontal: PatientTheme.spaceLg,
-    gap: PatientTheme.spaceSm,
-  },
-  inlineError: {
-    paddingHorizontal: PatientTheme.spaceLg,
-    fontSize: PatientTheme.designType.caption,
-    color: PatientTheme.danger,
-  },
-  block: {
-    paddingHorizontal: PatientTheme.spaceLg,
-    gap: PatientTheme.spaceSm,
-  },
-  blockTitle: {
-    fontSize: PatientTheme.designType.section,
-    fontWeight: '800',
-    color: PatientTheme.textPrimary,
-  },
-  blockBody: {
-    gap: PatientTheme.spaceSm,
-  },
-  seeAll: {
-    alignSelf: 'flex-start',
-    paddingVertical: PatientTheme.spaceXs,
-  },
-  seeAllLabel: {
-    fontSize: PatientTheme.designType.body,
-    fontWeight: '700',
-    color: PatientTheme.brand,
-  },
-  visitRow: {
-    paddingHorizontal: PatientTheme.spaceMd,
-    paddingVertical: PatientTheme.spaceMd,
-    borderRadius: PatientTheme.radiusLg,
-    borderWidth: 1,
-    borderColor: PatientTheme.border,
-    backgroundColor: PatientTheme.surface,
-    gap: 2,
-  },
-  visitTitle: {
-    fontSize: PatientTheme.designType.item,
-    fontWeight: '700',
-    color: PatientTheme.textPrimary,
-  },
-  visitMeta: {
-    fontSize: PatientTheme.designType.caption,
-    color: PatientTheme.textSecondary,
-  },
-  visitReason: {
-    fontSize: PatientTheme.designType.caption,
-    color: PatientTheme.textMuted,
-  },
-  working: {
-    paddingHorizontal: PatientTheme.spaceLg,
-    fontSize: PatientTheme.designType.caption,
-    color: PatientTheme.textSecondary,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-});
