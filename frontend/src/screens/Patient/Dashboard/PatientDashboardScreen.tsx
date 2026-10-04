@@ -1,135 +1,152 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path } from 'react-native-svg';
+import { useFonts } from 'expo-font';
 import { DesignImage, type DesignImageName } from '../../../components/patient/DesignImage';
 import { patientApi } from '../../../services/patientApi';
-import { HttpError } from '../../../services/http';
-import type { DashboardPayload } from '../../../types/patient';
+import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import { ACTION_TILES, EVENTS, SPECIALTIES } from './dashboardContent';
+import { C, styles } from './dashboardStyles';
 
-const C = { background: '#f3faff', primary: '#004c5b', teal: '#176577', secondary: '#00696e', aqua: '#84f4fb', pale: '#e6f6ff', icon: '#e0f0f9', text: '#0e1e23', muted: '#3f484b' };
-
-function IconButton({ icon, label, onPress, light = false }: { icon: DesignImageName; label: string; onPress: () => void; light?: boolean }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [styles.iconButton, light && styles.lightButton, pressed && styles.pressed]}><DesignImage name={icon} size={22} color={light ? '#fff' : C.muted} /></Pressable>;
+function StatCard({ value, label, icon, onPress }: { value: number | null | undefined; label: string; icon: DesignImageName; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value ?? 'unavailable'}`} onPress={onPress} style={({ pressed }) => [styles.stat, pressed && styles.pressed]}>
+    <View style={styles.statIcon}><DesignImage name={icon} size={18} color={C.secondary} /></View>
+    <View><Text style={styles.statValue}>{value ?? '—'}</Text><Text style={styles.statLabel}>{label}</Text></View>
+  </Pressable>;
 }
 
-function Wave({ ticket = false }: { ticket?: boolean }) {
-  return <Svg pointerEvents="none" style={ticket ? styles.ticketWave : styles.heroWave} viewBox={ticket ? '0 0 100 60' : '0 0 200 200'} preserveAspectRatio="none">
-    {ticket ? <><Path d="M10 0 C40 45 60 15 100 35 L100 60 L0 60 Z" fill={C.teal} opacity={0.2} /><Path d="M0 20 C30 5 60 50 100 25" stroke={C.teal} strokeWidth={2} opacity={0.2} /></> : <><Path d="M20 180 C60 130 100 170 150 110 C190 60 170 20 210 0" stroke="#fff" strokeWidth={4} fill="none" /><Path d="M0 140 C50 100 90 140 140 80 C180 30 160 10 200 0" stroke="#fff" strokeWidth={2} fill="none" /></>}
-  </Svg>;
+function SectionHeading({ title, action, onPress }: { title: string; action?: string; onPress?: () => void }) {
+  return <View style={styles.sectionHeading}><Text accessibilityRole="header" style={styles.sectionTitle}>{title}</Text>{action && onPress ?
+    <Pressable accessibilityRole="button" accessibilityLabel={`${action}: ${title}`} onPress={onPress} style={styles.textButton}><Text style={styles.link}>{action}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable> : null}</View>;
 }
 
 export function PatientDashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [data, setData] = useState<DashboardPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { width } = useWindowDimensions();
+  const [fontsLoaded, fontError] = useFonts({
+    ProfileInter400: require('../../../../assets/fonts/Inter-400.ttf'),
+    ProfileInter500: require('../../../../assets/fonts/Inter-500.ttf'),
+    ProfileInter600: require('../../../../assets/fonts/Inter-600.ttf'),
+    ProfileInter700: require('../../../../assets/fonts/Inter-700.ttf'),
+  });
+  const dashboard = useAsyncResource(() => patientApi.getDashboard(), []);
+  const { reload } = dashboard;
+  const hasFocused = useRef(false);
   const [now, setNow] = useState(() => new Date());
+  const [sheet, setSheet] = useState<{ title: string; body: string } | null>(null);
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(timer); }, []);
-  const load = useCallback(async () => {
-    setRefreshing(true);
-    try { setData(await patientApi.getDashboard()); setError(null); }
-    catch (err) { setError(err instanceof HttpError ? err.message : 'Something went wrong. Please try again.'); }
-    finally { setLoading(false); setRefreshing(false); }
-  }, []);
-  useEffect(() => {
-    let cancelled = false;
-    patientApi.getDashboard().then(payload => { if (!cancelled) { setData(payload); setError(null); } }).catch(err => { if (!cancelled) setError(err instanceof HttpError ? err.message : 'Something went wrong. Please try again.'); }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
+  useFocusEffect(useCallback(() => {
+    if (hasFocused.current) reload();
+    hasFocused.current = true;
+  }, [reload]));
 
+  const data = dashboard.data;
   const name = data?.patient.fullName.trim().split(/\s+/)[0] || 'there';
-  const daypart = now.getHours() < 12 ? 'Morning' : now.getHours() < 17 ? 'Afternoon' : 'Evening';
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Asia/Colombo' }).format(now));
+  const daypart = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+  const dateLabel = now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Colombo' });
   const pass = data?.stats.activePass;
   const next = data?.nextAppointment;
   const ahead = pass?.position == null ? null : Math.max(0, pass.position - 1);
+  const called = pass?.status === 'called' || pass?.status === 'in_consultation';
+  const wide = width >= 760;
+  const columns = wide ? 4 : 2;
+  const specialtyWidth = (Math.min(width, 1120) - 40 - (columns - 1) * 10) / columns;
   const doctors = () => router.push('/(patient)/doctors');
   const queue = () => router.push('/(patient)/queue');
   const profile = () => router.push('/(patient)/profile');
-  const notifications = () => Alert.alert('Appointment reminders', next ? `${next.doctorName}\n${next.dateLabel ?? next.date} at ${next.slotTime}` : 'You have no upcoming appointments. Book a doctor to get started.');
-  const help = () => Alert.alert('How can we help?', 'Book a slot in Doctors, then open Queue on the day of your appointment to check in and follow your turn. Your appointments and medical reports are available in Profile.');
+  const reports = () => router.push('/(patient)/profile/reports');
+  const history = () => router.push('/(patient)/profile/history');
+  const showMessage = (title: string, body: string) => setSheet({ title, body });
+  const notifications = () => showMessage('Appointment reminders', !data ? 'Your appointment information is currently unavailable. Refresh the dashboard to try again.' : next ? `${next.doctorName}\n${next.department}\n${next.dateLabel ?? next.date} at ${next.slotTime}` : 'You have no upcoming appointments. Open Doctors to book a visit.');
+  const help = () => showMessage('How can we help?', 'Book a slot in Doctors, then open Queue on the day of your appointment to check in and follow your turn. Your visit history and medical reports are available in Profile.');
+
+  if (!fontsLoaded && !fontError) return <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator color={C.primary} accessibilityLabel="Loading dashboard" /></View>;
 
   return <View style={styles.root}>
     <View style={[styles.headerSafe, { paddingTop: insets.top }]}><View style={styles.header}>
-      <View style={styles.logo}><DesignImage name="medical" size={20} color="#fff" /></View>
-      <View style={styles.grow}><Text style={styles.eyebrow}>NATIONAL OPD</Text><Text style={styles.headerTitle}>Home Dashboard</Text></View>
-      <IconButton icon="bell" label="Notifications" onPress={notifications} />
-      <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={profile} style={styles.avatar}><DesignImage name="profile" size={18} color="#fff" /></Pressable>
+      <View style={styles.logo}><DesignImage name="medical" size={22} color="#fff" /></View>
+      <View style={styles.grow}><Text style={styles.eyebrow}>MEDI-QUEUE</Text><Text style={styles.headerTitle}>Home Dashboard</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={notifications} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}><DesignImage name="bell" size={20} color={C.primary} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={profile} style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}><DesignImage name="profile" size={20} color={C.primary} /></Pressable>
     </View></View>
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={C.primary} colors={[C.primary]} />}>
-      <View style={styles.hero}>
-        <Wave />
-        <View style={styles.greetingRow}><View style={styles.grow}><Text style={styles.greeting}>{daypart}, {name}</Text><Text style={styles.subtitle}>Let us make you better</Text></View><IconButton icon="bell" label="Appointment reminders" onPress={notifications} light /><IconButton icon="help" label="Help and FAQ" onPress={help} light /></View>
-        <Text style={styles.queueLabel}>{pass ? 'ACTIVE QUEUE' : 'LIVE QUEUE'}</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={pass ? 'View your active queue pass' : 'Open queue to check in'} onPress={queue} style={({ pressed }) => [styles.queueWidget, pressed && styles.pressed]}>
-          <View style={styles.queueHeading}><View style={styles.clinicIcon}><DesignImage name="spine" size={20} color="#fff" /></View><View style={styles.grow}><Text style={styles.clinicTitle}>{pass ? `${pass.department} Queue` : 'No active pass today'}</Text><Text style={styles.clinicSubtitle}>{pass ? ahead === null ? 'Follow your live queue here' : ahead === 0 ? 'You are next' : `${ahead} ${ahead === 1 ? 'person' : 'people'} ahead of you` : 'Check in on the day of your appointment'}</Text></View><View style={styles.queueArrow}><DesignImage name="arrow" size={18} color="#fff" /></View></View>
-          <View style={styles.ticket}><Wave ticket /><View style={styles.ticketText}><Text style={styles.queueNumber}>{pass ? `Queue ${pass.tokenNumber}` : 'Get your queue pass'}</Text><View style={styles.etaRow}><DesignImage name="clock" size={14} color={C.secondary} /><Text style={styles.eta}>{pass ? pass.estimatedTurnAt ? `Your turn at ${pass.estimatedTurnAt}` : 'Your turn estimate will appear here' : 'Open the queue to check in'}</Text></View></View>{pass?.room ? <View style={styles.roomPill}><Text style={styles.room}>{pass.room}</Text></View> : null}</View>
-        </Pressable>
-        <View style={styles.dots}><View style={styles.activeDot} /><View style={styles.dot} /><View style={styles.dot} /></View>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={Boolean(data) && dashboard.loading} onRefresh={reload} tintColor={C.primary} colors={[C.primary]} />}>
+      <View style={styles.intro}>
+        <View style={styles.introTop}><Text style={styles.overline}>PATIENT DASHBOARD</Text><View style={styles.datePill}><DesignImage name="calendar" size={14} color={C.primary} /><Text style={styles.dateText}>{dateLabel}</Text></View></View>
+        <Text accessibilityRole="header" style={styles.greeting}>Good {daypart}, {name}</Text>
+        <Text style={styles.subtitle}>Your appointments, queue and health records, all in one place.</Text>
       </View>
-      <View style={styles.body}>
-        {loading ? <View style={styles.status}><ActivityIndicator color={C.primary} /><Text style={styles.statusText}>Loading your dashboard…</Text></View> : null}
-        {error && !loading ? <View style={styles.error}><Text style={styles.errorTitle}>We could not load your dashboard</Text><Text style={styles.statusText}>{error}</Text><Pressable accessibilityRole="button" onPress={load} style={styles.retry}><Text style={styles.link}>Try again</Text></Pressable></View> : null}
-        <LinearGradient colors={[C.primary, C.teal]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.booking}>
-          <View pointerEvents="none" style={styles.bookingDecoration} />
-          <View style={styles.bookingTop}><View style={styles.reservationPill}><DesignImage name="calendar" size={16} color={C.aqua} /><Text style={styles.reservation}>Instant OPD Slot Reservation</Text></View><View style={styles.livePill}><Text style={styles.live}>Live Slots</Text></View></View>
-          <Text style={styles.bookingTitle}>Book Doctor Appointment</Text><Text style={styles.bookingBody}>Skip waiting lines. Choose your specialist, OPD clinic & preferred time slot instantly.</Text>
-          <View style={styles.bookingFooter}><View style={styles.bookingMeta}><DesignImage name="badge" size={13} color="#afecff" /><Text style={styles.meta}>General & Specialist</Text><Text style={styles.metaBullet}>•</Text><Text style={styles.meta}>Today Available</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Book slot now" onPress={doctors} style={({ pressed }) => [styles.bookButton, pressed && styles.pressed]}><Text style={styles.bookButtonText}>Book Slot Now</Text><DesignImage name="arrow" size={18} color={C.primary} /></Pressable></View>
-        </LinearGradient>
-        <Pressable accessibilityRole="button" accessibilityLabel="Search doctor or clinic" onPress={doctors} style={styles.search}><DesignImage name="search" size={22} color={C.secondary} /><Text style={styles.searchText}>Search doctor or clinic</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={notifications} style={styles.checkup}><DesignImage name="bell" size={20} color={C.aqua} /><Text style={styles.checkupTitle} numberOfLines={1}>{next ? `Checkup with ${next.doctorName}` : 'Your next medical checkup'}</Text><View style={styles.checkupBadge}><DesignImage name="calendar" size={14} color="#fff" /><Text style={styles.checkupDate}>{next ? next.dateLabel ?? next.date : 'No booking'}</Text></View></Pressable>
-        <View style={styles.actions}>{ACTION_TILES.map(tile => <Pressable key={tile.key} accessibilityRole="button" accessibilityLabel={`${tile.label} ${tile.caption}`} onPress={tile.key === 'clinics-queue' || tile.key === 'medicine-queue' ? queue : doctors} style={({ pressed }) => [styles.action, pressed && styles.pressed]}><View style={styles.actionIcon}><DesignImage name={tile.icon} size={22} color={C.secondary} /></View><Text style={styles.actionLabel}>{tile.label}{'\n'}{tile.caption}</Text></Pressable>)}</View>
-        <View style={styles.section}><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Hospital Clinics</Text><Pressable accessibilityRole="button" accessibilityLabel="See all hospital clinics" onPress={doctors} hitSlop={8}><Text style={styles.link}>See All</Text></Pressable></View><View style={styles.specialties}>{SPECIALTIES.map(specialty => <Pressable key={specialty.key} accessibilityRole="button" accessibilityLabel={specialty.label} onPress={doctors} style={({ pressed }) => [styles.specialty, pressed && styles.pressed]}><View style={styles.specialtyIcon}><DesignImage name={specialty.icon} size={22} color={C.secondary} /></View><Text style={styles.specialtyLabel}>{specialty.label}</Text></Pressable>)}</View></View>
-        <View style={styles.section}><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Events & Health Insights</Text><Pressable accessibilityRole="button" accessibilityLabel="See all health insights" onPress={() => Alert.alert('Events & Health Insights', EVENTS.map(event => `${event.title}\n${event.description}\n${event.schedule}`).join('\n\n'))} hitSlop={8}><Text style={styles.link}>See All</Text></Pressable></View><ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.events} contentContainerStyle={styles.eventContent}>{EVENTS.map(event => <Pressable key={event.key} accessibilityRole="button" accessibilityLabel={event.title} onPress={() => Alert.alert(event.title, `${event.description}\n\n${event.schedule}`)} style={({ pressed }) => [styles.eventCard, pressed && styles.pressed]}><Image source={event.image} style={styles.eventImage} resizeMode="cover" /><View style={styles.eventBadge}><Text style={styles.eventBadgeText}>{event.badge}</Text></View><View style={styles.eventBody}><Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text><Text style={styles.eventDescription} numberOfLines={1}>{event.description}</Text><Text style={styles.eventSchedule}>{event.schedule}</Text></View></Pressable>)}</ScrollView></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Search doctor or clinic" onPress={doctors} style={({ pressed }) => [styles.search, pressed && styles.pressed]}><DesignImage name="search" size={20} color={C.secondary} /><Text style={styles.searchText}>Search a doctor or clinic</Text><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
+      {dashboard.loading && !data ? <View style={styles.status}><ActivityIndicator color={C.primary} /><Text style={styles.statusText}>Loading your dashboard…</Text></View> : null}
+      {dashboard.error ? <View style={styles.error}><Text style={styles.errorTitle}>We could not refresh your dashboard</Text><Text style={styles.statusText}>{dashboard.error}</Text><Pressable accessibilityRole="button" onPress={reload} style={[styles.textButton, { alignSelf: 'flex-start' }]}><Text style={styles.link}>Try again</Text></Pressable></View> : null}
+      <View style={styles.stats}>
+        <StatCard value={data?.stats.upcomingAppointments} label="Upcoming visits" icon="calendar" onPress={doctors} />
+        <StatCard value={data?.stats.completedVisits} label="Completed visits" icon="medical" onPress={history} />
+        <StatCard value={data?.stats.reports} label="Medical reports" icon="clipboard" onPress={reports} />
+      </View>
+      <LinearGradient colors={[C.primary, C.teal]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.booking}>
+        <View pointerEvents="none" style={styles.bookingDecoration} />
+        <View style={styles.bookingTop}><DesignImage name="calendar" size={18} color={C.aqua} /><Text style={styles.bookingEyebrow}>YOUR NEXT STEP TO BETTER HEALTH</Text></View>
+        <View style={{ gap: 6 }}><Text style={styles.bookingTitle}>Care starts with an appointment.</Text><Text style={styles.bookingBody}>Find your specialist, choose a clinic and book a time that works for you.</Text></View>
+        <View style={styles.bookingFooter}><View style={styles.bookingMeta}><DesignImage name="stethoscope" size={16} color={C.aqua} /><Text style={styles.bookingMetaText}>General &amp; specialist clinics</Text></View><Pressable accessibilityRole="button" onPress={doctors} style={({ pressed }) => [styles.bookButton, pressed && styles.pressed]}><Text style={styles.bookButtonLabel}>Book appointment</Text><DesignImage name="arrow" size={16} color={C.primary} /></Pressable></View>
+      </LinearGradient>
+      <View style={styles.section}>
+        <SectionHeading title="Your care at a glance" />
+        <View style={[styles.overview, wide && styles.wideRow]}>
+          <View style={[styles.careCard, wide && styles.wideCard]}>
+            <View style={styles.cardTop}><Text style={styles.cardType}>NEXT APPOINTMENT</Text><View style={styles.badge}><Text style={styles.badgeLabel}>{next ? 'Upcoming' : data ? 'Not booked' : 'Loading'}</Text></View></View>
+            <View style={{ gap: 6 }}><Text style={styles.careHeading}>{next ? next.doctorName : data ? 'Plan your next visit' : 'Your next visit'}</Text><Text style={styles.careDescription}>{next ? next.department : data ? 'Book a consultation when you need care.' : 'Your appointment details will appear here.'}</Text></View>
+            <View style={styles.cardMeta}><DesignImage name="calendar" size={14} color={C.secondary} /><Text style={styles.careDescription}>{next ? `${next.dateLabel ?? next.date} · ${next.slotTime}` : 'Choose your preferred date and time'}</Text></View>
+            <Pressable accessibilityRole="button" onPress={next ? notifications : doctors} style={({ pressed }) => [styles.cardFooter, pressed && styles.pressed]}><Text style={styles.link}>{next ? 'View appointment' : 'Find a doctor'}</Text><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
+          </View>
+          <View style={[styles.careCard, wide && styles.wideCard]}>
+            <View style={styles.cardTop}><Text style={styles.cardType}>LIVE QUEUE</Text><View style={styles.badge}><Text style={styles.badgeLabel}>{pass ? called ? 'Your turn' : 'Active' : data ? 'No active pass' : 'Loading'}</Text></View></View>
+            <View style={{ gap: 4 }}><Text style={pass ? styles.careNumber : styles.careHeading}>{pass ? `#${pass.tokenNumber}` : 'Your place in line'}</Text><Text style={styles.careDescription}>{pass ? pass.department : 'Check in on the day of your appointment.'}</Text></View>
+            <View style={styles.cardMeta}><DesignImage name="clock" size={14} color={C.secondary} /><Text style={styles.careDescription}>{pass ? called ? pass.room ? `Please go to ${pass.room}` : 'Please go to the clinic desk' : ahead === null ? 'Follow your live queue here' : ahead === 0 ? 'You are next' : `${ahead} ${ahead === 1 ? 'person' : 'people'} ahead of you` : 'Your position updates automatically'}</Text></View>
+            {pass?.estimatedTurnAt && !called ? <Text style={styles.careDescription}>Estimated turn: {pass.estimatedTurnAt}</Text> : null}
+            <Pressable accessibilityRole="button" onPress={queue} style={({ pressed }) => [styles.cardFooter, pressed && styles.pressed]}><Text style={styles.link}>{pass ? 'Open queue pass' : 'Go to queue'}</Text><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
+          </View>
+          <View style={[styles.careCard, wide && styles.wideCard]}>
+            <View style={styles.cardTop}><Text style={styles.cardType}>HEALTH RECORDS</Text><DesignImage name="clipboard" size={18} color={C.secondary} /></View>
+            <View style={{ gap: 6 }}><Text style={styles.careHeading}>Your health, organized.</Text><Text style={styles.careDescription}>Keep your visit history and medical documents within reach.</Text></View>
+            <Text style={styles.careDescription}>{data ? `${data.stats.completedVisits ?? '—'} completed visits · ${data.stats.reports ?? '—'} reports` : 'Your records will appear once loaded.'}</Text>
+            <Pressable accessibilityRole="button" onPress={profile} style={({ pressed }) => [styles.cardFooter, pressed && styles.pressed]}><Text style={styles.link}>View my records</Text><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
+          </View>
+        </View>
+      </View>
+      <View style={styles.section}>
+        <SectionHeading title="Quick actions" action="Help" onPress={help} />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionScroll} contentContainerStyle={styles.actionContent}>
+          {ACTION_TILES.map(tile => <Pressable key={tile.key} accessibilityRole="button" accessibilityLabel={`${tile.label} ${tile.caption}`} onPress={tile.key === 'clinics-queue' || tile.key === 'medicine-queue' ? queue : doctors} style={({ pressed }) => [styles.action, pressed && styles.pressed]}><View style={styles.actionIcon}><DesignImage name={tile.icon} size={20} color={C.secondary} /></View><Text style={styles.actionLabel}>{tile.label}{'\n'}{tile.caption}</Text></Pressable>)}
+        </ScrollView>
+      </View>
+      <View style={styles.section}>
+        <SectionHeading title="Hospital clinics" action="See all" onPress={doctors} />
+        <Text style={styles.sectionCaption}>Find the right specialist for your care.</Text>
+        <View style={styles.specialties}>{SPECIALTIES.map(specialty => <Pressable key={specialty.key} accessibilityRole="button" accessibilityLabel={specialty.label} onPress={doctors} style={({ pressed }) => [styles.specialty, { width: specialtyWidth }, pressed && styles.pressed]}><View style={styles.specialtyIcon}><DesignImage name={specialty.icon} size={20} color={C.secondary} /></View><Text style={styles.specialtyLabel}>{specialty.label}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable>)}</View>
+      </View>
+      <View style={styles.section}>
+        <SectionHeading title="Recent activity" action="View history" onPress={history} />
+        <View style={styles.activityCard}>
+          {data?.recentActivity.length ? data.recentActivity.slice(0, 4).map((item, index) => <React.Fragment key={`${item.type}-${item.id}`}>
+            {index ? <View style={styles.divider} /> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel={item.title} onPress={item.type === 'report' ? reports : history} style={({ pressed }) => [styles.activityRow, pressed && styles.pressed]}><View style={styles.actionIcon}><DesignImage name={item.type === 'report' ? 'clipboard' : 'calendar'} size={18} color={C.secondary} /></View><View style={styles.grow}><Text style={styles.activityTitle}>{item.title}</Text><Text style={styles.activityCaption}>{[item.dateLabel ?? item.date, item.status.replace(/_/g, ' ')].filter(Boolean).join(' · ')}</Text></View><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
+          </React.Fragment>) : <View style={styles.emptyActivity}><Text style={styles.activityTitle}>{data ? 'No recent activity yet' : 'Your recent activity'}</Text><Text style={styles.sectionCaption}>{data ? 'Your appointments and reports will be listed here.' : 'Activity will appear once your dashboard loads.'}</Text></View>}
+        </View>
+      </View>
+      <View style={styles.section}>
+        <SectionHeading title="Events & health insights" action="See all" onPress={() => showMessage('Events & Health Insights', EVENTS.map(event => `${event.title}\n${event.description}\n${event.schedule}`).join('\n\n'))} />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.events} contentContainerStyle={styles.eventContent}>{EVENTS.map(event => <Pressable key={event.key} accessibilityRole="button" accessibilityLabel={event.title} onPress={() => showMessage(event.title, `${event.description}\n\n${event.schedule}`)} style={({ pressed }) => [styles.eventCard, pressed && styles.pressed]}><Image source={event.image} style={styles.eventImage} resizeMode="cover" /><View style={styles.eventBadge}><Text style={styles.eventBadgeText}>{event.badge}</Text></View><View style={styles.eventBody}><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.eventDescription}>{event.description}</Text><View style={styles.cardMeta}><DesignImage name="calendar" size={13} color={C.secondary} /><Text style={styles.eventSchedule}>{event.schedule}</Text></View></View></Pressable>)}</ScrollView>
       </View>
     </ScrollView>
+    <Modal transparent visible={Boolean(sheet)} animationType="slide" onRequestClose={() => setSheet(null)}>
+      <View style={styles.modalOverlay}><Pressable accessibilityRole="button" accessibilityLabel="Close dialog" onPress={() => setSheet(null)} style={StyleSheet.absoluteFill} />
+        <View accessibilityViewIsModal style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}><Text accessibilityRole="header" style={styles.sectionTitle}>{sheet?.title}</Text><ScrollView><Text style={styles.sheetBody}>{sheet?.body}</Text></ScrollView><Pressable accessibilityRole="button" onPress={() => setSheet(null)} style={styles.sheetButton}><Text style={styles.sheetButtonLabel}>Done</Text></Pressable></View>
+      </View>
+    </Modal>
   </View>;
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.background }, content: { paddingBottom: 32 },
-  headerSafe: { backgroundColor: C.background, zIndex: 1, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' },
-  header: { height: 64, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  grow: { flex: 1, minWidth: 0 },
-  logo: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.teal, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { color: C.secondary, fontSize: 11, letterSpacing: 1 }, headerTitle: { fontSize: 18, fontWeight: '600', color: C.text },
-  iconButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, lightButton: { backgroundColor: 'rgba(255,255,255,0.15)' },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' }, pressed: { opacity: 0.75 },
-  hero: { backgroundColor: C.teal, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, overflow: 'hidden', boxShadow: '0 3px 5px rgba(0,0,0,0.12)' },
-  heroWave: { position: 'absolute', width: 256, height: 256, right: -32, top: -48, opacity: 0.1 }, greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 },
-  greeting: { color: '#fff', fontSize: 22, fontWeight: '700', letterSpacing: -0.3 }, subtitle: { color: C.aqua, fontSize: 11, marginTop: 2 },
-  queueLabel: { color: C.aqua, fontSize: 11, fontWeight: '500', letterSpacing: 0.5, marginBottom: 4 }, queueWidget: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 8 },
-  queueHeading: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 4, paddingVertical: 6 },
-  clinicIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  clinicTitle: { color: '#fff', fontSize: 14, fontWeight: '600' }, clinicSubtitle: { color: '#8dd0e5', fontSize: 11, marginTop: 2 },
-  queueArrow: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  ticket: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, overflow: 'hidden', minHeight: 82 },
-  ticketWave: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 112, height: '100%' }, ticketText: { flex: 1 }, queueNumber: { color: C.primary, fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  etaRow: { flexDirection: 'row', gap: 4, alignItems: 'center', marginTop: 2 }, eta: { color: C.muted, fontSize: 11, flex: 1 },
-  roomPill: { backgroundColor: C.pale, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 }, room: { color: C.primary, fontSize: 11 },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 16 }, activeDot: { width: 20, height: 6, borderRadius: 3, backgroundColor: '#fff' }, dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
-  body: { paddingHorizontal: 20, paddingTop: 16, gap: 16 }, status: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 }, statusText: { color: C.muted, fontSize: 12 },
-  error: { backgroundColor: '#ffdad6', borderRadius: 12, padding: 12, gap: 6 }, errorTitle: { color: '#93000a', fontWeight: '600', fontSize: 14 }, retry: { alignSelf: 'flex-start', paddingVertical: 8 },
-  booking: { borderRadius: 16, padding: 16, overflow: 'hidden', boxShadow: '0 3px 6px rgba(0,0,0,0.12)' },
-  bookingDecoration: { position: 'absolute', right: -24, bottom: -24, width: 130, height: 120, borderTopLeftRadius: 50, borderTopRightRadius: 40, backgroundColor: 'rgba(255,255,255,0.15)', transform: [{ rotate: '-10deg' }] },
-  bookingTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 },
-  reservationPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 1 }, reservation: { color: C.aqua, fontSize: 11, flexShrink: 1 },
-  livePill: { backgroundColor: C.aqua, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }, live: { fontSize: 11, fontWeight: '700', color: '#002022' },
-  bookingTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginTop: 10 }, bookingBody: { color: 'rgba(255,255,255,0.85)', fontSize: 12, lineHeight: 16, marginTop: 3 },
-  bookingFooter: { marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }, bookingMeta: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 130, gap: 4 },
-  meta: { color: '#afecff', fontSize: 11, flexShrink: 1 }, metaBullet: { color: '#8dd0e5', fontSize: 12, marginHorizontal: 4 },
-  bookButton: { backgroundColor: '#fff', borderRadius: 30, paddingHorizontal: 16, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 6 }, bookButtonText: { color: C.primary, fontSize: 12, fontWeight: '700' },
-  search: { backgroundColor: '#fff', borderRadius: 30, minHeight: 44, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }, searchText: { color: '#6f797c', fontSize: 14 },
-  checkup: { backgroundColor: C.primary, borderRadius: 30, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }, checkupTitle: { color: '#fff', fontSize: 12, fontWeight: '600', flex: 1 },
-  checkupBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', maxWidth: '45%' }, checkupDate: { color: '#fff', fontSize: 11, flexShrink: 1 },
-  actions: { flexDirection: 'row', gap: 6, paddingTop: 4 }, action: { flex: 1, alignItems: 'center' }, actionIcon: { width: 42, height: 42, borderRadius: 26, backgroundColor: C.pale, alignItems: 'center', justifyContent: 'center' }, actionLabel: { color: C.text, fontSize: 11, lineHeight: 14, textAlign: 'center', marginTop: 6 },
-  section: { gap: 8, paddingTop: 4 }, sectionHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }, sectionTitle: { color: C.text, fontSize: 18, fontWeight: '600', flexShrink: 1 }, link: { color: C.secondary, fontSize: 14, fontWeight: '600' },
-  specialties: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 }, specialty: { width: '25%', alignItems: 'center' }, specialtyIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: C.icon, alignItems: 'center', justifyContent: 'center' }, specialtyLabel: { color: C.text, fontSize: 11, textAlign: 'center', marginTop: 4 },
-  events: { marginHorizontal: -20 }, eventContent: { paddingHorizontal: 20, paddingBottom: 4, gap: 16 }, eventCard: { width: 240, borderRadius: 16, backgroundColor: '#fff', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }, eventImage: { width: '100%', height: 112 },
-  eventBadge: { position: 'absolute', top: 8, left: 8, backgroundColor: C.primary, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2 }, eventBadgeText: { color: '#fff', fontSize: 11, fontWeight: '500' }, eventBody: { padding: 8, gap: 4 }, eventTitle: { color: C.secondary, fontSize: 11 }, eventDescription: { color: C.text, fontSize: 12, fontWeight: '600' }, eventSchedule: { color: C.muted, fontSize: 12 },
-});
