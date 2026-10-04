@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { login } from '../../services/authService';
 
@@ -32,6 +33,10 @@ export default function LoginScreen() {
 
     try {
       const userData = await login(email, password);
+      
+      // Save token and user data locally
+      await AsyncStorage.setItem('token', userData.token);
+      await AsyncStorage.setItem('user', JSON.stringify(userData));
       
       // Successfully logged in
       Alert.alert('Success', `Welcome back, ${userData.fullName}!`);
@@ -117,7 +122,10 @@ export default function LoginScreen() {
           </View>
 
           {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotButton}>
+          <TouchableOpacity 
+            style={styles.forgotButton}
+            onPress={() => router.push('/(auth)/forgot-password')}
+          >
             <Text style={styles.forgotText}>Forgot Password?</Text>
           </TouchableOpacity>
 
