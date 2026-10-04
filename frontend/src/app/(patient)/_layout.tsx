@@ -1,6 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage, type DesignImageName } from '../../components/patient/DesignImage';
 
@@ -18,23 +19,24 @@ const QueueIcon = tabIcon('ticket');
 const ProfileIcon = tabIcon('profile');
 
 export default function PatientTabsLayout() {
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: PatientTheme.brand,
-        tabBarInactiveTintColor: PatientTheme.textMuted,
+        tabBarActiveTintColor: '#004c5b',
+        tabBarInactiveTintColor: '#3f484b',
         tabBarStyle: {
-          backgroundColor: PatientTheme.surface,
-          borderTopColor: PatientTheme.border,
-          borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 8,
+          backgroundColor: '#f3faff',
+          borderTopWidth: 0,
+          height: 64 + insets.bottom,
+          paddingBottom: Math.max(8, insets.bottom),
           paddingTop: 8,
+          boxShadow: '0 -2px 12px rgba(0,0,0,0.05)',
         },
         tabBarLabelStyle: {
           fontSize: PatientTheme.designType.caption,
-          fontWeight: PatientTheme.weight.bold,
+          fontWeight: '500',
         },
       }}
     >

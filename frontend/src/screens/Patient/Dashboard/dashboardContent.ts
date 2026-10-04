@@ -9,7 +9,8 @@ export const ACTION_TILES = [
   { key: 'clinic-registration', label: 'Clinic', caption: 'Registration', icon: 'clipboard' },
   { key: 'doctor-schedule', label: 'Doctor', caption: 'Schedule', icon: 'calendar' },
   { key: 'doctor-appointment', label: 'Doctor', caption: 'Appt.', icon: 'stethoscope' },
-  { key: 'medicine-queue', label: 'Medicine', caption: 'Queue Submit', icon: 'pill' },
+  { key: 'clinics-queue', label: 'Clinics', caption: 'Queue', icon: 'hourglass' },
+  { key: 'medicine-queue', label: 'Medicine', caption: 'Submit', icon: 'pill' },
 ] as const;
 
 // Core services a real hospital app puts one tap away, modelled on the
@@ -46,28 +47,20 @@ export const SPECIALTIES = [
 
 export const EVENTS = [
   {
-    key: 'wellness-workshop',
-    title: 'Wellness Workshop',
-    description: 'Guided wellness session for OPD patients and staff.',
-    schedule: 'Saturday, 08:30 WITA',
-    image: require('../../../../assets/images/patient/wellness.png'),
-    badge: 'Workshop',
-  },
-  {
     key: 'blood-screening',
     title: 'Free Blood Screening',
-    description: 'Complimentary glucose check & basic panel.',
+    description: 'Complimentary glucose check & bone density tests',
     schedule: 'Saturday, 08:30 WITA',
-    image: require('../../../../assets/images/patient/screening.png'),
-    badge: 'Free',
+    image: require('../../../../assets/images/patient/dashboard-screening.png'),
+    badge: 'Workshop',
   },
   {
     key: 'spine-care',
     title: 'Posture & Spine Care',
-    description: 'Ergonomic habits for workplace and home.',
+    description: 'Ergonomic habits for workplace orthopedic health',
     schedule: 'Next Tuesday, 14:00 WITA',
-    image: require('../../../../assets/images/patient/spine.png'),
-    badge: 'Clinic',
+    image: require('../../../../assets/images/patient/dashboard-wellness.png'),
+    badge: 'Wellness',
   },
 ] as const;
 
