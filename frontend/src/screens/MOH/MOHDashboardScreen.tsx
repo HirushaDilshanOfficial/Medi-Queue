@@ -57,10 +57,10 @@ export default function MOHDashboardScreen() {
           {/* Top Info Row */}
           <View style={styles.headerTop}>
             <View style={styles.profileSection}>
-              <View style={styles.avatarPlaceholder}>
+              <TouchableOpacity style={styles.avatarPlaceholder} onPress={() => router.push('/(moh)/profile')}>
                 <Text style={styles.avatarText}>M</Text>
                 <View style={styles.onlineDot} />
-              </View>
+              </TouchableOpacity>
               <View>
                 <Text style={styles.greetingText}>Good Morning,</Text>
                 <Text style={styles.userNameText}>Ministry of Health</Text>
