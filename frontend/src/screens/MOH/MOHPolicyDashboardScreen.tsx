@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 import { getPolicies, updatePolicy } from '../../services/policyService';
 
@@ -75,14 +76,19 @@ export default function MOHPolicyDashboardScreen() {
         {/* Header Section */}
         <View style={styles.headerBackground}>
           <View style={styles.headerTop}>
-            <View style={styles.headerUser}>
-              <View style={styles.avatar}>
-                <Ionicons name="shield-checkmark" size={24} color={Colors.primaryDark} />
-              </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <Ionicons name="arrow-back" size={24} color={Colors.white} />
+              </TouchableOpacity>
+              <View style={styles.headerUser}>
+                <View style={styles.avatar}>
+                  <Ionicons name="shield-checkmark" size={24} color={Colors.primaryDark} />
+                </View>
               <View>
                 <Text style={styles.headerRole}>MOH Executive</Text>
                 <Text style={styles.headerSub}>National OPD Network • Policy</Text>
               </View>
+            </View>
             </View>
             <TouchableOpacity style={styles.notificationBtn}>
               <Ionicons name="notifications-outline" size={24} color={Colors.white} />
@@ -283,6 +289,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 25,
+  },
+  backBtn: {
+    marginRight: 12,
+    padding: 4,
   },
   avatar: {
     width: 36,
