@@ -28,11 +28,24 @@ const findOrCreatePatient = async ({ existingPatientId, patient: data, createdBy
     return { patient: existing, isNewPatient: false };
   }
 
-  // ── 2. Normalize inputs ──
+  // ── 2. Validate input formats if provided ──
+  if (data.nic && !isValidNIC(data.nic)) {
+    const err = new Error('Invalid NIC format. Use 9 digits + V/X or 12 digits.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (data.phone && !isValidSLPhone(data.phone)) {
+    const err = new Error('Invalid Sri Lankan phone number format.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // ── 3. Normalize inputs ──
   const nic = data.nic ? normalizeNIC(data.nic) : null;
   const phone = data.phone ? normalizePhone(data.phone) || data.phone.trim() : null;
 
-  // ── 3. Try to find existing patient by NIC, then by phone ──
+  // ── 4. Try to find existing patient by NIC, then by phone ──
   if (nic) {
     const byNic = await Patient.findOne({ nic });
     if (byNic) return { patient: byNic, isNewPatient: false };
@@ -43,7 +56,7 @@ const findOrCreatePatient = async ({ existingPatientId, patient: data, createdBy
     if (byPhone) return { patient: byPhone, isNewPatient: false };
   }
 
-  // ── 4. Validate required fields before creating ──
+  // ── 5. Validate required fields before creating ──
   if (!data.fullName || !data.fullName.trim()) {
     const err = new Error('Patient full name is required.');
     err.statusCode = 400;
@@ -56,17 +69,6 @@ const findOrCreatePatient = async ({ existingPatientId, patient: data, createdBy
     throw err;
   }
 
-  if (data.phone && !isValidSLPhone(data.phone)) {
-    const err = new Error('Invalid Sri Lankan phone number format.');
-    err.statusCode = 400;
-    throw err;
-  }
-
-  if (data.nic && !isValidNIC(data.nic)) {
-    const err = new Error('Invalid NIC format. Use 9 digits + V/X or 12 digits.');
-    err.statusCode = 400;
-    throw err;
-  }
 
   // ── 5. Create patient ──
   const newData = {

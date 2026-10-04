@@ -17,24 +17,30 @@ const protect = async (req, res, next) => {
 
       // Get user from the token
       req.user = await User.findById(decoded.id).select('-password');
+      if (!req.user) {
+        res.status(401);
+        return next(new Error('Not authorized, user not found'));
+      }
 
-      next();
+      return next();
     } catch (error) {
       res.status(401);
-      next(new Error('Not authorized, token failed'));
+      return next(new Error('Not authorized, token failed'));
     }
   }
 
   if (!token) {
     res.status(401);
-    next(new Error('Not authorized, no token'));
+    return next(new Error('Not authorized, no token'));
   }
 };
 
 // Role-based access control — use AFTER protect so req.user is available
 const authorizeRoles = (...roles) => {
+  const allowed = roles.map((r) => r.toLowerCase());
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    const userRole = (req.user?.role || '').toLowerCase();
+    if (!req.user || !allowed.includes(userRole)) {
       res.status(403);
       return next(
         new Error(`Access denied. Required role(s): ${roles.join(', ')}`)
@@ -45,3 +51,4 @@ const authorizeRoles = (...roles) => {
 };
 
 module.exports = { protect, authorizeRoles };
+
