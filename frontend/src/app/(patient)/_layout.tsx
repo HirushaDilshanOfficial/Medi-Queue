@@ -84,6 +84,7 @@ export default function PatientTabsLayout() {
         options={{
           title: 'Book',
           href: null,
+          tabBarStyle: { display: 'none' },
         }}
       />
 

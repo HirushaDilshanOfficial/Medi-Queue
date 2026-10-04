@@ -66,7 +66,7 @@ const opdAppointmentSchema = new mongoose.Schema(
     },
     tokenNumber: { type: Number, default: null },
 
-    reason: { type: String, trim: true, maxlength: 200 },
+    reason: { type: String, trim: true, maxlength: 300 },
     cancelledAt: { type: Date, default: null },
     cancelReason: { type: String, trim: true, maxlength: 200 },
     rescheduledFrom: { type: String, trim: true },
