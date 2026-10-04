@@ -9,13 +9,8 @@ const protect = async (req, res, next) => {
     req.headers.authorization.startsWith('Bearer')
   ) {
     try {
-      // Get token from header
       token = req.headers.authorization.split(' ')[1];
-
-      // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
-
-      // Get user from the token
       req.user = await User.findById(decoded.id).select('-password');
       if (!req.user) {
         res.status(401);
@@ -35,9 +30,8 @@ const protect = async (req, res, next) => {
   }
 };
 
-// Role-based access control — use AFTER protect so req.user is available
 const authorizeRoles = (...roles) => {
-  const allowed = roles.map((r) => r.toLowerCase());
+  const allowed = roles.map((role) => role.toLowerCase());
   return (req, res, next) => {
     const userRole = (req.user?.role || '').toLowerCase();
     if (!req.user || !allowed.includes(userRole)) {
@@ -50,5 +44,6 @@ const authorizeRoles = (...roles) => {
   };
 };
 
-module.exports = { protect, authorizeRoles };
+const authorize = (...roles) => authorizeRoles(...roles);
 
+module.exports = { protect, authorize, authorizeRoles };

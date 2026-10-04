@@ -2,90 +2,111 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { asyncHandler, createError } = require('../utils/errorHandler');
 
-// Generate JWT
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback_secret', {
     expiresIn: '30d',
   });
 };
 
-// @desc    Register a new user
-// @route   POST /api/users/register
-// @access  Public
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const {
+    name,
+    fullName,
+    email,
+    password,
+    role,
+    nic,
+    birthday,
+    gender,
+    phone,
+    bloodGroup,
+  } = req.body;
+  const normalizedName = String(fullName || name || '').trim();
+  const roleNames = {
+    moh: 'MOH',
+    doctor: 'Doctor',
+    nurse: 'Nurse',
+    receptionist: 'Receptionist',
+    pharmacist: 'Pharmacist',
+    'lab technician': 'Lab Technician',
+    other: 'Other',
+    patient: 'Patient',
+  };
+  const normalizedRole = roleNames[String(role || 'patient').toLowerCase()];
 
-  if (!name || !email || !password) {
+  if (!normalizedName || !email || !password) {
     throw createError('Please provide name, email and password', 400);
+  }
+  if (!normalizedRole) {
+    throw createError('Invalid user role', 400);
+  }
+  if (normalizedRole === 'Patient' && !nic) {
+    throw createError('NIC is required for patient registration', 400);
   }
 
   const userExists = await User.findOne({ email });
-
   if (userExists) {
     throw createError('User already exists', 400);
   }
 
   const user = await User.create({
-    name,
+    fullName: normalizedName,
     email,
     password,
-    role: role ? role.toLowerCase() : 'patient',
+    role: normalizedRole,
+    nic,
+    birthday,
+    gender: gender
+      ? `${gender[0].toUpperCase()}${gender.slice(1).toLowerCase()}`
+      : undefined,
+    phone,
+    bloodGroup,
   });
 
-  if (user) {
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id),
-    });
-  } else {
-    throw createError('Invalid user data', 400);
-  }
+  res.status(201).json({
+    _id: user._id,
+    name: user.fullName,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+    token: generateToken(user._id),
+  });
 });
 
-// @desc    Auth user & get token
-// @route   POST /api/users/login
-// @access  Public
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-
   if (!email || !password) {
     throw createError('Please provide email and password', 400);
   }
 
   const user = await User.findOne({ email });
-
-  if (user && user.password === password) {
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id),
-    });
-  } else {
+  if (!user || !(await user.matchPassword(password))) {
     throw createError('Invalid email or password', 401);
   }
+
+  res.json({
+    _id: user._id,
+    name: user.fullName,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+    token: generateToken(user._id),
+  });
 });
 
-// @desc    Get user profile
-// @route   GET /api/users/profile
-// @access  Private
 const getUserProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id);
-
-  if (user) {
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-    });
-  } else {
+  if (!user) {
     throw createError('User not found', 404);
   }
+
+  res.json({
+    _id: user._id,
+    name: user.fullName,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+  });
 });
 
 module.exports = {

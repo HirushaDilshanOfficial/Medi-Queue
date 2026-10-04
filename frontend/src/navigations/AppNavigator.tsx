@@ -2,18 +2,19 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer } from '@react-navigation/native';
 
-// Import Screens
-import DoctorHomeScreen from '../screens/Doctor/DoctorHomeScreen';
-import PatientHomeScreen from '../screens/Patient/PatientHomeScreen';
-import MOHHomeScreen from '../screens/MOH/MOHHomeScreen';
-import ReceptionistHomeScreen from '../screens/Receptionist/ReceptionistHomeScreen';
+// Auth Screens
+import LoginScreen from '../screens/Auth/LoginScreen';
+import RegisterScreen from '../screens/Auth/RegisterScreen';
 
-// Define Route Types
+// MOH Dashboard Screen
+// TODO: Patient, Doctor, Receptionist screens - later add කරමු
+import MOHDashboardScreen from '../screens/MOH/MOHDashboardScreen';
+
+// Define all route names and their params
 export type RootStackParamList = {
-  DoctorHome: undefined;
-  PatientHome: undefined;
-  MOHHome: undefined;
-  ReceptionistHome: undefined;
+  Login: undefined;
+  Register: undefined;
+  MOHDashboard: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -22,28 +23,22 @@ export default function AppNavigator() {
   return (
     // @ts-ignore - Expo router and React Navigation conflict workaround
     <NavigationContainer independent={true}>
-      <Stack.Navigator initialRouteName="PatientHome">
-        <Stack.Screen 
-          name="PatientHome" 
-          component={PatientHomeScreen} 
-          options={{ title: 'Patient Dashboard' }} 
-        />
-        <Stack.Screen 
-          name="DoctorHome" 
-          component={DoctorHomeScreen} 
-          options={{ title: 'Doctor Dashboard' }} 
-        />
-        <Stack.Screen 
-          name="ReceptionistHome" 
-          component={ReceptionistHomeScreen} 
-          options={{ title: 'Receptionist Dashboard' }} 
-        />
-        <Stack.Screen 
-          name="MOHHome" 
-          component={MOHHomeScreen} 
-          options={{ title: 'MOH Dashboard' }} 
-        />
+      {/* headerShown: false - because each screen has its own custom header */}
+      <Stack.Navigator
+        initialRouteName="Login"
+        screenOptions={{ headerShown: false }}
+      >
+        {/* ---- AUTH SCREENS ---- */}
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
+
+        {/* ---- MOH DASHBOARD ---- */}
+        <Stack.Screen name="MOHDashboard" component={MOHDashboardScreen} />
+
+        {/* TODO: PatientDashboard, DoctorDashboard, ReceptionistDashboard - later */}
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
+
+
