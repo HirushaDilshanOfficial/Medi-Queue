@@ -1,426 +1,179 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  RefreshControl,
-  Alert,
-  Vibration,
-  Platform,
-} from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useIsFocused, useRouter } from 'expo-router';
-import { PatientTheme } from '../../../constants/PatientTheme';
+import { useFocusEffect, useIsFocused, useRouter } from 'expo-router';
+import { useFonts } from 'expo-font';
+import Svg, { Path } from 'react-native-svg';
 import { bookingApi } from '../../../services/bookingApi';
+import { patientApi } from '../../../services/patientApi';
+import { doctorApi } from '../../../services/doctorApi';
 import { queueApi } from '../../../services/queueApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import { usePolling } from '../../../hooks/usePolling';
 import { todayKey } from '../../../utils/opdDates';
-import type { Appointment, LiveQueueState, QueuePass } from '../../../types/patient';
-import { ScreenHeader } from '../../../components/patient/ScreenHeader';
-import { ScreenLoader, MessageState } from '../../../components/patient/ScreenStates';
-import { QueuePassCard } from '../../../components/patient/QueuePassCard';
 import { AppointmentCard } from '../../../components/patient/AppointmentCard';
-import { DesignImage } from '../../../components/patient/DesignImage';
+import { ProfileIcon } from '../../../components/patient/ProfileIcon';
+import type { Appointment } from '../../../types/patient';
+import { QueuePassContent } from './QueuePassContent';
+import { C, styles } from './queueStyles';
 
-// 15s keeps the position feeling live without hammering the API. The polling hook
-// backs this off on failure and stops entirely in the background.
 const POLL_INTERVAL_MS = 15_000;
+type Sheet = 'options' | 'leave' | { title: string; body: string } | null;
 
 export function LiveQueueScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isFocused = useIsFocused();
-
-  const [refreshing, setRefreshing] = useState(false);
-  const [checkingIn, setCheckingIn] = useState(false);
-
+  const [fontsLoaded, fontError] = useFonts({
+    ProfileInter400: require('../../../../assets/fonts/Inter-400.ttf'),
+    ProfileInter500: require('../../../../assets/fonts/Inter-500.ttf'),
+    ProfileInter600: require('../../../../assets/fonts/Inter-600.ttf'),
+    ProfileInter700: require('../../../../assets/fonts/Inter-700.ttf'),
+    ProfileInter800: require('../../../../assets/fonts/Inter-800.ttf'),
+  });
   const pass = useAsyncResource(() => queueApi.myPass(), []);
-  const today = useAsyncResource(() => bookingApi.list('upcoming'), []);
+  const upcoming = useAsyncResource(() => bookingApi.list('upcoming'), []);
+  const profile = useAsyncResource(() => patientApi.getProfile(), []);
+  const activePass = pass.data?.pass ?? null;
+  const activePassId = activePass?.id;
+  const todaysAppointment = upcoming.data?.appointments.find(appointment => appointment.date === todayKey());
+  const linkedAppointment = upcoming.data?.appointments.find(appointment => appointment.id === activePass?.appointmentId);
+  const doctorId = linkedAppointment?.doctorId;
+  const doctor = useAsyncResource(() => doctorId ? doctorApi.getById(doctorId) : Promise.resolve(null), [doctorId]);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  const { reload: reloadPass, setData: setPass } = pass;
+  const { reload: reloadUpcoming } = upcoming;
+  const { reload: reloadProfile } = profile;
+  const hasFocused = useRef(false);
+  const buzzedPass = useRef<string | null>(null);
+  const pollingEnabled = isFocused && Boolean(activePass) && !['completed', 'cancelled', 'no_show'].includes(activePass?.status ?? '');
 
-  const todaysAppointment = today.data?.appointments.find(
-    (appointment) => appointment.date === todayKey(),
-  );
+  useFocusEffect(useCallback(() => {
+    if (hasFocused.current) { reloadPass(); reloadUpcoming(); reloadProfile(); }
+    hasFocused.current = true;
+  }, [reloadPass, reloadUpcoming, reloadProfile]));
 
-  // Poll the lightweight live endpoint, then patch the pass in place so the QR
-  // code and pass code are not regenerated on every tick.
-  const patchLive = useCallback(
-    (live: LiveQueueState | null, status?: string, calledAt?: string | null) => {
-      pass.setData((current) => {
-        if (!current?.pass) return current;
-        const next: QueuePass = {
-          ...current.pass,
-          live: live ?? current.pass.live,
-          status: (status as QueuePass['status']) ?? current.pass.status,
-          calledAt: calledAt === undefined ? current.pass.calledAt : calledAt,
-        };
-        return { ...current, pass: next };
-      });
-    },
-    [pass],
-  );
-
+  // Preserve the QR and ticket ID while updating position and status.
   const poll = useCallback(async () => {
-    const result = await queueApi.live();
-    patchLive(result.live, result.pass?.status, result.pass?.calledAt);
-  }, [patchLive]);
-
-  usePolling(poll, POLL_INTERVAL_MS, { enabled: isFocused });
-
-  // A haptic the moment the patient is called is the single most useful signal in
-  // a noisy waiting room, where the phone is often on silent. Keyed on the token
-  // so it fires once per patient rather than on every poll.
-  const lastStatus = pass.data?.pass?.status;
-  const lastToken = pass.data?.pass?.tokenNumber ?? null;
-  const buzzedToken = useRef<number | null>(null);
+    try {
+      const result = await queueApi.live();
+      const livePass = result.pass;
+      if (!livePass) {
+        setPass(current => current?.pass?.id === activePassId ? { pass: null } : current);
+        reloadUpcoming();
+      }
+      else if (activePassId !== livePass.id) { reloadPass(); reloadUpcoming(); }
+      else setPass(current => {
+        if (!current?.pass || current.pass.id !== livePass.id) return current;
+        return { ...current, pass: { ...current.pass, live: result.live,
+          status: livePass.status as typeof current.pass.status, calledAt: livePass.calledAt } };
+      });
+      setLastUpdate(Date.now()); setLiveError(null);
+    } catch (error) {
+      setLiveError('Live updates are temporarily unavailable. Showing the last known position and retrying.');
+      throw error;
+    }
+  }, [setPass, reloadPass, reloadUpcoming, activePassId]);
+  usePolling(poll, POLL_INTERVAL_MS, { enabled: pollingEnabled });
 
   useEffect(() => {
-    if (lastStatus !== 'called' || lastToken === null) return;
-    if (buzzedToken.current === lastToken) return;
-    buzzedToken.current = lastToken;
+    if (!pollingEnabled) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [pollingEnabled]);
+  useEffect(() => {
+    if (activePass?.status !== 'called' || buzzedPass.current === activePass.id) return;
+    buzzedPass.current = activePass.id;
     if (Platform.OS !== 'web') Vibration.vibrate([0, 400, 200, 400]);
-  }, [lastStatus, lastToken]);
+  }, [activePass?.id, activePass?.status]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([pass.reload(), today.reload()]);
-    setRefreshing(false);
-  }, [pass, today]);
+  const countdown = Math.max(0, Math.min(POLL_INTERVAL_MS / 1000, Math.ceil((lastUpdate + POLL_INTERVAL_MS - now) / 1000)));
+  const refresh = () => { reloadPass(); reloadUpcoming(); reloadProfile(); };
+  const home = () => router.replace('/(patient)');
+  const message = (title: string, body: string) => { setActionError(null); setSheet({ title, body }); };
+  const checkIn = async (appointment: Appointment) => {
+    setCheckingIn(true);
+    try { setPass(await queueApi.checkIn(appointment.id)); reloadUpcoming(); }
+    catch (error) { message('Could not check in', error instanceof Error ? error.message : 'Please try again.'); }
+    finally { setCheckingIn(false); }
+  };
+  const leave = async () => {
+    setLeaving(true); setActionError(null);
+    try { await queueApi.leave(); setPass({ pass: null }); reloadUpcoming(); setSheet(null); }
+    catch (error) { setActionError(error instanceof Error ? error.message : 'Could not leave the queue. Please try again.'); }
+    finally { setLeaving(false); }
+  };
+  const share = async () => {
+    if (!activePass) return;
+    const text = `Medi-Queue pass\n${activePass.department}\nQueue ${activePass.tokenNumber}\n${activePass.dateLong || activePass.queueDate}\n${activePass.room ?? 'Room assigned at clinic'}\nPass code: ${activePass.passCode}`;
+    try {
+      if (Platform.OS === 'web') {
+        if (navigator.share) await navigator.share({ title: 'Medi-Queue pass', text });
+        else message('Share ticket', text);
+      } else await Share.share({ title: 'Medi-Queue pass', message: text });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      message('Could not share your ticket', 'Please try again.');
+    }
+  };
 
-  const checkIn = useCallback(
-    (appointment: Appointment) => {
-      setCheckingIn(true);
-      queueApi
-        .checkIn(appointment.id)
-        .then(async (result) => {
-          pass.setData({ pass: result.pass });
-          await today.reload();
-        })
-        .catch((error) => {
-          Alert.alert(
-            'Could not check in',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
-        })
-        .finally(() => setCheckingIn(false));
-    },
-    [pass, today],
-  );
+  if (!fontsLoaded && !fontError) return <View style={[styles.root, { alignItems: 'center', justifyContent: 'center' }]}><ActivityIndicator color={C.primary} /></View>;
 
-  const leaveQueue = useCallback(() => {
-    Alert.alert('Leave the queue?', 'Your queue number will be released.', [
-      { text: 'Stay', style: 'cancel' },
-      {
-        text: 'Leave',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await queueApi.leave();
-            await Promise.all([pass.reload(), today.reload()]);
-          } catch (error) {
-            Alert.alert(
-              'Could not leave the queue',
-              error instanceof Error ? error.message : 'Please try again.',
-            );
-          }
-        },
-      },
-    ]);
-  }, [pass, today]);
-
-  if (pass.loading) {
-    return (
-      <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
-        <ScreenHeader title="Live queue" subtitle="Your position updates automatically" />
-        <ScreenLoader label="Checking your queue pass" />
+  return <View style={styles.root}>
+    <View style={[styles.headerSafe, { paddingTop: insets.top }]}><View style={styles.header}>
+      <View style={styles.logo}><ProfileIcon name="medical" color={C.surface} /></View>
+      <View style={styles.grow}><Text style={styles.eyebrow}>NATIONAL OPD</Text><Text style={styles.headerTitle}>Live Queue Pass</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Queue notifications" onPress={() => message('Queue notifications', activePass ? `Queue ${activePass.tokenNumber}: ${activePass.status.replace(/_/g, ' ')}. This screen updates automatically while you wait.` : 'Check in for an appointment to receive your live queue pass.')} style={styles.iconButton}><ProfileIcon name="bell" size={22} color={C.muted} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open patient profile" onPress={() => router.push('/(patient)/profile')} style={styles.profileButton}><ProfileIcon name="profile" size={18} color={C.surface} /></Pressable>
+    </View></View>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={Boolean(pass.data) && (pass.loading || upcoming.loading)} onRefresh={refresh} tintColor={C.primary} colors={[C.primary]} />}>
+      <View style={styles.hero}>
+        <Svg pointerEvents="none" style={styles.heroWaveRight} viewBox="0 0 260 140" fill="none" stroke="#1a6779" opacity={0.3}><Path d="M-20 120 C60 40 160 150 280 60" strokeWidth={2.5} /><Path d="M-10 140 C70 60 180 170 300 80" strokeWidth={1.75} /><Path d="M0 160 C80 80 200 190 320 100" strokeWidth={1} /></Svg>
+        <Svg pointerEvents="none" style={styles.heroWaveLeft} viewBox="0 0 200 120" fill="none" stroke={C.aqua} opacity={0.15}><Path d="M-10 20 C50 80 140 10 220 90" strokeWidth={2} /></Svg>
+        <View style={styles.heroRow}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Go back home" onPress={home} style={({ pressed }) => [styles.lightButton, pressed && styles.pressed]}><ProfileIcon name="back" color={C.surface} /></Pressable>
+          <View style={styles.grow}><Text style={styles.heroTitle}>Queue Details</Text><Text numberOfLines={1} style={styles.heroSubtitle}>{activePass ? `Ticket ID: ${activePass.passCode}` : 'Your position updates automatically'}</Text></View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Queue options" onPress={() => { setActionError(null); setSheet('options'); }} style={({ pressed }) => [styles.lightButton, pressed && styles.pressed]}><ProfileIcon name="more" color={C.surface} /></Pressable>
+        </View>
       </View>
-    );
-  }
-
-  const activePass = pass.data?.pass ?? null;
-
-  return (
-    <View style={styles.root}>
-      <View style={{ paddingTop: insets.top + PatientTheme.spaceSm }}>
-        <ScreenHeader
-          title="Live queue"
-          subtitle={activePass ? activePass.department : 'Your position updates automatically'}
-          action={
-            <View style={styles.liveTag}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveTagText}>LIVE</Text>
-            </View>
-          }
-        />
+      <View style={styles.stack}>
+        {pass.error ? <View style={styles.stateCard}><Text style={styles.title}>Could not reach the queue</Text><Text style={styles.error}>{pass.error}</Text><Pressable accessibilityRole="button" onPress={reloadPass} style={styles.walletButton}><Text style={styles.actionLabel}>Try again</Text></Pressable></View> : null}
+        {activePass ? <QueuePassContent pass={activePass} patientName={profile.data?.patient.fullName ?? '—'} doctor={doctor.data?.doctor}
+          countdown={countdown} liveError={liveError} onHome={home} onShare={share}
+          onWallet={() => message('Add to Wallet', 'Apple Wallet and Google Wallet integration is not available yet. Keep this live pass open at check-in, or use Share ticket to share your pass details.')}
+          onContact={() => message('Clinic contact', 'Ask at the clinic reception desk for assistance with your queue or consulting room. A clinic phone number has not been provided.')} /> :
+          pass.loading || (upcoming.loading && !upcoming.data) ? <View style={styles.stateCard}><ActivityIndicator color={C.primary} /><Text style={styles.caption}>Checking your queue pass and bookings…</Text></View> :
+          pass.error ? null : todaysAppointment ? <View style={styles.stateCard}>
+            <View style={styles.inline}><ProfileIcon name="calendar" /><Text style={styles.title}>You have a booking today</Text></View>
+            <Text style={styles.caption}>{todaysAppointment.slotTime} with {todaysAppointment.doctorName}</Text>
+            <Text style={styles.caption}>Check in to get your queue number and QR pass. You can leave the queue before you are called.</Text>
+            <Pressable accessibilityRole="button" disabled={checkingIn} accessibilityState={{ disabled: checkingIn }} onPress={() => checkIn(todaysAppointment)} style={[styles.homeButton, checkingIn && styles.disabled]}><Text style={styles.homeLabel}>{checkingIn ? 'Checking in…' : 'Check in for my token'}</Text></Pressable>
+          </View> : <View style={styles.stateCard}><ProfileIcon name="ticket" size={32} /><Text style={styles.title}>No queue pass yet</Text><Text style={styles.caption}>Check in on the day of your appointment to collect your queue number.</Text><Pressable accessibilityRole="button" onPress={() => router.push('/(patient)/doctors')} style={styles.homeButton}><Text style={styles.homeLabel}>Book a clinic visit</Text></Pressable></View>}
+        {upcoming.error && !activePass ? <View style={styles.stateCard}><Text style={styles.error}>Your bookings could not be loaded.</Text><Pressable accessibilityRole="button" onPress={reloadUpcoming} style={styles.menuButton}><Text style={styles.actionLabel}>Retry bookings</Text></Pressable></View> : null}
+        {!activePass && Boolean(upcoming.data?.appointments.length) ? <View style={{ gap: 12 }}><Text style={styles.title}>Your bookings</Text>{upcoming.data?.appointments.slice(0, 3).map(appointment => <AppointmentCard key={appointment.id} appointment={appointment} />)}</View> : null}
       </View>
-
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + PatientTheme.spaceXxl }]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={PatientTheme.brand} />
-        }
-      >
-        {pass.error ? (
-          <MessageState
-            icon="help"
-            title="Could not reach the queue"
-            description={pass.error}
-            actionLabel="Try again"
-            onAction={pass.reload}
-          />
-        ) : activePass ? (
-          <>
-            <QueuePassCard pass={activePass} onLeave={leaveQueue} refreshing={refreshing} />
-            <WaitNotice pass={activePass} />
-          </>
-        ) : todaysAppointment ? (
-          <View style={styles.checkInCard}>
-            <View style={styles.checkInHeader}>
-              <DesignImage name="calendar" size={20} color={PatientTheme.brand} />
-              <View style={styles.checkInText}>
-                <Text style={styles.checkInTitle}>You have a booking today</Text>
-                <Text style={styles.checkInSub}>
-                  {todaysAppointment.slotTime} with {todaysAppointment.doctorName}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.checkInBody}>
-              Check in to get your queue number and pass. You can leave the queue at any time before you
-              are called.
-            </Text>
-
-            <Pressable
-              onPress={() => checkIn(todaysAppointment)}
-              disabled={checkingIn}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: checkingIn }}
-              style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
-            >
-              <Text style={styles.ctaLabel}>{checkingIn ? 'Checking in...' : 'Check in for my token'}</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <MessageState
-            icon="ticket"
-            title="No queue pass yet"
-            description="Check in on the day of an appointment to collect your queue number."
-            actionLabel="Book a clinic visit"
-            onAction={() => router.push('/(patient)/doctors')}
-          />
-        )}
-
-        {today.data?.appointments.length && !activePass ? (
-          <View style={styles.upcoming}>
-            <Text style={styles.upcomingTitle}>Your bookings</Text>
-            <View style={styles.upcomingList}>
-              {today.data.appointments.slice(0, 3).map((appointment) => (
-                <AppointmentCard key={appointment.id} appointment={appointment} />
-              ))}
-            </View>
-          </View>
-        ) : null}
-      </ScrollView>
-    </View>
-  );
-}
-
-// Explains what to do next. A patient who is two places away and a patient who has
-// been called need very different guidance, and guessing wrong wastes a doctor's
-// time.
-function WaitNotice({ pass }: { pass: QueuePass }) {
-  const live = pass.live;
-  if (!live) return null;
-
-  if (pass.status === 'in_consultation') {
-    return (
-      <Notice
-        tone="success"
-        icon="medical"
-        title="You are with the doctor"
-        body="Your consultation is under way. Follow up at the pharmacy desk if you need a prescription."
-      />
-    );
-  }
-
-  if (pass.status === 'called') {
-    return (
-      <Notice
-        tone="warning"
-        icon="bell"
-        title="Please go to the counter now"
-        body={`${pass.doctorName ?? 'The doctor'} is waiting. Ask at the desk to be shown to ${pass.room ?? 'the consulting room'}.`}
-      />
-    );
-  }
-
-  if (live.position <= 1) {
-    return (
-      <Notice
-        tone="warning"
-        icon="bell"
-        title="Stay close by"
-        body="You are next. Keep your phone on loud and stay in this department."
-      />
-    );
-  }
-
-  if (live.peopleAhead <= 3) {
-    return (
-      <Notice
-        tone="info"
-        icon="clock"
-        title="Nearly your turn"
-        body={`${live.peopleAhead} ${live.peopleAhead === 1 ? 'person is' : 'people are'} ahead of you. Stay in the waiting area.`}
-      />
-    );
-  }
-
-  return (
-    <Notice
-      tone="info"
-      icon="clock"
-      title="You are in the queue"
-      body="This screen updates on its own. You can leave the department and come back before your turn."
-    />
-  );
-}
-
-function Notice({
-  tone,
-  icon,
-  title,
-  body,
-}: {
-  tone: 'info' | 'success' | 'warning';
-  icon: 'bell' | 'clock' | 'medical';
-  title: string;
-  body: string;
-}) {
-  const palette = {
-    info: { background: PatientTheme.infoSoft, color: PatientTheme.brand },
-    success: { background: PatientTheme.successSoft, color: PatientTheme.success },
-    warning: { background: PatientTheme.warningSoft, color: PatientTheme.warning },
-  }[tone];
-
-  return (
-    <View style={[styles.notice, { backgroundColor: palette.background }]}>
-      <DesignImage name={icon} size={16} color={palette.color} />
-      <View style={styles.noticeText}>
-        <Text style={[styles.noticeTitle, { color: palette.color }]}>{title}</Text>
-        <Text style={styles.noticeBody}>{body}</Text>
+    </ScrollView>
+    <Modal transparent visible={sheet !== null} animationType="slide" onRequestClose={() => { if (!leaving) setSheet(null); }}>
+      <View style={styles.modalOverlay}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close dialog" disabled={leaving} onPress={() => setSheet(null)} style={StyleSheet.absoluteFill} />
+        <View accessibilityViewIsModal style={[styles.sheet, { paddingBottom: Math.max(24, insets.bottom) }]}>
+          <View style={styles.sheetHandle} /><Text accessibilityRole="header" style={styles.title}>{sheet === 'options' ? 'Queue options' : sheet === 'leave' ? 'Leave the queue?' : sheet?.title}</Text>
+          {sheet === 'options' ? <>
+            <Pressable accessibilityRole="button" onPress={() => { refresh(); setSheet(null); }} style={styles.menuButton}><Text style={styles.actionLabel}>Refresh queue</Text></Pressable>
+            {activePass?.status === 'waiting' ? <Pressable accessibilityRole="button" onPress={() => setSheet('leave')} style={styles.menuButton}><Text style={styles.error}>Leave queue</Text></Pressable> : null}
+          </> : <Text selectable style={styles.sheetBody}>{sheet === 'leave' ? 'Your queue number will be released. Stay in the queue to keep your place.' : sheet?.body}</Text>}
+          {actionError ? <Text accessibilityRole="alert" style={styles.error}>{actionError}</Text> : null}
+          {sheet === 'leave' ? <Pressable accessibilityRole="button" disabled={leaving} onPress={leave} style={[styles.homeButton, leaving && styles.disabled]}><Text style={styles.homeLabel}>{leaving ? 'Leaving…' : 'Leave queue'}</Text></Pressable> : null}
+          <Pressable accessibilityRole="button" disabled={leaving} onPress={() => setSheet(null)} style={styles.menuButton}><Text style={styles.actionLabel}>{sheet === 'leave' ? 'Stay in queue' : 'Done'}</Text></Pressable>
+        </View>
       </View>
-    </View>
-  );
+    </Modal>
+  </View>;
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: PatientTheme.background,
-  },
-  content: {
-    paddingHorizontal: PatientTheme.spaceLg,
-    paddingTop: PatientTheme.spaceSm,
-    gap: PatientTheme.spaceLg,
-  },
-  liveTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: PatientTheme.spaceSm,
-    paddingVertical: 4,
-    borderRadius: PatientTheme.radiusPill,
-    backgroundColor: PatientTheme.successSoft,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: PatientTheme.success,
-  },
-  liveTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: PatientTheme.success,
-    letterSpacing: 0.5,
-  },
-  checkInCard: {
-    padding: PatientTheme.spaceLg,
-    borderRadius: PatientTheme.radiusLg,
-    borderWidth: 1,
-    borderColor: PatientTheme.border,
-    backgroundColor: PatientTheme.surface,
-    gap: PatientTheme.spaceMd,
-    ...PatientTheme.shadowCard,
-  },
-  checkInHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: PatientTheme.spaceSm,
-  },
-  checkInText: {
-    flex: 1,
-  },
-  checkInTitle: {
-    fontSize: PatientTheme.designType.item,
-    fontWeight: '800',
-    color: PatientTheme.textPrimary,
-  },
-  checkInSub: {
-    fontSize: PatientTheme.designType.caption,
-    color: PatientTheme.textSecondary,
-  },
-  checkInBody: {
-    fontSize: PatientTheme.designType.body,
-    lineHeight: 18,
-    color: PatientTheme.textSecondary,
-  },
-  cta: {
-    paddingVertical: PatientTheme.spaceMd,
-    borderRadius: PatientTheme.radiusPill,
-    backgroundColor: PatientTheme.brand,
-    alignItems: 'center',
-  },
-  ctaLabel: {
-    fontSize: PatientTheme.designType.item,
-    fontWeight: '700',
-    color: PatientTheme.textOnBrand,
-  },
-  notice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: PatientTheme.spaceSm,
-    padding: PatientTheme.spaceMd,
-    borderRadius: PatientTheme.radiusMd,
-  },
-  noticeText: {
-    flex: 1,
-    gap: 2,
-  },
-  noticeTitle: {
-    fontSize: PatientTheme.designType.body,
-    fontWeight: '800',
-  },
-  noticeBody: {
-    fontSize: PatientTheme.designType.caption,
-    lineHeight: 16,
-    color: PatientTheme.textSecondary,
-  },
-  upcoming: {
-    gap: PatientTheme.spaceSm,
-  },
-  upcomingTitle: {
-    fontSize: PatientTheme.designType.item,
-    fontWeight: '800',
-    color: PatientTheme.textPrimary,
-  },
-  upcomingList: {
-    gap: PatientTheme.spaceMd,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-});
