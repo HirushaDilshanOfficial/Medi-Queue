@@ -1,3 +1,6 @@
+const dns = require('dns');
+try { dns.setServers(['8.8.8.8', '1.1.1.1']); } catch (e) {}
+
 require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('../models/User');
@@ -275,6 +278,194 @@ async function runTests() {
     throw new Error(`Expected null when no tokens waiting, got ${JSON.stringify(nextEmptyData)}`);
   }
   console.log('✓ GET /next returned null when no waiting tokens remain');
+
+  // 9. Test POST /api/reception/queue/call-next
+  console.log('\n--- TESTING POST /call-next ---');
+
+  // 9a. Auth checks for POST /call-next
+  const noAuthCallRes = await fetch(`${BASE_URL}/api/reception/queue/call-next`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (noAuthCallRes.status !== 401) {
+    throw new Error(`Expected 401 for unauthenticated POST /call-next, got ${noAuthCallRes.status}`);
+  }
+  console.log('✓ Unauthenticated POST /call-next returns 401');
+
+  const patCallRes = await fetch(`${BASE_URL}/api/reception/queue/call-next`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${patToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (patCallRes.status !== 403) {
+    throw new Error(`Expected 403 for patient role on POST /call-next, got ${patCallRes.status}`);
+  }
+  console.log('✓ Patient role on POST /call-next returns 403');
+
+  // 9b. Reset tokens & appointments for call-next testing:
+  // Token 4: 'serving' (consultation in progress)
+  // Token 1: 'waiting', priority 'normal'
+  // Token 2: 'waiting', priority 'urgent'
+  // Token 3: 'waiting', priority 'senior'
+  await QueueToken.updateOne({ tokenNumber: 4, date: testDate }, { status: 'serving', servedAt: null });
+  await Appointment.updateOne({ tokenNumber: 4, date: testDate }, { status: 'in_consultation' });
+
+  await QueueToken.updateOne({ tokenNumber: 1, date: testDate }, { status: 'waiting', calledAt: null, servedAt: null });
+  await Appointment.updateOne({ tokenNumber: 1, date: testDate }, { status: 'checked_in' });
+
+  await QueueToken.updateOne({ tokenNumber: 2, date: testDate }, { status: 'waiting', calledAt: null, servedAt: null });
+  await Appointment.updateOne({ tokenNumber: 2, date: testDate }, { status: 'checked_in' });
+
+  await QueueToken.updateOne({ tokenNumber: 3, date: testDate }, { status: 'waiting', calledAt: null, servedAt: null });
+  await Appointment.updateOne({ tokenNumber: 3, date: testDate }, { status: 'checked_in' });
+
+  // 9c. First call-next:
+  // - Previous serving token 4 -> status "done", servedAt = now, Appointment -> "completed"
+  // - Atomically picks first waiting in order (Urgent: Token 2 / OPD-002)
+  // - Sets Token 2 status "called", calledAt = now, Appointment -> "in_consultation"
+  // - Returns { patient, tokenLabel, room, doctor }
+  const callRes1 = await fetch(`${BASE_URL}/api/reception/queue/call-next?date=${testDate}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${recToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ doctorId: doctor._id }),
+  });
+
+  if (callRes1.status !== 200) {
+    const errBody = await callRes1.text();
+    throw new Error(`Expected 200 for POST /call-next, got ${callRes1.status}: ${errBody}`);
+  }
+
+  const callData1 = await callRes1.json();
+  console.log('POST /call-next #1 response:', JSON.stringify({
+    tokenLabel: callData1.tokenLabel,
+    room: callData1.room,
+    doctorName: callData1.doctor?.name || callData1.doctor,
+    patientName: callData1.patient?.fullName,
+  }));
+
+  if (callData1.tokenLabel !== 'OPD-002') {
+    throw new Error(`Expected tokenLabel OPD-002 (urgent), got ${callData1.tokenLabel}`);
+  }
+  if (callData1.room !== 'Room 101') {
+    throw new Error(`Expected room 'Room 101', got ${callData1.room}`);
+  }
+  if (!callData1.patient || callData1.patient.fullName !== 'Patient Urgent') {
+    throw new Error(`Expected patient 'Patient Urgent', got ${JSON.stringify(callData1.patient)}`);
+  }
+  const doctorName1 = callData1.doctor?.name || callData1.doctor;
+  if (doctorName1 !== 'Dr. Palitha Perera') {
+    throw new Error(`Expected doctor 'Dr. Palitha Perera', got ${doctorName1}`);
+  }
+  console.log('✓ Response contains correct { patient, tokenLabel, room, doctor } for urgent token OPD-002');
+
+  // Verify DB state for previous serving token (token 4)
+  const prevServingToken = await QueueToken.findOne({ tokenNumber: 4, date: testDate });
+  const prevServingAppt = await Appointment.findOne({ tokenNumber: 4, date: testDate });
+  if (prevServingToken.status !== 'done' || !prevServingToken.servedAt) {
+    throw new Error(`Expected previous serving token to be 'done' with servedAt set, got status=${prevServingToken.status}`);
+  }
+  if (prevServingAppt.status !== 'completed' || prevServingAppt.isActive !== false) {
+    throw new Error(`Expected previous appointment to be 'completed' with isActive=false, got status=${prevServingAppt.status}`);
+  }
+  console.log('✓ Previous serving token marked done (servedAt set) and Appointment marked completed');
+
+  // Verify DB state for newly called token (token 2)
+  const calledToken2 = await QueueToken.findOne({ tokenNumber: 2, date: testDate });
+  const calledAppt2 = await Appointment.findOne({ tokenNumber: 2, date: testDate });
+  if (calledToken2.status !== 'called' || !calledToken2.calledAt) {
+    throw new Error(`Expected called token 2 to be 'called' with calledAt set, got status=${calledToken2.status}`);
+  }
+  if (calledAppt2.status !== 'in_consultation') {
+    throw new Error(`Expected appointment 2 to be 'in_consultation', got status=${calledAppt2.status}`);
+  }
+  console.log('✓ Token 2 status is "called" (calledAt set) and Appointment is "in_consultation"');
+
+  // 9d. Advance token 2 to serving, call next again -> should pick Senior (token 3)
+  await QueueToken.updateOne({ tokenNumber: 2, date: testDate }, { status: 'serving' });
+
+  const callRes2 = await fetch(`${BASE_URL}/api/reception/queue/call-next?date=${testDate}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${recToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ doctorId: doctor._id }),
+  });
+  const callData2 = await callRes2.json();
+  if (callData2.tokenLabel !== 'OPD-003') {
+    throw new Error(`Expected second call to pick OPD-003 (senior), got ${callData2.tokenLabel}`);
+  }
+  if (callData2.patient.fullName !== 'Patient Senior') {
+    throw new Error(`Expected patient 'Patient Senior', got ${callData2.patient.fullName}`);
+  }
+
+  // Token 2 must now be 'done'
+  const doneToken2 = await QueueToken.findOne({ tokenNumber: 2, date: testDate });
+  if (doneToken2.status !== 'done') {
+    throw new Error(`Expected token 2 to be marked done, got ${doneToken2.status}`);
+  }
+  console.log('✓ Second POST /call-next picked senior token OPD-003 and marked previous token done');
+
+  // 9e. Advance token 3 to serving, call next again -> should pick Normal (token 1)
+  await QueueToken.updateOne({ tokenNumber: 3, date: testDate }, { status: 'serving' });
+
+  const callRes3 = await fetch(`${BASE_URL}/api/reception/queue/call-next?date=${testDate}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${recToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ doctorId: doctor._id }),
+  });
+  const callData3 = await callRes3.json();
+  if (callData3.tokenLabel !== 'OPD-001') {
+    throw new Error(`Expected third call to pick OPD-001 (normal), got ${callData3.tokenLabel}`);
+  }
+  console.log('✓ Third POST /call-next picked normal token OPD-001');
+
+  // 9f. Call next when queue is empty -> 404 "Queue is empty"
+  // Set token 1 to 'done' so no waiting tokens remain
+  await QueueToken.updateOne({ tokenNumber: 1, date: testDate }, { status: 'done' });
+
+  const callEmptyRes = await fetch(`${BASE_URL}/api/reception/queue/call-next?date=${testDate}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${recToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ doctorId: doctor._id }),
+  });
+  if (callEmptyRes.status !== 404) {
+    throw new Error(`Expected 404 when queue is empty, got ${callEmptyRes.status}`);
+  }
+  const emptyBody = await callEmptyRes.json();
+  if (!emptyBody.message || !emptyBody.message.includes('Queue is empty')) {
+    throw new Error(`Expected message 'Queue is empty', got ${JSON.stringify(emptyBody)}`);
+  }
+  console.log('✓ POST /call-next returned 404 "Queue is empty" when no waiting tokens exist');
+
+  // 9g. Test alias endpoint POST /api/reception/call-next
+  await QueueToken.updateOne({ tokenNumber: 1, date: testDate }, { status: 'waiting' });
+  const aliasRes = await fetch(`${BASE_URL}/api/reception/call-next?date=${testDate}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${recToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (aliasRes.status !== 200) {
+    throw new Error(`Expected 200 for alias POST /api/reception/call-next, got ${aliasRes.status}`);
+  }
+  const aliasData = await aliasRes.json();
+  if (aliasData.tokenLabel !== 'OPD-001') {
+    throw new Error(`Expected alias to return OPD-001, got ${aliasData.tokenLabel}`);
+  }
+  console.log('✓ Alias POST /api/reception/call-next also works correctly');
 
   // Clean up test data
   await QueueToken.deleteMany({ date: testDate, assignedDoctor: doctor._id });
