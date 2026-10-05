@@ -13,18 +13,18 @@ const {
 router.use(protect, authorizeRoles('receptionist'));
 
 // /patients/search MUST be registered BEFORE /patients/:id
-router.get(['/patients/search', '/search'], searchPatients);
+router.get('/patients/search', searchPatients);
 
 // GET /patients?filter=visited_today|recent|all
-router.get(['/patients', '/'], getPatients);
+router.get('/patients', getPatients);
 
 // POST /patients/:id/verify-nic
-router.post(['/patients/:id/verify-nic', '/:id/verify-nic'], verifyPatientNIC);
+router.post('/patients/:id/verify-nic', verifyPatientNIC);
 
 // GET /patients/:id
-router.get(['/patients/:id', '/:id'], getPatientById);
+router.get('/patients/:id', getPatientById);
 
 // PATCH /patients/:id
-router.patch(['/patients/:id', '/:id'], updatePatientProfile);
+router.patch('/patients/:id', updatePatientProfile);
 
 module.exports = router;

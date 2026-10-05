@@ -13,6 +13,7 @@ const staffRoutes = require('./routes/staffRoutes');
 const alertRoutes = require('./routes/alertRoutes');
 const patientRoutes = require('./routes/patientRoutes');
 const v1PatientRoutes = require('./routes/v1PatientRoutes');
+const doctorRoutes = require('./routes/doctorRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -46,6 +47,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/reception/queue', queueRoutes);
 app.use('/api/reception', dashboardRoutes);
 app.use('/api/reception', patientRoutes);
+app.use('/api/reception', doctorRoutes);
 app.use('/api/reception', walkInRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/hospitals', hospitalRoutes);
