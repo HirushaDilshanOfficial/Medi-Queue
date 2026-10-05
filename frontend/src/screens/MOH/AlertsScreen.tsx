@@ -269,7 +269,7 @@ export default function AlertsScreen() {
             </View>
             <View style={{ flex: 1, paddingHorizontal: 12 }}>
               <Text style={styles.settingsTitle}>Sensor Threshold Engine</Text>
-              <Text style={styles.settingsDesc}>Alert triggers at >35 min wait or >25 patient</Text>
+              <Text style={styles.settingsDesc}>Alert triggers at &gt;35 min wait or &gt;25 patient</Text>
             </View>
             <Text style={{ color: Colors.textLight }}>›</Text>
           </TouchableOpacity>
