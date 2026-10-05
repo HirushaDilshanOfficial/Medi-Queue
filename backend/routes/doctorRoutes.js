@@ -4,9 +4,6 @@ const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 const { getDoctors } = require('../controllers/doctorController');
 
 // All doctor routes in reception require auth + receptionist role
-router.use(protect, authorizeRoles('receptionist'));
-
-// GET /api/reception/doctors?department=
-router.get('/doctors', getDoctors);
+router.get('/doctors', protect, authorizeRoles('receptionist'), getDoctors);
 
 module.exports = router;

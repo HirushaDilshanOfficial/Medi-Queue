@@ -16,6 +16,9 @@ const v1PatientRoutes = require('./routes/v1PatientRoutes');
 const doctorRoutes = require('./routes/doctorRoutes');
 const shiftRoutes = require('./routes/shiftRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const policyRoutes = require('./routes/policyRoutes');
+const publicRoutes = require('./routes/publicRoutes');
+const v1DoctorRoutes = require('./routes/v1DoctorRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -58,11 +61,14 @@ app.use('/api/v1/hospitals', hospitalRoutes);
 app.use('/api/v1/staff', staffRoutes);
 app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/patients', v1PatientRoutes);
+app.use('/api/v1/policies', policyRoutes);
+app.use('/api/v1/public', publicRoutes);
+app.use('/api/v1/doctor', v1DoctorRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 const HOST = process.env.HOST || '0.0.0.0';
 
 app.listen(PORT, HOST, () => {

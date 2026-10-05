@@ -1,6 +1,5 @@
 import React from 'react';
-import {
-  View,
+import { View,
   Text,
   StyleSheet,
   ScrollView,
@@ -9,13 +8,21 @@ import {
   StatusBar,
   TextInput,
   Modal,
-  Alert,
-} from 'react-native';
+  Alert, RefreshControl } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
 export default function ManageHospitalsScreen() {
+  const [refreshing, setRefreshing] = React.useState(false);
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    fetchHospitals();
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1500);
+  }, []);
+
   const [activeFilter, setActiveFilter] = React.useState('All');
   const [hospitals, setHospitals] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -98,7 +105,7 @@ export default function ManageHospitalsScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           
           <View style={styles.topSection}>
             <Text style={styles.sectionTitle}>Hospital Network</Text>

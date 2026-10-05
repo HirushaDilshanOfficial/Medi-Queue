@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
+import { View,
   Text,
   StyleSheet,
   ScrollView,
@@ -8,14 +7,22 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
-  Modal
-} from 'react-native';
+  Modal, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
 export default function AlertsScreen() {
+  const [refreshing, setRefreshing] = React.useState(false);
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    fetchAlerts();
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1500);
+  }, []);
+
   const [activeFilter, setActiveFilter] = useState('All Alerts');
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +114,7 @@ export default function AlertsScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollArea}>
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollArea} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         
         {/* Banner Section */}
         <View style={styles.bannerContainer}>
@@ -262,7 +269,7 @@ export default function AlertsScreen() {
             </View>
             <View style={{ flex: 1, paddingHorizontal: 12 }}>
               <Text style={styles.settingsTitle}>Sensor Threshold Engine</Text>
-              <Text style={styles.settingsDesc}>{'Alert triggers at >35 min wait or >25 patient'}</Text>
+              <Text style={styles.settingsDesc}>Alert triggers at &gt;35 min wait or &gt;25 patient</Text>
             </View>
             <Text style={{ color: Colors.textLight }}>›</Text>
           </TouchableOpacity>

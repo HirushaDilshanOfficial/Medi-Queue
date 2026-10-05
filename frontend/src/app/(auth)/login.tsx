@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { login } from '../../services/authService';
 
@@ -33,6 +34,10 @@ export default function LoginScreen() {
     try {
       const userData = await login(email, password);
       
+      // Save token and user data locally
+      await AsyncStorage.setItem('token', userData.token);
+      await AsyncStorage.setItem('user', JSON.stringify(userData));
+      
       // Successfully logged in
       Alert.alert('Success', `Welcome back, ${userData.fullName}!`);
       
@@ -42,6 +47,8 @@ export default function LoginScreen() {
         router.replace('/(moh)/dashboard');
       } else if (userRole === 'receptionist') {
         router.replace('/(reception)/dashboard');
+      } else if (userRole === 'doctor') {
+        router.replace('/(doctor)/dashboard');
       } else {
         Alert.alert('Notice', `Logged in as ${userData.role}, but dashboard is not created yet.`);
       }
@@ -57,8 +64,12 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        bounces={false}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <View style={{ flex: 1 }}>
         {/* ---- TEAL HEADER ---- */}
         <View style={styles.header}>
           <View style={styles.circleTopRight} />
@@ -119,7 +130,10 @@ export default function LoginScreen() {
           </View>
 
           {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotButton}>
+          <TouchableOpacity 
+            style={styles.forgotButton}
+            onPress={() => router.push('/(auth)/forgot-password')}
+          >
             <Text style={styles.forgotText}>Forgot Password?</Text>
           </TouchableOpacity>
 
@@ -155,6 +169,8 @@ export default function LoginScreen() {
               New patient? <Text style={styles.registerBold}>Create Account</Text>
             </Text>
           </TouchableOpacity>
+
+        </View>
 
         </View>
 

@@ -10,6 +10,7 @@ import { Colors } from '../constants/Colors';
 import LoginScreen from '../app/(auth)/login';
 import RegisterScreen from '../app/(auth)/register';
 import MOHDashboardScreen from '../screens/MOH/MOHDashboardScreen';
+import DoctorDashboardScreen from '../screens/Doctor/DoctorDashboardScreen';
 
 // ─────────────────────────────────────────────────────────
 // Type Definitions
@@ -33,6 +34,7 @@ export type RootStackParamList = {
   MOHDashboard: undefined;
   ReceptionistTabs: undefined;
   Queue: undefined;
+  DoctorDashboard: undefined;
 };
 
 // ─────────────────────────────────────────────────────────
@@ -210,6 +212,8 @@ export default function AppNavigator({
     ? 'ReceptionistTabs'
     : role === 'MOH'
     ? 'MOHDashboard'
+    : (role || '').toLowerCase() === 'doctor'
+    ? 'DoctorDashboard'
     : 'Login';
 
   const resolvedInitialRoute = initialRouteName || defaultInitialRoute;
@@ -231,6 +235,9 @@ export default function AppNavigator({
         {/* ---- RECEPTIONIST NAVIGATION ---- */}
         <Stack.Screen name="ReceptionistTabs" component={ReceptionistTabNavigator} />
         <Stack.Screen name="Queue" component={QueuePlaceholderScreen} />
+
+        {/* ---- DOCTOR DASHBOARD ---- */}
+        <Stack.Screen name="DoctorDashboard" component={DoctorDashboardScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
