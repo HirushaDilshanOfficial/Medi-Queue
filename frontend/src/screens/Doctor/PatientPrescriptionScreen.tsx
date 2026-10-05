@@ -15,7 +15,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   fetchPrescriptionDetails,
@@ -27,10 +27,18 @@ import {
   COMMON_MEDICINES,
   COMMON_DIAGNOSES,
   fallbackPrescriptionData,
+  aureliaPrescriptionData,
 } from '../../services/prescriptionService';
+import { downloadPrescription } from '../../utils/prescriptionPdfGenerator';
 
 export default function PatientPrescriptionScreen() {
-  const [data, setData] = useState<PatientPrescriptionDetails>(fallbackPrescriptionData);
+  const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string }>();
+  const initialToken = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : undefined;
+  const isAurelia = initialToken === 29 || (params?.patientName ? String(params.patientName).includes('Aurelia') : false);
+
+  const [data, setData] = useState<PatientPrescriptionDetails>(
+    isAurelia ? aureliaPrescriptionData : fallbackPrescriptionData
+  );
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('rx');
 
@@ -39,7 +47,9 @@ export default function PatientPrescriptionScreen() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedFrequency, setSelectedFrequency] = useState<'OD' | 'BD' | 'TDS' | 'QDS'>('BD');
   const [selectedDuration, setSelectedDuration] = useState<number>(5);
-  const [clinicalNotes, setClinicalNotes] = useState(data.clinicalNotes);
+  const [clinicalNotes, setClinicalNotes] = useState(
+    isAurelia ? aureliaPrescriptionData.clinicalNotes : fallbackPrescriptionData.clinicalNotes
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   // Modal states
@@ -54,7 +64,8 @@ export default function PatientPrescriptionScreen() {
   // Load prescription details
   const loadData = useCallback(async () => {
     try {
-      const res = await fetchPrescriptionDetails();
+      const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : undefined;
+      const res = await fetchPrescriptionDetails(tokenNum);
       setData(res);
       setClinicalNotes(res.clinicalNotes);
     } catch (err) {
@@ -62,7 +73,7 @@ export default function PatientPrescriptionScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [params?.tokenNumber]);
 
   useEffect(() => {
     loadData();
@@ -250,6 +261,7 @@ export default function PatientPrescriptionScreen() {
         diagnoses: data.diagnoses,
         clinicalNotes,
         prescriptions: data.prescriptions,
+        tokenNumber: data.patient?.tokenNumber,
       });
       setIsSaveSuccessModalOpen(true);
     } catch (err) {
@@ -736,7 +748,7 @@ export default function PatientPrescriptionScreen() {
               ) : (
                 <>
                   <MaterialCommunityIcons
-                    name="printer-outline"
+                    name="cloud-upload-outline"
                     size={20}
                     color="#ffffff"
                     style={{ marginRight: 8 }}
@@ -746,6 +758,23 @@ export default function PatientPrescriptionScreen() {
                   </Text>
                 </>
               )}
+            </TouchableOpacity>
+
+            {/* Download Prescription PDF Button */}
+            <TouchableOpacity
+              style={styles.downloadRxActionBtn}
+              onPress={() => downloadPrescription(data, clinicalNotes)}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons
+                name="cloud-download-outline"
+                size={20}
+                color="#064e59"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.downloadRxActionBtnText}>
+                Download Prescription (PDF / Print)
+              </Text>
             </TouchableOpacity>
 
             {/* Secondary Referral Button */}
@@ -971,6 +1000,22 @@ export default function PatientPrescriptionScreen() {
               Prescription for {patient.name} ({patient.tokenFormatted}) has been saved and the Digital
               Rx has been dispatched to the hospital pharmacy and patient portal.
             </Text>
+
+            <TouchableOpacity
+              style={styles.downloadRxModalBtn}
+              onPress={() => downloadPrescription(data, clinicalNotes)}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons
+                name="cloud-download-outline"
+                size={20}
+                color="#ffffff"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.downloadRxModalBtnText}>
+                Download Prescription (PDF)
+              </Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.successDoneBtn}
@@ -1566,6 +1611,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
+  downloadRxActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 25,
+    paddingVertical: 13,
+    borderWidth: 1.5,
+    borderColor: '#064e59',
+    elevation: 2,
+    shadowColor: 'rgba(6, 78, 89, 0.12)',
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  downloadRxActionBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#064e59',
+  },
   referralBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1749,15 +1814,38 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 20,
   },
-  successDoneBtn: {
+  downloadRxModalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#064e59',
+    paddingVertical: 13,
+    paddingHorizontal: 24,
+    borderRadius: 22,
+    width: '100%',
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: 'rgba(6, 78, 89, 0.2)',
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  downloadRxModalBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  successDoneBtn: {
+    backgroundColor: '#f1f5f9',
     paddingVertical: 12,
     paddingHorizontal: 36,
     borderRadius: 22,
+    width: '100%',
+    alignItems: 'center',
   },
   successDoneBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#475569',
   },
 });

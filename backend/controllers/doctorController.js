@@ -832,12 +832,82 @@ let prescriptionSessionState = {
   referrals: [],
 };
 
+let aureliaPrescriptionSessionState = {
+  doctor: {
+    name: 'Dr. Emilia Emelson',
+    specialization: 'Orthopedics Surgeon',
+    department: 'Orthopedics OPD',
+    room: 'Room 3B',
+    isOnline: true,
+    avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
+  },
+  patient: {
+    id: 'pat-aurelia-029',
+    opdId: 'ID #OPD-9034',
+    name: 'Aurelia Sisca',
+    initials: 'AS',
+    gender: 'Female',
+    age: 32,
+    tokenNumber: 29,
+    tokenFormatted: 'Token #029',
+    vitals: {
+      bloodPressure: '118/76',
+      pulseRate: '72 bpm',
+      weight: '58 kg',
+    },
+  },
+  diagnoses: [
+    {
+      id: 'diag-aur-1',
+      code: 'S82.401A',
+      name: 'Closed fracture distal fibula',
+      displayName: 'Closed fracture distal fibula (S82.401A)',
+      isPrimary: true,
+    },
+  ],
+  clinicalNotes: 'Follow-up for right ankle distal fibula fracture. Cast intact, pain managed, minimal swelling.',
+  isNotesAutoSaved: true,
+  prescriptions: [
+    {
+      id: 'rx-aur-1',
+      name: 'Paracetamol 500mg',
+      type: 'TABLET',
+      dosage: '1 tablet',
+      frequency: 'BD (2x daily)',
+      frequencyCode: 'BD',
+      duration: '5 days',
+      durationDays: 5,
+      instructions: 'After food',
+      tagType: 'food',
+    },
+    {
+      id: 'rx-aur-2',
+      name: 'Ibuprofen 400mg',
+      type: 'TABLET',
+      dosage: '1 tablet',
+      frequency: 'BD (2x daily)',
+      frequencyCode: 'BD',
+      duration: '3 days',
+      durationDays: 3,
+      instructions: 'After food',
+      tagType: 'food',
+    },
+  ],
+  referrals: [],
+};
+
 // @desc    Get patient prescription & consultation details
 // @route   GET /api/v1/doctor/prescription
 // @access  Public / Protected
 const getPrescriptionDetails = async (req, res) => {
   try {
-    const { tokenNumber } = req.query;
+    const { tokenNumber, patientName } = req.query;
+    if (Number(tokenNumber) === 29 || (patientName && String(patientName).includes('Aurelia'))) {
+      return res.status(200).json({
+        success: true,
+        data: aureliaPrescriptionSessionState,
+      });
+    }
     return res.status(200).json({
       success: true,
       data: prescriptionSessionState,
@@ -852,15 +922,16 @@ const getPrescriptionDetails = async (req, res) => {
 // @access  Public / Protected
 const savePrescription = async (req, res) => {
   try {
-    const { diagnoses, clinicalNotes, prescriptions } = req.body;
-    if (diagnoses) prescriptionSessionState.diagnoses = diagnoses;
-    if (clinicalNotes !== undefined) prescriptionSessionState.clinicalNotes = clinicalNotes;
-    if (prescriptions) prescriptionSessionState.prescriptions = prescriptions;
+    const { diagnoses, clinicalNotes, prescriptions, tokenNumber } = req.body;
+    const target = Number(tokenNumber) === 29 ? aureliaPrescriptionSessionState : prescriptionSessionState;
+    if (diagnoses) target.diagnoses = diagnoses;
+    if (clinicalNotes !== undefined) target.clinicalNotes = clinicalNotes;
+    if (prescriptions) target.prescriptions = prescriptions;
 
     return res.status(200).json({
       success: true,
       message: 'Prescription saved & Digital Rx sent to patient successfully!',
-      data: prescriptionSessionState,
+      data: target,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

@@ -156,6 +156,69 @@ export const COMMON_DIAGNOSES = [
   { name: 'Tension-type Headache', code: 'G44.2' },
 ];
 
+export const aureliaPrescriptionData: PatientPrescriptionDetails = {
+  doctor: {
+    name: 'Dr. Emilia Emelson',
+    specialization: 'Orthopedics Surgeon',
+    department: 'Orthopedics OPD',
+    room: 'Room 3B',
+    isOnline: true,
+    avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
+  },
+  patient: {
+    id: 'pat-aurelia-029',
+    opdId: 'ID #OPD-9034',
+    name: 'Aurelia Sisca',
+    initials: 'AS',
+    gender: 'Female',
+    age: 32,
+    tokenNumber: 29,
+    tokenFormatted: 'Token #029',
+    vitals: {
+      bloodPressure: '118/76',
+      pulseRate: '72 bpm',
+      weight: '58 kg',
+    },
+  },
+  diagnoses: [
+    {
+      id: 'diag-aur-1',
+      code: 'S82.401A',
+      name: 'Closed fracture distal fibula',
+      displayName: 'Closed fracture distal fibula (S82.401A)',
+      isPrimary: true,
+    },
+  ],
+  clinicalNotes: 'Follow-up for right ankle distal fibula fracture. Cast intact, pain managed, minimal swelling.',
+  isNotesAutoSaved: true,
+  prescriptions: [
+    {
+      id: 'rx-aur-1',
+      name: 'Paracetamol 500mg',
+      type: 'TABLET',
+      dosage: '1 tablet',
+      frequency: 'BD (2x daily)',
+      frequencyCode: 'BD',
+      duration: '5 days',
+      durationDays: 5,
+      instructions: 'After food',
+      tagType: 'food',
+    },
+    {
+      id: 'rx-aur-2',
+      name: 'Ibuprofen 400mg',
+      type: 'TABLET',
+      dosage: '1 tablet',
+      frequency: 'BD (2x daily)',
+      frequencyCode: 'BD',
+      duration: '3 days',
+      durationDays: 3,
+      instructions: 'After food',
+      tagType: 'food',
+    },
+  ],
+};
+
 /**
  * Fetch prescription details for current patient
  */
@@ -167,10 +230,10 @@ export const fetchPrescriptionDetails = async (tokenNumber?: number): Promise<Pa
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const json = await response.json();
-    return json.data || fallbackPrescriptionData;
+    return json.data || (tokenNumber === 29 ? aureliaPrescriptionData : fallbackPrescriptionData);
   } catch (err) {
     console.log('Error fetching prescription details, using fallback:', err);
-    return fallbackPrescriptionData;
+    return tokenNumber === 29 ? aureliaPrescriptionData : fallbackPrescriptionData;
   }
 };
 
@@ -181,6 +244,7 @@ export const savePrescriptionApi = async (payload: {
   diagnoses: DiagnosisItem[];
   clinicalNotes: string;
   prescriptions: MedicineItem[];
+  tokenNumber?: number;
 }): Promise<{ success: boolean; message: string; data?: any }> => {
   try {
     const response = await fetch(`${API_URL}/doctor/prescription`, {
