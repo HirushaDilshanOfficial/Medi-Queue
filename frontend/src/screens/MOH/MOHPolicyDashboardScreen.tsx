@@ -28,6 +28,8 @@ export default function MOHPolicyDashboardScreen() {
   const [dataMasking, setDataMasking] = useState(true);
   const [targetWaitTime, setTargetWaitTime] = useState(30);
   const [loading, setLoading] = useState(true);
+  const [trafficAlerts, setTrafficAlerts] = useState<any[]>([]);
+  const [epidemicAlerts, setEpidemicAlerts] = useState<any[]>([]);
 
   useEffect(() => {
     fetchPolicies();
@@ -145,14 +147,16 @@ export default function MOHPolicyDashboardScreen() {
                 <Text style={styles.cardSubtitle}>Real-time patient load alerts</Text>
               </View>
             </View>
-            <View style={styles.alertItem}>
-              <View style={[styles.statusDot, { backgroundColor: Colors.error }]} />
-              <Text style={styles.alertText}>Colombo General - Wait > 45 mins</Text>
-            </View>
-            <View style={styles.alertItem}>
-              <View style={[styles.statusDot, { backgroundColor: Colors.warning }]} />
-              <Text style={styles.alertText}>Gampaha Base - Wait 35 mins</Text>
-            </View>
+            {trafficAlerts.length > 0 ? (
+              trafficAlerts.map((alert, index) => (
+                <View key={index} style={styles.alertItem}>
+                  <View style={[styles.statusDot, { backgroundColor: alert.severity === 'high' ? Colors.error : Colors.warning }]} />
+                  <Text style={styles.alertText}>{alert.message}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={{ fontSize: 13, color: Colors.textMedium, fontStyle: 'italic' }}>No active traffic alerts.</Text>
+            )}
           </View>
 
           {/* 2. Smart Alerts (Outbreak) */}
@@ -166,9 +170,15 @@ export default function MOHPolicyDashboardScreen() {
                 <Text style={styles.cardSubtitle}>AI driven symptom spike detection</Text>
               </View>
             </View>
-            <View style={styles.warningBox}>
-              <Text style={styles.warningText}>⚠️ 15% increase in fever cases in Kandy region over the last 24 hours.</Text>
-            </View>
+            {epidemicAlerts.length > 0 ? (
+              epidemicAlerts.map((alert, index) => (
+                <View key={index} style={styles.warningBox}>
+                  <Text style={styles.warningText}>⚠️ {alert.message}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={{ fontSize: 13, color: Colors.textMedium, fontStyle: 'italic' }}>No epidemic warnings at this time.</Text>
+            )}
           </View>
 
           {/* 3. OPD Queue Policies */}
