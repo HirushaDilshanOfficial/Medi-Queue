@@ -5,6 +5,8 @@ const {
   getPatients,
   getPatientById,
   searchPatients,
+  updatePatientProfile,
+  verifyPatientNIC,
 } = require('../controllers/patientController');
 
 // All reception patient routes require auth + receptionist role
@@ -16,7 +18,13 @@ router.get(['/patients/search', '/search'], searchPatients);
 // GET /patients?filter=visited_today|recent|all
 router.get(['/patients', '/'], getPatients);
 
+// POST /patients/:id/verify-nic
+router.post(['/patients/:id/verify-nic', '/:id/verify-nic'], verifyPatientNIC);
+
 // GET /patients/:id
 router.get(['/patients/:id', '/:id'], getPatientById);
+
+// PATCH /patients/:id
+router.patch(['/patients/:id', '/:id'], updatePatientProfile);
 
 module.exports = router;

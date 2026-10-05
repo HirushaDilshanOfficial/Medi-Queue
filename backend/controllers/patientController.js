@@ -1,6 +1,10 @@
 const mongoose = require('mongoose');
 const { asyncHandler, createError } = require('../utils/errorHandler');
-const { normalizePhone } = require('../utils/validators');
+const {
+  isValidNIC,
+  isValidSLPhone,
+  normalizePhone,
+} = require('../utils/validators');
 const Patient = require('../models/Patient');
 const Appointment = require('../models/Appointment');
 const User = require('../models/User');
@@ -208,6 +212,156 @@ const getPatientById = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Update editable fields of a patient (phone, address, district, emergencyContact, bloodGroup, allergies)
+ * @route   PATCH /api/reception/patients/:id
+ * @access  Private — receptionist
+ */
+const updatePatientProfile = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw createError('Patient not found.', 404);
+  }
+
+  const patient = await Patient.findOne({
+    _id: id,
+    isDeleted: { $ne: true },
+  });
+
+  if (!patient) {
+    throw createError('Patient not found.', 404);
+  }
+
+  // 1. Validate and update phone if provided
+  if (req.body.phone !== undefined) {
+    if (!isValidSLPhone(req.body.phone)) {
+      throw createError('Invalid Sri Lankan phone number format.', 400);
+    }
+    patient.phone = normalizePhone(req.body.phone);
+  }
+
+  // 2. Address
+  if (req.body.address !== undefined) {
+    patient.address =
+      typeof req.body.address === 'string'
+        ? req.body.address.trim()
+        : req.body.address;
+  }
+
+  // 3. District
+  if (req.body.district !== undefined) {
+    patient.district =
+      typeof req.body.district === 'string'
+        ? req.body.district.trim()
+        : req.body.district;
+  }
+
+  // 4. Emergency Contact
+  if (req.body.emergencyContact !== undefined) {
+    if (
+      typeof req.body.emergencyContact === 'object' &&
+      req.body.emergencyContact !== null
+    ) {
+      patient.emergencyContact = {
+        name:
+          req.body.emergencyContact.name !== undefined
+            ? String(req.body.emergencyContact.name).trim()
+            : patient.emergencyContact?.name,
+        relationship:
+          req.body.emergencyContact.relationship !== undefined
+            ? String(req.body.emergencyContact.relationship).trim()
+            : patient.emergencyContact?.relationship,
+        phone:
+          req.body.emergencyContact.phone !== undefined
+            ? String(req.body.emergencyContact.phone).trim()
+            : patient.emergencyContact?.phone,
+      };
+    }
+  }
+
+  // 5. Blood Group
+  if (req.body.bloodGroup !== undefined) {
+    const validBloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+    if (
+      req.body.bloodGroup !== null &&
+      req.body.bloodGroup !== '' &&
+      !validBloodGroups.includes(req.body.bloodGroup)
+    ) {
+      throw createError(
+        'Invalid blood group. Allowed: A+, A-, B+, B-, AB+, AB-, O+, O-.',
+        400
+      );
+    }
+    patient.bloodGroup = req.body.bloodGroup || undefined;
+  }
+
+  // 6. Allergies
+  if (req.body.allergies !== undefined) {
+    if (Array.isArray(req.body.allergies)) {
+      patient.allergies = req.body.allergies
+        .map((item) => {
+          if (typeof item === 'string') {
+            return { name: item.trim(), severity: 'moderate' };
+          }
+          return {
+            name: item.name ? String(item.name).trim() : '',
+            severity: item.severity ? String(item.severity).trim() : 'moderate',
+          };
+        })
+        .filter((a) => a.name);
+    }
+  }
+
+  // All other fields (e.g. fullName, nic, nicVerified, status, etc.) are ignored
+  await patient.save();
+
+  res.json({
+    message: 'Patient profile updated successfully',
+    ...patient.toObject(),
+    patient,
+  });
+});
+
+/**
+ * @desc    Verify patient NIC (requires valid NIC on record, sets nicVerified = true)
+ * @route   POST /api/reception/patients/:id/verify-nic
+ * @access  Private — receptionist
+ */
+const verifyPatientNIC = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw createError('Patient not found.', 404);
+  }
+
+  const patient = await Patient.findOne({
+    _id: id,
+    isDeleted: { $ne: true },
+  });
+
+  if (!patient) {
+    throw createError('Patient not found.', 404);
+  }
+
+  if (!patient.nic || !patient.nic.trim()) {
+    throw createError('Patient does not have an NIC on record to verify.', 400);
+  }
+
+  if (!isValidNIC(patient.nic)) {
+    throw createError('Patient NIC on record is not a valid Sri Lankan NIC.', 400);
+  }
+
+  patient.nicVerified = true;
+  await patient.save();
+
+  res.json({
+    message: 'NIC verified successfully',
+    nicVerified: true,
+    patient,
+  });
+});
+
 // ─────────────────────────────────────────────────────────────
 // Legacy handlers for /api/v1/patients compatibility (MOH screens)
 // ─────────────────────────────────────────────────────────────
@@ -293,6 +447,9 @@ module.exports = {
   searchPatients,
   getPatients,
   getPatientById,
+  updatePatientProfile,
+  patchPatient: updatePatientProfile,
+  verifyPatientNIC,
   getAllPatients,
   updatePatient,
   togglePatientStatus,

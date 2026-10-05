@@ -353,7 +353,152 @@ async function runPatientTests() {
   }
   console.log('✓ Non-existent or invalid patient ID returns 404');
 
-  // 11. Cleanup test data
+  // 11. Test: PATCH /patients/:id (allow only phone, address, district, emergencyContact, bloodGroup, allergies)
+  console.log('\n--- Testing PATCH /patients/:id ---');
+  // (a) Invalid phone returns 400
+  const patchInvalidPhoneRes = await fetch(`${BASE_URL}/api/reception/patients/${patientToday._id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({ phone: '12345' }),
+  });
+  if (patchInvalidPhoneRes.status !== 400) {
+    throw new Error(`Expected 400 for invalid phone number, got ${patchInvalidPhoneRes.status}`);
+  }
+  console.log('✓ PATCH with invalid phone returns 400');
+
+  // (b) Valid update with allowed fields and attempting to change ignored fields
+  const patchValidRes = await fetch(`${BASE_URL}/api/reception/patients/${patientToday._id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({
+      phone: '+94779998888', // Valid SL phone with +94
+      address: '456 New Flower Road',
+      district: 'Gampaha',
+      bloodGroup: 'B+',
+      allergies: ['Penicillin', { name: 'Peanuts', severity: 'severe' }],
+      emergencyContact: {
+        name: 'Jane Doe',
+        relationship: 'Spouse',
+        phone: '0779997777',
+      },
+      // Ignored fields
+      fullName: 'Hacked Name',
+      nic: '200500000000',
+      nicVerified: true,
+      status: 'Inactive',
+    }),
+  });
+  if (patchValidRes.status !== 200) {
+    const errTxt = await patchValidRes.text();
+    throw new Error(`Expected 200 for valid PATCH, got ${patchValidRes.status}: ${errTxt}`);
+  }
+  const patchData = await patchValidRes.json();
+
+  // Re-fetch patient directly from DB to verify persistence and ignored fields
+  const updatedDbPt = await Patient.findById(patientToday._id).lean();
+
+  // Verify updated allowed fields
+  if (updatedDbPt.phone !== '0779998888') {
+    throw new Error(`Expected normalized phone 0779998888, got ${updatedDbPt.phone}`);
+  }
+  if (updatedDbPt.address !== '456 New Flower Road' || updatedDbPt.district !== 'Gampaha') {
+    throw new Error(`Address/District mismatch: ${JSON.stringify(updatedDbPt)}`);
+  }
+  if (updatedDbPt.bloodGroup !== 'B+') {
+    throw new Error(`Expected bloodGroup B+, got ${updatedDbPt.bloodGroup}`);
+  }
+  if (!Array.isArray(updatedDbPt.allergies) || updatedDbPt.allergies.length !== 2) {
+    throw new Error(`Allergies mismatch: ${JSON.stringify(updatedDbPt.allergies)}`);
+  }
+  if (updatedDbPt.emergencyContact?.name !== 'Jane Doe' || updatedDbPt.emergencyContact?.phone !== '0779997777') {
+    throw new Error(`EmergencyContact mismatch: ${JSON.stringify(updatedDbPt.emergencyContact)}`);
+  }
+
+  // Verify ignored fields did NOT change
+  if (updatedDbPt.fullName !== 'PT Test Today') {
+    throw new Error(`fullName should NOT be modified by PATCH, got ${updatedDbPt.fullName}`);
+  }
+  if (updatedDbPt.nic !== '199011111111') {
+    throw new Error(`nic should NOT be modified by PATCH, got ${updatedDbPt.nic}`);
+  }
+  if (updatedDbPt.nicVerified !== false) {
+    throw new Error(`nicVerified should NOT be modified by PATCH, got ${updatedDbPt.nicVerified}`);
+  }
+  if (updatedDbPt.status !== 'Active') {
+    throw new Error(`status should NOT be modified by PATCH, got ${updatedDbPt.status}`);
+  }
+  console.log('✓ PATCH /patients/:id updates allowed fields, normalizes phone, and ignores other fields');
+
+  // (c) PATCH on non-existent patient returns 404
+  const patch404Res = await fetch(`${BASE_URL}/api/reception/patients/${fakeId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({ address: 'Unknown' }),
+  });
+  if (patch404Res.status !== 404) {
+    throw new Error(`Expected 404 for PATCH non-existent ID, got ${patch404Res.status}`);
+  }
+  console.log('✓ PATCH non-existent patient returns 404');
+
+  // 12. Test: POST /patients/:id/verify-nic
+  console.log('\n--- Testing POST /patients/:id/verify-nic ---');
+  // (a) Patient with no NIC returns 400
+  const ptNoNic = await Patient.create({
+    fullName: 'PT Test No NIC',
+    phone: '0774444444',
+    address: 'Colombo',
+    status: 'Active',
+  });
+
+  const verifyNoNicRes = await fetch(`${BASE_URL}/api/reception/patients/${ptNoNic._id}/verify-nic`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (verifyNoNicRes.status !== 400) {
+    throw new Error(`Expected 400 for verify-nic on patient with no NIC, got ${verifyNoNicRes.status}`);
+  }
+  console.log('✓ POST verify-nic returns 400 when patient has no NIC');
+
+  // (b) Patient with valid NIC sets nicVerified = true
+  const verifyValidRes = await fetch(`${BASE_URL}/api/reception/patients/${patientToday._id}/verify-nic`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (verifyValidRes.status !== 200) {
+    const errTxt = await verifyValidRes.text();
+    throw new Error(`Expected 200 for verify-nic on valid NIC, got ${verifyValidRes.status}: ${errTxt}`);
+  }
+  const verifyData = await verifyValidRes.json();
+  if (verifyData.nicVerified !== true) {
+    throw new Error(`Expected response nicVerified true, got ${JSON.stringify(verifyData)}`);
+  }
+
+  const verifiedDbPt = await Patient.findById(patientToday._id).lean();
+  if (verifiedDbPt.nicVerified !== true) {
+    throw new Error(`Expected database record nicVerified to be true, got ${verifiedDbPt.nicVerified}`);
+  }
+  console.log('✓ POST verify-nic sets nicVerified = true for valid NIC');
+
+  // (c) verify-nic on non-existent patient returns 404
+  const verify404Res = await fetch(`${BASE_URL}/api/reception/patients/${fakeId}/verify-nic`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (verify404Res.status !== 404) {
+    throw new Error(`Expected 404 for verify-nic on non-existent ID, got ${verify404Res.status}`);
+  }
+  console.log('✓ POST verify-nic non-existent patient returns 404');
+
+  // 13. Cleanup test data
   await Patient.deleteMany({ fullName: /^PT Test/ });
   await Appointment.deleteMany({ notes: 'patient-test-suite' });
   await Doctor.deleteOne({ _id: doc._id });
