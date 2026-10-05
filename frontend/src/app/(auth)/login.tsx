@@ -36,11 +36,13 @@ export default function LoginScreen() {
       // Successfully logged in
       Alert.alert('Success', `Welcome back, ${userData.fullName}!`);
       
-      // Navigate based on role (for now we only have MOH dashboard created)
-      if (userData.role === 'MOH') {
+      // Navigate based on role
+      const userRole = String(userData.role || '').toLowerCase();
+      if (userRole === 'moh') {
         router.replace('/(moh)/dashboard');
+      } else if (userRole === 'receptionist') {
+        router.replace('/(reception)/dashboard');
       } else {
-        // TODO: Navigate to other dashboards when they are created
         Alert.alert('Notice', `Logged in as ${userData.role}, but dashboard is not created yet.`);
       }
     } catch (error: any) {

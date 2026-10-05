@@ -85,7 +85,7 @@ export default function MOHPolicyDashboardScreen() {
             </View>
             <View style={styles.alertItem}>
               <View style={[styles.statusDot, { backgroundColor: Colors.error }]} />
-              <Text style={styles.alertText}>Colombo General - Wait > 45 mins</Text>
+              <Text style={styles.alertText}>{'Colombo General - Wait > 45 mins'}</Text>
             </View>
             <View style={styles.alertItem}>
               <View style={[styles.statusDot, { backgroundColor: Colors.warning }]} />

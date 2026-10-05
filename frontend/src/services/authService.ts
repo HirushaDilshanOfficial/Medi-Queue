@@ -1,6 +1,6 @@
 import { API_URL } from '../config';
 
-export const login = async (email, password) => {
+export const login = async (email: string, password: string) => {
   try {
     const response = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
@@ -22,7 +22,7 @@ export const login = async (email, password) => {
   }
 };
 
-export const registerPatient = async (patientData) => {
+export const registerPatient = async (patientData: any) => {
   try {
     const response = await fetch(`${API_URL}/auth/patient/register`, {
       method: 'POST',
