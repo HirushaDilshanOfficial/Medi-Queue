@@ -5,9 +5,13 @@ const connectDB = require('../config/db');
 const User = require('../models/User');
 const Doctor = require('../models/Doctor');
 const Patient = require('../models/Patient');
+const Appointment = require('../models/Appointment');
+const QueueToken = require('../models/QueueToken');
+const Counter = require('../models/Counter');
+const { getNextToken } = require('./tokenGenerator');
 
 /**
- * Seed initial receptionist user, active doctors, and patients.
+ * Seed initial receptionist user, active doctors, patients, and today's appointments/tokens.
  * Safe to re-run: deletes ONLY the seed records created by this script.
  */
 async function seed() {
@@ -15,6 +19,13 @@ async function seed() {
 
   // Connect via config/db.js
   await connectDB();
+
+  const todayString = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Colombo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 
   // 1. Seed Receptionist User
   const SEED_EMAIL = 'reception@mediqueue.lk';
@@ -81,9 +92,6 @@ async function seed() {
   }
 
   // 3. Seed 10 Patients
-  // Realistic Sri Lankan names, valid NICs (mix of old 9-digit+V and new 12-digit),
-  // valid phone numbers, ages 5-80, mixed gender, registeredVia "reception".
-  // Fixed NICs ensure re-running does not create duplicates.
   const patientsData = [
     {
       fullName: 'Kasun Chamara Mendis',
@@ -228,17 +236,189 @@ async function seed() {
   ];
 
   const SEED_NICS = patientsData.map((p) => p.nic);
+
+  // Clean up any previous seed appointments and tokens tied to existing seed patients before deleting patients
+  const existingSeedPatients = await Patient.find({ nic: { $in: SEED_NICS } }).select('_id');
+  const existingSeedPatientIds = existingSeedPatients.map((p) => p._id);
+
+  console.log(`Cleaning today's (${todayString}) seeded appointments, tokens, and Counter...`);
+  await Counter.deleteOne({ key: `OPD:${todayString}` });
+
+  const existingSeedAppts = await Appointment.find({
+    date: todayString,
+    $or: [
+      { notes: 'Seeded appointment' },
+      { bookedBy: receptionist._id },
+      { patient: { $in: existingSeedPatientIds } },
+    ],
+  }).select('_id');
+  const existingApptIds = existingSeedAppts.map((a) => a._id);
+
+  await QueueToken.deleteMany({
+    $or: [
+      { date: todayString, appointment: { $in: existingApptIds } },
+      { date: todayString, patient: { $in: existingSeedPatientIds } },
+    ],
+  });
+
+  await Appointment.deleteMany({
+    _id: { $in: existingApptIds },
+  });
+
   console.log(`Cleaning existing seed patients (${SEED_NICS.length} fixed NICs)...`);
   await Patient.deleteMany({ nic: { $in: SEED_NICS } });
 
   console.log('Creating 10 seed patients...');
   const patients = await Patient.insertMany(patientsData);
   for (const patient of patients) {
-    console.log(`✓ Patient created: ${patient.fullName} | NIC: ${patient.nic} | Age: ${patient.age} | Gender: ${patient.gender} | Phone: ${patient.phone} | Via: ${patient.registeredVia}`);
+    console.log(`✓ Patient created: ${patient.fullName} | NIC: ${patient.nic} | Age: ${patient.age} | Gender: ${patient.gender} | Phone: ${patient.phone}`);
+  }
+
+  // 4. Seed 8 Appointments & QueueTokens for today
+  console.log(`Creating 8 appointments and queue tokens for today (${todayString})...`);
+  const now = new Date();
+
+  // 8 appointments: mix walk_in and pre_booked, different doctors and slots
+  // Statuses: 2 done, 1 serving, 5 waiting
+  // Priorities: 1 urgent, 1 senior, 6 normal
+  const apptConfigs = [
+    // 2 done:
+    {
+      patient: patients[1], // Sunethra Bandara (Female, 62)
+      doctor: doctors[1],  // Dr. Chathura Silva (General OPD, Room 2A)
+      slotTime: '08:30',
+      type: 'walk_in',
+      priority: 'normal',
+      status: 'done',
+      apptStatus: 'completed',
+      calledMinutesAgo: 50,
+      servedMinutesAgo: 35,
+    },
+    {
+      patient: patients[2], // Sivakumar Tharmalingam (Male, 48)
+      doctor: doctors[0],  // Dr. Aruna Perera (Orthopedic, Room 3B)
+      slotTime: '08:30',
+      type: 'pre_booked',
+      priority: 'normal',
+      status: 'done',
+      apptStatus: 'completed',
+      calledMinutesAgo: 40,
+      servedMinutesAgo: 25,
+    },
+    // 1 serving:
+    {
+      patient: patients[0], // Kasun Mendis (Male, 32)
+      doctor: doctors[1],  // Dr. Chathura Silva (General OPD, Room 2A)
+      slotTime: '09:00',
+      type: 'walk_in',
+      priority: 'normal',
+      status: 'serving',
+      apptStatus: 'in_consultation',
+      calledMinutesAgo: 10,
+    },
+    // 5 waiting (1 urgent, 1 senior, 3 normal):
+    {
+      patient: patients[4], // Kaveen Jayawardena (Male, 22)
+      doctor: doctors[0],  // Dr. Aruna Perera (Orthopedic, Room 3B)
+      slotTime: '09:00',
+      type: 'walk_in',
+      priority: 'urgent',
+      status: 'waiting',
+      apptStatus: 'checked_in',
+    },
+    {
+      patient: patients[6], // Nimal Gunasekara (Male, 80)
+      doctor: doctors[1],  // Dr. Chathura Silva (General OPD, Room 2A)
+      slotTime: '09:30',
+      type: 'pre_booked',
+      priority: 'senior',
+      status: 'waiting',
+      apptStatus: 'checked_in',
+    },
+    {
+      patient: patients[8], // Tharindu Wickramasinghe (Male, 5)
+      doctor: doctors[2],  // Dr. Dilani Jayasuriya (Pediatrics, Room 1C)
+      slotTime: '08:30',
+      type: 'walk_in',
+      priority: 'normal',
+      status: 'waiting',
+      apptStatus: 'checked_in',
+    },
+    {
+      patient: patients[7], // Dinithi Perera (Female, 14)
+      doctor: doctors[2],  // Dr. Dilani Jayasuriya (Pediatrics, Room 1C)
+      slotTime: '09:00',
+      type: 'pre_booked',
+      priority: 'normal',
+      status: 'waiting',
+      apptStatus: 'checked_in',
+    },
+    {
+      patient: patients[3], // Fathima Mohamed (Female, 27)
+      doctor: doctors[0],  // Dr. Aruna Perera (Orthopedic, Room 3B)
+      slotTime: '09:30',
+      type: 'walk_in',
+      priority: 'normal',
+      status: 'waiting',
+      apptStatus: 'checked_in',
+    },
+  ];
+
+  const appointments = [];
+  const queueTokens = [];
+
+  for (const cfg of apptConfigs) {
+    // Atomically increment OPD counter via getNextToken()
+    const token = await getNextToken(todayString);
+
+    // Create Appointment consistent with walk-in flow
+    const apptData = {
+      patient: cfg.patient._id,
+      doctor: cfg.doctor._id,
+      department: cfg.doctor.department,
+      date: todayString,
+      slotTime: cfg.slotTime,
+      type: cfg.type,
+      status: cfg.apptStatus,
+      bookedBy: receptionist._id,
+      tokenNumber: token.tokenNumber,
+      notes: 'Seeded appointment',
+    };
+
+    const appointment = await Appointment.create(apptData);
+
+    // Create QueueToken matching Appointment
+    const queueTokenData = {
+      appointment: appointment._id,
+      patient: cfg.patient._id,
+      department: cfg.doctor.department,
+      date: todayString,
+      tokenNumber: token.tokenNumber,
+      tokenLabel: token.tokenLabel,
+      status: cfg.status,
+      priority: cfg.priority,
+      assignedDoctor: cfg.doctor._id,
+    };
+
+    if (cfg.calledMinutesAgo) {
+      queueTokenData.calledAt = new Date(now.getTime() - cfg.calledMinutesAgo * 60 * 1000);
+    }
+    if (cfg.servedMinutesAgo) {
+      queueTokenData.servedAt = new Date(now.getTime() - cfg.servedMinutesAgo * 60 * 1000);
+    }
+
+    const queueToken = await QueueToken.create(queueTokenData);
+
+    appointments.push(appointment);
+    queueTokens.push(queueToken);
+
+    console.log(
+      `✓ Token ${token.tokenLabel} (#${token.tokenNumber}) [${cfg.status.toUpperCase()}, ${cfg.priority}] -> Appt ${appointment._id} (${cfg.type}, ${cfg.slotTime}) | Doctor: ${cfg.doctor.name} (${cfg.doctor.department}) | Patient: ${cfg.patient.fullName}`
+    );
   }
 
   console.log('✓ Seeding complete.');
-  return { receptionist, doctors, patients };
+  return { receptionist, doctors, patients, appointments, queueTokens };
 }
 
 if (require.main === module) {
