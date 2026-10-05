@@ -293,11 +293,148 @@ const markNoShow = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Move a "waiting" token 3 positions back in the ordered queue and increment moveBackCount.
+ *          Do not let urgent tokens be moved. Return the new position.
+ * @route   POST /api/reception/queue/:id/move-back
+ * @access  Private — receptionist, doctor
+ */
+const moveBackToken = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  let query;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    query = { _id: id };
+  } else if (/^\d+$/.test(id)) {
+    query = { tokenNumber: Number(id) };
+  } else {
+    query = { tokenLabel: id };
+  }
+
+  const token = await QueueToken.findOne(query);
+
+  if (!token) {
+    throw createError('Queue token not found', 404);
+  }
+
+  if (token.status !== 'waiting') {
+    throw createError('Only waiting tokens can be moved back', 400);
+  }
+
+  if (token.priority === 'urgent') {
+    throw createError('Urgent tokens cannot be moved back', 400);
+  }
+
+  // Find all waiting tokens for this queue (same date and assigned doctor / department)
+  const filter = {
+    date: token.date,
+    status: 'waiting',
+  };
+  if (token.assignedDoctor) {
+    filter.assignedDoctor = token.assignedDoctor;
+  } else if (token.department) {
+    filter.department = token.department;
+  }
+
+  const waitingTokens = await QueueToken.find(filter);
+
+  // Sort by priority (urgent > senior > normal), then tokenNumber ascending
+  const PRIORITY_ORDER = { urgent: 0, senior: 1, normal: 2 };
+  waitingTokens.sort((a, b) => {
+    const pA = PRIORITY_ORDER[a.priority] ?? 99;
+    const pB = PRIORITY_ORDER[b.priority] ?? 99;
+    if (pA !== pB) return pA - pB;
+    return a.tokenNumber - b.tokenNumber;
+  });
+
+  const currentIndex = waitingTokens.findIndex(
+    (t) => t._id.toString() === token._id.toString()
+  );
+
+  if (currentIndex === -1) {
+    throw createError('Token not found in waiting queue', 400);
+  }
+
+  const targetIndex = Math.min(currentIndex + 3, waitingTokens.length - 1);
+  const newPosition = targetIndex + 1;
+  const newMoveBackCount = (token.moveBackCount || 0) + 1;
+
+  if (targetIndex > currentIndex) {
+    const tokensToShift = waitingTokens.slice(currentIndex, targetIndex + 1);
+    const origNumbers = tokensToShift.map((t) => t.tokenNumber);
+    const origPriorities = tokensToShift.map((t) => t.priority);
+    const k = tokensToShift.length - 1;
+
+    // 1. Move target token to temporary negative tokenNumber to avoid unique index conflict
+    const tempTokenNumber = -Math.floor(Date.now() % 1000000000 + Math.random() * 10000);
+    await QueueToken.updateOne(
+      { _id: tokensToShift[0]._id },
+      { $set: { tokenNumber: tempTokenNumber } }
+    );
+
+    // 2. Shift intermediate tokens forward one slot each
+    for (let i = 1; i <= k; i++) {
+      await QueueToken.updateOne(
+        { _id: tokensToShift[i]._id },
+        {
+          $set: {
+            tokenNumber: origNumbers[i - 1],
+            priority: origPriorities[i - 1],
+          },
+        }
+      );
+      if (tokensToShift[i].appointment) {
+        await Appointment.findByIdAndUpdate(tokensToShift[i].appointment, {
+          $set: {
+            tokenNumber: origNumbers[i - 1],
+            priority: origPriorities[i - 1],
+          },
+        });
+      }
+    }
+
+    // 3. Move target token to the target slot and increment moveBackCount
+    await QueueToken.updateOne(
+      { _id: tokensToShift[0]._id },
+      {
+        $set: {
+          tokenNumber: origNumbers[k],
+          priority: origPriorities[k],
+          moveBackCount: newMoveBackCount,
+        },
+      }
+    );
+    if (tokensToShift[0].appointment) {
+      await Appointment.findByIdAndUpdate(tokensToShift[0].appointment, {
+        $set: {
+          tokenNumber: origNumbers[k],
+          priority: origPriorities[k],
+        },
+      });
+    }
+  } else {
+    // Already at the end of the queue — just increment moveBackCount
+    await QueueToken.updateOne(
+      { _id: token._id },
+      { $set: { moveBackCount: newMoveBackCount } }
+    );
+  }
+
+  res.json({
+    position: newPosition,
+    newPosition,
+    tokenLabel: token.tokenLabel,
+    moveBackCount: newMoveBackCount,
+  });
+});
+
 module.exports = {
   getQueue,
   getNextInQueue,
   callNext,
   recallToken,
   markNoShow,
+  moveBackToken,
 };
+
 

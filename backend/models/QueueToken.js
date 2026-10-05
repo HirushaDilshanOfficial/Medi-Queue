@@ -53,6 +53,10 @@ const queueTokenSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    sortOffset: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

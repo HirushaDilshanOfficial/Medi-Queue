@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 const { searchPatients, getSlots, walkInBooking } = require('../controllers/walkInController');
-const { callNext, recallToken, markNoShow } = require('../controllers/queueController');
+const { callNext, recallToken, markNoShow, moveBackToken } = require('../controllers/queueController');
 
 // All routes below require auth + receptionist role
 router.use(protect, authorizeRoles('receptionist', 'doctor'));
@@ -24,5 +24,8 @@ router.post('/:id/recall', recallToken);
 
 // POST /api/reception/:id/no-show
 router.post('/:id/no-show', markNoShow);
+
+// POST /api/reception/:id/move-back
+router.post('/:id/move-back', moveBackToken);
 
 module.exports = router;

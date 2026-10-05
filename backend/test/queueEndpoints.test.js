@@ -618,6 +618,174 @@ async function runTests() {
   }
   console.log('✓ QueueToken and Appointment successfully marked "no_show" in database');
 
+  // 12. Test POST /api/reception/queue/:id/move-back
+  console.log('\n--- TESTING POST /:id/move-back ---');
+
+  // 12a. Auth checks
+  const noAuthMove = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/move-back`, {
+    method: 'POST',
+  });
+  if (noAuthMove.status !== 401) {
+    throw new Error(`Expected 401 for unauthenticated move-back, got ${noAuthMove.status}`);
+  }
+  console.log('✓ Unauthenticated POST /:id/move-back returns 401');
+
+  const patAuthMove = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/move-back`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${patToken}` },
+  });
+  if (patAuthMove.status !== 403) {
+    throw new Error(`Expected 403 for patient move-back, got ${patAuthMove.status}`);
+  }
+  console.log('✓ Patient role on POST /:id/move-back returns 403');
+
+  // 12b. Rejection when token is not found -> 404
+  const notFoundMove = await fetch(`${BASE_URL}/api/reception/queue/${nonExistentId}/move-back`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (notFoundMove.status !== 404) {
+    throw new Error(`Expected 404 for non-existent token move-back, got ${notFoundMove.status}`);
+  }
+  console.log('✓ Non-existent token move-back returns 404');
+
+  // 12c. Rejection when token status is NOT "waiting" -> 400
+  await QueueToken.updateOne({ _id: testRecallToken._id }, { status: 'called' });
+  const badStatusMove = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/move-back`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (badStatusMove.status !== 400) {
+    throw new Error(`Expected 400 when moving non-waiting token, got ${badStatusMove.status}`);
+  }
+  const badStatusMoveData = await badStatusMove.json();
+  if (!badStatusMoveData.message || !badStatusMoveData.message.includes('waiting')) {
+    throw new Error(`Expected message about waiting status, got ${JSON.stringify(badStatusMoveData)}`);
+  }
+  console.log('✓ Rejection with 400 when token is not in "waiting" status');
+
+  // 12d. Rejection when token has priority "urgent" -> 400 ("Do not let urgent tokens be moved")
+  await QueueToken.updateOne({ _id: testRecallToken._id }, { status: 'waiting', priority: 'urgent' });
+  const urgentMove = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/move-back`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (urgentMove.status !== 400) {
+    throw new Error(`Expected 400 when moving urgent token, got ${urgentMove.status}`);
+  }
+  const urgentMoveData = await urgentMove.json();
+  if (!urgentMoveData.message || !urgentMoveData.message.includes('Urgent')) {
+    throw new Error(`Expected message about urgent tokens, got ${JSON.stringify(urgentMoveData)}`);
+  }
+  console.log('✓ Urgent token move-back rejected with 400 ("Do not let urgent tokens be moved")');
+
+  // 12e. Successful move-back of a waiting token 3 positions back
+  // Set up 5 waiting tokens for this doctor and date:
+  // Patient 1 (Token 10, normal)
+  // Patient 2 (Token 20, normal)
+  // Patient 3 (Token 30, normal)
+  // Patient 4 (Token 40, normal)
+  // Patient 5 (Token 50, normal)
+  const patient5 = await Patient.create({
+    fullName: 'Patient MoveBack Test',
+    phone: '0770000005',
+    nic: '199000000005',
+    age: 22,
+    gender: 'male',
+  });
+
+  const appt5 = await Appointment.create({
+    patient: patient5._id,
+    doctor: doctor._id,
+    department: doctor.department || 'General OPD',
+    date: testDate,
+    slotTime: '11:00',
+    type: 'walk_in',
+    status: 'checked_in',
+    tokenNumber: 50,
+    priority: 'normal',
+  });
+
+  const token5 = await QueueToken.create({
+    tokenNumber: 50,
+    tokenLabel: 'OPD-050',
+    patient: patient5._id,
+    assignedDoctor: doctor._id,
+    appointment: appt5._id,
+    date: testDate,
+    priority: 'normal',
+    status: 'waiting',
+  });
+
+  await QueueToken.updateOne({ _id: (await QueueToken.findOne({ tokenNumber: 1, date: testDate }))?._id }, { tokenNumber: 10, tokenLabel: 'OPD-010', status: 'waiting', priority: 'normal', moveBackCount: 0 });
+  await QueueToken.updateOne({ _id: testRecallToken._id }, { tokenNumber: 20, tokenLabel: 'OPD-020', status: 'waiting', priority: 'normal', moveBackCount: 0 });
+  await QueueToken.updateOne({ _id: (await QueueToken.findOne({ tokenNumber: 3, date: testDate }))?._id }, { tokenNumber: 30, tokenLabel: 'OPD-030', status: 'waiting', priority: 'normal', moveBackCount: 0 });
+  await QueueToken.updateOne({ _id: (await QueueToken.findOne({ tokenNumber: 4, date: testDate }))?._id }, { tokenNumber: 40, tokenLabel: 'OPD-040', status: 'waiting', priority: 'normal', moveBackCount: 0 });
+
+  const moveTargetToken = await QueueToken.findOne({ tokenLabel: 'OPD-010', date: testDate });
+
+  // Move OPD-010 (pos 1) 3 positions back -> should land at position 4 (behind OPD-040, before OPD-050)
+  const moveRes = await fetch(`${BASE_URL}/api/reception/queue/${moveTargetToken._id}/move-back`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (moveRes.status !== 200) {
+    const errText = await moveRes.text();
+    throw new Error(`Expected 200 for move-back, got ${moveRes.status}: ${errText}`);
+  }
+  const moveData = await moveRes.json();
+  console.log('POST /:id/move-back response:', JSON.stringify(moveData));
+
+  if (moveData.position !== 4 && moveData.newPosition !== 4) {
+    throw new Error(`Expected new position 4, got ${moveData.position || moveData.newPosition}`);
+  }
+  if (moveData.moveBackCount !== 1) {
+    throw new Error(`Expected moveBackCount 1, got ${moveData.moveBackCount}`);
+  }
+
+  // Verify queue order via GET /api/reception/queue
+  const queueAfterMoveRes = await fetch(`${BASE_URL}/api/reception/queue?date=${testDate}`, {
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  const queueAfterMoveData = await queueAfterMoveRes.json();
+  const queueLabels = queueAfterMoveData.queue.map(q => q.tokenLabel);
+  console.log('Queue order after move-back:', queueLabels);
+
+  if (queueLabels[0] !== 'OPD-020' || queueLabels[1] !== 'OPD-030' || queueLabels[2] !== 'OPD-040' || queueLabels[3] !== 'OPD-010' || queueLabels[4] !== 'OPD-050') {
+    throw new Error(`Expected [OPD-020, OPD-030, OPD-040, OPD-010, OPD-050], got ${JSON.stringify(queueLabels)}`);
+  }
+  console.log('✓ Token successfully moved 3 positions back from pos 1 to pos 4 in the ordered queue');
+
+  // 12f. Move token near the end of the queue (pos 4 out of 5, 4+3=7 clamped to 5)
+  const moveEndToken = await QueueToken.findOne({ tokenLabel: 'OPD-010', date: testDate });
+  const moveEndRes = await fetch(`${BASE_URL}/api/reception/queue/${moveEndToken._id}/move-back`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  const moveEndData = await moveEndRes.json();
+  if (moveEndData.position !== 5 && moveEndData.newPosition !== 5) {
+    throw new Error(`Expected position clamped to 5, got ${moveEndData.position || moveEndData.newPosition}`);
+  }
+  if (moveEndData.moveBackCount !== 2) {
+    throw new Error(`Expected moveBackCount 2, got ${moveEndData.moveBackCount}`);
+  }
+  console.log('✓ Clamped correctly to last position (pos 5) and incremented moveBackCount to 2');
+
+  // 12g. Test alias endpoint POST /api/reception/:id/move-back
+  const aliasMoveRes = await fetch(`${BASE_URL}/api/reception/${moveEndToken._id}/move-back`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (aliasMoveRes.status !== 200) {
+    throw new Error(`Expected 200 for alias POST /api/reception/:id/move-back, got ${aliasMoveRes.status}`);
+  }
+  console.log('✓ Alias POST /api/reception/:id/move-back works correctly');
+
+  // Clean up extra patient 5 & token 5
+  await QueueToken.deleteOne({ _id: token5._id });
+  await Appointment.deleteOne({ _id: appt5._id });
+  await Patient.deleteOne({ _id: patient5._id });
+
   // Clean up test data
   await QueueToken.deleteMany({ date: testDate, assignedDoctor: doctor._id });
   await Appointment.deleteMany({ date: testDate, doctor: doctor._id });
