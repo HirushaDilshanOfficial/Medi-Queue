@@ -34,6 +34,7 @@ const shiftSchema = new mongoose.Schema(
       cancelled: { type: Number, default: 0 },
       avgHandlingMinutes: { type: Number, default: 0 },
       throughputPercent: { type: Number, default: 0 },
+      doctors: { type: Array, default: [] },
     },
   },
   {

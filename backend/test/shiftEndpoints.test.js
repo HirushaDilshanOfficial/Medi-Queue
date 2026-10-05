@@ -8,6 +8,7 @@ const Doctor = require('../models/Doctor');
 const Patient = require('../models/Patient');
 const Appointment = require('../models/Appointment');
 const QueueToken = require('../models/QueueToken');
+const Shift = require('../models/Shift');
 const { getShiftSummary } = require('../services/shiftService');
 
 const BASE_URL = 'http://localhost:5001';
@@ -380,7 +381,120 @@ async function runShiftTests() {
   }
   console.log('✓ Invalid date returns 400 Bad Request');
 
-  // 7. Cleanup
+  // 7. Test POST /api/reception/shift/close
+  console.log('\n--- Testing POST /api/reception/shift/close ---');
+  // (a) Auth checks
+  const unauthCloseRes = await fetch(`${BASE_URL}/api/reception/shift/close`, {
+    method: 'POST',
+  });
+  if (unauthCloseRes.status !== 401) {
+    throw new Error(`Expected 401 for unauthenticated POST /shift/close, got ${unauthCloseRes.status}`);
+  }
+  console.log('✓ Unauthenticated request to /shift/close returns 401');
+
+  const patCloseRes = await fetch(`${BASE_URL}/api/reception/shift/close`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${patToken}` },
+  });
+  if (patCloseRes.status !== 403) {
+    throw new Error(`Expected 403 for patient role on /shift/close, got ${patCloseRes.status}`);
+  }
+  console.log('✓ Patient role request to /shift/close returns 403');
+
+  // (b) Find receptionist user id
+  const recUser = await User.findOne({ email: 'receptionist@mediqueue.lk' });
+  if (!recUser) throw new Error('Receptionist user not found');
+
+  // Clean any shift records for today for this receptionist
+  const todayDateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Colombo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+
+  await Shift.deleteMany({ receptionist: recUser._id, date: todayDateStr });
+
+  // (c) Close shift when none exists yet today -> creates one, saves snapshot, sets closed
+  const closeRes1 = await fetch(`${BASE_URL}/api/reception/shift/close`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (closeRes1.status !== 200) {
+    const errText = await closeRes1.text();
+    throw new Error(`Expected 200 for POST /shift/close (first time), got ${closeRes1.status}: ${errText}`);
+  }
+  const closedData1 = await closeRes1.json();
+  if (closedData1.status !== 'closed') {
+    throw new Error(`Expected shift status "closed", got ${closedData1.status}`);
+  }
+  if (!closedData1.endTime) {
+    throw new Error('Expected shift endTime to be set');
+  }
+  if (!closedData1.summary || typeof closedData1.summary.totalRegistered !== 'number') {
+    throw new Error(`Expected summary snapshot on closed shift: ${JSON.stringify(closedData1.summary)}`);
+  }
+  console.log('✓ POST /shift/close creates shift if none exists, saves summary snapshot, sets endTime and status="closed"');
+
+  // (d) Calling close again today when already closed returns 409 Conflict
+  const closeRes2 = await fetch(`${BASE_URL}/api/reception/shift/close`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (closeRes2.status !== 409) {
+    throw new Error(`Expected 409 Conflict when shift is already closed today, got ${closeRes2.status}`);
+  }
+  console.log('✓ POST /shift/close returns 409 Conflict if shift is already closed for today');
+
+  // (e) Test with existing open shift on testDate
+  await Shift.deleteMany({ receptionist: recUser._id, date: testDate });
+  const openShift = await Shift.create({
+    receptionist: recUser._id,
+    date: testDate,
+    startTime: new Date(`${testDate}T08:00:00Z`),
+    status: 'open',
+  });
+
+  const closeOpenRes = await fetch(`${BASE_URL}/api/reception/shift/close`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({ date: testDate }),
+  });
+  if (closeOpenRes.status !== 200) {
+    const errTxt = await closeOpenRes.text();
+    throw new Error(`Expected 200 for closing open shift, got ${closeOpenRes.status}: ${errTxt}`);
+  }
+  const closedOpenData = await closeOpenRes.json();
+  if (closedOpenData._id.toString() !== openShift._id.toString()) {
+    throw new Error('Expected to close the existing open shift');
+  }
+  if (closedOpenData.status !== 'closed' || !closedOpenData.endTime) {
+    throw new Error('Expected status="closed" and endTime set');
+  }
+  if (closedOpenData.summary.totalRegistered !== 9 || closedOpenData.summary.attended !== 4) {
+    throw new Error(`Summary snapshot mismatch on testDate: ${JSON.stringify(closedOpenData.summary)}`);
+  }
+  console.log('✓ POST /shift/close finds and closes existing open shift with accurate testDate summary snapshot');
+
+  // (f) Calling close again on testDate returns 409 Conflict
+  const closeRepeatRes = await fetch(`${BASE_URL}/api/reception/shift/close`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({ date: testDate }),
+  });
+  if (closeRepeatRes.status !== 409) {
+    throw new Error(`Expected 409 on repeat close for testDate, got ${closeRepeatRes.status}`);
+  }
+  console.log('✓ POST /shift/close returns 409 Conflict on repeat close');
+
+  // 8. Cleanup
+  await Shift.deleteMany({ receptionist: recUser._id });
   await QueueToken.deleteMany({ date: testDate });
   await Appointment.deleteMany({ date: testDate });
   await Doctor.deleteMany({ name: /^Dr\. ShiftTest/ });
