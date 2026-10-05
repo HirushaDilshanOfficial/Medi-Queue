@@ -60,8 +60,12 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        bounces={false}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <View style={{ flex: 1 }}>
         {/* ---- TEAL HEADER ---- */}
         <View style={styles.header}>
           <View style={styles.circleTopRight} />
@@ -161,6 +165,8 @@ export default function LoginScreen() {
               New patient? <Text style={styles.registerBold}>Create Account</Text>
             </Text>
           </TouchableOpacity>
+
+        </View>
 
         </View>
 
