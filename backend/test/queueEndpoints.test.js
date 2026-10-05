@@ -8,6 +8,7 @@ const Doctor = require('../models/Doctor');
 const Patient = require('../models/Patient');
 const Appointment = require('../models/Appointment');
 const QueueToken = require('../models/QueueToken');
+const Settings = require('../models/Settings');
 
 const BASE_URL = 'http://localhost:5001';
 
@@ -781,10 +782,247 @@ async function runTests() {
   }
   console.log('✓ Alias POST /api/reception/:id/move-back works correctly');
 
+  // ==========================================
+  // 13. PATCH /:id/assign-doctor tests
+  // ==========================================
+  console.log('\n--- Testing PATCH /:id/assign-doctor ---');
+
+  // 13a. Auth checks
+  const unauthAssign = await fetch(`${BASE_URL}/api/reception/queue/${moveEndToken._id}/assign-doctor`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ doctorId: doctor._id.toString() }),
+  });
+  if (unauthAssign.status !== 401) {
+    throw new Error(`Expected 401 for unauthenticated assign-doctor, got ${unauthAssign.status}`);
+  }
+  console.log('✓ Unauthenticated assign-doctor returns 401');
+
+  const patAssign = await fetch(`${BASE_URL}/api/reception/queue/${moveEndToken._id}/assign-doctor`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${patToken}`,
+    },
+    body: JSON.stringify({ doctorId: doctor._id.toString() }),
+  });
+  if (patAssign.status !== 403) {
+    throw new Error(`Expected 403 for patient role assign-doctor, got ${patAssign.status}`);
+  }
+  console.log('✓ Patient role assign-doctor returns 403');
+
+  // 13b. Missing doctorId or invalid format
+  const missingDocRes = await fetch(`${BASE_URL}/api/reception/queue/${moveEndToken._id}/assign-doctor`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({}),
+  });
+  if (missingDocRes.status !== 400) {
+    throw new Error(`Expected 400 for missing doctorId, got ${missingDocRes.status}`);
+  }
+  console.log('✓ Missing doctorId returns 400');
+
+  // 13c. Inactive doctor check
+  let offlineDoctor = await Doctor.findOne({ name: 'Dr. Test Offline' });
+  if (!offlineDoctor) {
+    offlineDoctor = await Doctor.create({
+      name: 'Dr. Test Offline',
+      specialization: 'General Practice',
+      department: 'OPD',
+      room: 'Room 99',
+      status: 'offline',
+    });
+  } else {
+    offlineDoctor.status = 'offline';
+    await offlineDoctor.save();
+  }
+
+  const inactiveDocRes = await fetch(`${BASE_URL}/api/reception/queue/${moveEndToken._id}/assign-doctor`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({ doctorId: offlineDoctor._id.toString() }),
+  });
+  if (inactiveDocRes.status !== 400) {
+    throw new Error(`Expected 400 for inactive doctor, got ${inactiveDocRes.status}`);
+  }
+  const inactiveDocData = await inactiveDocRes.json();
+  if (!inactiveDocData.message?.includes('not active')) {
+    throw new Error(`Expected message stating doctor is not active, got: ${inactiveDocData.message}`);
+  }
+  console.log('✓ Inactive doctor correctly rejected with 400');
+
+  // 13d. Successful doctor assignment to an active doctor
+  let activeDoctor2 = await Doctor.findOne({ name: 'Dr. Sarath Silva' });
+  if (!activeDoctor2) {
+    activeDoctor2 = await Doctor.create({
+      name: 'Dr. Sarath Silva',
+      specialization: 'Internal Medicine',
+      department: 'OPD',
+      room: 'Room 102',
+      status: 'active',
+      dailyCapacity: 25,
+      avgConsultMinutes: 12,
+    });
+  } else {
+    activeDoctor2.status = 'active';
+    await activeDoctor2.save();
+  }
+
+  const assignRes = await fetch(`${BASE_URL}/api/reception/queue/${moveEndToken._id}/assign-doctor`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({ doctorId: activeDoctor2._id.toString() }),
+  });
+  if (assignRes.status !== 200) {
+    const errText = await assignRes.text();
+    throw new Error(`Expected 200 for assign-doctor, got ${assignRes.status}: ${errText}`);
+  }
+  const assignData = await assignRes.json();
+  console.log('PATCH /:id/assign-doctor response:', JSON.stringify(assignData));
+
+  // Verify in MongoDB database that QueueToken and Appointment were updated
+  const updatedTokenInDB = await QueueToken.findById(moveEndToken._id);
+  if (updatedTokenInDB.assignedDoctor.toString() !== activeDoctor2._id.toString()) {
+    throw new Error(`Expected QueueToken.assignedDoctor to be ${activeDoctor2._id}, got ${updatedTokenInDB.assignedDoctor}`);
+  }
+  const updatedApptInDB = await Appointment.findById(moveEndToken.appointment);
+  if (updatedApptInDB.doctor.toString() !== activeDoctor2._id.toString()) {
+    throw new Error(`Expected Appointment.doctor to be ${activeDoctor2._id}, got ${updatedApptInDB.doctor}`);
+  }
+  console.log('✓ QueueToken.assignedDoctor and Appointment.doctor successfully updated in DB');
+
+  // 13e. Test alias PATCH /api/reception/:id/assign-doctor (reassigning back to doctor)
+  const aliasAssignRes = await fetch(`${BASE_URL}/api/reception/${moveEndToken._id}/assign-doctor`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({ doctorId: doctor._id.toString() }),
+  });
+  if (aliasAssignRes.status !== 200) {
+    throw new Error(`Expected 200 for alias PATCH /api/reception/:id/assign-doctor, got ${aliasAssignRes.status}`);
+  }
+  const reUpdatedToken = await QueueToken.findById(moveEndToken._id);
+  if (reUpdatedToken.assignedDoctor.toString() !== doctor._id.toString()) {
+    throw new Error(`Expected QueueToken.assignedDoctor reverted back to ${doctor._id}`);
+  }
+  console.log('✓ Alias PATCH /api/reception/:id/assign-doctor works correctly');
+
+  // ==========================================
+  // 14. GET & PATCH /auto-advance tests
+  // ==========================================
+  console.log('\n--- Testing GET & PATCH /auto-advance ---');
+
+  // 14a. Auth checks
+  const unauthGetAdv = await fetch(`${BASE_URL}/api/reception/queue/auto-advance`);
+  if (unauthGetAdv.status !== 401) {
+    throw new Error(`Expected 401 for unauth GET /auto-advance, got ${unauthGetAdv.status}`);
+  }
+  const patGetAdv = await fetch(`${BASE_URL}/api/reception/queue/auto-advance`, {
+    headers: { Authorization: `Bearer ${patToken}` },
+  });
+  if (patGetAdv.status !== 403) {
+    throw new Error(`Expected 403 for patient GET /auto-advance, got ${patGetAdv.status}`);
+  }
+  console.log('✓ Auth checks passed for /auto-advance');
+
+  // 14b. Body validation for PATCH /auto-advance
+  const badBodyRes = await fetch(`${BASE_URL}/api/reception/queue/auto-advance`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({ enabled: 'invalid-string' }),
+  });
+  if (badBodyRes.status !== 400) {
+    throw new Error(`Expected 400 for non-boolean enabled, got ${badBodyRes.status}`);
+  }
+  console.log('✓ Invalid body rejected with 400');
+
+  // 14c. PATCH /auto-advance { enabled: true }
+  const patchAdvRes = await fetch(`${BASE_URL}/api/reception/queue/auto-advance`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({ enabled: true }),
+  });
+  if (patchAdvRes.status !== 200) {
+    const errText = await patchAdvRes.text();
+    throw new Error(`Expected 200 for PATCH /auto-advance, got ${patchAdvRes.status}: ${errText}`);
+  }
+  const patchAdvData = await patchAdvRes.json();
+  if (patchAdvData.enabled !== true) {
+    throw new Error(`Expected enabled: true, got ${patchAdvData.enabled}`);
+  }
+  console.log('✓ PATCH /auto-advance { enabled: true } returned enabled: true');
+
+  // Verify in MongoDB Settings collection
+  const settingInDB = await Settings.findOne({ key: 'auto_advance' });
+  if (!settingInDB || settingInDB.value !== true) {
+    throw new Error(`Expected Settings document with key auto_advance and value true, got ${JSON.stringify(settingInDB)}`);
+  }
+  console.log('✓ Settings model verified in DB: key="auto_advance", value=true');
+
+  // 14d. GET /auto-advance reads enabled: true
+  const getAdvRes = await fetch(`${BASE_URL}/api/reception/queue/auto-advance`, {
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (getAdvRes.status !== 200) {
+    throw new Error(`Expected 200 for GET /auto-advance, got ${getAdvRes.status}`);
+  }
+  const getAdvData = await getAdvRes.json();
+  if (getAdvData.enabled !== true) {
+    throw new Error(`Expected GET /auto-advance to return enabled: true, got ${getAdvData.enabled}`);
+  }
+  console.log('✓ GET /auto-advance correctly read enabled: true');
+
+  // 14e. Alias PATCH & GET /api/reception/auto-advance with { enabled: false }
+  const aliasPatchAdv = await fetch(`${BASE_URL}/api/reception/auto-advance`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${recToken}`,
+    },
+    body: JSON.stringify({ enabled: false }),
+  });
+  if (aliasPatchAdv.status !== 200) {
+    throw new Error(`Expected 200 for alias PATCH /api/reception/auto-advance, got ${aliasPatchAdv.status}`);
+  }
+  const aliasPatchData = await aliasPatchAdv.json();
+  if (aliasPatchData.enabled !== false) {
+    throw new Error(`Expected enabled: false, got ${aliasPatchData.enabled}`);
+  }
+
+  const aliasGetAdv = await fetch(`${BASE_URL}/api/reception/auto-advance`, {
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  const aliasGetData = await aliasGetAdv.json();
+  if (aliasGetData.enabled !== false) {
+    throw new Error(`Expected enabled: false from alias GET, got ${aliasGetData.enabled}`);
+  }
+  console.log('✓ Alias PATCH & GET /api/reception/auto-advance work correctly');
+
   // Clean up extra patient 5 & token 5
   await QueueToken.deleteOne({ _id: token5._id });
   await Appointment.deleteOne({ _id: appt5._id });
   await Patient.deleteOne({ _id: patient5._id });
+
+  // Clean up doctors & settings created during test
+  if (offlineDoctor) await Doctor.deleteOne({ _id: offlineDoctor._id });
+  if (activeDoctor2) await Doctor.deleteOne({ _id: activeDoctor2._id });
 
   // Clean up test data
   await QueueToken.deleteMany({ date: testDate, assignedDoctor: doctor._id });

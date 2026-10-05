@@ -4,6 +4,7 @@ const { getOrderedQueue } = require('../services/queueService');
 const QueueToken = require('../models/QueueToken');
 const Appointment = require('../models/Appointment');
 const Doctor = require('../models/Doctor');
+const Settings = require('../models/Settings');
 
 /**
  * @desc    Get today's ordered queue with totals and timestamp
@@ -428,6 +429,130 @@ const moveBackToken = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Assign doctor to a queue token and appointment
+ *          Doctor must be active; update QueueToken.assignedDoctor and Appointment.doctor
+ * @route   PATCH /api/reception/queue/:id/assign-doctor
+ *          PATCH /api/reception/:id/assign-doctor
+ * @access  Private — receptionist, doctor
+ */
+const assignDoctor = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { doctorId } = req.body;
+
+  if (!doctorId) {
+    throw createError('doctorId is required', 400);
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+    throw createError('Invalid doctorId format', 400);
+  }
+
+  const doctor = await Doctor.findById(doctorId);
+  if (!doctor) {
+    throw createError('Doctor not found', 404);
+  }
+
+  if (doctor.status !== 'active') {
+    throw createError(`Doctor is not active (current status: ${doctor.status})`, 400);
+  }
+
+  let query;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    query = { _id: id };
+  } else if (/^\d+$/.test(id)) {
+    query = { tokenNumber: Number(id) };
+  } else {
+    query = { tokenLabel: id };
+  }
+
+  const token = await QueueToken.findOne(query).populate('appointment');
+  if (!token) {
+    throw createError('Queue token not found', 404);
+  }
+
+  // Update QueueToken assignedDoctor
+  token.assignedDoctor = doctor._id;
+  await token.save();
+
+  // Update Appointment doctor
+  let updatedAppointment = null;
+  if (token.appointment) {
+    const apptId = token.appointment._id || token.appointment;
+    try {
+      updatedAppointment = await Appointment.findByIdAndUpdate(
+        apptId,
+        { $set: { doctor: doctor._id } },
+        { new: true }
+      );
+    } catch (err) {
+      if (err.code === 11000) {
+        throw createError('Selected doctor already has an appointment booked for this slot', 409);
+      }
+      throw err;
+    }
+  }
+
+  res.json({
+    success: true,
+    message: 'Doctor assigned successfully',
+    tokenLabel: token.tokenLabel,
+    assignedDoctor: doctor._id,
+    doctor: {
+      _id: doctor._id,
+      name: doctor.name,
+      room: doctor.room,
+      department: doctor.department,
+      status: doctor.status,
+    },
+    appointment: updatedAppointment,
+  });
+});
+
+/**
+ * @desc    Update auto-advance setting in Settings model (key, value)
+ * @route   PATCH /api/reception/queue/auto-advance
+ *          PATCH /api/reception/auto-advance
+ * @access  Private — receptionist, doctor
+ */
+const updateAutoAdvance = asyncHandler(async (req, res) => {
+  const { enabled } = req.body;
+
+  if (typeof enabled !== 'boolean') {
+    throw createError('enabled must be a boolean', 400);
+  }
+
+  const setting = await Settings.findOneAndUpdate(
+    { key: 'auto_advance' },
+    { $set: { value: enabled } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  res.json({
+    success: true,
+    enabled: Boolean(setting.value),
+  });
+});
+
+/**
+ * @desc    Get auto-advance setting from Settings model
+ * @route   GET /api/reception/queue/auto-advance
+ *          GET /api/reception/auto-advance
+ * @access  Private — receptionist, doctor
+ */
+const getAutoAdvance = asyncHandler(async (req, res) => {
+  const setting = await Settings.findOne({
+    $or: [{ key: 'auto_advance' }, { key: 'auto-advance' }],
+  });
+
+  const enabled = setting ? Boolean(setting.value) : false;
+
+  res.json({
+    success: true,
+    enabled,
+  });
+});
+
 module.exports = {
   getQueue,
   getNextInQueue,
@@ -435,6 +560,10 @@ module.exports = {
   recallToken,
   markNoShow,
   moveBackToken,
+  assignDoctor,
+  updateAutoAdvance,
+  getAutoAdvance,
 };
+
 
 
