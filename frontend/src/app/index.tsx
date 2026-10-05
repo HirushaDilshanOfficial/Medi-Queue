@@ -1,8 +1,8 @@
 import { Redirect } from 'expo-router';
 
-// App start වෙනකොට Doctor Schedule එකට direct යවනවා
+// App start වෙනකොට Login screen එකට direct යවනවා
 export default function Index() {
-  return <Redirect href="/(doctor)/schedule" />;
+  return <Redirect href="/(auth)/login" />;
 }
 
 
