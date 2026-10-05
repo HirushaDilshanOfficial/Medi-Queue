@@ -467,6 +467,157 @@ async function runTests() {
   }
   console.log('✓ Alias POST /api/reception/call-next also works correctly');
 
+  // 10. Test POST /api/reception/queue/:id/recall
+  console.log('\n--- TESTING POST /:id/recall ---');
+
+  // 10a. Auth checks
+  const testRecallToken = await QueueToken.findOne({ tokenNumber: 2, date: testDate });
+  const noAuthRecall = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/recall`, {
+    method: 'POST',
+  });
+  if (noAuthRecall.status !== 401) {
+    throw new Error(`Expected 401 for unauthenticated recall, got ${noAuthRecall.status}`);
+  }
+  console.log('✓ Unauthenticated POST /:id/recall returns 401');
+
+  const patAuthRecall = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/recall`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${patToken}` },
+  });
+  if (patAuthRecall.status !== 403) {
+    throw new Error(`Expected 403 for patient recall, got ${patAuthRecall.status}`);
+  }
+  console.log('✓ Patient role on POST /:id/recall returns 403');
+
+  // 10b. Rejection when token is not found -> 404
+  const nonExistentId = new mongoose.Types.ObjectId();
+  const notFoundRecall = await fetch(`${BASE_URL}/api/reception/queue/${nonExistentId}/recall`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (notFoundRecall.status !== 404) {
+    throw new Error(`Expected 404 for non-existent token recall, got ${notFoundRecall.status}`);
+  }
+  console.log('✓ Non-existent token recall returns 404');
+
+  // 10c. Rejection when token status is NOT "called" -> 400
+  await QueueToken.updateOne({ _id: testRecallToken._id }, { status: 'waiting' });
+  const badStatusRecall = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/recall`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (badStatusRecall.status !== 400) {
+    throw new Error(`Expected 400 when recalling non-called token, got ${badStatusRecall.status}`);
+  }
+  const badStatusData = await badStatusRecall.json();
+  if (!badStatusData.message || !badStatusData.message.includes('called')) {
+    throw new Error(`Expected error message about 'called' status, got ${JSON.stringify(badStatusData)}`);
+  }
+  console.log('✓ Recall rejected with 400 when token status is not "called"');
+
+  // 10d. Success when token status IS "called"
+  const pastTime = new Date(Date.now() - 60000);
+  await QueueToken.updateOne({ _id: testRecallToken._id }, { status: 'called', calledAt: pastTime });
+
+  const successRecall = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/recall`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (successRecall.status !== 200) {
+    const errText = await successRecall.text();
+    throw new Error(`Expected 200 for successful recall, got ${successRecall.status}: ${errText}`);
+  }
+  const recallData = await successRecall.json();
+  console.log('POST /:id/recall response:', JSON.stringify(recallData));
+
+  if (recallData.tokenLabel !== 'OPD-002') {
+    throw new Error(`Expected tokenLabel OPD-002, got ${recallData.tokenLabel}`);
+  }
+  if (recallData.room !== 'Room 101') {
+    throw new Error(`Expected room 'Room 101', got ${recallData.room}`);
+  }
+
+  const updatedRecalledToken = await QueueToken.findById(testRecallToken._id);
+  if (!updatedRecalledToken.calledAt || new Date(updatedRecalledToken.calledAt).getTime() <= pastTime.getTime()) {
+    throw new Error(`Expected calledAt to be updated to a newer timestamp`);
+  }
+  console.log('✓ Successful recall updated calledAt and returned tokenLabel and room');
+
+  // 11. Test POST /api/reception/queue/:id/no-show
+  console.log('\n--- TESTING POST /:id/no-show ---');
+
+  // 11a. Auth checks
+  const noAuthNoShow = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/no-show`, {
+    method: 'POST',
+  });
+  if (noAuthNoShow.status !== 401) {
+    throw new Error(`Expected 401 for unauthenticated no-show, got ${noAuthNoShow.status}`);
+  }
+  console.log('✓ Unauthenticated POST /:id/no-show returns 401');
+
+  const patAuthNoShow = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/no-show`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${patToken}` },
+  });
+  if (patAuthNoShow.status !== 403) {
+    throw new Error(`Expected 403 for patient no-show, got ${patAuthNoShow.status}`);
+  }
+  console.log('✓ Patient role on POST /:id/no-show returns 403');
+
+  // 11b. Rejection when token is not found -> 404
+  const notFoundNoShow = await fetch(`${BASE_URL}/api/reception/queue/${nonExistentId}/no-show`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (notFoundNoShow.status !== 404) {
+    throw new Error(`Expected 404 for non-existent token no-show, got ${notFoundNoShow.status}`);
+  }
+  console.log('✓ Non-existent token no-show returns 404');
+
+  // 11c. Rejection when already "done" -> 400
+  await QueueToken.updateOne({ _id: testRecallToken._id }, { status: 'done' });
+  const alreadyDoneNoShow = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/no-show`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (alreadyDoneNoShow.status !== 400) {
+    throw new Error(`Expected 400 when marking done token as no-show, got ${alreadyDoneNoShow.status}`);
+  }
+  const alreadyDoneData = await alreadyDoneNoShow.json();
+  if (!alreadyDoneData.message || !alreadyDoneData.message.includes('already done')) {
+    throw new Error(`Expected message about already done, got ${JSON.stringify(alreadyDoneData)}`);
+  }
+  console.log('✓ Rejected with 400 when trying to mark "done" token as no-show');
+
+  // 11d. Successful no-show transition
+  await QueueToken.updateOne({ _id: testRecallToken._id }, { status: 'called' });
+  await Appointment.updateOne({ tokenNumber: 2, date: testDate }, { status: 'in_consultation', isActive: true });
+
+  const successNoShow = await fetch(`${BASE_URL}/api/reception/queue/${testRecallToken._id}/no-show`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${recToken}` },
+  });
+  if (successNoShow.status !== 200) {
+    const errText = await successNoShow.text();
+    throw new Error(`Expected 200 for successful no-show, got ${successNoShow.status}: ${errText}`);
+  }
+  const noShowData = await successNoShow.json();
+  if (noShowData.status !== 'no_show') {
+    throw new Error(`Expected status 'no_show', got ${noShowData.status}`);
+  }
+  console.log('POST /:id/no-show response:', JSON.stringify(noShowData));
+
+  // Verify DB updates for both QueueToken and Appointment
+  const noShowTokenInDB = await QueueToken.findById(testRecallToken._id);
+  const noShowApptInDB = await Appointment.findOne({ tokenNumber: 2, date: testDate });
+  if (noShowTokenInDB.status !== 'no_show') {
+    throw new Error(`Expected QueueToken in DB to have status 'no_show', got ${noShowTokenInDB.status}`);
+  }
+  if (noShowApptInDB.status !== 'no_show' || noShowApptInDB.isActive !== false) {
+    throw new Error(`Expected Appointment in DB to have status 'no_show' and isActive=false, got status=${noShowApptInDB.status}, isActive=${noShowApptInDB.isActive}`);
+  }
+  console.log('✓ QueueToken and Appointment successfully marked "no_show" in database');
+
   // Clean up test data
   await QueueToken.deleteMany({ date: testDate, assignedDoctor: doctor._id });
   await Appointment.deleteMany({ date: testDate, doctor: doctor._id });

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { asyncHandler, createError } = require('../utils/errorHandler');
 const { getOrderedQueue } = require('../services/queueService');
 const QueueToken = require('../models/QueueToken');
@@ -201,8 +202,102 @@ const callNext = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Recall a patient: only for "called" tokens; update calledAt, return tokenLabel and room
+ * @route   POST /api/reception/queue/:id/recall
+ * @access  Private — receptionist, doctor
+ */
+const recallToken = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  let query;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    query = { _id: id };
+  } else if (/^\d+$/.test(id)) {
+    query = { tokenNumber: Number(id) };
+  } else {
+    query = { tokenLabel: id };
+  }
+
+  const token = await QueueToken.findOne(query)
+    .populate('assignedDoctor')
+    .populate({
+      path: 'appointment',
+      populate: { path: 'doctor' },
+    });
+
+  if (!token) {
+    throw createError('Queue token not found', 404);
+  }
+
+  if (token.status !== 'called') {
+    throw createError('Only tokens with status "called" can be recalled', 400);
+  }
+
+  const now = new Date();
+  token.calledAt = now;
+  await token.save();
+
+  const doctor = token.assignedDoctor || token.appointment?.doctor || null;
+  const room = doctor?.room || null;
+
+  res.json({
+    tokenLabel: token.tokenLabel,
+    room,
+  });
+});
+
+/**
+ * @desc    Mark token and appointment as no-show. Reject if already done.
+ * @route   POST /api/reception/queue/:id/no-show
+ * @access  Private — receptionist, doctor
+ */
+const markNoShow = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  let query;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    query = { _id: id };
+  } else if (/^\d+$/.test(id)) {
+    query = { tokenNumber: Number(id) };
+  } else {
+    query = { tokenLabel: id };
+  }
+
+  const token = await QueueToken.findOne(query).populate('appointment');
+
+  if (!token) {
+    throw createError('Queue token not found', 404);
+  }
+
+  if (token.status === 'done' || token.appointment?.status === 'completed') {
+    throw createError('Cannot mark as no-show: token is already done', 400);
+  }
+
+  token.status = 'no_show';
+  await token.save();
+
+  if (token.appointment) {
+    const appointmentId = token.appointment._id || token.appointment;
+    await Appointment.findByIdAndUpdate(appointmentId, {
+      $set: {
+        status: 'no_show',
+        isActive: false,
+      },
+    });
+  }
+
+  res.json({
+    tokenLabel: token.tokenLabel,
+    status: 'no_show',
+  });
+});
+
 module.exports = {
   getQueue,
   getNextInQueue,
   callNext,
+  recallToken,
+  markNoShow,
 };
+
