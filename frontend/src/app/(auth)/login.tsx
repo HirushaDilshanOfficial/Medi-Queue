@@ -41,11 +41,13 @@ export default function LoginScreen() {
       // Successfully logged in
       Alert.alert('Success', `Welcome back, ${userData.fullName}!`);
       
-      // Navigate based on role (for now we only have MOH dashboard created)
+      // Navigate based on role
       if (userData.role === 'MOH') {
         router.replace('/(moh)/dashboard');
+      } else if (userData.role === 'Doctor') {
+        router.replace('/(doctor)/dashboard');
       } else {
-        // TODO: Navigate to other dashboards when they are created
+        // TODO: Navigate to Patient or Receptionist dashboards when created
         Alert.alert('Notice', `Logged in as ${userData.role}, but dashboard is not created yet.`);
       }
     } catch (error: any) {

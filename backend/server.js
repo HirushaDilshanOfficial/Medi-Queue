@@ -12,6 +12,7 @@ const alertRoutes = require('./routes/alertRoutes');
 const patientRoutes = require('./routes/patientRoutes');
 const policyRoutes = require('./routes/policyRoutes');
 const publicRoutes = require('./routes/publicRoutes');
+const doctorRoutes = require('./routes/doctorRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -34,11 +35,12 @@ app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/patients', patientRoutes);
 app.use('/api/v1/policies', policyRoutes);
 app.use('/api/v1/public', publicRoutes);
+app.use('/api/v1/doctor', doctorRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

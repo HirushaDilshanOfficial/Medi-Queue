@@ -7,14 +7,18 @@ import LoginScreen from '../screens/Auth/LoginScreen';
 import RegisterScreen from '../screens/Auth/RegisterScreen';
 
 // MOH Dashboard Screen
-// TODO: Patient, Doctor, Receptionist screens - later add කරමු
+// TODO: Patient, Receptionist screens - later add කරමු
 import MOHDashboardScreen from '../screens/MOH/MOHDashboardScreen';
+
+// Doctor Dashboard Screen
+import DoctorDashboardScreen from '../screens/Doctor/DoctorDashboardScreen';
 
 // Define all route names and their params
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   MOHDashboard: undefined;
+  DoctorDashboard: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -35,7 +39,10 @@ export default function AppNavigator() {
         {/* ---- MOH DASHBOARD ---- */}
         <Stack.Screen name="MOHDashboard" component={MOHDashboardScreen} />
 
-        {/* TODO: PatientDashboard, DoctorDashboard, ReceptionistDashboard - later */}
+        {/* ---- DOCTOR DASHBOARD ---- */}
+        <Stack.Screen name="DoctorDashboard" component={DoctorDashboardScreen} />
+
+        {/* TODO: PatientDashboard, ReceptionistDashboard - later */}
       </Stack.Navigator>
     </NavigationContainer>
   );
