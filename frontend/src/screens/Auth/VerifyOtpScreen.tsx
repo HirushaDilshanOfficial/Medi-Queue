@@ -13,14 +13,42 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { BASE_URL } from '../../config';
+import { Alert, ActivityIndicator } from 'react-native';
 
 export default function VerifyOtpScreen() {
   const { email } = useLocalSearchParams();
   const [otp, setOtp] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleVerify = () => {
-    // Navigate to reset password passing email and otp (UI mock)
-    router.push({ pathname: '/(auth)/reset-password', params: { email, otp } });
+  const handleVerify = async () => {
+    if (!otp || otp.length < 6) {
+      Alert.alert('Error', 'Please enter a valid 6-digit OTP');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${BASE_URL}/api/v1/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Navigate to reset password passing email and otp
+        router.push({ pathname: '/(auth)/reset-password', params: { email, otp } });
+      } else {
+        Alert.alert('Error', data.message || 'Invalid OTP');
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,8 +102,12 @@ export default function VerifyOtpScreen() {
           </View>
 
           {/* Verify Button */}
-          <TouchableOpacity style={styles.primaryButton} onPress={handleVerify}>
-            <Text style={styles.primaryButtonText}>Verify & Proceed</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleVerify} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <Text style={styles.primaryButtonText}>Verify & Proceed</Text>
+            )}
           </TouchableOpacity>
 
         </View>

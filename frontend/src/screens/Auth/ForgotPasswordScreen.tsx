@@ -13,13 +13,41 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { BASE_URL } from '../../config';
+import { Alert, ActivityIndicator } from 'react-native';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSendOtp = () => {
-    // Navigate to verify OTP screen passing email (UI mock)
-    router.push({ pathname: '/(auth)/verify-otp', params: { email } });
+  const handleSendOtp = async () => {
+    if (!email) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${BASE_URL}/api/v1/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Navigate to verify OTP screen passing email
+        router.push({ pathname: '/(auth)/verify-otp', params: { email } });
+      } else {
+        Alert.alert('Error', data.message || 'Failed to send OTP');
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -73,8 +101,12 @@ export default function ForgotPasswordScreen() {
           </View>
 
           {/* Send OTP Button */}
-          <TouchableOpacity style={styles.primaryButton} onPress={handleSendOtp}>
-            <Text style={styles.primaryButtonText}>Send OTP</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleSendOtp} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <Text style={styles.primaryButtonText}>Send OTP</Text>
+            )}
           </TouchableOpacity>
 
         </View>
