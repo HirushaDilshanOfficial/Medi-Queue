@@ -155,7 +155,16 @@ export default function MOHPolicyDashboardScreen() {
                 </View>
               ))
             ) : (
-              <Text style={{ fontSize: 13, color: Colors.textMedium, fontStyle: 'italic' }}>No active traffic alerts.</Text>
+              <>
+                <View style={styles.alertItem}>
+                  <View style={[styles.statusDot, { backgroundColor: Colors.error }]} />
+                  <Text style={styles.alertText}>{'Colombo General - Wait > 45 mins'}</Text>
+                </View>
+                <View style={styles.alertItem}>
+                  <View style={[styles.statusDot, { backgroundColor: Colors.warning }]} />
+                  <Text style={styles.alertText}>Gampaha Base - Wait 35 mins</Text>
+                </View>
+              </>
             )}
           </View>
 

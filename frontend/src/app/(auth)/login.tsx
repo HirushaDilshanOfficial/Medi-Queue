@@ -42,12 +42,14 @@ export default function LoginScreen() {
       Alert.alert('Success', `Welcome back, ${userData.fullName}!`);
       
       // Navigate based on role
-      if (userData.role === 'MOH') {
+      const userRole = String(userData.role || '').toLowerCase();
+      if (userRole === 'moh') {
         router.replace('/(moh)/dashboard');
-      } else if (userData.role === 'Doctor') {
+      } else if (userRole === 'receptionist') {
+        router.replace('/(reception)/dashboard');
+      } else if (userRole === 'doctor') {
         router.replace('/(doctor)/dashboard');
       } else {
-        // TODO: Navigate to Patient or Receptionist dashboards when created
         Alert.alert('Notice', `Logged in as ${userData.role}, but dashboard is not created yet.`);
       }
     } catch (error: any) {

@@ -1,25 +1,30 @@
 const express = require('express');
 const router = express.Router();
-const patientController = require('../controllers/patientController');
+const { protect, authorizeRoles } = require('../middleware/authMiddleware');
+const {
+  getPatients,
+  getPatientById,
+  searchPatients,
+  updatePatientProfile,
+  verifyPatientNIC,
+} = require('../controllers/patientController');
 
-// @route   GET /api/v1/patients
-// @desc    Get all patients
-// @access  Public (Should be private in production)
-router.get('/', patientController.getAllPatients);
+// All reception patient routes require auth + receptionist role
+router.use(protect, authorizeRoles('receptionist'));
 
-// @route   PUT /api/v1/patients/:id
-// @desc    Update a patient
-// @access  Public
-router.put('/:id', patientController.updatePatient);
+// /patients/search MUST be registered BEFORE /patients/:id
+router.get('/patients/search', searchPatients);
 
-// @route   PATCH /api/v1/patients/:id/toggle-status
-// @desc    Toggle patient active/inactive status
-// @access  Public
-router.patch('/:id/toggle-status', patientController.togglePatientStatus);
+// GET /patients?filter=visited_today|recent|all
+router.get('/patients', getPatients);
 
-// @route   DELETE /api/v1/patients/:id
-// @desc    Soft delete a patient
-// @access  Public
-router.delete('/:id', patientController.deletePatient);
+// POST /patients/:id/verify-nic
+router.post('/patients/:id/verify-nic', verifyPatientNIC);
+
+// GET /patients/:id
+router.get('/patients/:id', getPatientById);
+
+// PATCH /patients/:id
+router.patch('/patients/:id', updatePatientProfile);
 
 module.exports = router;

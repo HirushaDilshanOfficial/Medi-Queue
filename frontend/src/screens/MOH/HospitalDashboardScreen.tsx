@@ -58,7 +58,7 @@ export default function HospitalDashboardScreen() {
   };
 
   const chartData = getChartData();
-  const maxValue = chartData.length > 0 ? Math.max(...chartData.map(d => d.value)) : 1;
+  const maxValue = chartData.length > 0 ? Math.max(...chartData.map((d: any) => d.value)) : 1;
 
   return (
     <View style={styles.container}>
@@ -190,7 +190,7 @@ export default function HospitalDashboardScreen() {
           {/* Dummy Bar Chart */}
           <View style={styles.chartArea}>
             <View style={styles.barsContainer}>
-              {chartData.map((data, index) => {
+              {chartData.map((data: any, index: number) => {
                 const heightPercent = (data.value / maxValue) * 100;
                 // Highlight highest bar
                 const isMax = data.value === maxValue;
