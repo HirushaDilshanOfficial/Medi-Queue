@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['MOH', 'Doctor', 'Receptionist', 'Patient'],
+      enum: ['MOH', 'Doctor', 'Nurse', 'Receptionist', 'Pharmacist', 'Lab Technician', 'Other', 'Patient'],
       default: 'Patient',
     },
 
@@ -39,6 +39,21 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
     },
+    bloodGroup: {
+      type: String,
+      enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
+    },
+    status: {
+      type: String,
+      enum: ['Active', 'Inactive'],
+      default: 'Active',
+    },
+    resetPasswordOTP: {
+      type: String,
+    },
+    resetPasswordExpires: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
@@ -48,9 +63,9 @@ const userSchema = new mongoose.Schema(
 
 
 // Encrypt password before saving
-userSchema.pre('save', async function (next) {
+userSchema.pre('save', async function () {
   if (!this.isModified('password')) {
-    next();
+    return;
   }
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);

@@ -2,8 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
+const userRoutes = require('./routes/userRoutes');
+const queueRoutes = require('./routes/queueRoutes');
+const walkInRoutes = require('./routes/walkInRoutes');
 const authRoutes = require('./routes/authRoutes');
-const doctorRoutes = require('./routes/doctorRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -16,8 +18,10 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
+app.use('/api/users', userRoutes);
+app.use('/api/reception/queue', queueRoutes);
+app.use('/api/reception', walkInRoutes);
 app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/doctor', doctorRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

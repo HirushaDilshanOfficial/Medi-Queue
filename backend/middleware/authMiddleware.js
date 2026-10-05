@@ -10,35 +10,40 @@ const protect = async (req, res, next) => {
   ) {
     try {
       token = req.headers.authorization.split(' ')[1];
-
-      // Decode token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
-
-      // Add user to request object
       req.user = await User.findById(decoded.id).select('-password');
+      if (!req.user) {
+        res.status(401);
+        return next(new Error('Not authorized, user not found'));
+      }
 
-      next();
+      return next();
     } catch (error) {
-      console.error(error);
-      res.status(401).json({ message: 'Not authorized, token failed' });
+      res.status(401);
+      return next(new Error('Not authorized, token failed'));
     }
   }
 
   if (!token) {
-    res.status(401).json({ message: 'Not authorized, no token' });
+    res.status(401);
+    return next(new Error('Not authorized, no token'));
   }
 };
 
-// Role based authorization
-const authorize = (...roles) => {
+const authorizeRoles = (...roles) => {
+  const allowed = roles.map((role) => role.toLowerCase());
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({
-        message: `User role '${req.user.role}' is not authorized to access this route`,
-      });
+    const userRole = (req.user?.role || '').toLowerCase();
+    if (!req.user || !allowed.includes(userRole)) {
+      res.status(403);
+      return next(
+        new Error(`Access denied. Required role(s): ${roles.join(', ')}`)
+      );
     }
     next();
   };
 };
 
-module.exports = { protect, authorize };
+const authorize = (...roles) => authorizeRoles(...roles);
+
+module.exports = { protect, authorize, authorizeRoles };
