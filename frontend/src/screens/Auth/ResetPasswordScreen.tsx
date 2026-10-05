@@ -12,23 +12,51 @@ import {
   SafeAreaView,
   Alert
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { BASE_URL } from '../../config';
+import { ActivityIndicator } from 'react-native';
 
 export default function ResetPasswordScreen() {
+  const { email, otp } = useLocalSearchParams();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!password || !confirmPassword) {
+      Alert.alert('Error', 'Please fill all fields');
+      return;
+    }
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match!');
       return;
     }
-    // Navigate back to login (UI mock)
-    Alert.alert('Success', 'Your password has been reset successfully.', [
-      { text: 'Login', onPress: () => router.replace('/(auth)/login') }
-    ]);
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`${BASE_URL}/api/v1/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp, newPassword: password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert('Success', 'Your password has been reset successfully.', [
+          { text: 'Login', onPress: () => router.replace('/(auth)/login') }
+        ]);
+      } else {
+        Alert.alert('Error', data.message || 'Failed to reset password');
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -97,8 +125,12 @@ export default function ResetPasswordScreen() {
           </View>
 
           {/* Reset Button */}
-          <TouchableOpacity style={styles.primaryButton} onPress={handleReset}>
-            <Text style={styles.primaryButtonText}>Reset Password</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleReset} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <Text style={styles.primaryButtonText}>Reset Password</Text>
+            )}
           </TouchableOpacity>
 
         </View>
