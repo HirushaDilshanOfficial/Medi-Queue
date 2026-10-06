@@ -18,6 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { BASE_URL } from '../../config';
 
+import { getAuthToken } from '../../services/http';
+
 export default function EditProfileScreen() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -32,7 +34,7 @@ export default function EditProfileScreen() {
   const fetchProfile = async () => {
     try {
       setIsFetching(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await getAuthToken();
       if (!token) return;
 
       const response = await fetch(`${BASE_URL}/api/users/profile`, {
@@ -65,7 +67,7 @@ export default function EditProfileScreen() {
     setIsLoading(true);
 
     try {
-      const token = await AsyncStorage.getItem('token');
+      const token = await getAuthToken();
       const response = await fetch(`${BASE_URL}/api/users/profile`, {
         method: 'PUT',
         headers: {

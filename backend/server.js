@@ -20,6 +20,7 @@ const policyRoutes = require('./routes/policyRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 const v1DoctorRoutes = require('./routes/v1DoctorRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -71,6 +72,9 @@ app.use('/api/v1/patients', patientRoutes);
 app.use('/api/v1/doctors', doctorRoutes);
 app.use('/api/v1/bookings', bookingRoutes);
 app.use('/api/v1/queue', queueRoutes);
+
+// Broadcast Notifications
+app.use('/api/v1/notifications', notificationRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);
