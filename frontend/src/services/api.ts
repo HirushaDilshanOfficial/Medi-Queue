@@ -232,14 +232,21 @@ export interface GetQueueParams {
   department?: string;
   doctorId?: string;
   status?: string;
+  type?: 'all' | 'walk_in' | 'pre_booked' | string;
 }
 
 export interface QueueResponse {
   date: string;
-  total: number;
-  waiting: number;
-  serving: number;
+  total?: number;
+  waiting?: number;
+  serving?: number;
   queue: QueueToken[];
+  totals?: {
+    inQueue: number;
+    walkIns: number;
+    preBooked: number;
+    avgWaitMinutes: number;
+  };
   lastUpdated: string;
 }
 
@@ -318,14 +325,19 @@ export const createWalkIn = async (
  * Get the live ordered queue with totals and wait times.
  */
 export const getQueue = async (
-  params?: GetQueueParams,
+  params?: GetQueueParams | 'all' | 'walk_in' | 'pre_booked',
   token?: string
 ): Promise<QueueResponse> => {
   const query = new URLSearchParams();
-  if (params?.date) query.append('date', params.date);
-  if (params?.department) query.append('department', params.department);
-  if (params?.doctorId) query.append('doctorId', params.doctorId);
-  if (params?.status) query.append('status', params.status);
+  if (typeof params === 'string') {
+    if (params && params !== 'all') query.append('type', params);
+  } else if (params) {
+    if (params.date) query.append('date', params.date);
+    if (params.department) query.append('department', params.department);
+    if (params.doctorId) query.append('doctorId', params.doctorId);
+    if (params.status) query.append('status', params.status);
+    if (params.type && params.type !== 'all') query.append('type', params.type);
+  }
   const qs = query.toString() ? `?${query.toString()}` : '';
   return api.get<QueueResponse>(`/api/reception/queue${qs}`, { token });
 };
