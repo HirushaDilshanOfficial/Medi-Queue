@@ -75,6 +75,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             gender: (patient.gender as any) || '',
           });
 
+          // Auto-suggest Senior if age is 60+
+          if (patient.age !== undefined && patient.age !== null) {
+            const ageNum = Number(patient.age);
+            if (!isNaN(ageNum) && ageNum >= 60) {
+              form.setField('priority', 'senior');
+            }
+          }
+
           showToast('Existing patient record found & auto-filled', 'success');
         } else {
           setMatchedPatient(null);
@@ -127,6 +135,18 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setMatchedPatient(null);
     setSearching(false);
     form.reset();
+  };
+
+  const handleAgeChange = (val: string) => {
+    form.setField('age', val);
+    const ageNum = parseInt(val, 10);
+    if (!isNaN(ageNum) && ageNum >= 60) {
+      if (form.priority !== 'urgent') {
+        form.setField('priority', 'senior');
+      }
+    } else if (!isNaN(ageNum) && ageNum < 60 && form.priority === 'senior') {
+      form.setField('priority', 'normal');
+    }
   };
 
   const handleQRScanPress = () => {
@@ -251,13 +271,16 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             )}
           </View>
 
-          {/* ── STEP 1: PATIENT DEMOGRAPHICS FORM ── */}
+          {/* ── STEP 1: DEMOGRAPHICS & TRIAGE CARD ── */}
           <View style={styles.formCard}>
             <View style={styles.formCardHeader}>
               <View style={styles.stepPill}>
                 <Text style={styles.stepPillText}>STEP 1</Text>
               </View>
-              <Text style={styles.formCardTitle}>Patient Information</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.formCardTitle}>Demographics & Triage</Text>
+                <Text style={styles.formCardSub}>Patient identification and priority triage</Text>
+              </View>
             </View>
 
             {/* Full Name */}
@@ -328,16 +351,21 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             <View style={styles.fieldsRow}>
               {/* Age Field */}
               <View style={[styles.fieldGroup, { flex: 0.8, marginRight: 8 }]}>
-                <Text style={styles.fieldLabel}>Age</Text>
+                <View style={styles.ageLabelRow}>
+                  <Text style={styles.fieldLabel}>Age</Text>
+                  {Number(form.patient.age) >= 60 && (
+                    <Text style={styles.seniorBadgeText}>Senior (60+)</Text>
+                  )}
+                </View>
                 <TextInput
                   style={[
                     styles.textInput,
                     form.errors.age ? styles.inputError : null,
                   ]}
-                  placeholder="e.g. 32"
+                  placeholder="e.g. 62"
                   placeholderTextColor={Colors.textLight}
                   value={String(form.patient.age || '')}
-                  onChangeText={(val) => form.setField('age', val)}
+                  onChangeText={handleAgeChange}
                   keyboardType="number-pad"
                   maxLength={3}
                 />
@@ -346,7 +374,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 ) : null}
               </View>
 
-              {/* Gender Select */}
+              {/* Gender Selector */}
               <View style={[styles.fieldGroup, { flex: 1.2, marginLeft: 8 }]}>
                 <Text style={styles.fieldLabel}>Gender</Text>
                 <View style={styles.genderRow}>
@@ -361,6 +389,8 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                         ]}
                         onPress={() => form.setField('gender', g)}
                         activeOpacity={0.7}
+                        accessibilityLabel={`Gender ${g}`}
+                        accessibilityRole="button"
                       >
                         <Text
                           style={[
@@ -377,14 +407,63 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
               </View>
             </View>
 
-            {/* Priority Select */}
+            {/* Intake Toggle (Walk-In / Pre-Booked) */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Queue Priority</Text>
+              <Text style={styles.fieldLabel}>Intake Mode</Text>
+              <View style={styles.intakeTypeRow}>
+                {[
+                  { key: 'walk_in', label: 'Walk-In Patient', icon: 'walk' },
+                  { key: 'pre_booked', label: 'Pre-Booked', icon: 'calendar' },
+                ].map((item) => {
+                  const isSelected = form.intakeType === item.key;
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[
+                        styles.intakeTypeChip,
+                        isSelected ? styles.intakeTypeChipSelected : null,
+                      ]}
+                      onPress={() => form.setField('intakeType', item.key as AppointmentType)}
+                      activeOpacity={0.7}
+                      accessibilityLabel={`Intake ${item.label}`}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons
+                        name={item.icon as any}
+                        size={16}
+                        color={isSelected ? Colors.primary : Colors.textMedium}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={[
+                          styles.intakeTypeChipText,
+                          isSelected ? styles.intakeTypeChipTextSelected : null,
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Priority Chips (Normal / Senior / Urgent) */}
+            <View style={styles.fieldGroup}>
+              <View style={styles.priorityHeaderRow}>
+                <Text style={styles.fieldLabel}>Priority Triage</Text>
+                {form.priority === 'senior' && (
+                  <Text style={styles.priorityHintSenior}>Senior line prioritized</Text>
+                )}
+                {form.priority === 'urgent' && (
+                  <Text style={styles.priorityHintUrgent}>Immediate doctor triage</Text>
+                )}
+              </View>
               <View style={styles.priorityRow}>
                 {[
                   { key: 'normal', label: 'Normal', icon: 'person' },
-                  { key: 'senior', label: 'Senior Citizen', icon: 'heart' },
-                  { key: 'urgent', label: 'Urgent Priority', icon: 'warning' },
+                  { key: 'senior', label: 'Senior', icon: 'heart' },
+                  { key: 'urgent', label: 'Urgent', icon: 'warning' },
                 ].map((item) => {
                   const isSelected = form.priority === item.key;
                   return (
@@ -398,10 +477,12 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       ]}
                       onPress={() => form.setField('priority', item.key as QueuePriority)}
                       activeOpacity={0.7}
+                      accessibilityLabel={`Priority ${item.label}`}
+                      accessibilityRole="button"
                     >
                       <Ionicons
                         name={item.icon as any}
-                        size={14}
+                        size={15}
                         color={
                           isSelected
                             ? item.key === 'urgent'
@@ -417,45 +498,6 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                         style={[
                           styles.priorityChipText,
                           isSelected ? styles.priorityChipTextSelected : null,
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Intake Type Select */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Intake Type</Text>
-              <View style={styles.intakeTypeRow}>
-                {[
-                  { key: 'walk_in', label: 'Walk-In Patient', icon: 'walk' },
-                  { key: 'pre_booked', label: 'Pre-Booked Appointment', icon: 'calendar' },
-                ].map((item) => {
-                  const isSelected = form.intakeType === item.key;
-                  return (
-                    <TouchableOpacity
-                      key={item.key}
-                      style={[
-                        styles.intakeTypeChip,
-                        isSelected ? styles.intakeTypeChipSelected : null,
-                      ]}
-                      onPress={() => form.setField('intakeType', item.key as AppointmentType)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={item.icon as any}
-                        size={15}
-                        color={isSelected ? Colors.primary : Colors.textMedium}
-                        style={{ marginRight: 6 }}
-                      />
-                      <Text
-                        style={[
-                          styles.intakeTypeChipText,
-                          isSelected ? styles.intakeTypeChipTextSelected : null,
                         ]}
                       >
                         {item.label}
@@ -687,6 +729,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.textDark,
   },
+  formCardSub: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginTop: 2,
+  },
   fieldGroup: {
     marginBottom: 14,
   },
@@ -699,6 +746,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textDark,
     marginBottom: 6,
+  },
+  ageLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  seniorBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.warning,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  priorityHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  priorityHintSenior: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.warning,
+  },
+  priorityHintUrgent: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.danger,
   },
   requiredAsterisk: {
     color: Colors.danger,
