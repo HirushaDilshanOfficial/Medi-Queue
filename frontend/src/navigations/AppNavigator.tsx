@@ -11,7 +11,10 @@ import LoginScreen from '../app/(auth)/login';
 import RegisterScreen from '../app/(auth)/register';
 import MOHDashboardScreen from '../screens/MOH/MOHDashboardScreen';
 import DoctorDashboardScreen from '../screens/Doctor/DoctorDashboardScreen';
-import { ReceptionistHomeScreen } from '../screens/Receptionist/ReceptionistHomeScreen';
+import {
+  ReceptionistHomeScreen,
+  RegisterPatientScreen,
+} from '../screens/Receptionist';
 
 // ─────────────────────────────────────────────────────────
 // Type Definitions
@@ -174,7 +177,7 @@ export function ReceptionistTabNavigator() {
       />
       <Tab.Screen
         name="RegisterTab"
-        component={RegisterPlaceholderScreen}
+        component={RegisterPatientScreen}
         options={{ tabBarLabel: 'Register' }}
       />
       <Tab.Screen
