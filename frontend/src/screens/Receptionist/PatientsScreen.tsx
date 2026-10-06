@@ -17,7 +17,7 @@ import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-ic
 import { Colors } from '../../constants/Colors';
 import { Patient, PatientVisitHistoryItem } from '../../types';
 import { usePatients, PatientListFilter } from '../../hooks';
-import { verifyNic, updatePatient, getErrorMessage } from '../../services/api';
+import { verifyNic, getErrorMessage } from '../../services/api';
 import {
   PatientCard,
   LoadingState,
@@ -27,6 +27,7 @@ import {
   ToastType,
   TokenBadge,
   StatusChip,
+  EditPatientModal,
 } from '../../components';
 
 export interface PatientsScreenProps {
@@ -104,61 +105,22 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
 
   // Edit Patient Details Modal State
   const [editModalVisible, setEditModalVisible] = useState<boolean>(false);
-  const [savingDetails, setSavingDetails] = useState<boolean>(false);
-  const [editPhone, setEditPhone] = useState<string>('');
-  const [editDistrict, setEditDistrict] = useState<string>('');
-  const [editBloodGroup, setEditBloodGroup] = useState<string>('');
-  const [editEmName, setEditEmName] = useState<string>('');
-  const [editEmPhone, setEditEmPhone] = useState<string>('');
-  const [editAllergyName, setEditAllergyName] = useState<string>('');
-  const [editAllergySeverity, setEditAllergySeverity] = useState<string>('Moderate');
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
 
-  const handleOpenEditModal = () => {
-    if (!selected) return;
-    setEditPhone(selected.phone || '');
-    setEditDistrict(selected.district || '');
-    setEditBloodGroup(selected.bloodGroup || '');
-    setEditEmName(selected.emergencyContact?.name || '');
-    setEditEmPhone(selected.emergencyContact?.phone || '');
-    const firstAllergy =
-      selected.allergies && selected.allergies.length > 0
-        ? selected.allergies[0]
-        : null;
-    setEditAllergyName(firstAllergy?.name || '');
-    setEditAllergySeverity(firstAllergy?.severity || 'Moderate');
+  const handleOpenEditModal = (patientToEdit?: Patient | null) => {
+    const target = patientToEdit || selected;
+    if (!target) return;
+    setEditingPatient(target);
     setEditModalVisible(true);
   };
 
-  const handleSavePatientDetails = async () => {
-    const patientId = selected?._id || selected?.id;
-    if (!patientId || savingDetails) return;
-
-    try {
-      setSavingDetails(true);
-      const updates: Partial<Patient> = {
-        phone: editPhone.trim(),
-        district: editDistrict.trim(),
-        bloodGroup: (editBloodGroup as any) || undefined,
-        emergencyContact: {
-          name: editEmName.trim(),
-          phone: editEmPhone.trim(),
-        },
-        allergies: editAllergyName.trim()
-          ? [{ name: editAllergyName.trim(), severity: editAllergySeverity }]
-          : [],
-      };
-
-      const res = await updatePatient(patientId, updates);
-      showToast(res.message || 'Patient details updated successfully', 'success');
-      setEditModalVisible(false);
+  const handleEditSuccess = async (updated: Patient) => {
+    showToast('Patient details updated successfully', 'success');
+    const patientId = updated._id || updated.id;
+    if (patientId && selected && (selected._id === patientId || selected.id === patientId)) {
       await selectPatient(patientId);
-      await refresh();
-    } catch (err: any) {
-      const msg = getErrorMessage(err);
-      showToast(msg || 'Failed to update patient details', 'error');
-    } finally {
-      setSavingDetails(false);
     }
+    await refresh();
   };
 
   const handleBookFutureSlot = () => {
@@ -494,6 +456,18 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       <Text style={styles.selectedBloodText}>{selected.bloodGroup}</Text>
                     </View>
                   ) : null}
+
+                  {/* Edit Patient Icon Button */}
+                  <TouchableOpacity
+                    style={styles.selectedEditButton}
+                    onPress={() => handleOpenEditModal(selected)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit patient details"
+                  >
+                    <Ionicons name="create-outline" size={18} color={Colors.primary} />
+                  </TouchableOpacity>
                 </View>
 
                 {/* ── NIC VERIFICATION STATUS / ACTION ── */}
@@ -668,7 +642,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   <View style={styles.quickDeskButtonsRow}>
                     <TouchableOpacity
                       style={styles.updateDetailsButton}
-                      onPress={handleOpenEditModal}
+                      onPress={() => handleOpenEditModal(selected)}
                       activeOpacity={0.8}
                       accessibilityRole="button"
                       accessibilityLabel="Update Patient Details"
@@ -908,6 +882,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   key={patientId}
                   patient={patient}
                   onPress={() => handleSelectPatient(patient)}
+                  onEditPress={() => handleOpenEditModal(patient)}
                   style={[
                     styles.resultPatientCard,
                     isSelected && styles.resultPatientCardSelected,
@@ -965,196 +940,14 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
       </ScrollView>
 
       {/* ======================================================== */}
-      {/* 5. UPDATE PATIENT DETAILS MODAL                          */}
+      {/* 5. EDIT PATIENT DETAILS MODAL                            */}
       {/* ======================================================== */}
-      <Modal
+      <EditPatientModal
         visible={editModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Update Patient Details</Text>
-                <Text style={styles.modalSubtitle} numberOfLines={1}>
-                  {selected?.fullName || 'Patient Profile'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setEditModalVisible(false)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={20} color={Colors.textDark} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Modal Form Scroll */}
-            <ScrollView
-              style={styles.modalFormScroll}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              {/* Phone Input */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Phone Number</Text>
-                <TextInput
-                  style={styles.modalTextInput}
-                  value={editPhone}
-                  onChangeText={setEditPhone}
-                  placeholder="e.g. 0771234567"
-                  placeholderTextColor={Colors.textLight}
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              {/* District Input */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>District</Text>
-                <TextInput
-                  style={styles.modalTextInput}
-                  value={editDistrict}
-                  onChangeText={setEditDistrict}
-                  placeholder="e.g. Colombo / Gampaha / Kandy"
-                  placeholderTextColor={Colors.textLight}
-                />
-              </View>
-
-              {/* Blood Group Selector */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Blood Group</Text>
-                <View style={styles.bloodGroupSelectorRow}>
-                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => {
-                    const isSelected = editBloodGroup === bg;
-                    return (
-                      <TouchableOpacity
-                        key={bg}
-                        style={[
-                          styles.bloodChip,
-                          isSelected && styles.bloodChipSelected,
-                        ]}
-                        onPress={() =>
-                          setEditBloodGroup(isSelected ? '' : bg)
-                        }
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.bloodChipText,
-                            isSelected && styles.bloodChipTextSelected,
-                          ]}
-                        >
-                          {bg}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Emergency Contact Name & Phone */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Emergency Contact Name</Text>
-                <TextInput
-                  style={styles.modalTextInput}
-                  value={editEmName}
-                  onChangeText={setEditEmName}
-                  placeholder="e.g. Nimal Perera (Spouse / Guardian)"
-                  placeholderTextColor={Colors.textLight}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Emergency Contact Phone</Text>
-                <TextInput
-                  style={styles.modalTextInput}
-                  value={editEmPhone}
-                  onChangeText={setEditEmPhone}
-                  placeholder="e.g. 0719876543"
-                  placeholderTextColor={Colors.textLight}
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              {/* Allergies & Severity */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Known Allergy Name</Text>
-                <TextInput
-                  style={styles.modalTextInput}
-                  value={editAllergyName}
-                  onChangeText={setEditAllergyName}
-                  placeholder="e.g. Penicillin, Aspirin, Sulfa drugs"
-                  placeholderTextColor={Colors.textLight}
-                />
-              </View>
-
-              {editAllergyName.trim().length > 0 ? (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Allergy Severity</Text>
-                  <View style={styles.severitySelectorRow}>
-                    {['Mild', 'Moderate', 'Severe', 'High'].map((sev) => {
-                      const isSelected = editAllergySeverity === sev;
-                      return (
-                        <TouchableOpacity
-                          key={sev}
-                          style={[
-                            styles.severityChip,
-                            isSelected && styles.severityChipSelected,
-                          ]}
-                          onPress={() => setEditAllergySeverity(sev)}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.severityChipText,
-                              isSelected && styles.severityChipTextSelected,
-                            ]}
-                          >
-                            {sev}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              ) : null}
-
-              <View style={{ height: 16 }} />
-            </ScrollView>
-
-            {/* Modal Actions */}
-            <View style={styles.modalActionsRow}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setEditModalVisible(false)}
-                disabled={savingDetails}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.modalSaveButton,
-                  savingDetails && styles.buttonDisabled,
-                ]}
-                onPress={handleSavePatientDetails}
-                disabled={savingDetails}
-                activeOpacity={0.8}
-              >
-                {savingDetails ? (
-                  <ActivityIndicator size="small" color={Colors.white} />
-                ) : (
-                  <Text style={styles.modalSaveButtonText}>Save Changes</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        patient={editingPatient}
+        onClose={() => setEditModalVisible(false)}
+        onSuccess={handleEditSuccess}
+      />
     </SafeAreaView>
   );
 };
@@ -1413,6 +1206,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#DC2626',
+  },
+  selectedEditButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.tint,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
 
   // ── NIC Verification & Notice Styles ──
