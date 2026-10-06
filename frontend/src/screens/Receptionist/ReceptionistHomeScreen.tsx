@@ -498,8 +498,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         {/* ── CONSULTATION ROOMS (LIVE) ── */}
         <View style={styles.roomsSection}>
           <SectionHeader
-            title="Consultation Rooms"
-            subtitle="Live status per active doctor"
+            title="Consultation Rooms (Live)"
+            subtitle="Active doctor room status"
           />
 
           {rooms.length > 0 ? (
@@ -522,11 +522,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                   </Text>
 
                   <View style={styles.roomNextWrap}>
-                    <Text style={styles.roomNextLabel}>Next in line:</Text>
+                    <Text style={styles.roomNextLabel}>Next:</Text>
                     {room.nextToken ? (
                       <TokenBadge tokenLabel={room.nextToken} size="small" />
                     ) : (
-                      <Text style={styles.roomNoneText}>None</Text>
+                      <Text style={styles.roomNoneText}>None waiting</Text>
                     )}
                   </View>
                 </View>
@@ -534,28 +534,32 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             </ScrollView>
           ) : (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No active consultation rooms found.</Text>
+              <Ionicons name="medical-outline" size={28} color={Colors.textLight} />
+              <Text style={styles.emptyTitle}>No Rooms Active</Text>
+              <Text style={styles.emptyText}>No consultation rooms currently scheduled.</Text>
             </View>
           )}
         </View>
 
-        {/* ── NEXT IN QUEUE LIST ── */}
+        {/* ── NEXT IN QUEUE ── */}
         <View style={styles.queueSection}>
           <SectionHeader
             title="Next in Queue"
-            subtitle="Patients waiting in order"
-            actionText="View Full Queue"
+            subtitle="First 3 tokens in waiting queue"
+            actionText="View All"
             actionIcon="chevron-forward"
             onActionPress={() => handleNav('Queue')}
           />
 
           {nextInQueue.length > 0 ? (
-            nextInQueue.map((item, index) => {
+            nextInQueue.slice(0, 3).map((item, index) => {
               const patientObj: any = item.patient || {};
               const doctorObj: any = item.assignedDoctor || {};
-              const patientName = patientObj.fullName || patientObj.name || `Patient #${index + 1}`;
-              const phone = patientObj.phone || '';
-              const docName = doctorObj.name ? `Dr. ${doctorObj.name.replace(/^Dr\.?\s*/i, '')}` : 'General OPD';
+              const patientName =
+                patientObj.fullName || patientObj.name || `Patient #${index + 1}`;
+              const docName = doctorObj.name
+                ? `Dr. ${doctorObj.name.replace(/^Dr\.?\s*/i, '')}`
+                : 'General OPD';
 
               return (
                 <View key={item._id || index} style={styles.queueItemCard}>
@@ -573,23 +577,13 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                         {patientName}
                       </Text>
                       <Text style={styles.queueDoctorSub} numberOfLines={1}>
-                        {docName} {phone ? `• ${phone}` : ''}
+                        {docName}
                       </Text>
                     </View>
                   </View>
 
                   <View style={styles.queueItemRight}>
                     <StatusChip status={item.status} size="small" />
-                    {item.priority && item.priority !== 'normal' && (
-                      <Text
-                        style={[
-                          styles.priorityTag,
-                          item.priority === 'urgent' ? styles.urgentTag : styles.seniorTag,
-                        ]}
-                      >
-                        {item.priority.toUpperCase()}
-                      </Text>
-                    )}
                   </View>
                 </View>
               );
@@ -598,7 +592,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             <View style={styles.emptyCard}>
               <Ionicons name="checkmark-circle-outline" size={32} color={Colors.success} />
               <Text style={styles.emptyTitle}>Queue is Clear</Text>
-              <Text style={styles.emptyText}>All waiting patients have been attended.</Text>
+              <Text style={styles.emptyText}>No patients currently waiting in queue.</Text>
             </View>
           )}
         </View>
