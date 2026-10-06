@@ -14,9 +14,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { DashboardData, CurrentlyServingToken, QueueToken } from '../../types';
+import { CurrentlyServingToken, QueueToken } from '../../types';
+import { useDashboard } from '../../hooks';
 import {
-  getDashboard,
   callNext,
   recallToken,
   markNoShow,
@@ -40,11 +40,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   navigation,
   onNavigate,
 }) => {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const { data, loading, error, refreshing, refresh } = useDashboard();
   const [actionLoading, setActionLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -112,48 +109,6 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     [toastAnim]
   );
 
-  // Load dashboard data
-  const fetchDashboardData = useCallback(async (isPull = false) => {
-    try {
-      if (isPull) {
-        setRefreshing(true);
-      } else if (!data) {
-        setLoading(true);
-      }
-      setError(null);
-
-      const res = await getDashboard();
-      if (isMounted.current) {
-        setData(res);
-      }
-    } catch (err: any) {
-      if (isMounted.current) {
-        const msg = getErrorMessage(err);
-        setError(msg || 'Failed to load dashboard data');
-      }
-    } finally {
-      if (isMounted.current) {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    }
-  }, [data]);
-
-  // Auto-refresh every 10 seconds & cleanup
-  useEffect(() => {
-    isMounted.current = true;
-    fetchDashboardData();
-
-    const interval = setInterval(() => {
-      fetchDashboardData();
-    }, 10000);
-
-    return () => {
-      isMounted.current = false;
-      clearInterval(interval);
-    };
-  }, []);
-
   // Action: Call Next
   const handleCallNext = async () => {
     if (actionLoading) return;
@@ -166,7 +121,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
       const room = res?.room ? ` (Room ${res.room})` : '';
 
       showToast(`Now Calling ${token} — ${patientName}${room}`, 'success');
-      await fetchDashboardData();
+      await refresh(false);
     } catch (err: any) {
       const msg = getErrorMessage(err);
       Alert.alert('Call Next Failed', msg || 'No more waiting patients or error calling next.');
@@ -184,7 +139,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
       setActionLoading(true);
       await recallToken(tokenLabel);
       showToast(`Recalled ${tokenLabel} to consulting room`, 'info');
-      await fetchDashboardData();
+      await refresh(false);
     } catch (err: any) {
       const msg = getErrorMessage(err);
       Alert.alert('Recall Failed', msg || 'Unable to recall this token.');
@@ -211,7 +166,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               setActionLoading(true);
               await markNoShow(tokenLabel);
               showToast(`Token ${tokenLabel} marked as No-Show`, 'warning');
-              await fetchDashboardData();
+              await refresh(false);
             } catch (err: any) {
               const msg = getErrorMessage(err);
               Alert.alert('Action Failed', msg || 'Unable to mark token as no-show.');
@@ -244,7 +199,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         fullscreen
         title="Dashboard Error"
         message={error}
-        onRetry={() => fetchDashboardData()}
+        onRetry={() => refresh(false)}
       />
     );
   }
@@ -331,7 +286,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => fetchDashboardData(true)}
+            onRefresh={() => refresh(true)}
             colors={[Colors.primary]}
             tintColor={Colors.primary}
           />
