@@ -11,12 +11,13 @@ import {
   StatusBar,
   ActivityIndicator,
   Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Patient, PatientVisitHistoryItem } from '../../types';
 import { usePatients, PatientListFilter } from '../../hooks';
-import { verifyNic, getErrorMessage } from '../../services/api';
+import { verifyNic, updatePatient, getErrorMessage } from '../../services/api';
 import {
   PatientCard,
   LoadingState,
@@ -98,6 +99,78 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
       showToast(msg || 'Failed to verify patient NIC', 'error');
     } finally {
       setVerifyingNic(false);
+    }
+  };
+
+  // Edit Patient Details Modal State
+  const [editModalVisible, setEditModalVisible] = useState<boolean>(false);
+  const [savingDetails, setSavingDetails] = useState<boolean>(false);
+  const [editPhone, setEditPhone] = useState<string>('');
+  const [editDistrict, setEditDistrict] = useState<string>('');
+  const [editBloodGroup, setEditBloodGroup] = useState<string>('');
+  const [editEmName, setEditEmName] = useState<string>('');
+  const [editEmPhone, setEditEmPhone] = useState<string>('');
+  const [editAllergyName, setEditAllergyName] = useState<string>('');
+  const [editAllergySeverity, setEditAllergySeverity] = useState<string>('Moderate');
+
+  const handleOpenEditModal = () => {
+    if (!selected) return;
+    setEditPhone(selected.phone || '');
+    setEditDistrict(selected.district || '');
+    setEditBloodGroup(selected.bloodGroup || '');
+    setEditEmName(selected.emergencyContact?.name || '');
+    setEditEmPhone(selected.emergencyContact?.phone || '');
+    const firstAllergy =
+      selected.allergies && selected.allergies.length > 0
+        ? selected.allergies[0]
+        : null;
+    setEditAllergyName(firstAllergy?.name || '');
+    setEditAllergySeverity(firstAllergy?.severity || 'Moderate');
+    setEditModalVisible(true);
+  };
+
+  const handleSavePatientDetails = async () => {
+    const patientId = selected?._id || selected?.id;
+    if (!patientId || savingDetails) return;
+
+    try {
+      setSavingDetails(true);
+      const updates: Partial<Patient> = {
+        phone: editPhone.trim(),
+        district: editDistrict.trim(),
+        bloodGroup: (editBloodGroup as any) || undefined,
+        emergencyContact: {
+          name: editEmName.trim(),
+          phone: editEmPhone.trim(),
+        },
+        allergies: editAllergyName.trim()
+          ? [{ name: editAllergyName.trim(), severity: editAllergySeverity }]
+          : [],
+      };
+
+      const res = await updatePatient(patientId, updates);
+      showToast(res.message || 'Patient details updated successfully', 'success');
+      setEditModalVisible(false);
+      await selectPatient(patientId);
+      await refresh();
+    } catch (err: any) {
+      const msg = getErrorMessage(err);
+      showToast(msg || 'Failed to update patient details', 'error');
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
+  const handleBookFutureSlot = () => {
+    if (!selected) return;
+    showToast(`Navigating to appointment booking for ${selected.fullName}...`, 'info');
+    if (navigation?.navigate) {
+      navigation.navigate('RegisterTab', {
+        patientId: selected._id || selected.id,
+        patient: selected,
+      });
+    } else if (onNavigate) {
+      onNavigate('register');
     }
   };
 
@@ -516,6 +589,107 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   </View>
                 </View>
 
+                {/* ── QUICK DESK ACTIONS CARD ── */}
+                <View style={styles.quickDeskCard}>
+                  <View style={styles.quickDeskHeader}>
+                    <View style={styles.quickDeskTitleRow}>
+                      <View style={styles.quickDeskIconWrap}>
+                        <Ionicons name="flash" size={15} color={Colors.primary} />
+                      </View>
+                      <Text style={styles.quickDeskTitle}>Quick Desk Actions</Text>
+                    </View>
+                  </View>
+
+                  {/* Quick Info Grid */}
+                  <View style={styles.quickDeskGrid}>
+                    {/* 1. Emergency Contact */}
+                    <View style={styles.quickDeskRow}>
+                      <View style={styles.quickDeskLabelCol}>
+                        <Ionicons name="call-outline" size={14} color={Colors.textMedium} style={{ marginRight: 6 }} />
+                        <Text style={styles.quickDeskLabel}>Emergency Contact:</Text>
+                      </View>
+                      <View style={styles.quickDeskValueCol}>
+                        {selected.emergencyContact?.name || selected.emergencyContact?.phone ? (
+                          <Text style={styles.quickDeskValueText}>
+                            {selected.emergencyContact.name || 'Named Kin'}
+                            {selected.emergencyContact.phone ? ` • ${selected.emergencyContact.phone}` : ''}
+                            {selected.emergencyContact.relationship ? ` (${selected.emergencyContact.relationship})` : ''}
+                          </Text>
+                        ) : (
+                          <Text style={styles.notRecordedText}>Not recorded</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* 2. Blood Group */}
+                    <View style={styles.quickDeskRow}>
+                      <View style={styles.quickDeskLabelCol}>
+                        <Ionicons name="water-outline" size={14} color="#DC2626" style={{ marginRight: 6 }} />
+                        <Text style={styles.quickDeskLabel}>Blood Group:</Text>
+                      </View>
+                      <View style={styles.quickDeskValueCol}>
+                        {selected.bloodGroup ? (
+                          <View style={styles.quickBloodBadge}>
+                            <Text style={styles.quickBloodText}>{selected.bloodGroup}</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.notRecordedText}>Not recorded</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* 3. Allergies (Shown in red with severity) */}
+                    <View style={styles.quickDeskRow}>
+                      <View style={styles.quickDeskLabelCol}>
+                        <Ionicons name="alert-circle-outline" size={14} color="#DC2626" style={{ marginRight: 6 }} />
+                        <Text style={styles.quickDeskLabel}>Allergies:</Text>
+                      </View>
+                      <View style={styles.quickDeskValueCol}>
+                        {selected.allergies && selected.allergies.length > 0 ? (
+                          <View style={styles.allergiesWrap}>
+                            {selected.allergies.map((alg, i) => (
+                              <View key={`allergy-${i}`} style={styles.allergyBadge}>
+                                <Ionicons name="warning" size={11} color="#DC2626" style={{ marginRight: 4 }} />
+                                <Text style={styles.allergyText}>
+                                  {alg.name || 'Allergy'}
+                                  {alg.severity ? ` (${alg.severity})` : ''}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text style={styles.notRecordedText}>Not recorded</Text>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Two Action Buttons */}
+                  <View style={styles.quickDeskButtonsRow}>
+                    <TouchableOpacity
+                      style={styles.updateDetailsButton}
+                      onPress={handleOpenEditModal}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Update Patient Details"
+                    >
+                      <Ionicons name="create-outline" size={16} color={Colors.white} style={{ marginRight: 6 }} />
+                      <Text style={styles.updateDetailsButtonText}>Update Patient Details</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.bookFutureSlotButton}
+                      onPress={handleBookFutureSlot}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Book Future OPD Slot"
+                    >
+                      <Ionicons name="calendar-outline" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
+                      <Text style={styles.bookFutureSlotButtonText}>Book Future OPD Slot</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
                 {/* ── VISIT & APPOINTMENT HISTORY TIMELINE SECTION ── */}
                 <View style={styles.historySection}>
                   <SectionHeader
@@ -789,6 +963,198 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
         {/* Bottom spacer for tab bar / safe layout */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* ======================================================== */}
+      {/* 5. UPDATE PATIENT DETAILS MODAL                          */}
+      {/* ======================================================== */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Update Patient Details</Text>
+                <Text style={styles.modalSubtitle} numberOfLines={1}>
+                  {selected?.fullName || 'Patient Profile'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setEditModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={Colors.textDark} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Form Scroll */}
+            <ScrollView
+              style={styles.modalFormScroll}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Phone Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Phone Number</Text>
+                <TextInput
+                  style={styles.modalTextInput}
+                  value={editPhone}
+                  onChangeText={setEditPhone}
+                  placeholder="e.g. 0771234567"
+                  placeholderTextColor={Colors.textLight}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {/* District Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>District</Text>
+                <TextInput
+                  style={styles.modalTextInput}
+                  value={editDistrict}
+                  onChangeText={setEditDistrict}
+                  placeholder="e.g. Colombo / Gampaha / Kandy"
+                  placeholderTextColor={Colors.textLight}
+                />
+              </View>
+
+              {/* Blood Group Selector */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Blood Group</Text>
+                <View style={styles.bloodGroupSelectorRow}>
+                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => {
+                    const isSelected = editBloodGroup === bg;
+                    return (
+                      <TouchableOpacity
+                        key={bg}
+                        style={[
+                          styles.bloodChip,
+                          isSelected && styles.bloodChipSelected,
+                        ]}
+                        onPress={() =>
+                          setEditBloodGroup(isSelected ? '' : bg)
+                        }
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.bloodChipText,
+                            isSelected && styles.bloodChipTextSelected,
+                          ]}
+                        >
+                          {bg}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Emergency Contact Name & Phone */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Emergency Contact Name</Text>
+                <TextInput
+                  style={styles.modalTextInput}
+                  value={editEmName}
+                  onChangeText={setEditEmName}
+                  placeholder="e.g. Nimal Perera (Spouse / Guardian)"
+                  placeholderTextColor={Colors.textLight}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Emergency Contact Phone</Text>
+                <TextInput
+                  style={styles.modalTextInput}
+                  value={editEmPhone}
+                  onChangeText={setEditEmPhone}
+                  placeholder="e.g. 0719876543"
+                  placeholderTextColor={Colors.textLight}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {/* Allergies & Severity */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Known Allergy Name</Text>
+                <TextInput
+                  style={styles.modalTextInput}
+                  value={editAllergyName}
+                  onChangeText={setEditAllergyName}
+                  placeholder="e.g. Penicillin, Aspirin, Sulfa drugs"
+                  placeholderTextColor={Colors.textLight}
+                />
+              </View>
+
+              {editAllergyName.trim().length > 0 ? (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Allergy Severity</Text>
+                  <View style={styles.severitySelectorRow}>
+                    {['Mild', 'Moderate', 'Severe', 'High'].map((sev) => {
+                      const isSelected = editAllergySeverity === sev;
+                      return (
+                        <TouchableOpacity
+                          key={sev}
+                          style={[
+                            styles.severityChip,
+                            isSelected && styles.severityChipSelected,
+                          ]}
+                          onPress={() => setEditAllergySeverity(sev)}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.severityChipText,
+                              isSelected && styles.severityChipTextSelected,
+                            ]}
+                          >
+                            {sev}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={{ height: 16 }} />
+            </ScrollView>
+
+            {/* Modal Actions */}
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setEditModalVisible(false)}
+                disabled={savingDetails}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalSaveButton,
+                  savingDetails && styles.buttonDisabled,
+                ]}
+                onPress={handleSavePatientDetails}
+                disabled={savingDetails}
+                activeOpacity={0.8}
+              >
+                {savingDetails ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.modalSaveButtonText}>Save Changes</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1163,6 +1529,327 @@ const styles = StyleSheet.create({
     color: Colors.danger,
     fontWeight: '600',
     flex: 1,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Quick Desk Actions Card Styles
+  // ─────────────────────────────────────────────────────────
+  quickDeskCard: {
+    marginTop: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#E0F2FE',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickDeskHeader: {
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  quickDeskTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  quickDeskIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    backgroundColor: Colors.tint,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  quickDeskTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  quickDeskGrid: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  quickDeskRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  quickDeskLabelCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 140,
+  },
+  quickDeskLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMedium,
+  },
+  quickDeskValueCol: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  quickDeskValueText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textDark,
+    textAlign: 'right',
+  },
+  notRecordedText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.textLight,
+    fontStyle: 'italic',
+  },
+  quickBloodBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  quickBloodText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  allergiesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    justifyContent: 'flex-end',
+  },
+  allergyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  allergyText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  quickDeskButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  updateDetailsButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    minHeight: 44, // 44px touch target
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  updateDetailsButtonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  bookFutureSlotButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    minHeight: 44, // 44px touch target
+  },
+  bookFutureSlotButtonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Update Patient Details Modal Styles
+  // ─────────────────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalFormScroll: {
+    marginTop: 12,
+  },
+  inputGroup: {
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textDark,
+    marginBottom: 6,
+  },
+  modalTextInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textDark,
+    minHeight: 44,
+  },
+  bloodGroupSelectorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  bloodChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bloodChipSelected: {
+    backgroundColor: '#DC2626',
+    borderColor: '#DC2626',
+  },
+  bloodChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  bloodChipTextSelected: {
+    color: Colors.white,
+  },
+  severitySelectorRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  severityChip: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  severityChipSelected: {
+    backgroundColor: '#DC2626',
+    borderColor: '#DC2626',
+  },
+  severityChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  severityChipTextSelected: {
+    color: Colors.white,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  modalCancelButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCancelButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textMedium,
+  },
+  modalSaveButton: {
+    flex: 1.5,
+    minHeight: 44,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  modalSaveButtonText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.white,
   },
 
   // ─────────────────────────────────────────────────────────
