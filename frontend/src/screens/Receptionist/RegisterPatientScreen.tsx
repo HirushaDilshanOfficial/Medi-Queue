@@ -20,6 +20,9 @@ import {
   getErrorMessage,
   getDoctors,
   getSlots,
+  createWalkIn,
+  WalkInPayload,
+  WalkInResponse,
 } from '../../services/api';
 import { Patient, Doctor, QueuePriority, AppointmentType } from '../../types';
 import { Toast, ToastType } from '../../components/Toast';
@@ -85,6 +88,10 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   const [slotsLoading, setSlotsLoading] = useState<boolean>(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
 
+  // Submit and issued token state
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [lastIssuedToken, setLastIssuedToken] = useState<WalkInResponse | null>(null);
+
   // Toast state
   const [toastVisible, setToastVisible] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -95,6 +102,19 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setToastType(type);
     setToastVisible(true);
   };
+
+  // Currently selected doctor object
+  const selectedDoctor = allDoctors.find((d) => d._id === form.doctorId);
+
+  // Estimated wait calculation for selected doctor
+  const getEstimatedWaitForDoctor = useCallback((): string => {
+    if (!selectedDoctor) return '--';
+    const waitingPatients = selectedDoctor.todayPatients || 0;
+    const avgMins = selectedDoctor.avgConsultMinutes || 10;
+    const totalMins = waitingPatients * avgMins;
+    if (totalMins <= 0) return '< 5 mins';
+    return `~${totalMins} mins`;
+  }, [selectedDoctor]);
 
   // Fetch all active doctors for department cards & picker
   const loadDoctors = useCallback(async () => {
@@ -323,6 +343,87 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setMatchedPatient(null);
     setSearching(false);
     form.reset();
+  };
+
+  // Full form reset for "Clear Form / New Entry" button
+  const handleClearForm = () => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    setSearchQuery('');
+    setSearchStatus('idle');
+    setMatchedPatient(null);
+    setSearching(false);
+    setSlots([]);
+    setSlotsError(null);
+    form.reset();
+    showToast('Form cleared. Ready for new patient entry.', 'info');
+  };
+
+  // Submit and issue token
+  const handlePrintAndIssueToken = async () => {
+    const isValid = form.validate();
+    if (!isValid) {
+      showToast('Please fix the highlighted errors before issuing token.', 'error');
+      return;
+    }
+
+    let todayDate = '';
+    try {
+      todayDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Colombo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+    } catch {
+      todayDate = new Date().toISOString().split('T')[0];
+    }
+
+    const payload: WalkInPayload = {
+      department: form.department.trim(),
+      doctorId: form.doctorId,
+      date: todayDate,
+      slotTime: form.slotTime,
+      priority: form.priority,
+    };
+
+    // Send existingPatientId ONLY when a record was matched
+    if (form.existingPatientId) {
+      payload.existingPatientId = form.existingPatientId;
+    } else {
+      payload.patient = {
+        fullName: form.patient.fullName.trim(),
+        phone: form.patient.phone.trim(),
+        nic: form.patient.nic?.trim() || undefined,
+        age:
+          form.patient.age !== '' &&
+          form.patient.age !== undefined &&
+          form.patient.age !== null
+            ? Number(form.patient.age)
+            : undefined,
+        gender: (form.patient.gender as any) || undefined,
+      };
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await createWalkIn(payload);
+      setLastIssuedToken(res);
+      showToast(`Token #${res.token.tokenLabel} issued successfully!`, 'success');
+      // Reset form after successful submission
+      form.reset();
+      setSearchQuery('');
+      setSearchStatus('idle');
+      setMatchedPatient(null);
+      setSlots([]);
+      setSlotsError(null);
+    } catch (err: any) {
+      const msg = getErrorMessage(err);
+      showToast(msg || 'Failed to issue walk-in token', 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleAgeChange = (val: string) => {
@@ -1004,6 +1105,152 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 <Text style={styles.errorText}>{form.errors.slotTime}</Text>
               ) : null}
             </View>
+          </View>
+
+          {/* ── LIVE TOKEN PREVIEW CARD ── */}
+          <View style={styles.previewCard}>
+            <View style={styles.previewHeader}>
+              <View style={styles.previewBadge}>
+                <Ionicons name="sparkles" size={12} color="#5EEAD4" style={{ marginRight: 4 }} />
+                <Text style={styles.previewBadgeText}>LIVE TOKEN PREVIEW</Text>
+              </View>
+              <View style={styles.previewStatusTag}>
+                <Text style={styles.previewStatusTagText}>
+                  {form.existingPatientId ? 'Existing Record' : 'New Patient'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Token Callout Box */}
+            <View style={styles.previewTokenBox}>
+              <Text style={styles.previewTokenPlaceholder}>OPD • LIVE</Text>
+              <View style={styles.tokenAssignTag}>
+                <Ionicons name="shield-checkmark" size={13} color="#0D9488" style={{ marginRight: 4 }} />
+                <Text style={styles.tokenAssignTagText}>Token assigned on submit</Text>
+              </View>
+            </View>
+
+            {/* Summary Data Grid */}
+            <View style={styles.previewGrid}>
+              <View style={styles.previewGridItem}>
+                <Text style={styles.previewItemLabel}>PATIENT</Text>
+                <Text style={styles.previewItemValue} numberOfLines={1}>
+                  {form.patient.fullName.trim() || '---'}
+                </Text>
+              </View>
+
+              <View style={styles.previewGridItem}>
+                <Text style={styles.previewItemLabel}>DOCTOR</Text>
+                <Text style={styles.previewItemValue} numberOfLines={1}>
+                  {selectedDoctor ? selectedDoctor.name : '---'}
+                </Text>
+              </View>
+
+              <View style={styles.previewGridItem}>
+                <Text style={styles.previewItemLabel}>ROOM</Text>
+                <Text style={styles.previewItemValue}>
+                  {selectedDoctor?.room || '---'}
+                </Text>
+              </View>
+
+              <View style={styles.previewGridItem}>
+                <Text style={styles.previewItemLabel}>SLOT TIME</Text>
+                <Text style={styles.previewItemValue}>
+                  {form.slotTime || '---'}
+                </Text>
+              </View>
+
+              <View style={styles.previewGridItem}>
+                <Text style={styles.previewItemLabel}>DEPARTMENT</Text>
+                <Text style={styles.previewItemValue} numberOfLines={1}>
+                  {form.department || '---'}
+                </Text>
+              </View>
+
+              <View style={styles.previewGridItem}>
+                <Text style={styles.previewItemLabel}>EST. WAIT TIME</Text>
+                <Text style={[styles.previewItemValue, { color: '#5EEAD4' }]}>
+                  {getEstimatedWaitForDoctor()}
+                </Text>
+              </View>
+            </View>
+
+            {/* Tags Row: Priority & Intake Mode */}
+            <View style={styles.previewTagsRow}>
+              <View style={styles.previewTagPill}>
+                <Text style={styles.previewTagPillText}>
+                  Priority: {form.priority.toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.previewTagPill}>
+                <Text style={styles.previewTagPillText}>
+                  Mode: {form.intakeType === 'walk_in' ? 'Walk-In' : 'Pre-Booked'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* ── LAST ISSUED TOKEN SUCCESS NOTIFICATION ── */}
+          {lastIssuedToken && (
+            <View style={styles.successIssuedCard}>
+              <View style={styles.successIssuedIcon}>
+                <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.successIssuedTitle}>
+                  Token #{lastIssuedToken.token.tokenLabel} Issued Successfully!
+                </Text>
+                <Text style={styles.successIssuedSub}>
+                  Patient: {lastIssuedToken.patient.fullName} • Doctor: {lastIssuedToken.doctor.name} ({lastIssuedToken.doctor.room || 'OPD'})
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* ── ACTION BUTTONS ROW ── */}
+          <View style={styles.actionButtonsContainer}>
+            {/* Submit: Print Ticket & Issue Token */}
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                submitting ? styles.submitButtonDisabled : null,
+              ]}
+              onPress={handlePrintAndIssueToken}
+              disabled={submitting}
+              activeOpacity={0.8}
+              accessibilityLabel="Print Ticket and Issue Token"
+              accessibilityRole="button"
+            >
+              {submitting ? (
+                <View style={styles.btnContentRow}>
+                  <ActivityIndicator size="small" color={Colors.white} style={{ marginRight: 8 }} />
+                  <Text style={styles.submitButtonText}>Generating Token & Ticket...</Text>
+                </View>
+              ) : (
+                <View style={styles.btnContentRow}>
+                  <Ionicons name="print" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+                  <Text style={styles.submitButtonText}>Print Ticket & Issue Token</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Reset: Clear Form / New Entry */}
+            <TouchableOpacity
+              style={styles.clearFormButton}
+              onPress={handleClearForm}
+              disabled={submitting}
+              activeOpacity={0.7}
+              accessibilityLabel="Clear Form and New Entry"
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name="refresh-outline"
+                size={18}
+                color={Colors.textMedium}
+                style={{ marginRight: 6 }}
+              />
+              <Text style={styles.clearFormButtonText}>Clear Form / New Entry</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Bottom spacing */}
@@ -1718,6 +1965,192 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginLeft: 2,
     fontWeight: '600',
+  },
+  previewCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 18,
+    padding: 18,
+    marginTop: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  previewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(94, 234, 212, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  previewBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#5EEAD4',
+    letterSpacing: 0.5,
+  },
+  previewStatusTag: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  previewStatusTagText: {
+    fontSize: 11,
+    color: '#E2E8F0',
+    fontWeight: '600',
+  },
+  previewTokenBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 16,
+  },
+  previewTokenPlaceholder: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    marginBottom: 6,
+  },
+  tokenAssignTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(13, 148, 136, 0.25)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  tokenAssignTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#5EEAD4',
+  },
+  previewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -6,
+  },
+  previewGridItem: {
+    width: '50%',
+    paddingHorizontal: 6,
+    marginBottom: 12,
+  },
+  previewItemLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  previewItemValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  previewTagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    paddingTop: 12,
+    marginTop: 4,
+  },
+  previewTagPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  previewTagPillText: {
+    fontSize: 11,
+    color: '#CBD5E1',
+    fontWeight: '600',
+  },
+  successIssuedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 14,
+  },
+  successIssuedIcon: {
+    marginRight: 10,
+  },
+  successIssuedTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  successIssuedSub: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  actionButtonsContainer: {
+    marginTop: 16,
+  },
+  submitButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+    marginBottom: 10,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  btnContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitButtonText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: 0.2,
+  },
+  clearFormButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingVertical: 13,
+    minHeight: 48,
+  },
+  clearFormButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textMedium,
   },
 });
 
