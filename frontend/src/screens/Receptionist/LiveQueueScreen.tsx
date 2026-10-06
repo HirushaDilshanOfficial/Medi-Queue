@@ -11,10 +11,8 @@ import {
   Alert,
   Animated,
   Platform,
-  Modal,
-  ActivityIndicator,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { QueueToken, Doctor } from '../../types';
 import { useLiveQueue, LiveQueueFilter } from '../../hooks';
@@ -22,8 +20,6 @@ import {
   callNext,
   markNoShow,
   moveBack,
-  getDoctors,
-  assignDoctor,
   getErrorMessage,
 } from '../../services/api';
 import {
@@ -34,6 +30,7 @@ import {
   SectionHeader,
   Toast,
   ToastType,
+  DoctorPickerModal,
 } from '../../components';
 
 export interface LiveQueueScreenProps {
@@ -54,12 +51,9 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
   const [toastType, setToastType] = useState<ToastType>('success');
   const [toastVisible, setToastVisible] = useState<boolean>(false);
 
-  // Doctor Assignment Modal state
+  // Doctor Picker Modal state
   const [doctorModalVisible, setDoctorModalVisible] = useState<boolean>(false);
   const [selectedTokenForDoctor, setSelectedTokenForDoctor] = useState<QueueToken | null>(null);
-  const [doctorsList, setDoctorsList] = useState<Doctor[]>([]);
-  const [loadingDoctors, setLoadingDoctors] = useState<boolean>(false);
-  const [assigningDoctorId, setAssigningDoctorId] = useState<string | null>(null);
 
   // Pulsing animation for ACTIVE badge dot
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -254,52 +248,10 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     );
   };
 
-  // ─────────────────────────────────────────────────────────
-  // Assign / Change Doctor Flow
-  // ─────────────────────────────────────────────────────────
-  const openDoctorModal = async (token: QueueToken) => {
+  // 4. Open Doctor Modal
+  const openDoctorModal = (token: QueueToken) => {
     setSelectedTokenForDoctor(token);
     setDoctorModalVisible(true);
-    setLoadingDoctors(true);
-    try {
-      const docs = await getDoctors(token.department);
-      if (isMounted.current) {
-        setDoctorsList(docs || []);
-      }
-    } catch (err: any) {
-      if (isMounted.current) {
-        setDoctorsList([]);
-        showToast('Unable to load doctors list', 'error');
-      }
-    } finally {
-      if (isMounted.current) {
-        setLoadingDoctors(false);
-      }
-    }
-  };
-
-  const handleSelectDoctor = async (doctor: Doctor) => {
-    if (!selectedTokenForDoctor || assigningDoctorId) return;
-    try {
-      setAssigningDoctorId(doctor._id || doctor.id || '');
-      await assignDoctor(
-        selectedTokenForDoctor._id || selectedTokenForDoctor.tokenLabel,
-        doctor._id || doctor.id || ''
-      );
-      const tokenName = selectedTokenForDoctor.tokenLabel || `OPD-${selectedTokenForDoctor.tokenNumber}`;
-      const docName = doctor.name.startsWith('Dr.') ? doctor.name : `Dr. ${doctor.name}`;
-      showToast(`Assigned ${docName} to ${tokenName}`, 'success');
-      setDoctorModalVisible(false);
-      setSelectedTokenForDoctor(null);
-      await refresh(false);
-    } catch (err: any) {
-      const msg = getErrorMessage(err);
-      showToast(msg || 'Failed to assign doctor', 'error');
-    } finally {
-      if (isMounted.current) {
-        setAssigningDoctorId(null);
-      }
-    }
   };
 
   // ─────────────────────────────────────────────────────────
@@ -709,104 +661,24 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         onDismiss={() => setToastVisible(false)}
       />
 
-      {/* Doctor Selection Modal */}
-      <Modal
+      {/* Doctor Picker Modal Component */}
+      <DoctorPickerModal
         visible={doctorModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setDoctorModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Assign / Change Doctor</Text>
-                <Text style={styles.modalSubtitle}>
-                  Token {selectedTokenForDoctor?.tokenLabel || ''} •{' '}
-                  {typeof selectedTokenForDoctor?.patient === 'object' && selectedTokenForDoctor?.patient?.fullName
-                    ? selectedTokenForDoctor.patient.fullName
-                    : 'Patient'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setDoctorModalVisible(false)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={20} color={Colors.textMedium} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Modal Doctor List */}
-            {loadingDoctors ? (
-              <View style={styles.modalLoadingWrap}>
-                <ActivityIndicator size="large" color={Colors.primary} />
-                <Text style={styles.modalLoadingText}>Loading available doctors...</Text>
-              </View>
-            ) : doctorsList.length === 0 ? (
-              <View style={styles.modalEmptyWrap}>
-                <Ionicons name="medkit-outline" size={32} color={Colors.textLight} />
-                <Text style={styles.modalEmptyText}>No active doctors found.</Text>
-              </View>
-            ) : (
-              <ScrollView style={styles.modalDocList} showsVerticalScrollIndicator={false}>
-                {doctorsList.map((doc) => {
-                  const docId = doc._id || doc.id || '';
-                  const isCurrent =
-                    typeof selectedTokenForDoctor?.assignedDoctor === 'object'
-                      ? (selectedTokenForDoctor?.assignedDoctor as any)?._id === docId
-                      : selectedTokenForDoctor?.assignedDoctor === docId;
-                  const isAssigning = assigningDoctorId === docId;
-
-                  return (
-                    <TouchableOpacity
-                      key={docId}
-                      style={[
-                        styles.docPickerItem,
-                        isCurrent && styles.docPickerItemCurrent,
-                      ]}
-                      onPress={() => handleSelectDoctor(doc)}
-                      disabled={!!assigningDoctorId}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.docPickerIconBox}>
-                        <Ionicons name="medical" size={18} color={Colors.primary} />
-                      </View>
-                      <View style={styles.docPickerInfo}>
-                        <View style={styles.docPickerNameRow}>
-                          <Text style={styles.docPickerName}>
-                            {doc.name.startsWith('Dr.') ? doc.name : `Dr. ${doc.name}`}
-                          </Text>
-                          {isCurrent ? (
-                            <View style={styles.currentTag}>
-                              <Text style={styles.currentTagText}>Assigned</Text>
-                            </View>
-                          ) : null}
-                        </View>
-                        <Text style={styles.docPickerMeta}>
-                          {doc.specialization || doc.department || 'OPD'}
-                          {doc.room ? ` • Room ${doc.room}` : ''}
-                        </Text>
-                      </View>
-
-                      {isAssigning ? (
-                        <ActivityIndicator size="small" color={Colors.primary} />
-                      ) : (
-                        <Ionicons
-                          name={isCurrent ? 'checkmark-circle' : 'chevron-forward'}
-                          size={20}
-                          color={isCurrent ? Colors.success : Colors.textLight}
-                        />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
+        token={selectedTokenForDoctor}
+        department={selectedTokenForDoctor?.department}
+        onClose={() => {
+          setDoctorModalVisible(false);
+          setSelectedTokenForDoctor(null);
+        }}
+        onSuccess={async (doctor: Doctor, tokenLabel: string) => {
+          const docName = doctor.name.startsWith('Dr.') ? doctor.name : `Dr. ${doctor.name}`;
+          showToast(`Assigned ${docName} to ${tokenLabel}`, 'success');
+          await refresh(false);
+        }}
+        onError={(err: string) => {
+          showToast(err || 'Failed to assign doctor', 'error');
+        }}
+      />
 
       {/* Screen Header */}
       <View style={styles.header}>
@@ -1830,131 +1702,6 @@ const styles = StyleSheet.create({
     color: Colors.textMedium,
     textAlign: 'center',
     lineHeight: 16,
-  },
-
-  // ─────────────────────────────────────────────────────────
-  // Doctor Picker Modal Styles
-  // ─────────────────────────────────────────────────────────
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '75%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.textDark,
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    color: Colors.textMedium,
-    marginTop: 2,
-  },
-  modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
-  },
-  modalLoadingWrap: {
-    padding: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalLoadingText: {
-    marginTop: 10,
-    fontSize: 13,
-    color: Colors.textMedium,
-  },
-  modalEmptyWrap: {
-    padding: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalEmptyText: {
-    marginTop: 8,
-    fontSize: 14,
-    color: Colors.textMedium,
-  },
-  modalDocList: {
-    marginTop: 10,
-  },
-  docPickerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 8,
-    backgroundColor: Colors.white,
-    minHeight: 56,
-  },
-  docPickerItemCurrent: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#99F6E4',
-  },
-  docPickerIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: Colors.tint,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  docPickerInfo: {
-    flex: 1,
-  },
-  docPickerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  docPickerName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textDark,
-  },
-  currentTag: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-    marginLeft: 6,
-  },
-  currentTagText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#065F46',
-  },
-  docPickerMeta: {
-    fontSize: 12,
-    color: Colors.textMedium,
-    marginTop: 2,
   },
 
   // ─────────────────────────────────────────────────────────
