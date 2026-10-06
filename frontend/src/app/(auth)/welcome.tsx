@@ -147,28 +147,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     left: 20,
-<<<<<<< HEAD
     backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 10,
-    paddingVertical: 4,
-=======
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
->>>>>>> 2c8d59a6a706658c2a3996100fcf3d510e9b5124
+    paddingVertical: 5,
     borderRadius: 8,
     alignItems: 'center',
   },
   queueBadgeLabel: {
     fontSize: 9,
-<<<<<<< HEAD
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.85)',
     letterSpacing: 0.5,
-=======
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.7)',
->>>>>>> 2c8d59a6a706658c2a3996100fcf3d510e9b5124
   },
   queueBadgeNumber: {
     fontSize: 13,
@@ -179,34 +168,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     right: 20,
-<<<<<<< HEAD
     backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 10,
-    paddingVertical: 4,
-=======
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
->>>>>>> 2c8d59a6a706658c2a3996100fcf3d510e9b5124
+    paddingVertical: 5,
     borderRadius: 8,
     alignItems: 'center',
   },
   doctorsBadgeText: {
     fontSize: 9,
-<<<<<<< HEAD
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.85)',
     letterSpacing: 0.5,
   },
   doctorsBadgeNumber: {
-    fontSize: 11,
-=======
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.7)',
-  },
-  doctorsBadgeNumber: {
     fontSize: 12,
->>>>>>> 2c8d59a6a706658c2a3996100fcf3d510e9b5124
     fontWeight: '700',
     color: Colors.white,
   },
