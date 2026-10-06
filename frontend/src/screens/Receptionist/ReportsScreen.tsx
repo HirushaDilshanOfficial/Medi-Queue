@@ -40,15 +40,27 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     year: 'numeric',
   }).format(new Date());
 
-  // Calculate completion percentage
+  // Calculate breakdown numbers and percentages
   const total = data?.totalRegistered || 0;
   const attended = data?.attended || 0;
-  const completedPercent =
+  const noShows = data?.noShows || 0;
+  const cancelled = data?.cancelled || 0;
+  const inProgress = Math.max(0, total - (attended + noShows + cancelled));
+
+  const throughputPercent =
     data?.throughputPercent !== undefined
       ? data.throughputPercent
       : total > 0
       ? Math.round((attended / total) * 100)
       : 0;
+
+  const isGoalMet = throughputPercent >= 95;
+  const goalColor = isGoalMet ? Colors.success : Colors.warning;
+
+  const attendedPct = total > 0 ? Math.round((attended / total) * 100) : 0;
+  const noShowsPct = total > 0 ? Math.round((noShows / total) * 100) : 0;
+  const cancelledPct = total > 0 ? Math.round((cancelled / total) * 100) : 0;
+  const inProgressPct = total > 0 ? Math.max(0, 100 - (attendedPct + noShowsPct + cancelledPct)) : 0;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -139,7 +151,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 <View style={styles.statCardWrapper}>
                   <StatCard
                     title="Total Registered"
-                    value={data?.totalRegistered ?? 0}
+                    value={total}
                     subtitle="Total patient intake"
                     iconName="people-outline"
                     variant="primary"
@@ -150,8 +162,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 <View style={styles.statCardWrapper}>
                   <StatCard
                     title="Attended"
-                    value={data?.attended ?? 0}
-                    subtitle={`${completedPercent}% completed`}
+                    value={attended}
+                    subtitle={`${attendedPct}% completed`}
                     iconName="checkmark-circle-outline"
                     variant="success"
                   />
@@ -161,8 +173,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 <View style={styles.statCardWrapper}>
                   <StatCard
                     title="No-Shows / Cancelled"
-                    value={`${data?.noShows ?? 0} / ${data?.cancelled ?? 0}`}
-                    subtitle={`${(data?.noShows ?? 0) + (data?.cancelled ?? 0)} missed visits`}
+                    value={`${noShows} / ${cancelled}`}
+                    subtitle={`${noShows + cancelled} missed visits`}
                     iconName="alert-circle-outline"
                     variant="warning"
                   />
@@ -177,6 +189,198 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                     iconName="time-outline"
                     variant="default"
                   />
+                </View>
+              </View>
+            </View>
+
+            {/* ── QUEUE THROUGHPUT CARD ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                title="Queue Throughput"
+                subtitle="Operational efficiency vs daily target"
+              />
+
+              <View style={styles.throughputCard}>
+                {/* Card Top / Header */}
+                <View style={styles.throughputHeaderRow}>
+                  <View style={styles.throughputTitleLeft}>
+                    <View style={[styles.throughputIconBadge, { backgroundColor: `${goalColor}18` }]}>
+                      <Ionicons
+                        name={isGoalMet ? 'checkmark-circle' : 'trending-up'}
+                        size={18}
+                        color={goalColor}
+                      />
+                    </View>
+                    <View>
+                      <Text style={styles.throughputCardTitle}>Shift Completion</Text>
+                      <Text style={styles.throughputCardSubtitle}>95% Efficiency Benchmark</Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.goalBadge,
+                      {
+                        backgroundColor: isGoalMet ? '#ECFDF5' : '#FFFBEB',
+                        borderColor: isGoalMet ? '#A7F3D0' : '#FDE68A',
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={isGoalMet ? 'ribbon' : 'alert-circle'}
+                      size={13}
+                      color={goalColor}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text style={[styles.goalBadgeText, { color: goalColor }]}>
+                      {isGoalMet ? 'Goal Met (≥95%)' : 'Below 95% Target'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Hero Throughput Metric */}
+                <View style={styles.heroThroughputBox}>
+                  <View style={styles.heroThroughputRow}>
+                    <View>
+                      <Text style={styles.heroThroughputLabel}>Throughput Rate</Text>
+                      <Text style={styles.heroThroughputSub}>
+                        {isGoalMet ? 'Exceeding target' : 'Target gap: ' + (95 - throughputPercent).toFixed(1) + '%'}
+                      </Text>
+                    </View>
+                    <View style={styles.heroThroughputValueWrap}>
+                      <Text style={[styles.heroThroughputPercent, { color: goalColor }]}>
+                        {throughputPercent}%
+                      </Text>
+                      <Text style={styles.heroGoalTarget}> / 95% Goal</Text>
+                    </View>
+                  </View>
+
+                  {/* Main Throughput Progress Bar */}
+                  <View style={styles.heroProgressBarTrack}>
+                    <View
+                      style={[
+                        styles.heroProgressBarFill,
+                        {
+                          width: `${Math.min(Math.max(throughputPercent, 0), 100)}%`,
+                          backgroundColor: goalColor,
+                        },
+                      ]}
+                    />
+                    {/* 95% Goal Marker */}
+                    <View style={styles.goalMarkerLine} />
+                  </View>
+
+                  {/* Goal Scale Axis Labels */}
+                  <View style={styles.scaleRow}>
+                    <Text style={styles.scaleText}>0%</Text>
+                    <Text style={styles.scaleGoalText}>95% Target Goal</Text>
+                    <Text style={styles.scaleText}>100%</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardDivider} />
+
+                {/* Individual Breakdown Progress Bars */}
+                <Text style={styles.breakdownHeading}>Status Breakdown</Text>
+
+                <View style={styles.breakdownList}>
+                  {/* 1. Attended */}
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLabelRow}>
+                      <View style={styles.breakdownLabelLeft}>
+                        <View style={[styles.dotIndicator, { backgroundColor: Colors.success }]} />
+                        <Text style={styles.breakdownLabel}>Attended</Text>
+                      </View>
+                      <Text style={styles.breakdownValue}>
+                        <Text style={styles.breakdownCount}>{attended}</Text> ({attendedPct}%)
+                      </Text>
+                    </View>
+                    <View style={styles.breakdownBarTrack}>
+                      <View
+                        style={[
+                          styles.breakdownBarFill,
+                          {
+                            width: `${Math.min(attendedPct, 100)}%`,
+                            backgroundColor: Colors.success,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+
+                  {/* 2. No-Shows */}
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLabelRow}>
+                      <View style={styles.breakdownLabelLeft}>
+                        <View style={[styles.dotIndicator, { backgroundColor: Colors.warning }]} />
+                        <Text style={styles.breakdownLabel}>No-Shows</Text>
+                      </View>
+                      <Text style={styles.breakdownValue}>
+                        <Text style={styles.breakdownCount}>{noShows}</Text> ({noShowsPct}%)
+                      </Text>
+                    </View>
+                    <View style={styles.breakdownBarTrack}>
+                      <View
+                        style={[
+                          styles.breakdownBarFill,
+                          {
+                            width: `${Math.min(noShowsPct, 100)}%`,
+                            backgroundColor: Colors.warning,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+
+                  {/* 3. Cancelled */}
+                  <View style={styles.breakdownItem}>
+                    <View style={styles.breakdownLabelRow}>
+                      <View style={styles.breakdownLabelLeft}>
+                        <View style={[styles.dotIndicator, { backgroundColor: '#94A3B8' }]} />
+                        <Text style={styles.breakdownLabel}>Cancelled</Text>
+                      </View>
+                      <Text style={styles.breakdownValue}>
+                        <Text style={styles.breakdownCount}>{cancelled}</Text> ({cancelledPct}%)
+                      </Text>
+                    </View>
+                    <View style={styles.breakdownBarTrack}>
+                      <View
+                        style={[
+                          styles.breakdownBarFill,
+                          {
+                            width: `${Math.min(cancelledPct, 100)}%`,
+                            backgroundColor: '#94A3B8',
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+
+                  {/* 4. In Progress / Waiting (if any) */}
+                  {inProgress > 0 && (
+                    <View style={styles.breakdownItem}>
+                      <View style={styles.breakdownLabelRow}>
+                        <View style={styles.breakdownLabelLeft}>
+                          <View style={[styles.dotIndicator, { backgroundColor: Colors.primaryLight }]} />
+                          <Text style={styles.breakdownLabel}>In Waiting Queue</Text>
+                        </View>
+                        <Text style={styles.breakdownValue}>
+                          <Text style={styles.breakdownCount}>{inProgress}</Text> ({inProgressPct}%)
+                        </Text>
+                      </View>
+                      <View style={styles.breakdownBarTrack}>
+                        <View
+                          style={[
+                            styles.breakdownBarFill,
+                            {
+                              width: `${Math.min(inProgressPct, 100)}%`,
+                              backgroundColor: Colors.primaryLight,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  )}
                 </View>
               </View>
             </View>
@@ -289,6 +493,198 @@ const styles = StyleSheet.create({
     width: '50%',
     paddingHorizontal: 6,
     marginBottom: 12,
+  },
+  /* ── Queue Throughput Card Styles ── */
+  throughputCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 18,
+    marginTop: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.8,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  throughputHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  throughputTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  throughputIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  throughputCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  throughputCardSubtitle: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    marginTop: 1,
+  },
+  goalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  goalBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  heroThroughputBox: {
+    backgroundColor: '#F8FCFD',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2F0F3',
+  },
+  heroThroughputRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 10,
+  },
+  heroThroughputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textMedium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  heroThroughputSub: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginTop: 2,
+  },
+  heroThroughputValueWrap: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  heroThroughputPercent: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  heroGoalTarget: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textLight,
+  },
+  heroProgressBarTrack: {
+    height: 12,
+    backgroundColor: '#E2EEF1',
+    borderRadius: 6,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  heroProgressBarFill: {
+    height: '100%',
+    borderRadius: 6,
+  },
+  goalMarkerLine: {
+    position: 'absolute',
+    left: '95%',
+    top: 0,
+    bottom: 0,
+    width: 2,
+    backgroundColor: Colors.primary,
+    zIndex: 2,
+  },
+  scaleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  scaleText: {
+    fontSize: 11,
+    color: Colors.textLight,
+    fontWeight: '500',
+  },
+  scaleGoalText: {
+    fontSize: 11,
+    color: Colors.textMedium,
+    fontWeight: '700',
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: Colors.divider,
+    marginVertical: 16,
+  },
+  breakdownHeading: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textDark,
+    marginBottom: 12,
+  },
+  breakdownList: {
+    gap: 12,
+  },
+  breakdownItem: {
+    marginBottom: 2,
+  },
+  breakdownLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  breakdownLabelLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dotIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  breakdownLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  breakdownValue: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.textMedium,
+  },
+  breakdownCount: {
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  breakdownBarTrack: {
+    height: 8,
+    backgroundColor: '#F1F7F9',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  breakdownBarFill: {
+    height: '100%',
+    borderRadius: 4,
   },
   bottomSpacer: {
     height: 32,
