@@ -16,11 +16,14 @@ import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-ic
 import { Colors } from '../../constants/Colors';
 import { Patient } from '../../types';
 import { usePatients, PatientListFilter } from '../../hooks';
+import { verifyNic, getErrorMessage } from '../../services/api';
 import {
   PatientCard,
   LoadingState,
   ErrorState,
   SectionHeader,
+  Toast,
+  ToastType,
 } from '../../components';
 
 export interface PatientsScreenProps {
@@ -34,6 +37,12 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
 }) => {
   const [query, setQuery] = useState<string>('');
   const [filter, setFilter] = useState<PatientListFilter>('all');
+  const [verifyingNic, setVerifyingNic] = useState<boolean>(false);
+
+  // Toast notification state
+  const [toastMessage, setToastMessage] = useState<string>('');
+  const [toastType, setToastType] = useState<ToastType>('success');
+  const [toastVisible, setToastVisible] = useState<boolean>(false);
 
   const {
     list,
@@ -45,6 +54,12 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
     refresh,
     selectPatient,
   } = usePatients(query, filter);
+
+  const showToast = (message: string, type: ToastType = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
 
   const handleClearQuery = () => {
     setQuery('');
@@ -60,6 +75,30 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
     }
   };
 
+  const handleVerifyNic = async (patient: Patient) => {
+    const patientId = patient._id || patient.id;
+    if (!patientId || verifyingNic) return;
+
+    if (!patient.nic || !patient.nic.trim()) {
+      showToast('Patient has no NIC on record to verify', 'warning');
+      return;
+    }
+
+    try {
+      setVerifyingNic(true);
+      const res = await verifyNic(patientId);
+      showToast(res.message || 'NIC verified successfully', 'success');
+      // Refresh selected profile and full list
+      await selectPatient(patientId);
+      await refresh();
+    } catch (err: any) {
+      const msg = getErrorMessage(err);
+      showToast(msg || 'Failed to verify patient NIC', 'error');
+    } finally {
+      setVerifyingNic(false);
+    }
+  };
+
   const getInitials = (name: string): string => {
     if (!name) return 'P';
     const parts = name.trim().split(/\s+/);
@@ -72,6 +111,15 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+
+      {/* Toast Notification */}
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        duration={2500}
+        onDismiss={() => setToastVisible(false)}
+      />
 
       {/* Screen Header */}
       <View style={styles.header}>
@@ -254,7 +302,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
           <View style={styles.selectedSection}>
             <SectionHeader
               title="Selected Patient"
-              subtitle="Full profile & identity details"
+              subtitle="Full profile & identity verification"
               rightElement={
                 <TouchableOpacity
                   style={styles.deselectButton}
@@ -326,12 +374,13 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   ) : null}
                 </View>
 
-                {/* "Verified single record" Banner / Badge */}
+                {/* ── NIC VERIFICATION STATUS / ACTION ── */}
                 {selected.nicVerified ? (
+                  // Verified: Green Banner
                   <View style={styles.verifiedRecordBanner}>
                     <Ionicons
                       name="shield-checkmark"
-                      size={15}
+                      size={16}
                       color="#047857"
                       style={{ marginRight: 6 }}
                     />
@@ -339,7 +388,51 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       Verified single record (NIC validated)
                     </Text>
                   </View>
-                ) : null}
+                ) : selected.nic && selected.nic.trim().length > 0 ? (
+                  // Has NIC but unverified: "Verify NIC" Action Button
+                  <TouchableOpacity
+                    style={[
+                      styles.verifyNicButton,
+                      verifyingNic && styles.buttonDisabled,
+                    ]}
+                    onPress={() => handleVerifyNic(selected)}
+                    disabled={verifyingNic}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Verify Patient NIC"
+                  >
+                    {verifyingNic ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={Colors.white}
+                        style={{ marginRight: 8 }}
+                      />
+                    ) : (
+                      <Ionicons
+                        name="shield-checkmark"
+                        size={16}
+                        color={Colors.white}
+                        style={{ marginRight: 8 }}
+                      />
+                    )}
+                    <Text style={styles.verifyNicButtonText}>
+                      {verifyingNic ? 'Verifying NIC...' : 'Verify NIC'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  // No NIC: Clear Information Message
+                  <View style={styles.noNicNoticeBanner}>
+                    <Ionicons
+                      name="information-circle"
+                      size={16}
+                      color="#D97706"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.noNicNoticeText}>
+                      Patient has no NIC on record.
+                    </Text>
+                  </View>
+                )}
 
                 {/* Details Grid: NIC, Phone, District, Visits */}
                 <View style={styles.selectedDetailsGrid}>
@@ -742,22 +835,66 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#DC2626',
   },
+
+  // ── NIC Verification & Notice Styles ──
   verifiedRecordBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ECFDF5',
     borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: '#A7F3D0',
     marginBottom: 12,
   },
   verifiedRecordText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '800',
     color: '#047857',
   },
+  verifyNicButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minHeight: 44, // 44px touch target
+    marginBottom: 12,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  verifyNicButtonText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: 0.2,
+  },
+  noNicNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginBottom: 12,
+  },
+  noNicNoticeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#B45309',
+  },
+  buttonDisabled: {
+    opacity: 0.65,
+  },
+
   selectedDetailsGrid: {
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
