@@ -3,6 +3,7 @@
  * Reads backend API URL from EXPO_PUBLIC_API_URL. Never uses localhost.
  */
 
+import { Platform } from 'react-native';
 import {
   Patient,
   Doctor,
@@ -12,7 +13,8 @@ import {
   ShiftSummary,
 } from '../types';
 
-const FALLBACK_IP_URL = 'http://10.240.7.66:5001';
+const FALLBACK_IP_URL =
+  Platform.OS === 'web' ? 'http://localhost:5001' : 'http://192.168.1.2:5001';
 
 export const API_BASE_URL: string =
   process.env.EXPO_PUBLIC_API_URL || FALLBACK_IP_URL;
