@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { Patient } from '../../types';
+import { Patient, PatientVisitHistoryItem } from '../../types';
 import { usePatients, PatientListFilter } from '../../hooks';
 import { verifyNic, getErrorMessage } from '../../services/api';
 import {
@@ -24,6 +24,8 @@ import {
   SectionHeader,
   Toast,
   ToastType,
+  TokenBadge,
+  StatusChip,
 } from '../../components';
 
 export interface PatientsScreenProps {
@@ -107,6 +109,53 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
     }
     return name.substring(0, 2).toUpperCase();
   };
+
+  const formatDate = (dateStr?: string): string => {
+    if (!dateStr) return 'N/A';
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const dateObj = new Date(year, month, day);
+        return dateObj.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        });
+      }
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        });
+      }
+      return dateStr;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const isTodayDate = (dateStr?: string): boolean => {
+    if (!dateStr) return false;
+    const todayStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Colombo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    return dateStr.startsWith(todayStr);
+  };
+
+  const visits: PatientVisitHistoryItem[] = selected?.visitHistory || [];
+  const activeStatusList = ['waiting', 'called', 'serving', 'checked_in', 'booked'];
+  const activeTodayVisit = visits.find(
+    (v) => isTodayDate(v.date) && activeStatusList.includes((v.status || '').toLowerCase())
+  );
+  const pastVisits = visits.filter((v) => v !== activeTodayVisit);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -465,6 +514,170 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       {selected.visitHistory?.length || 0} recorded
                     </Text>
                   </View>
+                </View>
+
+                {/* ── VISIT & APPOINTMENT HISTORY TIMELINE SECTION ── */}
+                <View style={styles.historySection}>
+                  <SectionHeader
+                    title="Visit & Appointment History"
+                    subtitle="Chronological consultations & queue encounters"
+                    rightElement={
+                      <View style={styles.encounterCountChip}>
+                        <Ionicons name="medical" size={12} color={Colors.primary} style={{ marginRight: 4 }} />
+                        <Text style={styles.encounterCountText}>
+                          {visits.length} {visits.length === 1 ? 'Encounter' : 'Encounters'}
+                        </Text>
+                      </View>
+                    }
+                  />
+
+                  {visits.length === 0 ? (
+                    <View style={styles.historyEmptyCard}>
+                      <View style={styles.historyEmptyIconCircle}>
+                        <Ionicons name="calendar-outline" size={26} color={Colors.textLight} />
+                      </View>
+                      <Text style={styles.historyEmptyTitle}>No previous visits</Text>
+                      <Text style={styles.historyEmptySubtitle}>
+                        This patient does not have any recorded consultations or queue encounters yet.
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.timelineContainer}>
+                      {/* Today's Active Token (Shown First) */}
+                      {activeTodayVisit ? (
+                        <View style={styles.timelineItem}>
+                          {/* Indicator column */}
+                          <View style={styles.timelineIndicatorColumn}>
+                            <View style={styles.activeTimelineDot}>
+                              <View style={styles.activeTimelineInnerDot} />
+                            </View>
+                            {pastVisits.length > 0 ? <View style={styles.timelineLine} /> : null}
+                          </View>
+
+                          {/* Active Token Card */}
+                          <View style={styles.activeTokenCard}>
+                            <View style={styles.activeTokenHeaderRow}>
+                              <View style={styles.activeTokenBadgeRow}>
+                                <TokenBadge
+                                  tokenLabel={
+                                    activeTodayVisit.tokenNumber
+                                      ? `OPD-${String(activeTodayVisit.tokenNumber).padStart(3, '0')}`
+                                      : 'OPD-001'
+                                  }
+                                  priority="normal"
+                                  size="small"
+                                />
+                                <StatusChip
+                                  status="waiting"
+                                  label="In Waiting Queue"
+                                  size="small"
+                                  style={styles.inQueueChip}
+                                />
+                              </View>
+                              <View style={styles.todayDateBadge}>
+                                <Text style={styles.todayDateText}>
+                                  Today{activeTodayVisit.slotTime ? ` • ${activeTodayVisit.slotTime}` : ''}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View style={styles.timelineBodyDetails}>
+                              <View style={styles.timelineDetailRow}>
+                                <Ionicons name="business" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
+                                <Text style={styles.timelineDepartmentText}>
+                                  {activeTodayVisit.department || 'General OPD'}
+                                </Text>
+                              </View>
+                              <View style={styles.timelineDetailRow}>
+                                <Ionicons name="person" size={14} color={Colors.secondary} style={{ marginRight: 6 }} />
+                                <Text style={styles.timelineDoctorText}>
+                                  {activeTodayVisit.doctorName || activeTodayVisit.doctorDetails?.name || 'Doctor Pending Assignment'}
+                                </Text>
+                                {activeTodayVisit.doctorDetails?.room ? (
+                                  <Text style={styles.timelineRoomText}>
+                                    ({activeTodayVisit.doctorDetails.room})
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </View>
+
+                            {activeTodayVisit.notes && activeTodayVisit.notes.trim() ? (
+                              <View style={styles.clinicalNotesBox}>
+                                <View style={styles.clinicalNotesHeader}>
+                                  <Ionicons name="document-text" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
+                                  <Text style={styles.clinicalNotesTitle}>Clinical Note / Prescription</Text>
+                                </View>
+                                <Text style={styles.clinicalNotesContent}>{activeTodayVisit.notes.trim()}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        </View>
+                      ) : null}
+
+                      {/* Past Visits Timeline */}
+                      {pastVisits.map((visit, index) => {
+                        const isLast = index === pastVisits.length - 1;
+                        return (
+                          <View key={visit._id || `past-visit-${index}`} style={styles.timelineItem}>
+                            {/* Indicator column */}
+                            <View style={styles.timelineIndicatorColumn}>
+                              <View style={styles.pastTimelineDot}>
+                                <Ionicons name="checkmark" size={10} color={Colors.white} />
+                              </View>
+                              {!isLast ? <View style={styles.timelineLine} /> : null}
+                            </View>
+
+                            {/* Past Visit Card */}
+                            <View style={styles.pastVisitCard}>
+                              <View style={styles.pastVisitHeaderRow}>
+                                <View style={styles.pastVisitDateRow}>
+                                  <Ionicons name="calendar-outline" size={14} color={Colors.textMedium} style={{ marginRight: 5 }} />
+                                  <Text style={styles.pastVisitDateText}>
+                                    {formatDate(visit.date)}
+                                  </Text>
+                                  {visit.slotTime ? (
+                                    <Text style={styles.pastVisitTimeText}>• {visit.slotTime}</Text>
+                                  ) : null}
+                                </View>
+                                <StatusChip
+                                  status={visit.status || 'completed'}
+                                  size="small"
+                                />
+                              </View>
+
+                              <View style={styles.timelineBodyDetails}>
+                                <View style={styles.timelineDetailRow}>
+                                  <Ionicons name="business-outline" size={14} color={Colors.textMedium} style={{ marginRight: 6 }} />
+                                  <Text style={styles.pastDepartmentText}>
+                                    {visit.department || 'General OPD'}
+                                  </Text>
+                                </View>
+                                <View style={styles.timelineDetailRow}>
+                                  <Ionicons name="person-outline" size={14} color={Colors.textMedium} style={{ marginRight: 6 }} />
+                                  <Text style={styles.pastDoctorText}>
+                                    {visit.doctorName || visit.doctorDetails?.name || 'Assigned OPD Physician'}
+                                  </Text>
+                                  {visit.doctorDetails?.room ? (
+                                    <Text style={styles.timelineRoomText}>({visit.doctorDetails.room})</Text>
+                                  ) : null}
+                                </View>
+                              </View>
+
+                              {visit.notes && visit.notes.trim() ? (
+                                <View style={styles.clinicalNotesBox}>
+                                  <View style={styles.clinicalNotesHeader}>
+                                    <Ionicons name="document-text-outline" size={13} color="#0D9488" style={{ marginRight: 4 }} />
+                                    <Text style={styles.clinicalNotesTitle}>Clinical Note / Prescription</Text>
+                                  </View>
+                                  <Text style={styles.clinicalNotesContent}>{visit.notes.trim()}</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
               </View>
             )}
@@ -950,6 +1163,246 @@ const styles = StyleSheet.create({
     color: Colors.danger,
     fontWeight: '600',
     flex: 1,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Visit & Appointment History Timeline Styles
+  // ─────────────────────────────────────────────────────────
+  historySection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  encounterCountChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tint,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  encounterCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  historyEmptyCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 8,
+  },
+  historyEmptyIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  historyEmptyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textDark,
+    marginBottom: 2,
+  },
+  historyEmptySubtitle: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    textAlign: 'center',
+  },
+
+  // ── Timeline Structure ──
+  timelineContainer: {
+    marginTop: 8,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  timelineIndicatorColumn: {
+    alignItems: 'center',
+    width: 28,
+    marginRight: 8,
+    paddingTop: 6,
+  },
+  activeTimelineDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#BAE6FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeTimelineInnerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+  },
+  pastTimelineDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelineLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: '#E2E8F0',
+    marginTop: 4,
+    marginBottom: -6,
+  },
+
+  // ── Active Token Card ──
+  activeTokenCard: {
+    flex: 1,
+    backgroundColor: '#F0FDFA',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: '#99F6E4',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  activeTokenHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  activeTokenBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  inQueueChip: {
+    marginLeft: 2,
+  },
+  todayDateBadge: {
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  todayDateText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+
+  // ── Past Visit Card ──
+  pastVisitCard: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  pastVisitHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  pastVisitDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pastVisitDateText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  pastVisitTimeText: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+
+  // ── Shared Timeline Card Content ──
+  timelineBodyDetails: {
+    gap: 4,
+    marginBottom: 4,
+  },
+  timelineDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timelineDepartmentText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  timelineDoctorText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  timelineRoomText: {
+    fontSize: 11,
+    color: Colors.textMedium,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  pastDepartmentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textDark,
+  },
+  pastDoctorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textDark,
+  },
+
+  // ── Clinical Notes Box ──
+  clinicalNotesBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.primary,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  clinicalNotesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  clinicalNotesTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  clinicalNotesContent: {
+    fontSize: 12,
+    color: Colors.textDark,
+    lineHeight: 16,
+    fontWeight: '500',
   },
 
   // ─────────────────────────────────────────────────────────
