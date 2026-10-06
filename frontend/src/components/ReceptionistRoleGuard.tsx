@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import useAuth from '../hooks/useAuth';
@@ -11,7 +11,6 @@ interface ReceptionistRoleGuardProps {
 
 export const ReceptionistRoleGuard: React.FC<ReceptionistRoleGuardProps> = ({ children }) => {
   const { user, isAuthenticated, loading, logout } = useAuth();
-  const navigation = useNavigation<any>();
 
   if (loading) {
     return (
@@ -46,10 +45,7 @@ export const ReceptionistRoleGuard: React.FC<ReceptionistRoleGuardProps> = ({ ch
             style={styles.actionBtn}
             onPress={async () => {
               await logout();
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              });
+              router.replace('/(auth)/login');
             }}
             activeOpacity={0.8}
             accessibilityRole="button"

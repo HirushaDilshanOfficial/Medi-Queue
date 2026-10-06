@@ -1,8 +1,4 @@
-/**
- * API service configuration and typed receptionist endpoint functions.
- * Reads backend API URL from EXPO_PUBLIC_API_URL. Never uses localhost.
- */
-
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
@@ -16,15 +12,22 @@ import {
 
 const FALLBACK_IP_URL = 'http://10.240.7.66:5001';
 
-export const API_BASE_URL: string =
-  process.env.EXPO_PUBLIC_API_URL || FALLBACK_IP_URL;
+export const getApiBaseUrl = (): string => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+    const hostname = window.location.hostname;
+    return `http://${hostname === 'localhost' || hostname === '127.0.0.1' ? 'localhost' : hostname}:5001`;
+  }
+  return process.env.EXPO_PUBLIC_API_URL || FALLBACK_IP_URL;
+};
+
+export const API_BASE_URL: string = getApiBaseUrl();
 
 // Helper to normalize path and prepend API_BASE_URL
 const resolveUrl = (path: string): string => {
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path;
   }
-  const base = API_BASE_URL.replace(/\/+$/, '');
+  const base = getApiBaseUrl().replace(/\/+$/, '');
   const endpoint = path.startsWith('/') ? path : `/${path}`;
   return `${base}${endpoint}`;
 };
