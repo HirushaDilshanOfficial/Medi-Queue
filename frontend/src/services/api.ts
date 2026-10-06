@@ -220,10 +220,11 @@ export interface WalkInResponse {
   };
   doctor: {
     name: string;
-    department: string;
+    department?: string;
     room?: string;
   };
   estimatedWaitMinutes?: number;
+  patientsAhead?: number;
 }
 
 export interface GetQueueParams {
