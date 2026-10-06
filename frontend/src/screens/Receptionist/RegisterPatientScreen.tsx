@@ -15,14 +15,58 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { useWalkInForm } from '../../hooks/useWalkInForm';
-import { searchPatients, getErrorMessage } from '../../services/api';
-import { Patient, QueuePriority, AppointmentType } from '../../types';
+import {
+  searchPatients,
+  getErrorMessage,
+  getDoctors,
+  getSlots,
+} from '../../services/api';
+import { Patient, Doctor, QueuePriority, AppointmentType } from '../../types';
 import { Toast, ToastType } from '../../components/Toast';
 
 export interface RegisterPatientScreenProps {
   navigation?: any;
   onNavigate?: (route: string) => void;
 }
+
+export interface DepartmentItem {
+  id: string;
+  name: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  bgColor: string;
+}
+
+export const DEPARTMENTS: DepartmentItem[] = [
+  {
+    id: 'General OPD',
+    name: 'General OPD',
+    icon: 'medkit',
+    color: '#0D9488',
+    bgColor: '#CCFBF1',
+  },
+  {
+    id: 'Orthopedic',
+    name: 'Orthopedic',
+    icon: 'body',
+    color: '#0284C7',
+    bgColor: '#E0F2FE',
+  },
+  {
+    id: 'Cardiology',
+    name: 'Cardiology',
+    icon: 'heart',
+    color: '#E11D48',
+    bgColor: '#FFE4E6',
+  },
+  {
+    id: 'Pediatric',
+    name: 'Pediatric',
+    icon: 'happy',
+    color: '#D97706',
+    bgColor: '#FEF3C7',
+  },
+];
 
 export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   navigation,
@@ -34,6 +78,13 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   const [searchStatus, setSearchStatus] = useState<'idle' | 'found' | 'not_found'>('idle');
   const [matchedPatient, setMatchedPatient] = useState<Patient | null>(null);
 
+  // Doctors and Slots state
+  const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
+  const [doctorsLoading, setDoctorsLoading] = useState<boolean>(false);
+  const [slots, setSlots] = useState<Array<{ time: string; status: 'available' | 'booked' | 'past' }>>([]);
+  const [slotsLoading, setSlotsLoading] = useState<boolean>(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+
   // Toast state
   const [toastVisible, setToastVisible] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -44,6 +95,143 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setToastType(type);
     setToastVisible(true);
   };
+
+  // Fetch all active doctors for department cards & picker
+  const loadDoctors = useCallback(async () => {
+    setDoctorsLoading(true);
+    try {
+      const docs = await getDoctors();
+      if (Array.isArray(docs)) {
+        setAllDoctors(docs);
+      }
+    } catch (err: any) {
+      console.warn('Failed to load doctors:', err);
+    } finally {
+      setDoctorsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDoctors();
+  }, [loadDoctors]);
+
+  // Compute wait time & doctor count per department
+  const getDepartmentWaitTime = useCallback(
+    (deptId: string): { waitStr: string; doctorCount: number } => {
+      const normDept = deptId.toLowerCase().replace(/\s+/g, '');
+      const docs = allDoctors.filter((d) => {
+        const docDept = (d.department || '').toLowerCase().replace(/\s+/g, '');
+        return docDept.includes(normDept) || normDept.includes(docDept);
+      });
+
+      const count = docs.length;
+      if (count === 0) {
+        return { waitStr: 'No wait', doctorCount: 0 };
+      }
+
+      const activeDocs = docs.filter((d) => d.status === 'active');
+      const totalPatients = docs.reduce((sum, d) => sum + (d.todayPatients || 0), 0);
+      const avgMins =
+        docs.reduce((sum, d) => sum + (d.avgConsultMinutes || 10), 0) / count;
+      const divisor = activeDocs.length > 0 ? activeDocs.length : 1;
+      const estimatedMins = Math.round((totalPatients / divisor) * avgMins);
+
+      if (estimatedMins <= 5) {
+        return { waitStr: '< 5 min', doctorCount: count };
+      }
+      return { waitStr: `~${estimatedMins} min`, doctorCount: count };
+    },
+    [allDoctors]
+  );
+
+  // Department Selection: Reset doctor and slot when department changes
+  const handleSelectDepartment = (deptId: string) => {
+    if (form.department === deptId) return;
+    form.setField('department', deptId);
+    form.setField('doctorId', '');
+    form.setField('slotTime', '');
+    setSlots([]);
+    setSlotsError(null);
+  };
+
+  // Doctor Selection: Reset slot when doctor changes
+  const handleSelectDoctor = (docId: string) => {
+    if (form.doctorId === docId) return;
+    form.setField('doctorId', docId);
+    form.setField('slotTime', '');
+    setSlots([]);
+    setSlotsError(null);
+  };
+
+  // Fetch slots for doctor today & preselect earliest available slot
+  useEffect(() => {
+    if (!form.doctorId) {
+      setSlots([]);
+      setSlotsLoading(false);
+      setSlotsError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchDoctorSlots = async () => {
+      setSlotsLoading(true);
+      setSlotsError(null);
+      try {
+        let todayDate = '';
+        try {
+          todayDate = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Colombo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(new Date());
+        } catch {
+          todayDate = new Date().toISOString().split('T')[0];
+        }
+
+        const res = await getSlots(form.doctorId, todayDate);
+        if (!isMounted) return;
+
+        if (res && Array.isArray(res.slots)) {
+          setSlots(res.slots);
+          // Preselect earliest available slot
+          if (res.earliestAvailable) {
+            form.setField('slotTime', res.earliestAvailable);
+          } else {
+            const firstAvail = res.slots.find((s) => s.status === 'available');
+            if (firstAvail) {
+              form.setField('slotTime', firstAvail.time);
+            }
+          }
+        } else {
+          setSlots([]);
+        }
+      } catch (err: any) {
+        if (!isMounted) return;
+        const msg = getErrorMessage(err);
+        setSlotsError(msg || 'Failed to load doctor slots');
+        setSlots([]);
+      } finally {
+        if (isMounted) {
+          setSlotsLoading(false);
+        }
+      }
+    };
+
+    fetchDoctorSlots();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [form.doctorId]);
+
+  // Filter doctors for the chosen department
+  const departmentDoctors = allDoctors.filter((d) => {
+    if (!form.department) return false;
+    const normDept = form.department.toLowerCase().replace(/\s+/g, '');
+    const docDept = (d.department || '').toLowerCase().replace(/\s+/g, '');
+    return docDept.includes(normDept) || normDept.includes(docDept);
+  });
 
   // 400ms Debounced Patient Search by NIC or Phone
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -509,6 +697,315 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             </View>
           </View>
 
+          {/* ── STEP 2: CONSULTATION & SLOT SCHEDULING CARD ── */}
+          <View style={[styles.formCard, { marginTop: 16 }]}>
+            <View style={styles.formCardHeader}>
+              <View style={[styles.stepPill, { backgroundColor: '#0284C7' }]}>
+                <Text style={styles.stepPillText}>STEP 2</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.formCardTitle}>Department, Doctor & Slot</Text>
+                <Text style={styles.formCardSub}>Select specialty, physician, and appointment time</Text>
+              </View>
+            </View>
+
+            {/* ── 1. DEPARTMENT CARDS ── */}
+            <View style={styles.fieldGroup}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.fieldLabel}>
+                  Department <Text style={styles.requiredAsterisk}>*</Text>
+                </Text>
+                {form.department ? (
+                  <Text style={styles.selectedLabelText}>Selected: {form.department}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.departmentGrid}>
+                {DEPARTMENTS.map((dept) => {
+                  const isSelected = form.department === dept.id;
+                  const waitInfo = getDepartmentWaitTime(dept.id);
+                  return (
+                    <TouchableOpacity
+                      key={dept.id}
+                      style={[
+                        styles.departmentCard,
+                        isSelected ? styles.departmentCardSelected : null,
+                      ]}
+                      onPress={() => handleSelectDepartment(dept.id)}
+                      activeOpacity={0.7}
+                      accessibilityLabel={`Department ${dept.name}`}
+                      accessibilityRole="button"
+                    >
+                      <View style={styles.deptCardTop}>
+                        <View style={[styles.deptIconWrap, { backgroundColor: dept.bgColor }]}>
+                          <Ionicons name={dept.icon as any} size={20} color={dept.color} />
+                        </View>
+                        {isSelected && (
+                          <View style={styles.deptCheckBadge}>
+                            <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                          </View>
+                        )}
+                      </View>
+
+                      <Text
+                        style={[
+                          styles.deptName,
+                          isSelected ? styles.deptNameSelected : null,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {dept.name}
+                      </Text>
+
+                      <View style={styles.deptFooter}>
+                        <View style={styles.deptWaitTag}>
+                          <Ionicons
+                            name="time-outline"
+                            size={11}
+                            color={Colors.textLight}
+                            style={{ marginRight: 3 }}
+                          />
+                          <Text style={styles.deptWaitText}>{waitInfo.waitStr}</Text>
+                        </View>
+                        <Text style={styles.deptDocCountText}>
+                          {waitInfo.doctorCount} {waitInfo.doctorCount === 1 ? 'doc' : 'docs'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {form.errors.department ? (
+                <Text style={styles.errorText}>{form.errors.department}</Text>
+              ) : null}
+            </View>
+
+            {/* ── 2. DOCTOR PICKER ── */}
+            <View style={styles.fieldGroup}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.fieldLabel}>
+                  Consulting Doctor <Text style={styles.requiredAsterisk}>*</Text>
+                </Text>
+                {departmentDoctors.length > 0 ? (
+                  <Text style={styles.subCountText}>{departmentDoctors.length} available</Text>
+                ) : null}
+              </View>
+
+              {!form.department ? (
+                <View style={styles.promptBox}>
+                  <Ionicons name="arrow-up-circle-outline" size={20} color={Colors.textLight} />
+                  <Text style={styles.promptBoxText}>
+                    Please select a department above to view active doctors
+                  </Text>
+                </View>
+              ) : doctorsLoading ? (
+                <View style={styles.loadingBox}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={styles.loadingBoxText}>Loading doctors...</Text>
+                </View>
+              ) : departmentDoctors.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="alert-circle-outline" size={20} color={Colors.warning} />
+                  <Text style={styles.emptyBoxText}>
+                    No active doctors currently available in {form.department}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.doctorList}>
+                  {departmentDoctors.map((doc) => {
+                    const isSelected = form.doctorId === doc._id;
+                    const isActive = doc.status === 'active';
+                    return (
+                      <TouchableOpacity
+                        key={doc._id}
+                        style={[
+                          styles.doctorCard,
+                          isSelected ? styles.doctorCardSelected : null,
+                        ]}
+                        onPress={() => handleSelectDoctor(doc._id)}
+                        activeOpacity={0.7}
+                        accessibilityLabel={`Doctor ${doc.name}`}
+                        accessibilityRole="button"
+                      >
+                        <View
+                          style={[
+                            styles.doctorAvatar,
+                            isSelected ? styles.doctorAvatarSelected : null,
+                          ]}
+                        >
+                          <Ionicons
+                            name="person"
+                            size={18}
+                            color={isSelected ? Colors.white : Colors.primary}
+                          />
+                        </View>
+
+                        <View style={styles.doctorInfo}>
+                          <View style={styles.doctorNameRow}>
+                            <Text
+                              style={[
+                                styles.doctorName,
+                                isSelected ? styles.doctorNameSelected : null,
+                              ]}
+                            >
+                              {doc.name}
+                            </Text>
+                            <View
+                              style={[
+                                styles.docStatusDot,
+                                { backgroundColor: isActive ? Colors.success : Colors.warning },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.doctorSpecialty}>
+                            {doc.specialization || doc.department} • {doc.room || 'OPD Room'}
+                          </Text>
+                          <Text style={styles.doctorLoadText}>
+                            {doc.todayPatients || 0} patients attended today • ~{doc.avgConsultMinutes || 10}m/patient
+                          </Text>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.radioCircle,
+                            isSelected ? styles.radioCircleSelected : null,
+                          ]}
+                        >
+                          {isSelected && <View style={styles.radioInner} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+              {form.errors.doctorId ? (
+                <Text style={styles.errorText}>{form.errors.doctorId}</Text>
+              ) : null}
+            </View>
+
+            {/* ── 3. SLOT GRID ── */}
+            <View style={styles.fieldGroup}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.fieldLabel}>
+                  Appointment Slot <Text style={styles.requiredAsterisk}>*</Text>
+                </Text>
+                {form.slotTime ? (
+                  <View style={styles.slotBadge}>
+                    <Ionicons name="time" size={12} color={Colors.primary} style={{ marginRight: 4 }} />
+                    <Text style={styles.slotBadgeText}>{form.slotTime}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {!form.doctorId ? (
+                <View style={styles.promptBox}>
+                  <Ionicons name="calendar-outline" size={20} color={Colors.textLight} />
+                  <Text style={styles.promptBoxText}>
+                    Please choose a doctor above to view today's available slots
+                  </Text>
+                </View>
+              ) : slotsLoading ? (
+                <View style={styles.loadingBox}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={styles.loadingBoxText}>Fetching available slots for today...</Text>
+                </View>
+              ) : slotsError ? (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle" size={18} color={Colors.danger} />
+                  <Text style={styles.errorBoxText}>{slotsError}</Text>
+                </View>
+              ) : slots.length === 0 || !slots.some((s) => s.status === 'available') ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="time-outline" size={22} color={Colors.warning} />
+                  <Text style={styles.emptyBoxTitle}>No Slots Remaining</Text>
+                  <Text style={styles.emptyBoxText}>
+                    All appointment slots for this doctor are booked or passed for today.
+                  </Text>
+                </View>
+              ) : (
+                <View>
+                  {/* Legend */}
+                  <View style={styles.slotsLegend}>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendIndicator, { backgroundColor: Colors.primary }]} />
+                      <Text style={styles.legendText}>Selected</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View
+                        style={[
+                          styles.legendIndicator,
+                          {
+                            backgroundColor: Colors.cardBackground,
+                            borderColor: Colors.border,
+                            borderWidth: 1,
+                          },
+                        ]}
+                      />
+                      <Text style={styles.legendText}>Available</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendIndicator, { backgroundColor: '#E5E7EB' }]} />
+                      <Text style={styles.legendText}>Booked / Past</Text>
+                    </View>
+                  </View>
+
+                  {/* Grid of Slots */}
+                  <View style={styles.slotsGrid}>
+                    {slots.map((slot) => {
+                      const isSelected = form.slotTime === slot.time;
+                      const isAvailable = slot.status === 'available';
+                      const isBooked = slot.status === 'booked';
+                      const isPast = slot.status === 'past';
+
+                      return (
+                        <TouchableOpacity
+                          key={slot.time}
+                          disabled={!isAvailable}
+                          style={[
+                            styles.slotChip,
+                            isAvailable && styles.slotChipAvailable,
+                            isSelected && styles.slotChipSelected,
+                            isBooked && styles.slotChipBooked,
+                            isPast && styles.slotChipPast,
+                          ]}
+                          onPress={() => form.setField('slotTime', slot.time)}
+                          activeOpacity={0.7}
+                          accessibilityLabel={`Slot ${slot.time}, status: ${slot.status}`}
+                          accessibilityRole="button"
+                        >
+                          <Text
+                            style={[
+                              styles.slotChipText,
+                              isAvailable && styles.slotChipTextAvailable,
+                              isSelected && styles.slotChipTextSelected,
+                              (isBooked || isPast) && styles.slotChipTextDisabled,
+                            ]}
+                          >
+                            {slot.time}
+                          </Text>
+                          {isSelected && (
+                            <Ionicons
+                              name="checkmark"
+                              size={12}
+                              color={Colors.white}
+                              style={{ marginLeft: 3 }}
+                            />
+                          )}
+                          {isBooked && (
+                            <Text style={styles.slotSubText}>Booked</Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+              {form.errors.slotTime ? (
+                <Text style={styles.errorText}>{form.errors.slotTime}</Text>
+              ) : null}
+            </View>
+          </View>
+
           {/* Bottom spacing */}
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -900,6 +1397,327 @@ const styles = StyleSheet.create({
   intakeTypeChipTextSelected: {
     color: Colors.primary,
     fontWeight: '800',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  selectedLabelText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  subCountText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textLight,
+  },
+  departmentGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  departmentCard: {
+    width: '48.5%',
+    backgroundColor: Colors.background,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    padding: 12,
+    marginBottom: 10,
+    minHeight: 96,
+    justifyContent: 'space-between',
+  },
+  departmentCardSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.tint,
+  },
+  deptCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  deptIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deptCheckBadge: {
+    marginLeft: 4,
+  },
+  deptName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textDark,
+    marginBottom: 6,
+  },
+  deptNameSelected: {
+    color: Colors.primary,
+    fontWeight: '800',
+  },
+  deptFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  deptWaitTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deptWaitText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.textLight,
+  },
+  deptDocCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textMedium,
+  },
+  promptBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 4,
+  },
+  promptBoxText: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    marginLeft: 8,
+    flex: 1,
+    fontWeight: '500',
+  },
+  loadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  loadingBoxText: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+  emptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+  },
+  emptyBoxTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B45309',
+    marginTop: 4,
+  },
+  emptyBoxText: {
+    fontSize: 11,
+    color: '#92400E',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+  },
+  errorBoxText: {
+    fontSize: 12,
+    color: Colors.danger,
+    marginLeft: 8,
+    fontWeight: '600',
+    flex: 1,
+  },
+  doctorList: {
+    marginTop: 4,
+  },
+  doctorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    padding: 12,
+    marginBottom: 8,
+    minHeight: 64,
+  },
+  doctorCardSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.tint,
+  },
+  doctorAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: Colors.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  doctorAvatarSelected: {
+    backgroundColor: Colors.primary,
+  },
+  doctorInfo: {
+    flex: 1,
+  },
+  doctorNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  doctorName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textDark,
+    marginRight: 6,
+  },
+  doctorNameSelected: {
+    color: Colors.primary,
+    fontWeight: '800',
+  },
+  docStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  doctorSpecialty: {
+    fontSize: 11,
+    color: Colors.textLight,
+    marginTop: 1,
+  },
+  doctorLoadText: {
+    fontSize: 10,
+    color: Colors.textLight,
+    marginTop: 3,
+    fontWeight: '500',
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  radioCircleSelected: {
+    borderColor: Colors.primary,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+  },
+  slotBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tint,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  slotBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  slotsLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 2,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  legendIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    marginRight: 5,
+  },
+  legendText: {
+    fontSize: 11,
+    color: Colors.textLight,
+    fontWeight: '500',
+  },
+  slotsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+  },
+  slotChip: {
+    width: '23%',
+    marginHorizontal: '1%',
+    marginBottom: 8,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    flexDirection: 'row',
+  },
+  slotChipAvailable: {
+    backgroundColor: Colors.cardBackground,
+    borderColor: Colors.border,
+  },
+  slotChipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  slotChipBooked: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
+  slotChipPast: {
+    backgroundColor: '#F9FAFB',
+    borderColor: '#F3F4F6',
+    opacity: 0.6,
+  },
+  slotChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  slotChipTextAvailable: {
+    color: Colors.textDark,
+  },
+  slotChipTextSelected: {
+    color: Colors.white,
+  },
+  slotChipTextDisabled: {
+    color: '#9CA3AF',
+  },
+  slotSubText: {
+    fontSize: 8,
+    color: '#9CA3AF',
+    marginLeft: 2,
+    fontWeight: '600',
   },
 });
 
