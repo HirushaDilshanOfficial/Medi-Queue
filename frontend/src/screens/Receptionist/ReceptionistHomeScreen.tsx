@@ -445,44 +445,52 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               style={styles.quickActionItem}
               onPress={() => handleNav('RegisterTab')}
               activeOpacity={0.7}
+              accessibilityLabel="New Intake"
+              accessibilityRole="button"
             >
               <View style={[styles.quickActionIconWrap, { backgroundColor: '#E0F2FE' }]}>
                 <Ionicons name="person-add" size={22} color={Colors.primary} />
               </View>
-              <Text style={styles.quickActionLabel}>New Walk-In</Text>
+              <Text style={styles.quickActionLabel}>+ New Intake</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.quickActionItem}
               onPress={() => handleNav('PatientsTab')}
               activeOpacity={0.7}
+              accessibilityLabel="Verify NIC"
+              accessibilityRole="button"
             >
               <View style={[styles.quickActionIconWrap, { backgroundColor: '#ECFDF5' }]}>
-                <Ionicons name="search" size={22} color={Colors.success} />
+                <Ionicons name="shield-checkmark" size={22} color={Colors.success} />
               </View>
-              <Text style={styles.quickActionLabel}>Find Patient</Text>
+              <Text style={styles.quickActionLabel}>Verify NIC</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.quickActionItem}
-              onPress={() => handleNav('Queue')}
+              onPress={() => showToast('Reprint Slip coming soon', 'info')}
               activeOpacity={0.7}
+              accessibilityLabel="Reprint Slip"
+              accessibilityRole="button"
             >
               <View style={[styles.quickActionIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="list" size={22} color="#D97706" />
+                <Ionicons name="print" size={22} color="#D97706" />
               </View>
-              <Text style={styles.quickActionLabel}>Full Queue</Text>
+              <Text style={styles.quickActionLabel}>Reprint Slip</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.quickActionItem}
-              onPress={() => handleNav('ReportsTab')}
+              onPress={() => showToast('Doc Roster coming soon', 'info')}
               activeOpacity={0.7}
+              accessibilityLabel="Doc Roster"
+              accessibilityRole="button"
             >
               <View style={[styles.quickActionIconWrap, { backgroundColor: '#F3E8FF' }]}>
-                <Ionicons name="document-text" size={22} color="#7E22CE" />
+                <Ionicons name="calendar" size={22} color="#7E22CE" />
               </View>
-              <Text style={styles.quickActionLabel}>Daily Report</Text>
+              <Text style={styles.quickActionLabel}>Doc Roster</Text>
             </TouchableOpacity>
           </View>
         </View>
