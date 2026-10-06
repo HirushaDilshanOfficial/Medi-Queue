@@ -170,16 +170,14 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
           router.push('/(doctor)/prescription' as any);
         } catch (err) {
           if (typeof window !== 'undefined') {
-            window.location.href = '/(doctor)/prescription';
+            router.push('/(doctor)/prescription' as any);
           }
         }
       }
     }
     if (typeof window !== 'undefined') {
       setTimeout(() => {
-        if (!window.location.pathname.includes('prescription')) {
-          window.location.href = `/(doctor)/prescription?tokenNumber=${encodeURIComponent(String(currentPatient.tokenNumber || 29))}&patientName=${encodeURIComponent(currentPatient.name)}`;
-        }
+        router.push(`/(doctor)/prescription?tokenNumber=${encodeURIComponent(String(currentPatient.tokenNumber || 29))}&patientName=${encodeURIComponent(currentPatient.name)}` as any);
       }, 120);
     }
   };

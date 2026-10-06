@@ -15,6 +15,7 @@ export interface PatientCardProps {
   patient: Patient;
   onPress?: () => void;
   onActionPress?: () => void;
+  onEditPress?: () => void;
   actionLabel?: string;
   subtitle?: string;
   rightElement?: React.ReactNode;
@@ -25,6 +26,7 @@ export const PatientCard: React.FC<PatientCardProps> = ({
   patient,
   onPress,
   onActionPress,
+  onEditPress,
   actionLabel,
   subtitle,
   rightElement,
@@ -96,6 +98,19 @@ export const PatientCard: React.FC<PatientCardProps> = ({
             ) : null}
           </View>
         </View>
+
+        {onEditPress ? (
+          <TouchableOpacity
+            onPress={onEditPress}
+            style={styles.editIconButton}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Edit patient details"
+          >
+            <Ionicons name="create-outline" size={18} color={Colors.primary} />
+          </TouchableOpacity>
+        ) : null}
 
         {rightElement ? (
           <View style={styles.rightWrapper}>{rightElement}</View>
@@ -256,6 +271,17 @@ const styles = StyleSheet.create({
   },
   chevron: {
     marginLeft: 8,
+  },
+  editIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.tint,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
   },
 });
 

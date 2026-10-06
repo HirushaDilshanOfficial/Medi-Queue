@@ -67,9 +67,9 @@ export const StatusChip: React.FC<StatusChipProps> = ({
       case 'on_break':
       case 'on break':
         return {
-          bg: '#F3F4F6',
-          text: '#4B5563',
-          dot: '#9CA3AF',
+          bg: '#FEF3C7',
+          text: '#B45309',
+          dot: '#F59E0B',
           defaultLabel: 'On Break',
         };
       default:

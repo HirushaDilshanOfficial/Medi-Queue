@@ -427,9 +427,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          if (!window.location.pathname.includes('queue')) {
-            window.location.href = '/(doctor)/queue';
-          }
+          router.push('/(doctor)/queue' as any);
         }, 120);
       }
     } else if (tab === 'records') {
@@ -440,9 +438,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          if (!window.location.pathname.includes('records')) {
-            window.location.href = '/(doctor)/records';
-          }
+          router.push('/(doctor)/records' as any);
         }, 120);
       }
     } else if (tab === 'schedule') {
@@ -453,9 +449,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          if (!window.location.pathname.includes('schedule')) {
-            window.location.href = '/(doctor)/schedule';
-          }
+          router.push('/(doctor)/schedule' as any);
         }, 120);
       }
     } else if (tab === 'rx') {
@@ -466,9 +460,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          if (!window.location.pathname.includes('prescription')) {
-            window.location.href = '/(doctor)/prescription';
-          }
+          router.push('/(doctor)/prescription' as any);
         }, 120);
       }
     }
