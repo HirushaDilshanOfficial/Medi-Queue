@@ -206,9 +206,7 @@ export default function PatientPrescriptionScreen() {
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          if (!window.location.pathname.includes('dashboard')) {
-            window.location.href = '/(doctor)/dashboard';
-          }
+          router.push('/(doctor)/dashboard' as any);
         }, 120);
       }
     } else if (tab === 'queue') {
@@ -219,9 +217,7 @@ export default function PatientPrescriptionScreen() {
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          if (!window.location.pathname.includes('queue')) {
-            window.location.href = '/(doctor)/queue';
-          }
+          router.push('/(doctor)/queue' as any);
         }, 120);
       }
     } else if (tab === 'records') {
@@ -232,9 +228,7 @@ export default function PatientPrescriptionScreen() {
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          if (!window.location.pathname.includes('records')) {
-            window.location.href = '/(doctor)/records';
-          }
+          router.push('/(doctor)/records' as any);
         }, 120);
       }
     } else if (tab === 'schedule') {
@@ -245,9 +239,7 @@ export default function PatientPrescriptionScreen() {
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          if (!window.location.pathname.includes('schedule')) {
-            window.location.href = '/(doctor)/schedule';
-          }
+          router.push('/(doctor)/schedule' as any);
         }, 120);
       }
     } else if (tab === 'rx') {
