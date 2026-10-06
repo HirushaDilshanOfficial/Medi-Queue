@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   fetchPrescriptionDetails,
   savePrescriptionApi,
@@ -29,12 +30,13 @@ import {
   fallbackPrescriptionData,
   aureliaPrescriptionData,
 } from '../../services/prescriptionService';
+import { ALL_DUMMY_PATIENTS } from '../../services/patientRecordsService';
 import { downloadPrescription } from '../../utils/prescriptionPdfGenerator';
 
 export default function PatientPrescriptionScreen() {
   const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string }>();
-  const initialToken = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : undefined;
-  const isAurelia = initialToken === 29 || (params?.patientName ? String(params.patientName).includes('Aurelia') : false);
+  const initialToken = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
+  const isAurelia = !params?.tokenNumber || initialToken === 29 || (params?.patientName ? String(params.patientName).includes('Aurelia') : true);
 
   const [data, setData] = useState<PatientPrescriptionDetails>(
     isAurelia ? aureliaPrescriptionData : fallbackPrescriptionData
@@ -47,10 +49,15 @@ export default function PatientPrescriptionScreen() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedFrequency, setSelectedFrequency] = useState<'OD' | 'BD' | 'TDS' | 'QDS'>('BD');
   const [selectedDuration, setSelectedDuration] = useState<number>(5);
+  const [mealTiming, setMealTiming] = useState<'After meal' | 'Before meal'>('After meal');
+  const [takeMorning, setTakeMorning] = useState(true);
+  const [takeLunch, setTakeLunch] = useState(false);
+  const [takeDinner, setTakeDinner] = useState(true);
   const [clinicalNotes, setClinicalNotes] = useState(
     isAurelia ? aureliaPrescriptionData.clinicalNotes : fallbackPrescriptionData.clinicalNotes
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [addMedError, setAddMedError] = useState<string | null>(null);
 
   // Modal states
   const [isAddDiagnosisModalOpen, setIsAddDiagnosisModalOpen] = useState(false);
@@ -61,19 +68,128 @@ export default function PatientPrescriptionScreen() {
   const [referralNotes, setReferralNotes] = useState('');
   const [isSaveSuccessModalOpen, setIsSaveSuccessModalOpen] = useState(false);
 
+  // Edit Medicine Modal State
+  const [isEditMedModalOpen, setIsEditMedModalOpen] = useState(false);
+  const [editingMed, setEditingMed] = useState<MedicineItem | null>(null);
+  const [editMedName, setEditMedName] = useState('');
+  const [editMedType, setEditMedType] = useState<MedicineItem['type']>('TABLET');
+  const [editMedDosage, setEditMedDosage] = useState('');
+  const [editMedFrequency, setEditMedFrequency] = useState<'OD' | 'BD' | 'TDS' | 'QDS'>('BD');
+  const [editMedDuration, setEditMedDuration] = useState<number>(5);
+  const [editMealTiming, setEditMealTiming] = useState<'After meal' | 'Before meal'>('After meal');
+  const [editTakeMorning, setEditTakeMorning] = useState(true);
+  const [editTakeLunch, setEditTakeLunch] = useState(false);
+  const [editTakeDinner, setEditTakeDinner] = useState(true);
+  const [editCustomNotes, setEditCustomNotes] = useState('');
+
+  // Persistent auto-sync helper: writes to AsyncStorage and backend API
+  const persistPrescription = useCallback(async (updatedData: PatientPrescriptionDetails) => {
+    const tokenNum = updatedData.patient?.tokenNumber || (params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29);
+    const cacheKey = `@medi_queue_prescription_${tokenNum}`;
+
+    // 1. Immediately cache locally
+    try {
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(updatedData));
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(cacheKey, JSON.stringify(updatedData));
+      }
+    } catch (e) {
+      console.log('Error caching prescription:', e);
+    }
+
+    // 2. Sync to Backend API
+    try {
+      await savePrescriptionApi({
+        diagnoses: updatedData.diagnoses,
+        clinicalNotes: updatedData.clinicalNotes,
+        prescriptions: updatedData.prescriptions,
+        tokenNumber: tokenNum,
+      });
+    } catch (e) {
+      console.log('Error syncing prescription with backend:', e);
+    }
+  }, [params?.tokenNumber]);
+
+  // Helper to extract patient's current medications from patient records
+  const getRecordMeds = useCallback((): MedicineItem[] => {
+    const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
+    const patRecord = ALL_DUMMY_PATIENTS.find(
+      (p) => p.tokenNumber === tokenNum || (params?.patientName && p.name.includes(params.patientName))
+    );
+    if (patRecord && patRecord.medications && patRecord.medications.length > 0) {
+      return patRecord.medications.map((m, idx) => ({
+        id: m.id ? `rx-${m.id}` : `rx-rec-${idx}`,
+        name: `${m.drugName} ${m.dose}`.trim(),
+        type: m.drugName.toLowerCase().includes('inhaler') ? ('INHALER' as any) : 'TABLET',
+        dosage: m.dose || '1 tablet',
+        frequency: m.frequency || 'Every 6 hours, as needed',
+        frequencyCode: m.frequency.toLowerCase().includes('every 6') ? 'TDS' : m.frequency.toLowerCase().includes('2 puff') ? 'BD' : 'BD',
+        duration: m.duration || (m.drugName.toLowerCase().includes('inhaler') ? 'As needed' : '5 days'),
+        durationDays: 5,
+        instructions: m.sinceDate ? `${m.sinceDate}` : 'After food',
+        tagType: m.drugName.toLowerCase().includes('inhaler') ? 'indication' : 'food',
+      }));
+    }
+    return [];
+  }, [params?.tokenNumber, params?.patientName]);
+
   // Load prescription details
   const loadData = useCallback(async () => {
     try {
-      const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : undefined;
+      const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
+      const cacheKey = `@medi_queue_prescription_${tokenNum}`;
+
+      // 1. Immediately read local cache if available
+      let localFound = false;
+      try {
+        let raw = await AsyncStorage.getItem(cacheKey);
+        if (!raw && typeof window !== 'undefined' && window.localStorage) {
+          raw = window.localStorage.getItem(cacheKey);
+        }
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.diagnoses) && Array.isArray(parsed.prescriptions)) {
+            // If prescriptions list is empty, populate from patient records
+            if (parsed.prescriptions.length === 0) {
+              const defaultMeds = getRecordMeds();
+              if (defaultMeds.length > 0) {
+                parsed.prescriptions = defaultMeds;
+              }
+            }
+            setData(parsed);
+            if (parsed.clinicalNotes !== undefined) {
+              setClinicalNotes(parsed.clinicalNotes);
+            }
+            localFound = true;
+          }
+        }
+      } catch (cacheErr) {
+        console.log('Error reading local cache:', cacheErr);
+      }
+
+      // 2. Fetch from backend API
       const res = await fetchPrescriptionDetails(tokenNum);
-      setData(res);
-      setClinicalNotes(res.clinicalNotes);
+      if (res) {
+        // If backend prescriptions list is empty, populate from patient records
+        if (!res.prescriptions || res.prescriptions.length === 0) {
+          const defaultMeds = getRecordMeds();
+          if (defaultMeds.length > 0) {
+            res.prescriptions = defaultMeds;
+          }
+        }
+        setData(res);
+        setClinicalNotes(res.clinicalNotes || '');
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(res));
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem(cacheKey, JSON.stringify(res));
+        }
+      }
     } catch (err) {
       console.log('Error loading prescription data:', err);
     } finally {
       setLoading(false);
     }
-  }, [params?.tokenNumber]);
+  }, [params?.tokenNumber, getRecordMeds]);
 
   useEffect(() => {
     loadData();
@@ -141,20 +257,34 @@ export default function PatientPrescriptionScreen() {
 
   // Remove diagnosis chip
   const handleRemoveDiagnosis = (id: string, name?: string) => {
+    const doRemove = () => {
+      setData((prev) => {
+        const nextDiagnoses = prev.diagnoses.filter((d) => d.id !== id);
+        const nextData = { ...prev, diagnoses: nextDiagnoses, clinicalNotes };
+        persistPrescription(nextData);
+        return nextData;
+      });
+    };
+
     // On web, Alert.alert multi-button callbacks don't fire — use window.confirm instead
     if (Platform.OS === 'web') {
       const ok = (window as any).confirm(`Remove "${name || 'this diagnosis'}" from the diagnosis list?`);
       if (!ok) return;
-      setData((prev) => ({
-        ...prev,
-        diagnoses: prev.diagnoses.filter((d) => d.id !== id),
-      }));
+      doRemove();
       return;
     }
-    setData((prev) => ({
-      ...prev,
-      diagnoses: prev.diagnoses.filter((d) => d.id !== id),
-    }));
+    Alert.alert(
+      'Remove Diagnosis',
+      `Remove "${name || 'this diagnosis'}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: doRemove,
+        },
+      ]
+    );
   };
 
   // Add diagnosis
@@ -168,10 +298,12 @@ export default function PatientPrescriptionScreen() {
       displayName,
       isPrimary: data.diagnoses.length === 0,
     };
-    setData((prev) => ({
-      ...prev,
-      diagnoses: [...prev.diagnoses, newDiag],
-    }));
+    setData((prev) => {
+      const nextDiagnoses = [...prev.diagnoses, newDiag];
+      const nextData = { ...prev, diagnoses: nextDiagnoses, clinicalNotes };
+      persistPrescription(nextData);
+      return nextData;
+    });
     setNewDiagName('');
     setNewDiagCode('');
     setIsAddDiagnosisModalOpen(false);
@@ -179,14 +311,20 @@ export default function PatientPrescriptionScreen() {
 
   // Remove medicine item
   const handleRemoveMedicine = (id: string, name: string) => {
+    const doRemove = () => {
+      setData((prev) => {
+        const nextPrescriptions = prev.prescriptions.filter((m) => m.id !== id);
+        const nextData = { ...prev, prescriptions: nextPrescriptions, clinicalNotes };
+        persistPrescription(nextData);
+        return nextData;
+      });
+    };
+
     // On web, Alert.alert multi-button callbacks don't fire — use window.confirm instead
     if (Platform.OS === 'web') {
       const ok = (window as any).confirm(`Remove ${name} from this prescription?`);
       if (!ok) return;
-      setData((prev) => ({
-        ...prev,
-        prescriptions: prev.prescriptions.filter((m) => m.id !== id),
-      }));
+      doRemove();
       return;
     }
     Alert.alert(
@@ -197,26 +335,170 @@ export default function PatientPrescriptionScreen() {
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => {
-            setData((prev) => ({
-              ...prev,
-              prescriptions: prev.prescriptions.filter((m) => m.id !== id),
-            }));
-          },
+          onPress: doRemove,
         },
       ]
     );
   };
 
-  // Add medicine to prescription
-  const handleAddMedicine = () => {
-    if (!searchQuery.trim()) {
-      Alert.alert('Medicine Required', 'Please enter or select a medicine name & strength.');
-      return;
+  // Helper to format medicine instructions with meal timing and times of day
+  const formatInstructions = (
+    timing: 'After meal' | 'Before meal',
+    morning: boolean,
+    lunch: boolean,
+    dinner: boolean,
+    extraNote?: string
+  ): string => {
+    const times: string[] = [];
+    if (morning) times.push('Morning');
+    if (lunch) times.push('Lunch');
+    if (dinner) times.push('Dinner');
+
+    let res = timing;
+    if (times.length > 0) {
+      res += ` (${times.join(', ')})`;
+    }
+    if (extraNote && extraNote.trim()) {
+      const clean = extraNote.trim();
+      if (!res.toLowerCase().includes(clean.toLowerCase())) {
+        res += ` • ${clean}`;
+      }
+    }
+    return res;
+  };
+
+  // Helper when selecting frequency in Add Medicine
+  const handleSelectFrequency = (freq: 'OD' | 'BD' | 'TDS' | 'QDS') => {
+    setSelectedFrequency(freq);
+    if (freq === 'OD') {
+      setTakeMorning(true);
+      setTakeLunch(false);
+      setTakeDinner(false);
+    } else if (freq === 'BD') {
+      setTakeMorning(true);
+      setTakeLunch(false);
+      setTakeDinner(true);
+    } else if (freq === 'TDS' || freq === 'QDS') {
+      setTakeMorning(true);
+      setTakeLunch(true);
+      setTakeDinner(true);
+    }
+  };
+
+  // Helper when selecting frequency in Edit Medicine
+  const handleSelectEditFrequency = (freq: 'OD' | 'BD' | 'TDS' | 'QDS') => {
+    setEditMedFrequency(freq);
+    if (freq === 'OD') {
+      setEditTakeMorning(true);
+      setEditTakeLunch(false);
+      setEditTakeDinner(false);
+    } else if (freq === 'BD') {
+      setEditTakeMorning(true);
+      setEditTakeLunch(false);
+      setEditTakeDinner(true);
+    } else if (freq === 'TDS' || freq === 'QDS') {
+      setEditTakeMorning(true);
+      setEditTakeLunch(true);
+      setEditTakeDinner(true);
+    }
+  };
+
+  // Start editing medicine
+  const handleStartEditMedicine = (med: MedicineItem) => {
+    setEditingMed(med);
+    setEditMedName(med.name);
+    setEditMedType(med.type || 'TABLET');
+    setEditMedDosage(med.dosage || '');
+    const freq = med.frequencyCode || 'BD';
+    setEditMedFrequency(freq);
+    setEditMedDuration(med.durationDays || 5);
+
+    const rawInstr = med.instructions || '';
+    const isBefore = rawInstr.toLowerCase().includes('before');
+    setEditMealTiming(isBefore ? 'Before meal' : 'After meal');
+
+    const hasMorn = rawInstr.toLowerCase().includes('morning') || rawInstr.toLowerCase().includes('breakfast');
+    const hasLun = rawInstr.toLowerCase().includes('lunch') || rawInstr.toLowerCase().includes('noon');
+    const hasDin = rawInstr.toLowerCase().includes('dinner') || rawInstr.toLowerCase().includes('night');
+
+    if (hasMorn || hasLun || hasDin) {
+      setEditTakeMorning(hasMorn);
+      setEditTakeLunch(hasLun);
+      setEditTakeDinner(hasDin);
+    } else {
+      setEditTakeMorning(true);
+      setEditTakeLunch(freq === 'TDS' || freq === 'QDS');
+      setEditTakeDinner(freq === 'BD' || freq === 'TDS' || freq === 'QDS');
     }
 
+    // Clean out timing keywords to keep only extra indications/notes
+    const cleanedNote = rawInstr
+      .replace(/before\s*(meal|food)/gi, '')
+      .replace(/after\s*(meal|food)/gi, '')
+      .replace(/\(?(morning|lunch|dinner|night|breakfast|noon|,\s*)+\)?/gi, '')
+      .replace(/^[\s•\-,]+|[\s•\-,]+$/g, '')
+      .trim();
+    setEditCustomNotes(cleanedNote);
+    setIsEditMedModalOpen(true);
+  };
+
+  // Update existing medicine
+  const handleUpdateMedicine = () => {
+    if (!editingMed || !editMedName.trim()) return;
+
+    const freqLabels: Record<'OD' | 'BD' | 'TDS' | 'QDS', string> = {
+      OD: 'OD (1x daily)',
+      BD: 'BD (2x daily)',
+      TDS: 'TDS (3x daily)',
+      QDS: 'QDS (4x daily)',
+    };
+
+    const instructions = formatInstructions(
+      editMealTiming,
+      editTakeMorning,
+      editTakeLunch,
+      editTakeDinner,
+      editCustomNotes
+    );
+
+    const updatedMed: MedicineItem = {
+      ...editingMed,
+      name: editMedName.trim(),
+      type: editMedType,
+      dosage: editMedDosage.trim() || editingMed.dosage,
+      frequency: freqLabels[editMedFrequency] || editMedFrequency,
+      frequencyCode: editMedFrequency,
+      duration: `${editMedDuration} days`,
+      durationDays: editMedDuration,
+      instructions,
+    };
+
+    const nextPrescriptions = data.prescriptions.map((m) =>
+      m.id === editingMed.id ? updatedMed : m
+    );
+    const nextData = { ...data, prescriptions: nextPrescriptions, clinicalNotes };
+    setData(nextData);
+    persistPrescription(nextData);
+    setIsEditMedModalOpen(false);
+    setEditingMed(null);
+  };
+
+  // Add medicine to prescription
+  const handleAddMedicine = () => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setAddMedError('Please enter a medicine name & strength');
+      if (Platform.OS === 'web') {
+        window.alert('Please enter or select a medicine name & strength.');
+      } else {
+        Alert.alert('Medicine Required', 'Please enter or select a medicine name & strength.');
+      }
+      return;
+    }
+    setAddMedError(null);
+
     const matchedCatalog = COMMON_MEDICINES.find(
-      (m) => m.name.toLowerCase() === searchQuery.trim().toLowerCase()
+      (m) => m.name.toLowerCase() === trimmed.toLowerCase()
     );
 
     const freqLabels: Record<'OD' | 'BD' | 'TDS' | 'QDS', string> = {
@@ -226,14 +508,18 @@ export default function PatientPrescriptionScreen() {
       QDS: 'QDS (4x daily)',
     };
 
-    const type = matchedCatalog ? matchedCatalog.type : 'TABLET';
-    const dosage = matchedCatalog ? matchedCatalog.defaultDosage : `1 ${type.toLowerCase()}`;
-    const instructions = matchedCatalog ? matchedCatalog.defaultInstructions : 'After food';
-    const tagType = matchedCatalog ? matchedCatalog.tagType : 'food';
+    const type = matchedCatalog
+      ? matchedCatalog.type
+      : trimmed.toLowerCase().includes('inhaler')
+      ? ('INHALER' as any)
+      : 'TABLET';
+    const dosage = matchedCatalog ? matchedCatalog.defaultDosage : '1 dose';
+    const instructions = formatInstructions(mealTiming, takeMorning, takeLunch, takeDinner);
+    const tagType = 'food';
 
     const newItem: MedicineItem = {
       id: `rx-${Date.now()}`,
-      name: searchQuery.trim(),
+      name: trimmed,
       type,
       dosage,
       frequency: freqLabels[selectedFrequency],
@@ -244,25 +530,22 @@ export default function PatientPrescriptionScreen() {
       tagType,
     };
 
-    setData((prev) => ({
-      ...prev,
-      prescriptions: [...prev.prescriptions, newItem],
-    }));
+    const nextPrescriptions = [...data.prescriptions, newItem];
+    const nextData = { ...data, prescriptions: nextPrescriptions, clinicalNotes };
+    setData(nextData);
+    persistPrescription(nextData);
 
     setSearchQuery('');
     setShowSuggestions(false);
   };
 
-  // Save Prescription & Send Digital Rx
+  // Save Prescription & Download PDF
   const handleSavePrescription = async () => {
     setIsSaving(true);
     try {
-      const res = await savePrescriptionApi({
-        diagnoses: data.diagnoses,
-        clinicalNotes,
-        prescriptions: data.prescriptions,
-        tokenNumber: data.patient?.tokenNumber,
-      });
+      const nextData = { ...data, clinicalNotes };
+      await persistPrescription(nextData);
+      downloadPrescription(nextData, clinicalNotes);
       setIsSaveSuccessModalOpen(true);
     } catch (err) {
       Alert.alert('Saved Offline', 'Prescription details saved locally and queued for dispatch.');
@@ -491,6 +774,7 @@ export default function PatientPrescriptionScreen() {
                 numberOfLines={3}
                 value={clinicalNotes}
                 onChangeText={setClinicalNotes}
+                onBlur={() => persistPrescription({ ...data, clinicalNotes })}
                 placeholder="Enter clinical notes, examination findings, and symptoms..."
                 placeholderTextColor="#94a3b8"
               />
@@ -571,14 +855,24 @@ export default function PatientPrescriptionScreen() {
                       ) : null}
                     </View>
 
-                    {/* Right Delete Button */}
-                    <TouchableOpacity
-                      onPress={() => handleRemoveMedicine(med.id, med.name)}
-                      style={styles.deleteMedBtn}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                      <MaterialCommunityIcons name="trash-can-outline" size={19} color="#94a3b8" />
-                    </TouchableOpacity>
+                    {/* Right Action Buttons: Edit & Delete */}
+                    <View style={styles.medActionsRow}>
+                      <TouchableOpacity
+                        onPress={() => handleStartEditMedicine(med)}
+                        style={styles.editMedBtn}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialCommunityIcons name="pencil-outline" size={17} color="#0d6371" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => handleRemoveMedicine(med.id, med.name)}
+                        style={styles.deleteMedBtn}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={17} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 );
               })}
@@ -616,6 +910,7 @@ export default function PatientPrescriptionScreen() {
                   onChangeText={(text) => {
                     setSearchQuery(text);
                     setShowSuggestions(text.trim().length > 0);
+                    if (addMedError) setAddMedError(null);
                   }}
                   onFocus={() => {
                     if (searchQuery.trim().length > 0) setShowSuggestions(true);
@@ -644,6 +939,7 @@ export default function PatientPrescriptionScreen() {
                       onPress={() => {
                         setSearchQuery(item.name);
                         setShowSuggestions(false);
+                        if (addMedError) setAddMedError(null);
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -680,7 +976,7 @@ export default function PatientPrescriptionScreen() {
                     <TouchableOpacity
                       key={freq}
                       style={[styles.freqChip, isSelected && styles.freqChipSelected]}
-                      onPress={() => setSelectedFrequency(freq)}
+                      onPress={() => handleSelectFrequency(freq)}
                       activeOpacity={0.8}
                     >
                       <Text
@@ -691,6 +987,117 @@ export default function PatientPrescriptionScreen() {
                     </TouchableOpacity>
                   );
                 })}
+              </View>
+            </View>
+
+            {/* Meal Timing (After meal / Before meal) */}
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>Meal Timing</Text>
+              <View style={styles.timingRow}>
+                <TouchableOpacity
+                  style={[styles.timingChip, mealTiming === 'After meal' && styles.timingChipSelected]}
+                  onPress={() => setMealTiming('After meal')}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons
+                    name="silverware-fork-knife"
+                    size={15}
+                    color={mealTiming === 'After meal' ? '#ffffff' : '#0369a1'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[styles.timingChipText, mealTiming === 'After meal' && styles.timingChipTextSelected]}
+                  >
+                    After meal
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.timingChip, mealTiming === 'Before meal' && styles.timingChipSelected]}
+                  onPress={() => setMealTiming('Before meal')}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons
+                    name="clock-time-four-outline"
+                    size={15}
+                    color={mealTiming === 'Before meal' ? '#ffffff' : '#0369a1'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[styles.timingChipText, mealTiming === 'Before meal' && styles.timingChipTextSelected]}
+                  >
+                    Before meal
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Schedule / Time of Day (Morning, Lunch, Dinner) */}
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>Take Medicine</Text>
+              <View style={styles.timeScheduleRow}>
+                <TouchableOpacity
+                  style={[styles.timeScheduleChip, takeMorning && styles.timeScheduleChipSelected]}
+                  onPress={() => setTakeMorning(!takeMorning)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={takeMorning ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={15}
+                    color={takeMorning ? '#ffffff' : '#0369a1'}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
+                    style={[
+                      styles.timeScheduleChipText,
+                      takeMorning && styles.timeScheduleChipTextSelected,
+                    ]}
+                  >
+                    Morning
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.timeScheduleChip, takeLunch && styles.timeScheduleChipSelected]}
+                  onPress={() => setTakeLunch(!takeLunch)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={takeLunch ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={15}
+                    color={takeLunch ? '#ffffff' : '#0369a1'}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
+                    style={[
+                      styles.timeScheduleChipText,
+                      takeLunch && styles.timeScheduleChipTextSelected,
+                    ]}
+                  >
+                    Lunch
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.timeScheduleChip, takeDinner && styles.timeScheduleChipSelected]}
+                  onPress={() => setTakeDinner(!takeDinner)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={takeDinner ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={15}
+                    color={takeDinner ? '#ffffff' : '#0369a1'}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
+                    style={[
+                      styles.timeScheduleChipText,
+                      takeDinner && styles.timeScheduleChipTextSelected,
+                    ]}
+                  >
+                    Dinner
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -721,14 +1128,21 @@ export default function PatientPrescriptionScreen() {
               </View>
             </View>
 
+            {addMedError && (
+              <View style={styles.addMedErrorWrap}>
+                <Ionicons name="alert-circle" size={16} color="#ef4444" style={{ marginRight: 6 }} />
+                <Text style={styles.addMedErrorText}>{addMedError}</Text>
+              </View>
+            )}
+
             {/* Add to Prescription Button */}
             <TouchableOpacity
               style={styles.addToPrescriptionBtn}
               onPress={handleAddMedicine}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Ionicons name="add-circle-outline" size={20} color="#064e59" style={{ marginRight: 6 }} />
-              <Text style={styles.addToPrescriptionBtnText}>Add to Prescription</Text>
+              <Ionicons name="add-circle" size={20} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.addToPrescriptionBtnText}>+ Add Medicine to Prescription</Text>
             </TouchableOpacity>
           </View>
 
@@ -736,7 +1150,7 @@ export default function PatientPrescriptionScreen() {
           {/* 8. BOTTOM ACTION BUTTONS                                   */}
           {/* ========================================================= */}
           <View style={styles.actionsWrap}>
-            {/* Primary Action Button */}
+            {/* Primary Action Button: Save Prescription and Download */}
             <TouchableOpacity
               style={styles.saveDigitalRxBtn}
               onPress={handleSavePrescription}
@@ -748,33 +1162,16 @@ export default function PatientPrescriptionScreen() {
               ) : (
                 <>
                   <MaterialCommunityIcons
-                    name="cloud-upload-outline"
+                    name="cloud-download-outline"
                     size={20}
                     color="#ffffff"
                     style={{ marginRight: 8 }}
                   />
                   <Text style={styles.saveDigitalRxBtnText}>
-                    Save Prescription & Send Digital Rx
+                    Save Prescription and Download
                   </Text>
                 </>
               )}
-            </TouchableOpacity>
-
-            {/* Download Prescription PDF Button */}
-            <TouchableOpacity
-              style={styles.downloadRxActionBtn}
-              onPress={() => downloadPrescription(data, clinicalNotes)}
-              activeOpacity={0.85}
-            >
-              <MaterialCommunityIcons
-                name="cloud-download-outline"
-                size={20}
-                color="#064e59"
-                style={{ marginRight: 8 }}
-              />
-              <Text style={styles.downloadRxActionBtnText}>
-                Download Prescription (PDF / Print)
-              </Text>
             </TouchableOpacity>
 
             {/* Secondary Referral Button */}
@@ -913,6 +1310,229 @@ export default function PatientPrescriptionScreen() {
                 onPress={() => handleAddDiagnosis(newDiagName, newDiagCode)}
               >
                 <Text style={styles.modalSubmitBtnText}>Add Diagnosis</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* MODAL: EDIT MEDICINE                                       */}
+      {/* ========================================================= */}
+      <Modal visible={isEditMedModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <MaterialCommunityIcons name="pill" size={22} color="#0d6371" style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitle}>Edit Prescription Medicine</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsEditMedModalOpen(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSub}>Update medicine dosage, frequency, and instructions:</Text>
+
+            <ScrollView
+              style={{ maxHeight: 450 }}
+              contentContainerStyle={{ paddingBottom: 6 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={{ marginTop: 6 }}>
+                {/* Medicine Name */}
+                <Text style={styles.fieldLabel}>Medicine Name & Strength</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. Paracetamol 500mg"
+                  placeholderTextColor="#94a3b8"
+                  value={editMedName}
+                  onChangeText={setEditMedName}
+                />
+
+                {/* Dosage */}
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Dosage</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. 500 mg, 1 tablet, 2 puffs"
+                  placeholderTextColor="#94a3b8"
+                  value={editMedDosage}
+                  onChangeText={setEditMedDosage}
+                />
+
+                {/* Frequency */}
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Dosage Frequency</Text>
+                <View style={styles.segmentedRow}>
+                  {(['OD', 'BD', 'TDS', 'QDS'] as const).map((freq) => {
+                    const labelMap = { OD: 'OD (1x)', BD: 'BD (2x)', TDS: 'TDS (3x)', QDS: 'QDS (4x)' };
+                    const isSelected = editMedFrequency === freq;
+                    return (
+                      <TouchableOpacity
+                        key={freq}
+                        style={[styles.freqChip, isSelected && styles.freqChipSelected]}
+                        onPress={() => handleSelectEditFrequency(freq)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.freqChipText, isSelected && styles.freqChipTextSelected]}>
+                          {labelMap[freq]}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Meal Timing (After meal / Before meal) */}
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Meal Timing</Text>
+                <View style={styles.timingRow}>
+                  <TouchableOpacity
+                    style={[styles.timingChip, editMealTiming === 'After meal' && styles.timingChipSelected]}
+                    onPress={() => setEditMealTiming('After meal')}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons
+                      name="silverware-fork-knife"
+                      size={15}
+                      color={editMealTiming === 'After meal' ? '#ffffff' : '#0369a1'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[styles.timingChipText, editMealTiming === 'After meal' && styles.timingChipTextSelected]}
+                    >
+                      After meal
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.timingChip, editMealTiming === 'Before meal' && styles.timingChipSelected]}
+                    onPress={() => setEditMealTiming('Before meal')}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons
+                      name="clock-time-four-outline"
+                      size={15}
+                      color={editMealTiming === 'Before meal' ? '#ffffff' : '#0369a1'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[styles.timingChipText, editMealTiming === 'Before meal' && styles.timingChipTextSelected]}
+                    >
+                      Before meal
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Schedule / Time of Day (Morning, Lunch, Dinner) */}
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Take Medicine</Text>
+                <View style={styles.timeScheduleRow}>
+                  <TouchableOpacity
+                    style={[styles.timeScheduleChip, editTakeMorning && styles.timeScheduleChipSelected]}
+                    onPress={() => setEditTakeMorning(!editTakeMorning)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={editTakeMorning ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={15}
+                      color={editTakeMorning ? '#ffffff' : '#0369a1'}
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text
+                      style={[
+                        styles.timeScheduleChipText,
+                        editTakeMorning && styles.timeScheduleChipTextSelected,
+                      ]}
+                    >
+                      Morning
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.timeScheduleChip, editTakeLunch && styles.timeScheduleChipSelected]}
+                    onPress={() => setEditTakeLunch(!editTakeLunch)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={editTakeLunch ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={15}
+                      color={editTakeLunch ? '#ffffff' : '#0369a1'}
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text
+                      style={[
+                        styles.timeScheduleChipText,
+                        editTakeLunch && styles.timeScheduleChipTextSelected,
+                      ]}
+                    >
+                      Lunch
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.timeScheduleChip, editTakeDinner && styles.timeScheduleChipSelected]}
+                    onPress={() => setEditTakeDinner(!editTakeDinner)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={editTakeDinner ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={15}
+                      color={editTakeDinner ? '#ffffff' : '#0369a1'}
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text
+                      style={[
+                        styles.timeScheduleChipText,
+                        editTakeDinner && styles.timeScheduleChipTextSelected,
+                      ]}
+                    >
+                      Dinner
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Duration */}
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Duration (days)</Text>
+                <View style={styles.durationRow}>
+                  {[3, 5, 7, 14, 30].map((days) => {
+                    const isSelected = editMedDuration === days;
+                    return (
+                      <TouchableOpacity
+                        key={days}
+                        style={[styles.durationChip, isSelected && styles.durationChipSelected]}
+                        onPress={() => setEditMedDuration(days)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.durationChipText, isSelected && styles.durationChipTextSelected]}>
+                          {days} days
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Additional Note */}
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Additional Notes / Indication (Optional)</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. As needed for pain, 2 puffs for wheeze"
+                  placeholderTextColor="#94a3b8"
+                  value={editCustomNotes}
+                  onChangeText={setEditCustomNotes}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setIsEditMedModalOpen(false)}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSubmitBtn}
+                onPress={handleUpdateMedicine}
+              >
+                <Text style={styles.modalSubmitBtnText}>Update Medicine</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1444,9 +2064,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0d7685',
   },
-  deleteMedBtn: {
-    padding: 6,
+  medActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginLeft: 6,
+  },
+  editMedBtn: {
+    padding: 7,
+    borderRadius: 8,
+    backgroundColor: '#e0f2fe',
+  },
+  deleteMedBtn: {
+    padding: 7,
+    borderRadius: 8,
+    backgroundColor: '#fee2e2',
   },
   emptyPrescriptionBox: {
     paddingVertical: 14,
@@ -1550,6 +2182,60 @@ const styles = StyleSheet.create({
   freqChipTextSelected: {
     color: '#ffffff',
   },
+  timingRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  timingChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e0f2fe',
+    borderRadius: 14,
+    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: '#bae6fd',
+  },
+  timingChipSelected: {
+    backgroundColor: '#064e59',
+    borderColor: '#064e59',
+  },
+  timingChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369a1',
+  },
+  timingChipTextSelected: {
+    color: '#ffffff',
+  },
+  timeScheduleRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  timeScheduleChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e0f2fe',
+    borderRadius: 14,
+    paddingVertical: 9,
+    borderWidth: 1.5,
+    borderColor: '#bae6fd',
+  },
+  timeScheduleChipSelected: {
+    backgroundColor: '#064e59',
+    borderColor: '#064e59',
+  },
+  timeScheduleChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369a1',
+  },
+  timeScheduleChipTextSelected: {
+    color: '#ffffff',
+  },
   durationRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1572,19 +2258,35 @@ const styles = StyleSheet.create({
   durationChipTextSelected: {
     color: '#ffffff',
   },
+  addMedErrorWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  addMedErrorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ef4444',
+  },
   addToPrescriptionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e0f2fe',
+    backgroundColor: '#0d6371',
     borderRadius: 22,
-    paddingVertical: 11,
-    marginTop: 4,
+    paddingVertical: 13,
+    marginTop: 6,
+    shadowColor: '#0d6371',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   addToPrescriptionBtnText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#064e59',
+    color: '#ffffff',
   },
 
   // 8. BOTTOM ACTION BUTTONS
