@@ -10,4 +10,4 @@ export const getBaseUrl = (): string => {
 };
 
 export const BASE_URL = getBaseUrl();
-export const API_URL = `${getBaseUrl()}/api/v1`;
+export const API_URL = `${BASE_URL}/api/v1`;

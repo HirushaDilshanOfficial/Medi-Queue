@@ -19,6 +19,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const policyRoutes = require('./routes/policyRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 const v1DoctorRoutes = require('./routes/v1DoctorRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -65,6 +66,12 @@ app.use('/api/v1/policies', policyRoutes);
 app.use('/api/v1/public', publicRoutes);
 app.use('/api/v1/doctor', v1DoctorRoutes);
 
+// Patient module
+app.use('/api/v1/patients', patientRoutes);
+app.use('/api/v1/doctors', doctorRoutes);
+app.use('/api/v1/bookings', bookingRoutes);
+app.use('/api/v1/queue', queueRoutes);
+
 // Error Handling Middleware
 app.use(errorHandler);
 
@@ -74,4 +81,3 @@ const HOST = process.env.HOST || '0.0.0.0';
 app.listen(PORT, HOST, () => {
   console.log(`Server is running on http://${HOST}:${PORT}`);
 });
-

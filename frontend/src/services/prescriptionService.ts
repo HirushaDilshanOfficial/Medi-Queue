@@ -3,7 +3,7 @@ import { API_URL } from '../config';
 export interface MedicineItem {
   id: string;
   name: string;
-  type: 'TABLET' | 'CAPSULE' | 'SYRUP' | 'INJECTION' | 'CREAM' | 'DROPS';
+  type: 'TABLET' | 'CAPSULE' | 'SYRUP' | 'INJECTION' | 'CREAM' | 'DROPS' | 'INHALER';
   dosage: string;
   frequency: string;
   frequencyCode: 'OD' | 'BD' | 'TDS' | 'QDS';
@@ -196,25 +196,25 @@ export const aureliaPrescriptionData: PatientPrescriptionDetails = {
       id: 'rx-aur-1',
       name: 'Paracetamol 500mg',
       type: 'TABLET',
-      dosage: '1 tablet',
-      frequency: 'BD (2x daily)',
-      frequencyCode: 'BD',
+      dosage: '500 mg',
+      frequency: 'Every 6 hours, as needed',
+      frequencyCode: 'TDS',
       duration: '5 days',
       durationDays: 5,
-      instructions: 'After food',
+      instructions: 'Since Nov 04',
       tagType: 'food',
     },
     {
       id: 'rx-aur-2',
-      name: 'Ibuprofen 400mg',
-      type: 'TABLET',
-      dosage: '1 tablet',
-      frequency: 'BD (2x daily)',
+      name: 'Salbutamol Inhaler 100mcg',
+      type: 'INHALER',
+      dosage: '100 mcg',
+      frequency: '2 puffs as needed for wheeze',
       frequencyCode: 'BD',
-      duration: '3 days',
-      durationDays: 3,
-      instructions: 'After food',
-      tagType: 'food',
+      duration: 'As needed',
+      durationDays: 30,
+      instructions: 'Since Aug 12',
+      tagType: 'indication',
     },
   ],
 };
@@ -224,16 +224,17 @@ export const aureliaPrescriptionData: PatientPrescriptionDetails = {
  */
 export const fetchPrescriptionDetails = async (tokenNumber?: number): Promise<PatientPrescriptionDetails> => {
   try {
-    const url = tokenNumber ? `${API_URL}/doctor/prescription?tokenNumber=${tokenNumber}` : `${API_URL}/doctor/prescription`;
+    const targetToken = tokenNumber || 29;
+    const url = `${API_URL}/doctor/prescription?tokenNumber=${targetToken}`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const json = await response.json();
-    return json.data || (tokenNumber === 29 ? aureliaPrescriptionData : fallbackPrescriptionData);
+    return json.data || (targetToken === 29 ? aureliaPrescriptionData : fallbackPrescriptionData);
   } catch (err) {
     console.log('Error fetching prescription details, using fallback:', err);
-    return tokenNumber === 29 ? aureliaPrescriptionData : fallbackPrescriptionData;
+    return (tokenNumber || 29) === 29 ? aureliaPrescriptionData : fallbackPrescriptionData;
   }
 };
 
@@ -246,6 +247,17 @@ export const savePrescriptionApi = async (payload: {
   prescriptions: MedicineItem[];
   tokenNumber?: number;
 }): Promise<{ success: boolean; message: string; data?: any }> => {
+  // Update local fallback so even without server it never resurrects deleted items
+  if (!payload.tokenNumber || payload.tokenNumber === 29) {
+    if (payload.diagnoses !== undefined) aureliaPrescriptionData.diagnoses = [...payload.diagnoses];
+    if (payload.prescriptions !== undefined) aureliaPrescriptionData.prescriptions = [...payload.prescriptions];
+    if (payload.clinicalNotes !== undefined) aureliaPrescriptionData.clinicalNotes = payload.clinicalNotes;
+  } else {
+    if (payload.diagnoses !== undefined) fallbackPrescriptionData.diagnoses = [...payload.diagnoses];
+    if (payload.prescriptions !== undefined) fallbackPrescriptionData.prescriptions = [...payload.prescriptions];
+    if (payload.clinicalNotes !== undefined) fallbackPrescriptionData.clinicalNotes = payload.clinicalNotes;
+  }
+
   try {
     const response = await fetch(`${API_URL}/doctor/prescription`, {
       method: 'POST',

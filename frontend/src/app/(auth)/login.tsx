@@ -14,7 +14,9 @@ import {
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
+import { AppIcon } from '../../components/AppIcon';
 import { login } from '../../services/authService';
+import { setAuthToken } from '../../services/http';
 
 // Actual Login Form - Email & Password
 export default function LoginScreen() {
@@ -33,21 +35,22 @@ export default function LoginScreen() {
 
     try {
       const userData = await login(email, password);
-      
-      // Save token and user data locally
-      await AsyncStorage.setItem('token', userData.token);
+      // Persist the JWT for the role dashboards that need it (patient module reads
+      // the same key via services/http.ts).
+      await setAuthToken(userData.token);
       await AsyncStorage.setItem('user', JSON.stringify(userData));
-      
+
       // Successfully logged in
       Alert.alert('Success', `Welcome back, ${userData.fullName}!`);
-      
+
       // Navigate based on role
-      const userRole = String(userData.role || '').toLowerCase();
-      if (userRole === 'moh') {
+      if (userData.role === 'MOH') {
         router.replace('/(moh)/dashboard');
-      } else if (userRole === 'receptionist') {
+      } else if (userData.role === 'Patient') {
+        router.replace('/(patient)');
+      } else if (String(userData.role || '').toLowerCase() === 'receptionist') {
         router.replace('/(reception)/dashboard');
-      } else if (userRole === 'doctor') {
+      } else if (String(userData.role || '').toLowerCase() === 'doctor') {
         router.replace('/(doctor)/dashboard');
       } else {
         Alert.alert('Notice', `Logged in as ${userData.role}, but dashboard is not created yet.`);
@@ -77,12 +80,12 @@ export default function LoginScreen() {
 
           {/* Back Button */}
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>← Back</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>Back</Text></View>
           </TouchableOpacity>
 
           {/* Small Logo */}
           <View style={styles.logoSmall}>
-            <Text style={styles.logoSmallIcon}>🏥</Text>
+            <AppIcon name="medical" size={28} color={Colors.primaryDark} />
           </View>
 
           <Text style={styles.headerTitle}>Welcome Back</Text>
@@ -95,7 +98,7 @@ export default function LoginScreen() {
           {/* Email Field */}
           <Text style={styles.fieldLabel}>Email Address</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>✉️</Text>
+            <AppIcon name="mail" size={20} color={Colors.textMedium} style={{ marginRight: 10 }} />
             <TextInput
               style={styles.input}
               placeholder="you@example.com"
@@ -111,7 +114,7 @@ export default function LoginScreen() {
           {/* Password Field */}
           <Text style={styles.fieldLabel}>Password</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>🔒</Text>
+            <AppIcon name="lock" size={20} color={Colors.textMedium} style={{ marginRight: 10 }} />
             <TextInput
               style={styles.input}
               placeholder="Enter your password"
@@ -123,9 +126,11 @@ export default function LoginScreen() {
             {/* Show/Hide password toggle */}
             <TouchableOpacity
               style={styles.eyeButton}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
               onPress={() => setShowPassword(!showPassword)}
             >
-              <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
+              <AppIcon name={showPassword ? 'eyeOff' : 'eye'} size={20} color={Colors.textMedium} />
             </TouchableOpacity>
           </View>
 
@@ -149,7 +154,7 @@ export default function LoginScreen() {
                 <Text style={styles.loginButtonText}>  Signing in...</Text>
               </View>
             ) : (
-              <Text style={styles.loginButtonText}>Sign In  →</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.loginButtonText}>Sign In</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
             )}
           </TouchableOpacity>
 
@@ -175,9 +180,10 @@ export default function LoginScreen() {
         </View>
 
         {/* Footer */}
-        <Text style={styles.footer}>
-          Ministry of Health · Sri Lanka 🇱🇰
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 24, marginBottom: 40 }}>
+          <AppIcon name="flag" size={14} color={Colors.textLight} />
+          <Text style={[styles.footer, { marginTop: 0, marginBottom: 0 }]}>Ministry of Health · Sri Lanka</Text>
+        </View>
 
       </ScrollView>
     </KeyboardAvoidingView>

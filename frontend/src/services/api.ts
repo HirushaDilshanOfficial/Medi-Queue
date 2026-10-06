@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { Platform } from 'react-native';
 import {
   Patient,
   Doctor,
@@ -10,7 +11,8 @@ import {
   ShiftSummary,
 } from '../types';
 
-const FALLBACK_IP_URL = 'http://10.240.7.66:5001';
+const FALLBACK_IP_URL =
+  Platform.OS === 'web' ? 'http://localhost:5001' : 'http://192.168.1.2:5001';
 
 export const getApiBaseUrl = (): string => {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {

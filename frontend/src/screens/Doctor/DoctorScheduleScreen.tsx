@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,92 +6,174 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  RefreshControl,
-  ActivityIndicator,
-  Alert,
-  StatusBar,
-  Image,
   Modal,
-  TextInput,
+  Platform,
+  useColorScheme,
+  Animated,
+  StatusBar,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
-  fetchDoctorSchedule,
-  addWalkInSlotApi,
-  toggleDoctorBreakApi,
-  DoctorScheduleData,
-  ScheduleTimelineItem,
-  fallbackScheduleData,
-  toDateKey,
-  formatRealtimeDateHeader,
-  formatRealtimeClock,
-  getRealtimeWeekDays,
-} from '../../services/doctorService';
+  HOSPITALS,
+  HospitalInfo,
+  ScheduleAppointment,
+  DaySchedule,
+  INITIAL_SCHEDULE_DATA,
+  REFERENCE_TODAY,
+  WeekDayItem,
+  getWeekDays,
+  formatWeekRangeLabel,
+  formatHeaderDate,
+  parseDateKey,
+  formatDateKey,
+} from '../../services/scheduleData';
 
 interface DoctorScheduleScreenProps {
   navigation?: any;
 }
 
 export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScreenProps) {
-  const [data, setData] = useState<DoctorScheduleData>(fallbackScheduleData);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedDayKey, setSelectedDayKey] = useState<string>(toDateKey(new Date()));
-  const [liveClock, setLiveClock] = useState<string>(formatRealtimeClock(new Date()));
-  const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('schedule');
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
-  // Modals
-  const [isWalkinModalOpen, setIsWalkinModalOpen] = useState(false);
-  const [walkinName, setWalkinName] = useState('');
-  const [walkinReason, setWalkinReason] = useState('');
-  const [walkinAge, setWalkinAge] = useState('');
-  const [walkinGender, setWalkinGender] = useState('Male');
-  const [isSubmittingWalkin, setIsSubmittingWalkin] = useState(false);
+  // Theme definition
+  const theme = useMemo(() => {
+    if (isDark) {
+      return {
+        isDark: true,
+        background: '#0e191b',
+        pageBg: '#091012',
+        card: '#16272a',
+        cardBorder: '#1f383c',
+        primary: '#146370',
+        primaryDeep: '#0b4f5a',
+        accent: '#22aab8',
+        tint: '#1a373d',
+        textDark: '#eef8fa',
+        textMedium: '#b2c8cb',
+        textMuted: '#7a969a',
+        divider: '#20393d',
+        weekendBg: '#132124',
+        weekendBorder: '#233d42',
+        inputBg: '#142326',
+        modalOverlay: 'rgba(0, 0, 0, 0.75)',
+        sheetBg: '#142427',
+      };
+    }
+    return {
+      isDark: false,
+      background: '#eef6f8',
+      pageBg: '#e2e8f0',
+      card: '#ffffff',
+      cardBorder: '#e1eff1',
+      primary: '#0b4f5a',
+      primaryDeep: '#0b4f5a',
+      accent: '#0e8a96',
+      tint: '#d9f2f5',
+      textDark: '#08252b',
+      textMedium: '#31555c',
+      textMuted: '#688990',
+      divider: '#e2eff1',
+      weekendBg: '#f6fbfb',
+      weekendBorder: '#d4e7e9',
+      inputBg: '#f8fafc',
+      modalOverlay: 'rgba(8, 37, 43, 0.45)',
+      sheetBg: '#ffffff',
+    };
+  }, [isDark]);
 
-  // EHR Modal for active patient
-  const [isEhrModalOpen, setIsEhrModalOpen] = useState(false);
-  const [ehrNotes, setEhrNotes] = useState('Patient reports mild recurring lower back stiffness after prolonged sitting. Range of motion intact. No radiating numbness.');
-
-  // Break state modal
-  const [isBreakModalOpen, setIsBreakModalOpen] = useState(false);
-  const [breakTimerSeconds, setBreakTimerSeconds] = useState(15 * 60);
-  const [breakActive, setBreakActive] = useState(false);
-
-  // Filter
-  const [activeFilter, setActiveFilter] = useState<'all' | 'done' | 'attending' | 'waiting' | 'scheduled'>('all');
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-
-  // Live timer for consultation elapsed
-  const [elapsedMinutes, setElapsedMinutes] = useState(6);
-
-  const loadSchedule = useCallback(async (dateKey: string) => {
-    try {
-      const res = await fetchDoctorSchedule(dateKey);
-      if (res) {
-        setData(res);
+  // Inject Lexend Google font on web
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      if (!document.getElementById('lexend-google-font')) {
+        const link = document.createElement('link');
+        link.id = 'lexend-google-font';
+        link.rel = 'stylesheet';
+        link.href =
+          'https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap';
+        document.head.appendChild(link);
       }
-    } catch (err) {
-      console.log('Error fetching schedule:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadSchedule(selectedDayKey);
-  }, [loadSchedule, selectedDayKey]);
+  // ─────────────────────────────────────────────────────────
+  // STATE MANAGEMENT
+  // ─────────────────────────────────────────────────────────
 
-  // Live clock tick (every 10s)
+  // Selected date key (Defaults to Oct 6, 2026 - Tue)
+  const [selectedDateKey, setSelectedDateKey] = useState<string>(REFERENCE_TODAY);
+  // Current week anchor date (used to calculate Mon-Sun strip)
+  const [weekAnchorDate, setWeekAnchorDate] = useState<Date>(() => parseDateKey(REFERENCE_TODAY));
+
+  // Schedule appointments stored in mutable state for walk-in additions
+  const [scheduleData, setScheduleData] = useState<Record<string, DaySchedule>>(
+    INITIAL_SCHEDULE_DATA
+  );
+
+  // Remaining walk-in allocations per hospital (today)
+  const [walkInAllocations, setWalkInAllocations] = useState<Record<string, number>>({
+    cgh: HOSPITALS.cgh.walkInCapacity,
+    lakeview: HOSPITALS.lakeview.walkInCapacity,
+    'st-lucia': HOSPITALS['st-lucia'].walkInCapacity,
+  });
+
+  // Filter state
+  const [selectedHospitalId, setSelectedHospitalId] = useState<string>('all');
+  const [isHospitalDropdownOpen, setIsHospitalDropdownOpen] = useState(false);
+
+  // Selected patient for bottom detail sheet
+  const [selectedPatient, setSelectedPatient] = useState<ScheduleAppointment | null>(null);
+
+  // Active bottom navigation tab
+  const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>(
+    'schedule'
+  );
+
+  // Consultation elapsed counter for active patient
+  const [elapsedMinutes, setElapsedMinutes] = useState(6);
+
+  // Toast feedback system
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastFade] = useState(new Animated.Value(0));
+
+  const showToast = useCallback(
+    (msg: string) => {
+      setToastMessage(msg);
+      Animated.sequence([
+        Animated.timing(toastFade, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.delay(2400),
+        Animated.timing(toastFade, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setToastMessage(null);
+      });
+    },
+    [toastFade]
+  );
+
+  // Handle escape key on web to close modals & dropdown
   useEffect(() => {
-    const clockTimer = setInterval(() => {
-      setLiveClock(formatRealtimeClock(new Date()));
-    }, 10000);
-    return () => clearInterval(clockTimer);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          setSelectedPatient(null);
+          setIsHospitalDropdownOpen(false);
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
   }, []);
 
-  // Elapsed timer tick
+  // Increment consultation elapsed timer
   useEffect(() => {
     const timer = setInterval(() => {
       setElapsedMinutes((prev) => prev + 1);
@@ -99,950 +181,2014 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     return () => clearInterval(timer);
   }, []);
 
-  // Break countdown timer
-  useEffect(() => {
-    let interval: any = null;
-    if (breakActive && breakTimerSeconds > 0) {
-      interval = setInterval(() => {
-        setBreakTimerSeconds((sec) => Math.max(0, sec - 1));
-      }, 1000);
+  // ─────────────────────────────────────────────────────────
+  // WEEK STRIP LOGIC
+  // ─────────────────────────────────────────────────────────
+
+  // 7 days for the current anchor week
+  const weekDays = useMemo(() => {
+    return getWeekDays(weekAnchorDate);
+  }, [weekAnchorDate]);
+
+  // Week range label (e.g. "Oct 5 – 11, 2026")
+  const weekRangeLabel = useMemo(() => {
+    return formatWeekRangeLabel(weekDays);
+  }, [weekDays]);
+
+  // Navigate to previous week
+  const handlePrevWeek = () => {
+    const newAnchor = new Date(weekAnchorDate);
+    newAnchor.setDate(newAnchor.getDate() - 7);
+    setWeekAnchorDate(newAnchor);
+
+    // Keep the same weekday selected
+    const selectedD = parseDateKey(selectedDateKey);
+    const dayOfWeek = selectedD.getDay(); // 0 = Sun, 1 = Mon...
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const newMonday = new Date(newAnchor);
+    const newAnchorDayOfWeek = newAnchor.getDay();
+    const anchorMonOffset = newAnchorDayOfWeek === 0 ? -6 : 1 - newAnchorDayOfWeek;
+    newMonday.setDate(newAnchor.getDate() + anchorMonOffset);
+
+    const targetDayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const newSelected = new Date(newMonday);
+    newSelected.setDate(newMonday.getDate() + targetDayIndex);
+    const newKey = formatDateKey(newSelected);
+    setSelectedDateKey(newKey);
+    setSelectedHospitalId('all'); // Reset filter on day change
+    setIsHospitalDropdownOpen(false);
+  };
+
+  // Navigate to next week
+  const handleNextWeek = () => {
+    const newAnchor = new Date(weekAnchorDate);
+    newAnchor.setDate(newAnchor.getDate() + 7);
+    setWeekAnchorDate(newAnchor);
+
+    // Keep the same weekday selected
+    const selectedD = parseDateKey(selectedDateKey);
+    const dayOfWeek = selectedD.getDay();
+    const newMonday = new Date(newAnchor);
+    const newAnchorDayOfWeek = newAnchor.getDay();
+    const anchorMonOffset = newAnchorDayOfWeek === 0 ? -6 : 1 - newAnchorDayOfWeek;
+    newMonday.setDate(newAnchor.getDate() + anchorMonOffset);
+
+    const targetDayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const newSelected = new Date(newMonday);
+    newSelected.setDate(newMonday.getDate() + targetDayIndex);
+    const newKey = formatDateKey(newSelected);
+    setSelectedDateKey(newKey);
+    setSelectedHospitalId('all'); // Reset filter on day change
+    setIsHospitalDropdownOpen(false);
+  };
+
+  // Jump to Today (Tue Oct 6, 2026)
+  const handleJumpToday = () => {
+    const today = parseDateKey(REFERENCE_TODAY);
+    setWeekAnchorDate(today);
+    setSelectedDateKey(REFERENCE_TODAY);
+    setSelectedHospitalId('all');
+    setIsHospitalDropdownOpen(false);
+    showToast('Jumped to Today (Oct 6, 2026)');
+  };
+
+  // Select day on week strip
+  const handleSelectDay = (key: string) => {
+    setSelectedDateKey(key);
+    setSelectedHospitalId('all'); // Resets to "All hospitals" when day changes
+    setIsHospitalDropdownOpen(false);
+  };
+
+  // ─────────────────────────────────────────────────────────
+  // CURRENT DAY DATA & FILTERING
+  // ─────────────────────────────────────────────────────────
+
+  const currentDayData: DaySchedule = useMemo(() => {
+    return (
+      scheduleData[selectedDateKey] || {
+        dateKey: selectedDateKey,
+        hospitals: [],
+        appointments: [],
+      }
+    );
+  }, [scheduleData, selectedDateKey]);
+
+  // Is current day a leave day?
+  const isLeaveDay = Boolean(currentDayData.isLeave);
+
+  // Hospitals active on current day
+  const dayHospitals = useMemo(() => {
+    return (currentDayData.hospitals || [])
+      .map((hid) => HOSPITALS[hid])
+      .filter(Boolean);
+  }, [currentDayData]);
+
+  // Appointments for the day
+  const dayAppointments = useMemo(() => {
+    return currentDayData.appointments || [];
+  }, [currentDayData]);
+
+  // Filtered appointments based on hospital dropdown
+  const filteredAppointments = useMemo(() => {
+    if (selectedHospitalId === 'all') {
+      return dayAppointments;
     }
-    return () => clearInterval(interval);
-  }, [breakActive, breakTimerSeconds]);
+    return dayAppointments.filter((a) => a.hospitalId === selectedHospitalId);
+  }, [dayAppointments, selectedHospitalId]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadSchedule(selectedDayKey);
-  };
-
-  const handleSelectDay = (dateKey: string) => {
-    setSelectedDayKey(dateKey);
-    const todayKey = toDateKey(new Date());
-
-    // Calculate real-time dynamic date header for the selected day
-    const [y, m, d] = dateKey.split('-').map(Number);
-    const selectedDate = (!isNaN(y) && !isNaN(m) && !isNaN(d)) ? new Date(y, m - 1, d) : new Date();
-    const dynamicHeader = formatRealtimeDateHeader(selectedDate);
-
-    if (dateKey === todayKey) {
-      setData((prev) => ({
-        ...prev,
-        dateHeader: dynamicHeader,
-        selectedDayKey: dateKey,
-      }));
-      loadSchedule(dateKey);
-    } else {
-      setData({
-        ...fallbackScheduleData,
-        dateHeader: dynamicHeader,
-        selectedDayKey: dateKey,
-        timeline: [
-          {
-            id: 'slot-alt-1',
-            time: '08:30 AM',
-            timeHour: '08:30',
-            timePeriod: 'AM',
-            patientName: 'Bandara Wijesekara',
-            reason: 'Ortho Follow-up • Token #001',
-            tokenNumber: 1,
-            status: 'done',
-            age: 52,
-            gender: 'Male',
-          },
-          {
-            id: 'slot-alt-2',
-            time: '09:00 AM',
-            timeHour: '09:00',
-            timePeriod: 'AM',
-            patientName: 'Anoma Jayawardena',
-            reason: 'Joint Stiffness • Token #002',
-            tokenNumber: 2,
-            status: 'now_attending',
-            isNowAttending: true,
-            elapsedMinutes: 4,
-            locationStatus: 'In Room',
-            age: 63,
-            gender: 'Female',
-          },
-          {
-            id: 'slot-alt-3',
-            time: '09:30 AM',
-            timeHour: '09:30',
-            timePeriod: 'AM',
-            patientName: 'Saman Kumara',
-            reason: 'Fracture Review • Token #003',
-            tokenNumber: 3,
-            status: 'waiting',
-            age: 38,
-            gender: 'Male',
-          },
-        ],
-      });
+  // Filtered shift cards based on hospital dropdown
+  const filteredHospitals = useMemo(() => {
+    if (selectedHospitalId === 'all') {
+      return dayHospitals;
     }
-  };
+    return dayHospitals.filter((h) => h.id === selectedHospitalId);
+  }, [dayHospitals, selectedHospitalId]);
 
-  const handleTakeBreak = async () => {
-    setIsBreakModalOpen(true);
-  };
+  // Patient now attending (if any in filtered list)
+  const nowAttendingPatient = useMemo(() => {
+    return filteredAppointments.find((a) => a.status === 'Now attending');
+  }, [filteredAppointments]);
 
-  const confirmStartBreak = async (minutes: number = 15) => {
-    setBreakActive(true);
-    setBreakTimerSeconds(minutes * 60);
-    setData((prev) => ({
-      ...prev,
-      shift: {
-        ...prev.shift,
-        status: 'On Break',
-        isOnBreak: true,
-      },
-    }));
-    await toggleDoctorBreakApi(minutes);
-    setIsBreakModalOpen(false);
-    Alert.alert('Break Started', `Enjoy your ${minutes}-minute rest. Shift status set to "On Break".`);
-  };
+  // Other appointments (Done, Waiting, Scheduled)
+  const regularAppointments = useMemo(() => {
+    return filteredAppointments.filter((a) => a.status !== 'Now attending');
+  }, [filteredAppointments]);
 
-  const resumeShift = async () => {
-    setBreakActive(false);
-    setData((prev) => ({
-      ...prev,
-      shift: {
-        ...prev.shift,
-        status: 'In Progress',
-        isOnBreak: false,
-      },
-    }));
-    await toggleDoctorBreakApi(0);
-    Alert.alert('Shift Resumed', 'Doctor is back online in Room 3B.');
-  };
+  // ─────────────────────────────────────────────────────────
+  // WALK-IN SLOT HANDLER
+  // ─────────────────────────────────────────────────────────
 
-  const handleAddWalkinSlot = async () => {
-    if (!walkinName.trim()) {
-      Alert.alert('Validation Error', 'Please enter the patient name.');
+  const handleAddWalkInSlot = () => {
+    if (selectedDateKey !== REFERENCE_TODAY) {
+      showToast('Walk-ins can only be added for Today (Oct 6)');
+      return;
+    }
+    if (isLeaveDay) {
+      showToast('Doctor is on leave. Walk-in slots blocked');
+      return;
+    }
+    if (dayHospitals.length === 0) {
+      showToast('No clinics scheduled today');
       return;
     }
 
-    setIsSubmittingWalkin(true);
-    const newCapacity = data.shift.totalCapacity + 1;
-    const nextTokenNum = newCapacity;
-    const reasonText = walkinReason.trim() || 'Urgent Walk-in Checkup';
+    // Determine target hospital
+    const targetHospitalId =
+      selectedHospitalId !== 'all' ? selectedHospitalId : dayHospitals[0]?.id || 'cgh';
+    const remaining = walkInAllocations[targetHospitalId] ?? 0;
 
-    const newSlot: ScheduleTimelineItem = {
-      id: `slot-walkin-${Date.now()}`,
-      time: '12:00 PM',
-      timeHour: '12:00',
-      timePeriod: 'PM',
-      patientName: walkinName.trim(),
-      reason: `${reasonText} • Token #${String(nextTokenNum).padStart(3, '0')}`,
-      tokenNumber: nextTokenNum,
-      status: 'waiting',
-      age: parseInt(walkinAge) || 30,
-      gender: walkinGender,
-    };
+    if (remaining <= 0) {
+      const hName = HOSPITALS[targetHospitalId]?.shortName || 'Selected hospital';
+      showToast(`No walk-in slots remaining for ${hName}`);
+      return;
+    }
 
-    // Update state immediately
-    setData((prev) => ({
+    // Decrement allocation
+    setWalkInAllocations((prev) => ({
       ...prev,
-      shift: {
-        ...prev.shift,
-        totalCapacity: prev.shift.totalCapacity + 1,
-        waitingCount: prev.shift.waitingCount + 1,
-        remainingWalkinSlots: Math.max(0, prev.shift.remainingWalkinSlots - 1),
-      },
-      timeline: [...prev.timeline, newSlot],
+      [targetHospitalId]: (prev[targetHospitalId] || 0) - 1,
     }));
 
-    await addWalkInSlotApi({
-      patientName: walkinName.trim(),
-      reason: reasonText,
-      age: parseInt(walkinAge) || 30,
-      gender: walkinGender,
+    // Create walk-in appointment
+    const targetHospital = HOSPITALS[targetHospitalId];
+    const walkInTokenNum = 50 + Math.floor(Math.random() * 40);
+    const newAppointment: ScheduleAppointment = {
+      id: `walkin-${Date.now()}`,
+      time: '11:15 AM',
+      patientName: `Walk-in Patient #${Math.floor(100 + Math.random() * 900)}`,
+      reason: 'Urgent Consultation',
+      token: `Token #${String(walkInTokenNum).padStart(3, '0')}`,
+      status: 'Waiting',
+      hospitalId: targetHospitalId,
+      age: 34,
+      sex: 'Male',
+      bloodGroup: 'B+',
+      nic: `1992${Math.floor(10000000 + Math.random() * 90000000)}`,
+      phone: '077 555 0192',
+    };
+
+    setScheduleData((prev) => {
+      const existing = prev[selectedDateKey] || {
+        dateKey: selectedDateKey,
+        hospitals: dayHospitals.map((h) => h.id),
+        appointments: [],
+      };
+      return {
+        ...prev,
+        [selectedDateKey]: {
+          ...existing,
+          appointments: [...existing.appointments, newAppointment],
+        },
+      };
     });
 
-    setIsSubmittingWalkin(false);
-    setIsWalkinModalOpen(false);
-    setWalkinName('');
-    setWalkinReason('');
-    setWalkinAge('');
-
-    Alert.alert(
-      'Walk-in Added',
-      `Walk-in slot assigned for ${newSlot.patientName} with Token #${String(nextTokenNum).padStart(3, '0')}`
+    showToast(
+      `+ Added walk-in token ${newAppointment.token} at ${targetHospital.shortName}`
     );
   };
 
+  // ─────────────────────────────────────────────────────────
+  // BOTTOM TAB NAVIGATION
+  // User instruction: "mage araginal navigation bar eke icon change karanna epa"
+  // Keep original icons:
+  // Home: Ionicons 'home-outline'
+  // Queue: MaterialCommunityIcons 'ticket-confirmation-outline'
+  // Records: MaterialCommunityIcons 'folder-account-outline'
+  // Schedule: MaterialCommunityIcons 'calendar-month-outline'
+  // Prescription: MaterialCommunityIcons 'clipboard-edit-outline'
+  // ─────────────────────────────────────────────────────────
   const handleTabPress = (tab: 'home' | 'queue' | 'records' | 'schedule' | 'rx') => {
     setActiveTab(tab);
+    if (tab === 'schedule') {
+      showToast('Viewing My Schedule');
+      return;
+    }
     if (tab === 'home') {
       try {
         router.push('/(doctor)/dashboard' as any);
       } catch (e) {
-        router.push('/dashboard' as any);
-      }
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          if (!window.location.pathname.includes('dashboard')) {
-            window.location.href = '/(doctor)/dashboard';
-          }
-        }, 120);
+        showToast('Switched to Home Dashboard');
       }
     } else if (tab === 'queue') {
       try {
         router.push('/(doctor)/queue' as any);
       } catch (e) {
-        router.push('/queue' as any);
-      }
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          if (!window.location.pathname.includes('queue')) {
-            window.location.href = '/(doctor)/queue';
-          }
-        }, 120);
+        showToast('Switched to Live Queue');
       }
     } else if (tab === 'records') {
       try {
         router.push('/(doctor)/records' as any);
       } catch (e) {
-        router.push('/records' as any);
+        showToast('Switched to Patient Records');
       }
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          if (!window.location.pathname.includes('records')) {
-            window.location.href = '/(doctor)/records';
-          }
-        }, 120);
-      }
-    } else if (tab === 'schedule') {
-      // already on schedule
     } else if (tab === 'rx') {
       try {
         router.push('/(doctor)/prescription' as any);
       } catch (e) {
-        router.push('/prescription' as any);
-      }
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          if (!window.location.pathname.includes('prescription')) {
-            window.location.href = '/(doctor)/prescription';
-          }
-        }, 120);
+        showToast('Switched to Prescription');
       }
     }
   };
 
-  // Filtered timeline
-  const filteredTimeline = useMemo(() => {
-    if (activeFilter === 'all') return data.timeline;
-    if (activeFilter === 'done') return data.timeline.filter((s) => s.status === 'done');
-    if (activeFilter === 'attending') return data.timeline.filter((s) => s.status === 'now_attending');
-    if (activeFilter === 'waiting') return data.timeline.filter((s) => s.status === 'waiting');
-    if (activeFilter === 'scheduled') return data.timeline.filter((s) => s.status === 'scheduled');
-    return data.timeline;
-  }, [data.timeline, activeFilter]);
-
-  const doctor = data.doctor;
-  const shift = data.shift;
-  const totalCapacity = shift.totalCapacity || 32;
-  const consultedCount = shift.consultedCount || 18;
-  const waitingCount = shift.waitingCount || 14;
-  const progressRatio = Math.min(1, Math.max(0, consultedCount / totalCapacity));
+  // Current formatted time for timeline header (today only)
+  const isTodaySelected = selectedDateKey === REFERENCE_TODAY;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+    <SafeAreaView
+      style={[
+        styles.safeArea,
+        { backgroundColor: isDark ? theme.pageBg : theme.pageBg },
+      ]}
+    >
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.background}
+      />
 
-      {/* Main Content Area */}
-      <ScrollView
-        style={styles.scrollArea}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0d6371']} />}
+      {/* Centered responsive frame: 440px max width on desktop, full width on mobile */}
+      <View
+        style={[
+          styles.outerFrame,
+          { backgroundColor: isDark ? theme.pageBg : theme.pageBg },
+        ]}
       >
-        {/* ========================================================= */}
-        {/* 1. TOP PROFILE APP BAR                                    */}
-        {/* ========================================================= */}
-        <View style={styles.topProfileBar}>
-          <View style={styles.profileLeft}>
-            <View style={styles.avatarWrapper}>
-              <Image
-                source={{
-                  uri:
-                    doctor.avatarUrl ||
-                    'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
-                }}
-                style={styles.avatarImg}
-              />
-              <View style={styles.onlineGreenDot} />
-            </View>
-            <View style={styles.profileTextWrap}>
-              <Text style={styles.profileName}>{doctor.name || 'Dr. Emilia Emelson'}</Text>
-              <View style={styles.roomStatusRow}>
-                <Text style={styles.roomStatusDot}>•</Text>
-                <Text style={styles.roomStatusText}>{doctor.room || 'Room 3B Online'}</Text>
-              </View>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.bellBtn}
-            onPress={() => Alert.alert('Notifications', '1 high priority walk-in request pending approval.')}
+        <View
+          style={[
+            styles.mobileContainer,
+            { backgroundColor: theme.background },
+          ]}
+        >
+          {/* Main Scroll Content */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
           >
-            <Ionicons name="notifications" size={22} color="#334155" />
-            <View style={styles.redBadgeDot} />
-          </TouchableOpacity>
-        </View>
+            {/* ─────────────────────────────────────────────────────────
+                1. HEADER
+                Doctor avatar (initials) with green online dot,
+                "Dr. Emilia Emelson", "Room 3B online", notification bell
+               ───────────────────────────────────────────────────────── */}
+            <View style={styles.headerRow}>
+              <View style={styles.headerLeft}>
+                {/* Doctor Avatar with online badge */}
+                <View style={styles.avatarWrapper}>
+                  <View
+                    style={[
+                      styles.avatarBadge,
+                      { backgroundColor: theme.primaryDeep },
+                    ]}
+                  >
+                    <Text style={styles.avatarInitials}>EE</Text>
+                  </View>
+                  <View style={styles.onlineDot} />
+                </View>
 
-        {/* ========================================================= */}
-        {/* 2. DATE SUBTITLE & HEADER TITLE WITH FILTER BUTTON       */}
-        {/* ========================================================= */}
-        <View style={styles.dateAndHeaderSection}>
-          <View style={styles.dateSubRow}>
-            <Ionicons name="calendar-outline" size={15} color="#0d6371" style={{ marginRight: 6 }} />
-            <Text style={styles.dateSubText}>{data.dateHeader || formatRealtimeDateHeader(new Date())}</Text>
-          </View>
-
-          <View style={styles.titleWithFilterRow}>
-            <Text style={styles.screenHeading}>My Schedule</Text>
-            <TouchableOpacity
-              style={styles.filterBtn}
-              onPress={() => setIsFilterModalOpen(true)}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="tune-variant" size={20} color="#0d6371" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ========================================================= */}
-        {/* 3. WEEKLY DAY SELECTOR STRIP (CAROUSEL)                  */}
-        {/* ========================================================= */}
-        <View style={styles.weekStripContainer}>
-          {data.weekDays.map((item) => {
-            const isSelected = item.dateKey === selectedDayKey;
-            return (
-              <TouchableOpacity
-                key={item.dateKey}
-                style={[styles.dayCard, isSelected && styles.dayCardActive]}
-                onPress={() => handleSelectDay(item.dateKey)}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.dayNameText, isSelected && styles.dayNameTextActive]}>
-                  {item.dayName}
-                </Text>
-                <Text style={[styles.dayNumberText, isSelected && styles.dayNumberTextActive]}>
-                  {item.dayNumber}
-                </Text>
-                {isSelected && <View style={styles.activeDayDot} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* ========================================================= */}
-        {/* 4. CURRENT SHIFT CARD (MORNING OPD SHIFT)                 */}
-        {/* ========================================================= */}
-        <View style={styles.shiftCard}>
-          {/* Shift Header */}
-          <View style={styles.shiftHeaderRow}>
-            <View style={styles.shiftTitleLeft}>
-              <View style={styles.shiftIconBox}>
-                <MaterialCommunityIcons name="briefcase-plus-outline" size={19} color="#0d6371" />
-              </View>
-              <View>
-                <Text style={styles.shiftTitleText}>{shift.title || 'Morning OPD Shift'}</Text>
-                <View style={styles.shiftSubRow}>
-                  <Text style={styles.shiftSubTime}>{shift.timeRange || '08:30 AM – 01:00 PM'}</Text>
-                  <Text style={styles.shiftSubBullet}>•</Text>
-                  <Text style={styles.shiftSubRoom}>{shift.room || 'Room 3B Ortho'}</Text>
+                {/* Doctor Name & Subtitle */}
+                <View style={styles.doctorInfo}>
+                  <Text
+                    style={[styles.doctorName, { color: theme.textDark }]}
+                    numberOfLines={1}
+                  >
+                    Dr. Emilia Emelson
+                  </Text>
+                  <View style={styles.doctorSubRow}>
+                    <View style={styles.onlineMiniDot} />
+                    <Text
+                      style={[styles.doctorSubtitle, { color: theme.textMuted }]}
+                    >
+                      Room 3B online
+                    </Text>
+                  </View>
                 </View>
               </View>
+
+              {/* Notification Bell */}
+              <TouchableOpacity
+                style={[
+                  styles.bellButton,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => showToast('Notifications: No new alerts')}
+              >
+                <Ionicons
+                  name="notifications-outline"
+                  size={20}
+                  color={theme.textDark}
+                />
+                <View style={styles.redDot} />
+              </TouchableOpacity>
             </View>
 
-            {/* Shift Status Pill */}
+            {/* ─────────────────────────────────────────────────────────
+                2. TODAY'S DATE & SCREEN TITLE
+                Small teal text with calendar icon ("TUESDAY, OCT 6, 2026")
+                Large title "My schedule" + round filter button
+               ───────────────────────────────────────────────────────── */}
+            <View style={styles.titleSection}>
+              <View style={styles.dateBadgeRow}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={13}
+                  color={theme.accent}
+                  style={{ marginRight: 5 }}
+                />
+                <Text
+                  style={[styles.headerDateLabel, { color: theme.accent }]}
+                >
+                  {formatHeaderDate(selectedDateKey)}
+                </Text>
+              </View>
+
+              <View style={styles.titleRow}>
+                <Text
+                  style={[styles.screenTitle, { color: theme.textDark }]}
+                >
+                  My schedule
+                </Text>
+
+                {/* Filter icon button: shows or hides hospital dropdown */}
+                <TouchableOpacity
+                  style={[
+                    styles.filterButton,
+                    isHospitalDropdownOpen && styles.filterButtonActive,
+                    {
+                      backgroundColor: isHospitalDropdownOpen
+                        ? theme.primaryDeep
+                        : theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    setIsHospitalDropdownOpen(!isHospitalDropdownOpen)
+                  }
+                >
+                  <MaterialCommunityIcons
+                    name="filter-variant"
+                    size={20}
+                    color={
+                      isHospitalDropdownOpen ? '#ffffff' : theme.textDark
+                    }
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* ─────────────────────────────────────────────────────────
+                3. WEEK STRIP
+                - Row: < | "Oct 5 – 11, 2026" | > | "Today"
+                - 7 day boxes, Mon to Sun
+                - Selected day: dark teal fill (#0b4f5a) with white text
+                - Today: small underline
+                - Sat & Sun: lighter dashed style when not selected
+                - Leave day: small "off" label
+               ───────────────────────────────────────────────────────── */}
             <View
               style={[
-                styles.shiftStatusPill,
-                shift.isOnBreak && { backgroundColor: '#fef3c7' },
+                styles.weekStripContainer,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                },
               ]}
             >
-              <View
-                style={[
-                  styles.shiftStatusGreenDot,
-                  shift.isOnBreak && { backgroundColor: '#f59e0b' },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.shiftStatusText,
-                  shift.isOnBreak && { color: '#b45309' },
-                ]}
-              >
-                {shift.status || 'In Progress'}
-              </Text>
-            </View>
-          </View>
+              {/* Top controls: prev arrow, week range, next arrow, Today pill */}
+              <View style={styles.weekControlRow}>
+                <View style={styles.weekNavGroup}>
+                  <TouchableOpacity
+                    style={[
+                      styles.weekNavArrow,
+                      { backgroundColor: theme.tint },
+                    ]}
+                    onPress={handlePrevWeek}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="chevron-back"
+                      size={16}
+                      color={theme.primaryDeep}
+                    />
+                  </TouchableOpacity>
 
-          {/* Counts & Progress Bar */}
-          <View style={styles.progressSection}>
-            <View style={styles.progressCountsRow}>
-              <Text style={styles.consultedCountText}>{consultedCount} Consulted</Text>
-              <Text style={styles.waitingCountText}>{waitingCount} Waiting</Text>
-            </View>
-            <View style={styles.progressBarTrack}>
-              <View style={[styles.progressBarFill, { width: `${progressRatio * 100}%` }]} />
-            </View>
-          </View>
+                  <Text
+                    style={[styles.weekRangeText, { color: theme.textDark }]}
+                  >
+                    {weekRangeLabel}
+                  </Text>
 
-          {/* Shift Footer Row */}
-          <View style={styles.shiftFooterRow}>
-            <View style={styles.avgTimeWrap}>
-              <Ionicons name="time-outline" size={16} color="#526b78" style={{ marginRight: 5 }} />
-              <Text style={styles.avgTimeText}>Avg. {shift.avgMinutesPerPatient || 9}m / patient</Text>
-            </View>
-
-            {shift.isOnBreak ? (
-              <TouchableOpacity
-                style={[styles.breakBtn, { backgroundColor: '#ecfdf5' }]}
-                onPress={resumeShift}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="play" size={15} color="#047857" style={{ marginRight: 5 }} />
-                <Text style={[styles.breakBtnText, { color: '#047857' }]}>Resume Shift</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.breakBtn}
-                onPress={handleTakeBreak}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons name="coffee-outline" size={16} color="#0d6371" style={{ marginRight: 5 }} />
-                <Text style={styles.breakBtnText}>Take 15m Break</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* ========================================================= */}
-        {/* 5. TODAY'S TIMELINE SECTION HEADER                       */}
-        {/* ========================================================= */}
-        <View style={styles.timelineHeaderRow}>
-          <View style={styles.timelineTitleWrap}>
-            <Text style={styles.timelineTitle}>Today's Timeline</Text>
-            <View style={styles.patientsCountBadge}>
-              <Text style={styles.patientsCountText}>{totalCapacity} Patients</Text>
-            </View>
-          </View>
-          <Text style={styles.currentSlotText}>Current: {liveClock}</Text>
-        </View>
-
-        {/* ========================================================= */}
-        {/* 6. TIMELINE APPOINTMENT LIST                             */}
-        {/* ========================================================= */}
-        <View style={styles.timelineList}>
-          {filteredTimeline.map((item) => {
-            // Case A: NOW ATTENDING HERO CARD
-            if (item.status === 'now_attending' || item.isNowAttending) {
-              return (
-                <View key={item.id} style={styles.nowAttendingCard}>
-                  {/* Top content row */}
-                  <View style={styles.attendingContentRow}>
-                    {/* Cyan circle with Token number */}
-                    <View style={styles.tokenCircleCyan}>
-                      <Text style={styles.tokenNumberBig}>{item.tokenNumber}</Text>
-                    </View>
-
-                    {/* Middle patient details */}
-                    <View style={styles.attendingDetailsWrap}>
-                      <View style={styles.nowAttendingBadgeRow}>
-                        <Text style={styles.nowAttendingLabel}>NOW ATTENDING •</Text>
-                        <View style={styles.inRoomPill}>
-                          <Ionicons name="enter-outline" size={13} color="#ffffff" style={{ marginRight: 4 }} />
-                          <Text style={styles.inRoomPillText}>In Room</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.attendingPatientName}>{item.patientName}</Text>
-                      <Text style={styles.attendingReason}>{item.reason}</Text>
-                    </View>
-                  </View>
-
-                  {/* Bottom footer with elapsed counter and EHR button */}
-                  <View style={styles.attendingFooterRow}>
-                    <View style={styles.elapsedCounterWrap}>
-                      <Ionicons name="time-outline" size={15} color="#526b78" style={{ marginRight: 5 }} />
-                      <Text style={styles.elapsedCounterText}>
-                        Consultation elapsed: {elapsedMinutes} min
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.openEhrBtn}
-                      onPress={() => setIsEhrModalOpen(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.openEhrBtnText}>Open EHR</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            }
-
-            // Case B: Standard Timeline Slots (Done / Waiting / Scheduled)
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.standardSlotRow}
-                onPress={() => {
-                  Alert.alert(
-                    `Token #${item.tokenNumber} - ${item.patientName}`,
-                    `Reason: ${item.reason}\nStatus: ${item.status.toUpperCase()}\nTime: ${item.time}`
-                  );
-                }}
-                activeOpacity={0.7}
-              >
-                {/* Left Time Column */}
-                <View style={styles.slotTimeColumn}>
-                  <Text style={styles.slotTimeHour}>{item.timeHour}</Text>
-                  <Text style={styles.slotTimePeriod}>{item.timePeriod}</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.weekNavArrow,
+                      { backgroundColor: theme.tint },
+                    ]}
+                    onPress={handleNextWeek}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={theme.primaryDeep}
+                    />
+                  </TouchableOpacity>
                 </View>
 
-                {/* Middle Patient info */}
-                <View style={styles.slotPatientInfo}>
-                  <Text style={styles.slotPatientName}>{item.patientName}</Text>
-                  <Text style={styles.slotReasonSub}>{item.reason}</Text>
-                </View>
-
-                {/* Right Status Badge */}
-                <View style={styles.slotStatusRight}>
-                  {item.status === 'done' && (
-                    <View style={styles.badgeDone}>
-                      <Ionicons name="checkmark" size={13} color="#526b78" style={{ marginRight: 3 }} />
-                      <Text style={styles.badgeDoneText}>Done</Text>
-                    </View>
-                  )}
-
-                  {item.status === 'waiting' && (
-                    <View style={styles.badgeWaiting}>
-                      <Text style={styles.hourglassEmoji}>⏳</Text>
-                      <Text style={styles.badgeWaitingText}>Waiting</Text>
-                    </View>
-                  )}
-
-                  {item.status === 'scheduled' && (
-                    <View style={styles.badgeScheduled}>
-                      <Text style={styles.badgeScheduledText}>Scheduled</Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* ========================================================= */}
-        {/* 7. PRIMARY ACTION BUTTON: + ADD WALK-IN SLOT             */}
-        {/* ========================================================= */}
-        <View style={styles.walkinSection}>
-          <TouchableOpacity
-            style={styles.addWalkinBtn}
-            onPress={() => setIsWalkinModalOpen(true)}
-            activeOpacity={0.88}
-          >
-            <Ionicons name="person-add" size={18} color="#ffffff" style={{ marginRight: 8 }} />
-            <Text style={styles.addWalkinBtnText}>+ Add Walk-in Slot</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.walkinRemainingSubtext}>
-            Room 3B capacity: {shift.remainingWalkinSlots || 4} walk-in allocations remaining for today
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* ========================================================= */}
-      {/* 8. BOTTOM NAVIGATION BAR (5 TABS)                         */}
-      {/* ========================================================= */}
-      <View style={styles.bottomTabBar}>
-        {/* Home */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('home')}>
-          <Ionicons name="home-outline" size={22} color={activeTab === 'home' ? '#0d6371' : '#64748b'} />
-          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>Home</Text>
-        </TouchableOpacity>
-
-        {/* Queue */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('queue')}>
-          <MaterialCommunityIcons
-            name="ticket-confirmation-outline"
-            size={23}
-            color={activeTab === 'queue' ? '#0d6371' : '#64748b'}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>Queue</Text>
-        </TouchableOpacity>
-
-        {/* Records */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('records')}>
-          <MaterialCommunityIcons
-            name="folder-account-outline"
-            size={22}
-            color={activeTab === 'records' ? '#0d6371' : '#64748b'}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>Records</Text>
-        </TouchableOpacity>
-
-        {/* Schedule */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('schedule')}>
-          <MaterialCommunityIcons
-            name="calendar-month-outline"
-            size={22}
-            color={activeTab === 'schedule' ? '#0d6371' : '#64748b'}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>Schedule</Text>
-        </TouchableOpacity>
-
-        {/* Prescription */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('rx')}>
-          <MaterialCommunityIcons
-            name="clipboard-edit-outline"
-            size={22}
-            color={activeTab === 'rx' ? '#0d6371' : '#64748b'}
-          />
-          <Text
-            numberOfLines={1}
-            style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}
-          >
-            Prescription
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ========================================================= */}
-      {/* MODAL 1: ADD WALK-IN SLOT                                 */}
-      {/* ========================================================= */}
-      <Modal visible={isWalkinModalOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <MaterialCommunityIcons name="account-plus-outline" size={24} color="#0d6371" style={{ marginRight: 8 }} />
-                <Text style={styles.modalTitle}>Add Walk-in Slot</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsWalkinModalOpen(false)}>
-                <Ionicons name="close" size={22} color="#64748b" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 420 }}>
-              <Text style={styles.inputLabel}>Patient Full Name *</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="e.g. Ruwan Wickramasinghe"
-                placeholderTextColor="#94a3b8"
-                value={walkinName}
-                onChangeText={setWalkinName}
-              />
-
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Age</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="e.g. 35"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="numeric"
-                    value={walkinAge}
-                    onChangeText={setWalkinAge}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Gender</Text>
-                  <View style={styles.genderRow}>
-                    {['Male', 'Female'].map((g) => (
-                      <TouchableOpacity
-                        key={g}
-                        style={[styles.genderChip, walkinGender === g && styles.genderChipActive]}
-                        onPress={() => setWalkinGender(g)}
-                      >
-                        <Text style={[styles.genderChipText, walkinGender === g && styles.genderChipTextActive]}>
-                          {g}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </View>
-
-              <Text style={styles.inputLabel}>Chief Complaint / Reason</Text>
-              <TextInput
-                style={[styles.textInput, { height: 70, textAlignVertical: 'top' }]}
-                placeholder="e.g. Severe acute knee twist, dressing renewal"
-                placeholderTextColor="#94a3b8"
-                multiline
-                value={walkinReason}
-                onChangeText={setWalkinReason}
-              />
-
-              <View style={styles.tokenNoticeBox}>
-                <Ionicons name="information-circle-outline" size={18} color="#0d6371" style={{ marginRight: 6 }} />
-                <Text style={styles.tokenNoticeText}>
-                  Allocating next Token #{String(totalCapacity + 1).padStart(3, '0')} for Room 3B today.
-                </Text>
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setIsWalkinModalOpen(false)}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalSubmitBtn}
-                onPress={handleAddWalkinSlot}
-                disabled={isSubmittingWalkin}
-              >
-                {isSubmittingWalkin ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSubmitBtnText}>Confirm & Add Slot</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ========================================================= */}
-      {/* MODAL 2: OPEN EHR (PATIENT MEDICAL RECORD)                 */}
-      {/* ========================================================= */}
-      <Modal visible={isEhrModalOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { maxHeight: '88%' }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={styles.ehrModalToken}>Token #028</Text>
-                  <Text style={styles.modalTitle}>Kamal Gunaratne</Text>
-                </View>
-                <Text style={styles.ehrSub}>Male, 48 Years • File REC-841 • Room 3B</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsEhrModalOpen(false)}>
-                <Ionicons name="close" size={24} color="#64748b" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Vitals summary cards */}
-              <Text style={styles.sectionHeaderSmall}>RECORDED VITALS (10:15 AM)</Text>
-              <View style={styles.vitalsGrid}>
-                <View style={styles.vitalCard}>
-                  <Text style={styles.vitalLabel}>Blood Pressure</Text>
-                  <Text style={styles.vitalValue}>124/82</Text>
-                  <Text style={styles.vitalUnit}>mmHg (Normal)</Text>
-                </View>
-                <View style={styles.vitalCard}>
-                  <Text style={styles.vitalLabel}>Heart Rate</Text>
-                  <Text style={styles.vitalValue}>76</Text>
-                  <Text style={styles.vitalUnit}>bpm</Text>
-                </View>
-                <View style={styles.vitalCard}>
-                  <Text style={styles.vitalLabel}>Body Temp</Text>
-                  <Text style={styles.vitalValue}>98.6</Text>
-                  <Text style={styles.vitalUnit}>°F</Text>
-                </View>
-                <View style={styles.vitalCard}>
-                  <Text style={styles.vitalLabel}>SpO2</Text>
-                  <Text style={styles.vitalValue}>98%</Text>
-                  <Text style={styles.vitalUnit}>Room Air</Text>
-                </View>
-              </View>
-
-              {/* Diagnosis / Complaint */}
-              <Text style={styles.sectionHeaderSmall}>REASON FOR VISIT</Text>
-              <View style={styles.complaintBox}>
-                <Text style={styles.complaintText}>
-                  Spine checkup & lumbar mobility assessment. Follow-up after 4 weeks of physiotherapy.
-                </Text>
-              </View>
-
-              {/* Doctor's Clinical Consultation Notes */}
-              <Text style={styles.sectionHeaderSmall}>DOCTOR CLINICAL NOTES</Text>
-              <TextInput
-                style={styles.ehrNotesInput}
-                multiline
-                value={ehrNotes}
-                onChangeText={setEhrNotes}
-              />
-            </ScrollView>
-
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setIsEhrModalOpen(false)}
-              >
-                <Text style={styles.modalCancelBtnText}>Close</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalSubmitBtn}
-                onPress={() => {
-                  setIsEhrModalOpen(false);
-                  Alert.alert('Notes Saved', 'Clinical observation recorded. Ready for prescription.');
-                }}
-              >
-                <Text style={styles.modalSubmitBtnText}>Save Consultation</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ========================================================= */}
-      {/* MODAL 3: TAKE BREAK SELECTION                             */}
-      {/* ========================================================= */}
-      <Modal visible={isBreakModalOpen} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <MaterialCommunityIcons name="coffee" size={24} color="#0d6371" style={{ marginRight: 8 }} />
-                <Text style={styles.modalTitle}>Doctor Break</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsBreakModalOpen(false)}>
-                <Ionicons name="close" size={22} color="#64748b" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={{ fontSize: 13, color: '#475569', marginBottom: 16 }}>
-              Pausing consultations notifies the queue display and waiting patients in Room 3B.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.breakOptionCard}
-              onPress={() => confirmStartBreak(15)}
-            >
-              <MaterialCommunityIcons name="clock-fast" size={22} color="#0d6371" style={{ marginRight: 12 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.breakOptionTitle}>Take 15-Minute Tea Break</Text>
-                <Text style={styles.breakOptionDesc}>Recommended for standard rest intermission</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.breakOptionCard}
-              onPress={() => confirmStartBreak(30)}
-            >
-              <MaterialCommunityIcons name="silverware-fork-knife" size={22} color="#0d6371" style={{ marginRight: 12 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.breakOptionTitle}>Take 30-Minute Meal Break</Text>
-                <Text style={styles.breakOptionDesc}>Lunch and prayer intermission</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.modalCancelBtn, { width: '100%', marginTop: 8 }]}
-              onPress={() => setIsBreakModalOpen(false)}
-            >
-              <Text style={styles.modalCancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ========================================================= */}
-      {/* MODAL 4: FILTER TIMELINE                                  */}
-      {/* ========================================================= */}
-      <Modal visible={isFilterModalOpen} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <MaterialCommunityIcons name="filter-variant" size={24} color="#0d6371" style={{ marginRight: 8 }} />
-                <Text style={styles.modalTitle}>Filter Timeline</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsFilterModalOpen(false)}>
-                <Ionicons name="close" size={22} color="#64748b" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ gap: 8, marginVertical: 12 }}>
-              {[
-                { key: 'all', label: 'All Patients' },
-                { key: 'attending', label: 'Now Attending' },
-                { key: 'waiting', label: 'Waiting in Lobby' },
-                { key: 'done', label: 'Done / Completed' },
-                { key: 'scheduled', label: 'Scheduled Appointments' },
-              ].map((f) => (
+                {/* Jump to Today Button */}
                 <TouchableOpacity
-                  key={f.key}
                   style={[
-                    styles.filterOptionRow,
-                    activeFilter === f.key && styles.filterOptionRowActive,
+                    styles.todayPill,
+                    {
+                      backgroundColor: isTodaySelected
+                        ? theme.primaryDeep
+                        : theme.tint,
+                    },
                   ]}
-                  onPress={() => {
-                    setActiveFilter(f.key as any);
-                    setIsFilterModalOpen(false);
-                  }}
+                  onPress={handleJumpToday}
+                  activeOpacity={0.8}
                 >
                   <Text
                     style={[
-                      styles.filterOptionText,
-                      activeFilter === f.key && styles.filterOptionTextActive,
+                      styles.todayPillText,
+                      {
+                        color: isTodaySelected ? '#ffffff' : theme.primaryDeep,
+                      },
                     ]}
                   >
-                    {f.label}
+                    Today
                   </Text>
-                  {activeFilter === f.key && (
-                    <Ionicons name="checkmark-circle" size={18} color="#0d6371" />
-                  )}
                 </TouchableOpacity>
-              ))}
+              </View>
+
+              {/* 7 Days Row */}
+              <View style={styles.daysRow}>
+                {weekDays.map((item: WeekDayItem) => {
+                  const isSelected = item.dateKey === selectedDateKey;
+
+                  return (
+                    <TouchableOpacity
+                      key={item.dateKey}
+                      activeOpacity={0.8}
+                      onPress={() => handleSelectDay(item.dateKey)}
+                      style={[
+                        styles.dayBox,
+                        isSelected && [
+                          styles.dayBoxSelected,
+                          { backgroundColor: theme.primaryDeep },
+                        ],
+                        !isSelected &&
+                          item.isWeekend && [
+                            styles.dayBoxWeekend,
+                            {
+                              backgroundColor: theme.weekendBg,
+                              borderColor: theme.weekendBorder,
+                            },
+                          ],
+                        !isSelected &&
+                          !item.isWeekend && {
+                            borderColor: theme.cardBorder,
+                          },
+                      ]}
+                    >
+                      {/* Leave "off" label tag */}
+                      {item.isLeave && (
+                        <View style={styles.leaveOffBadge}>
+                          <Text style={styles.leaveOffText}>off</Text>
+                        </View>
+                      )}
+
+                      <Text
+                        style={[
+                          styles.dayWeekday,
+                          isSelected
+                            ? styles.dayTextSelected
+                            : { color: theme.textMuted },
+                        ]}
+                      >
+                        {item.dayLabel}
+                      </Text>
+
+                      <Text
+                        style={[
+                          styles.dayDateNum,
+                          isSelected
+                            ? styles.dayTextSelectedBold
+                            : { color: theme.textDark },
+                        ]}
+                      >
+                        {item.dateNum}
+                      </Text>
+
+                      {/* Small underline indicator for Today */}
+                      {item.isToday && (
+                        <View
+                          style={[
+                            styles.todayUnderline,
+                            {
+                              backgroundColor: isSelected
+                                ? '#ffffff'
+                                : theme.accent,
+                            },
+                          ]}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
+
+            {/* ─────────────────────────────────────────────────────────
+                4. HOSPITAL DROPDOWN
+                - Full-width button, pill-like, with colored dot, hospital name, chevron
+                - Shows options: "All hospitals" + each hospital with shifts today
+                - Shows hospital name, room, appointment count on right
+                - Closes on outside tap or Escape
+                - Resets to "All hospitals" when day changes
+               ───────────────────────────────────────────────────────── */}
+            <View style={styles.dropdownWrapper}>
+              <TouchableOpacity
+                style={[
+                  styles.dropdownPillButton,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+                activeOpacity={0.85}
+                onPress={() =>
+                  setIsHospitalDropdownOpen(!isHospitalDropdownOpen)
+                }
+              >
+                <View style={styles.dropdownLeft}>
+                  {selectedHospitalId === 'all' ? (
+                    <View
+                      style={[
+                        styles.colorDot,
+                        { backgroundColor: theme.accent },
+                      ]}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.colorDot,
+                        {
+                          backgroundColor:
+                            HOSPITALS[selectedHospitalId]?.accentColor ||
+                            theme.accent,
+                        },
+                      ]}
+                    />
+                  )}
+                  <Text
+                    style={[styles.dropdownButtonText, { color: theme.textDark }]}
+                  >
+                    {selectedHospitalId === 'all'
+                      ? 'All hospitals'
+                      : HOSPITALS[selectedHospitalId]?.name || 'Hospital'}
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name={
+                    isHospitalDropdownOpen
+                      ? 'chevron-up-outline'
+                      : 'chevron-down-outline'
+                  }
+                  size={18}
+                  color={theme.textMuted}
+                />
+              </TouchableOpacity>
+
+              {/* Dropdown Menu Overlay */}
+              {isHospitalDropdownOpen && (
+                <View
+                  style={[
+                    styles.dropdownMenu,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  {/* Option: All hospitals */}
+                  <TouchableOpacity
+                    style={[
+                      styles.dropdownMenuItem,
+                      selectedHospitalId === 'all' && [
+                        styles.dropdownMenuItemActive,
+                        { backgroundColor: theme.tint },
+                      ],
+                      { borderBottomColor: theme.divider },
+                    ]}
+                    onPress={() => {
+                      setSelectedHospitalId('all');
+                      setIsHospitalDropdownOpen(false);
+                      showToast('Showing shifts for all hospitals');
+                    }}
+                  >
+                    <View style={styles.dropdownMenuLeft}>
+                      <View
+                        style={[
+                          styles.colorDot,
+                          { backgroundColor: theme.accent },
+                        ]}
+                      />
+                      <View>
+                        <Text
+                          style={[
+                            styles.dropdownItemTitle,
+                            { color: theme.textDark },
+                          ]}
+                        >
+                          All hospitals
+                        </Text>
+                        <Text
+                          style={[
+                            styles.dropdownItemSub,
+                            { color: theme.textMuted },
+                          ]}
+                        >
+                          Combined overview
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={[
+                        styles.dropdownItemBadge,
+                        { color: theme.primaryDeep },
+                      ]}
+                    >
+                      {dayAppointments.length} appts
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Options: Hospitals with shifts today */}
+                  {dayHospitals.map((hosp: HospitalInfo) => {
+                    const count = dayAppointments.filter(
+                      (a) => a.hospitalId === hosp.id
+                    ).length;
+                    const isSelected = selectedHospitalId === hosp.id;
+
+                    return (
+                      <TouchableOpacity
+                        key={hosp.id}
+                        style={[
+                          styles.dropdownMenuItem,
+                          isSelected && [
+                            styles.dropdownMenuItemActive,
+                            { backgroundColor: theme.tint },
+                          ],
+                          { borderBottomColor: theme.divider },
+                        ]}
+                        onPress={() => {
+                          setSelectedHospitalId(hosp.id);
+                          setIsHospitalDropdownOpen(false);
+                          showToast(`Filtered: ${hosp.name}`);
+                        }}
+                      >
+                        <View style={styles.dropdownMenuLeft}>
+                          <View
+                            style={[
+                              styles.colorDot,
+                              { backgroundColor: hosp.accentColor },
+                            ]}
+                          />
+                          <View>
+                            <Text
+                              style={[
+                                styles.dropdownItemTitle,
+                                { color: theme.textDark },
+                              ]}
+                            >
+                              {hosp.name}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.dropdownItemSub,
+                                { color: theme.textMuted },
+                              ]}
+                            >
+                              {hosp.room}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text
+                          style={[
+                            styles.dropdownItemBadge,
+                            { color: hosp.accentColor },
+                          ]}
+                        >
+                          {count} appts
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
+            {/* ─────────────────────────────────────────────────────────
+                5. SHIFT CARDS
+                - Icon, shift name, time range, room, status pill
+                - Hospital name with its colored dot
+                - "N consulted" on left, "N waiting" on right, progress bar
+                - Footer: "Avg. 9m / patient" and "Take 15m break" pill
+                - If leave day or no clinics: "On leave" or "No clinics scheduled"
+               ───────────────────────────────────────────────────────── */}
+            <View style={styles.shiftsSection}>
+              {/* Scenario A: Doctor is On Leave */}
+              {isLeaveDay ? (
+                <View
+                  style={[
+                    styles.stateCard,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <View style={styles.stateIconCircle}>
+                    <Ionicons
+                      name="airplane-outline"
+                      size={28}
+                      color="#d97706"
+                    />
+                  </View>
+                  <Text
+                    style={[styles.stateCardTitle, { color: theme.textDark }]}
+                  >
+                    On leave
+                  </Text>
+                  <Text
+                    style={[
+                      styles.stateCardSubtitle,
+                      { color: theme.textMuted },
+                    ]}
+                  >
+                    {currentDayData.leaveReason ||
+                      'Annual medical conference leave approved.'}
+                  </Text>
+                  <View style={styles.blockedPill}>
+                    <Ionicons
+                      name="lock-closed"
+                      size={13}
+                      color="#b45309"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text style={styles.blockedPillText}>
+                      Bookings and walk-ins are blocked
+                    </Text>
+                  </View>
+                </View>
+              ) : filteredHospitals.length === 0 ? (
+                /* Scenario B: No clinics scheduled */
+                <View
+                  style={[
+                    styles.stateCard,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <View style={styles.stateIconCircle}>
+                    <Ionicons
+                      name="calendar-clear-outline"
+                      size={28}
+                      color={theme.accent}
+                    />
+                  </View>
+                  <Text
+                    style={[styles.stateCardTitle, { color: theme.textDark }]}
+                  >
+                    No clinics scheduled
+                  </Text>
+                  <Text
+                    style={[
+                      styles.stateCardSubtitle,
+                      { color: theme.textMuted },
+                    ]}
+                  >
+                    There are no hospital clinic sessions allocated for this date.
+                  </Text>
+                </View>
+              ) : (
+                /* Scenario C: Render shift card per hospital */
+                filteredHospitals.map((hosp: HospitalInfo) => {
+                  const hospAppts = dayAppointments.filter(
+                    (a) => a.hospitalId === hosp.id
+                  );
+                  const consulted = hospAppts.filter(
+                    (a) => a.status === 'Done'
+                  ).length;
+                  const waiting = hospAppts.filter(
+                    (a) => a.status === 'Waiting' || a.status === 'Now attending'
+                  ).length;
+                  const total = hospAppts.length;
+                  const progressPct =
+                    total > 0 ? Math.min(100, Math.round((consulted / total) * 100)) : 0;
+
+                  // Determine status pill
+                  let statusLabel = 'Upcoming';
+                  let statusBg = isDark ? '#1a2e33' : '#e6f7f9';
+                  let statusColor = '#0e8a96';
+
+                  if (isTodaySelected) {
+                    if (hosp.id === 'cgh') {
+                      statusLabel = 'In progress';
+                      statusBg = isDark ? '#1a3328' : '#ecfdf5';
+                      statusColor = '#059669';
+                    } else if (hosp.id === 'lakeview') {
+                      statusLabel = 'Upcoming';
+                      statusBg = isDark ? '#33271a' : '#fffbeb';
+                      statusColor = '#d97706';
+                    } else {
+                      statusLabel = 'Upcoming';
+                      statusBg = isDark ? '#281a38' : '#faf5ff';
+                      statusColor = '#7c3aed';
+                    }
+                  } else {
+                    const selD = parseDateKey(selectedDateKey);
+                    const refD = parseDateKey(REFERENCE_TODAY);
+                    if (selD < refD) {
+                      statusLabel = 'Completed';
+                      statusBg = isDark ? '#232931' : '#f1f5f9';
+                      statusColor = '#64748b';
+                    }
+                  }
+
+                  return (
+                    <View
+                      key={hosp.id}
+                      style={[
+                        styles.shiftCard,
+                        {
+                          backgroundColor: theme.card,
+                          borderColor: theme.cardBorder,
+                        },
+                      ]}
+                    >
+                      {/* Top: Icon + Shift name + Time + Status pill */}
+                      <View style={styles.shiftHeader}>
+                        <View style={styles.shiftTitleGroup}>
+                          <View
+                            style={[
+                              styles.shiftIconBox,
+                              { backgroundColor: theme.tint },
+                            ]}
+                          >
+                            <MaterialCommunityIcons
+                              name={hosp.shiftIcon as any}
+                              size={18}
+                              color={theme.primaryDeep}
+                            />
+                          </View>
+                          <View>
+                            <Text
+                              style={[
+                                styles.shiftNameText,
+                                { color: theme.textDark },
+                              ]}
+                            >
+                              {hosp.shiftName}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.shiftTimeText,
+                                { color: theme.textMuted },
+                              ]}
+                            >
+                              {hosp.shiftTime} · {hosp.room}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.statusPill,
+                            { backgroundColor: statusBg },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusPillText,
+                              { color: statusColor },
+                            ]}
+                          >
+                            {statusLabel}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Hospital Tag with dot */}
+                      <View style={styles.hospitalTagRow}>
+                        <View
+                          style={[
+                            styles.hospitalTag,
+                            {
+                              backgroundColor: isDark
+                                ? '#142023'
+                                : hosp.accentLight,
+                              borderColor: hosp.accentColor + '33',
+                            },
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.colorDotSmall,
+                              { backgroundColor: hosp.accentColor },
+                            ]}
+                          />
+                          <Text
+                            style={[
+                              styles.hospitalTagText,
+                              { color: hosp.accentColor },
+                            ]}
+                          >
+                            {hosp.name}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Progress Stats */}
+                      <View style={styles.progressSection}>
+                        <View style={styles.progressLabels}>
+                          <Text
+                            style={[
+                              styles.statLabel,
+                              { color: theme.textDark },
+                            ]}
+                          >
+                            <Text style={styles.statNumber}>{consulted}</Text>{' '}
+                            consulted
+                          </Text>
+                          <Text
+                            style={[
+                              styles.statLabel,
+                              { color: theme.textDark },
+                            ]}
+                          >
+                            <Text style={styles.statNumber}>{waiting}</Text>{' '}
+                            waiting
+                          </Text>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.progressBarBg,
+                            { backgroundColor: theme.divider },
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.progressBarFill,
+                              {
+                                width: `${progressPct}%`,
+                                backgroundColor: hosp.accentColor,
+                              },
+                            ]}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Card Footer: Avg 9m / patient & Break button */}
+                      <View
+                        style={[
+                          styles.shiftFooter,
+                          { borderTopColor: theme.divider },
+                        ]}
+                      >
+                        <View style={styles.avgConsultRow}>
+                          <Ionicons
+                            name="time-outline"
+                            size={14}
+                            color={theme.textMuted}
+                          />
+                          <Text
+                            style={[
+                              styles.avgConsultText,
+                              { color: theme.textMuted },
+                            ]}
+                          >
+                            Avg. 9m / patient
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.breakPillButton,
+                            {
+                              backgroundColor: theme.tint,
+                              borderColor: theme.cardBorder,
+                            },
+                          ]}
+                          activeOpacity={0.8}
+                          onPress={() =>
+                            showToast(
+                              `15m break scheduled after current consultation at ${hosp.shortName}`
+                            )
+                          }
+                        >
+                          <MaterialCommunityIcons
+                            name="coffee-outline"
+                            size={14}
+                            color={theme.primaryDeep}
+                            style={{ marginRight: 4 }}
+                          />
+                          <Text
+                            style={[
+                              styles.breakPillText,
+                              { color: theme.primaryDeep },
+                            ]}
+                          >
+                            Take 15m break
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+
+            {/* ─────────────────────────────────────────────────────────
+                6. TIMELINE
+                - Heading "Timeline" + patient count badge + "Current: 10:12 AM"
+                - Highlighted card for NOW ATTENDING with thick teal left border:
+                  round token number, "NOW ATTENDING •", patient name,
+                  reason • time, "In room" badge, hospital tag,
+                  "Consultation elapsed: 6 min", "Open EHR" pill button
+                - Rows for other appointments with AM/PM time, patient name,
+                  reason • Token #030, hospital tag with dot, status pill
+               ───────────────────────────────────────────────────────── */}
+            <View style={styles.timelineSection}>
+              {/* Timeline Header */}
+              <View style={styles.timelineHeaderRow}>
+                <View style={styles.timelineTitleGroup}>
+                  <Text
+                    style={[styles.timelineHeading, { color: theme.textDark }]}
+                  >
+                    Timeline
+                  </Text>
+                  <View
+                    style={[
+                      styles.patientCountBadge,
+                      { backgroundColor: theme.tint },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.patientCountText,
+                        { color: theme.primaryDeep },
+                      ]}
+                    >
+                      {filteredAppointments.length} patients
+                    </Text>
+                  </View>
+                </View>
+
+                {isTodaySelected && (
+                  <View style={styles.currentClockRow}>
+                    <View style={styles.clockPulseDot} />
+                    <Text
+                      style={[styles.clockTimeText, { color: theme.accent }]}
+                    >
+                      Current: 10:12 AM
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Patient List */}
+              {filteredAppointments.length === 0 ? (
+                <View
+                  style={[
+                    styles.emptyTimelineBox,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.emptyTimelineText,
+                      { color: theme.textMuted },
+                    ]}
+                  >
+                    No appointments on this timeline
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.appointmentsList}>
+                  {/* Highlighted NOW ATTENDING Card */}
+                  {nowAttendingPatient && (
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => setSelectedPatient(nowAttendingPatient)}
+                      style={[
+                        styles.nowAttendingCard,
+                        {
+                          backgroundColor: theme.card,
+                          borderColor: theme.cardBorder,
+                          borderLeftColor: theme.accent,
+                        },
+                      ]}
+                    >
+                      <View style={styles.nowAttendingTop}>
+                        <View style={styles.tokenCircle}>
+                          <Text style={styles.tokenCircleText}>
+                            {nowAttendingPatient.token.replace('Token #', '')}
+                          </Text>
+                        </View>
+
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <View style={styles.nowAttendingBadgeRow}>
+                            <Text
+                              style={[
+                                styles.nowAttendingLabel,
+                                { color: theme.accent },
+                              ]}
+                            >
+                              NOW ATTENDING •
+                            </Text>
+                            <View style={styles.inRoomBadge}>
+                              <Text style={styles.inRoomText}>In room</Text>
+                            </View>
+                          </View>
+
+                          <Text
+                            style={[
+                              styles.nowPatientName,
+                              { color: theme.textDark },
+                            ]}
+                          >
+                            {nowAttendingPatient.patientName}
+                          </Text>
+
+                          <Text
+                            style={[
+                              styles.nowPatientSub,
+                              { color: theme.textMuted },
+                            ]}
+                          >
+                            {nowAttendingPatient.reason} ·{' '}
+                            {nowAttendingPatient.time}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Hospital tag + Elapsed time + Open EHR button */}
+                      <View
+                        style={[
+                          styles.nowAttendingFooter,
+                          { borderTopColor: theme.divider },
+                        ]}
+                      >
+                        <View style={styles.nowFooterLeft}>
+                          {/* Hospital Tag */}
+                          <View
+                            style={[
+                              styles.hospitalTag,
+                              {
+                                backgroundColor: isDark
+                                  ? '#142023'
+                                  : HOSPITALS[nowAttendingPatient.hospitalId]
+                                      ?.accentLight || theme.tint,
+                              },
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.colorDotSmall,
+                                {
+                                  backgroundColor:
+                                    HOSPITALS[nowAttendingPatient.hospitalId]
+                                      ?.accentColor || theme.accent,
+                                },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.hospitalTagText,
+                                {
+                                  color:
+                                    HOSPITALS[nowAttendingPatient.hospitalId]
+                                      ?.accentColor || theme.accent,
+                                },
+                              ]}
+                            >
+                              {HOSPITALS[nowAttendingPatient.hospitalId]
+                                ?.shortName || 'Hospital'}
+                            </Text>
+                          </View>
+
+                          <Text
+                            style={[
+                              styles.elapsedText,
+                              { color: theme.textMuted },
+                            ]}
+                          >
+                            Consultation elapsed: {elapsedMinutes} min
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.openEhrPill,
+                            { backgroundColor: theme.primaryDeep },
+                          ]}
+                          activeOpacity={0.8}
+                          onPress={() =>
+                            showToast(
+                              `Opening EHR for ${nowAttendingPatient.patientName}`
+                            )
+                          }
+                        >
+                          <Text style={styles.openEhrText}>Open EHR</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Regular Appointment Rows */}
+                  {regularAppointments.map((appt: ScheduleAppointment) => {
+                    const hosp = HOSPITALS[appt.hospitalId] || HOSPITALS.cgh;
+
+                    // Status pill styling
+                    let statusBg = isDark ? '#142023' : '#f1f5f9';
+                    let statusColor = '#64748b';
+                    if (appt.status === 'Done') {
+                      statusBg = isDark ? '#142b23' : '#ecfdf5';
+                      statusColor = '#059669';
+                    } else if (appt.status === 'Waiting') {
+                      statusBg = isDark ? '#302613' : '#fffbeb';
+                      statusColor = '#d97706';
+                    } else if (appt.status === 'Scheduled') {
+                      statusBg = isDark ? '#1a2e33' : '#e6f7f9';
+                      statusColor = '#0e8a96';
+                    }
+
+                    return (
+                      <TouchableOpacity
+                        key={appt.id}
+                        activeOpacity={0.7}
+                        onPress={() => setSelectedPatient(appt)}
+                        style={[
+                          styles.timelineRowCard,
+                          {
+                            backgroundColor: theme.card,
+                            borderColor: theme.cardBorder,
+                          },
+                        ]}
+                      >
+                        <View style={styles.timelineRowLeft}>
+                          {/* Time */}
+                          <View style={styles.timeBlock}>
+                            <Text
+                              style={[
+                                styles.timeTextMain,
+                                { color: theme.textDark },
+                              ]}
+                            >
+                              {appt.time}
+                            </Text>
+                          </View>
+
+                          {/* Patient details */}
+                          <View style={styles.patientInfoBlock}>
+                            <Text
+                              style={[
+                                styles.rowPatientName,
+                                { color: theme.textDark },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {appt.patientName}
+                            </Text>
+
+                            <Text
+                              style={[
+                                styles.rowReasonText,
+                                { color: theme.textMuted },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {appt.reason} · {appt.token}
+                            </Text>
+
+                            {/* Hospital Tag with dot */}
+                            <View style={styles.rowTagRow}>
+                              <View
+                                style={[
+                                  styles.hospitalTag,
+                                  {
+                                    backgroundColor: isDark
+                                      ? '#142023'
+                                      : hosp.accentLight,
+                                  },
+                                ]}
+                              >
+                                <View
+                                  style={[
+                                    styles.colorDotSmall,
+                                    { backgroundColor: hosp.accentColor },
+                                  ]}
+                                />
+                                <Text
+                                  style={[
+                                    styles.hospitalTagText,
+                                    { color: hosp.accentColor },
+                                  ]}
+                                >
+                                  {hosp.shortName}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Status Pill */}
+                        <View
+                          style={[
+                            styles.statusPillSmall,
+                            { backgroundColor: statusBg },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusPillSmallText,
+                              { color: statusColor },
+                            ]}
+                          >
+                            {appt.status}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
+            {/* ─────────────────────────────────────────────────────────
+                7. ADD WALK-IN SLOT
+                - Full-width dark teal pill button: "+ Add walk-in slot"
+                - Below it: small centered text per hospital:
+                  "{Hospital}: 4 walk-in allocations remaining"
+                - Tapping adds walk-in (today only) & reduces count
+               ───────────────────────────────────────────────────────── */}
+            <View style={styles.walkInSection}>
+              <TouchableOpacity
+                style={[
+                  styles.addWalkInButton,
+                  { backgroundColor: theme.primaryDeep },
+                ]}
+                activeOpacity={0.85}
+                onPress={handleAddWalkInSlot}
+              >
+                <Ionicons
+                  name="add"
+                  size={20}
+                  color="#ffffff"
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.addWalkInButtonText}>
+                  + Add walk-in slot
+                </Text>
+              </TouchableOpacity>
+
+              {/* Allocations remaining text */}
+              <View style={styles.allocationsContainer}>
+                {filteredHospitals.map((hosp: HospitalInfo) => {
+                  const remaining = walkInAllocations[hosp.id] ?? 0;
+                  return (
+                    <Text
+                      key={hosp.id}
+                      style={[
+                        styles.allocationText,
+                        { color: theme.textMuted },
+                      ]}
+                    >
+                      {hosp.shortName}: {remaining} walk-in allocations remaining
+                    </Text>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Bottom spacer so content is not hidden by navigation bar */}
+            <View style={{ height: 100 }} />
+          </ScrollView>
+
+          {/* ─────────────────────────────────────────────────────────
+              8. FIXED BOTTOM NAVIGATION
+              User instruction: "mage araginal navigation bar eke icon change karanna epa"
+              EXACT ORIGINAL 5 ICONS & LABELS PRESERVED:
+              1. Home: Ionicons 'home-outline'
+              2. Queue: MaterialCommunityIcons 'ticket-confirmation-outline'
+              3. Records: MaterialCommunityIcons 'folder-account-outline'
+              4. Schedule: MaterialCommunityIcons 'calendar-month-outline' (Active)
+              5. Prescription: MaterialCommunityIcons 'clipboard-edit-outline'
+             ───────────────────────────────────────────────────────── */}
+          <View
+            style={[
+              styles.bottomTabBar,
+              {
+                backgroundColor: theme.card,
+                borderTopColor: theme.cardBorder,
+              },
+            ]}
+          >
+            {/* 1. Home */}
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => handleTabPress('home')}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="home-outline"
+                size={22}
+                color={activeTab === 'home' ? theme.accent : theme.textMuted}
+              />
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: activeTab === 'home' ? theme.accent : theme.textMuted },
+                  activeTab === 'home' && styles.tabLabelActive,
+                ]}
+              >
+                Home
+              </Text>
+            </TouchableOpacity>
+
+            {/* 2. Queue */}
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => handleTabPress('queue')}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name="ticket-confirmation-outline"
+                size={23}
+                color={activeTab === 'queue' ? theme.accent : theme.textMuted}
+              />
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: activeTab === 'queue' ? theme.accent : theme.textMuted },
+                  activeTab === 'queue' && styles.tabLabelActive,
+                ]}
+              >
+                Queue
+              </Text>
+            </TouchableOpacity>
+
+            {/* 3. Records */}
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => handleTabPress('records')}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name="folder-account-outline"
+                size={22}
+                color={activeTab === 'records' ? theme.accent : theme.textMuted}
+              />
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: activeTab === 'records' ? theme.accent : theme.textMuted },
+                  activeTab === 'records' && styles.tabLabelActive,
+                ]}
+              >
+                Records
+              </Text>
+            </TouchableOpacity>
+
+            {/* 4. Schedule (ACTIVE) */}
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => handleTabPress('schedule')}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name="calendar-month-outline"
+                size={22}
+                color={theme.accent}
+              />
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: theme.accent },
+                  styles.tabLabelActive,
+                ]}
+              >
+                Schedule
+              </Text>
+            </TouchableOpacity>
+
+            {/* 5. Prescription */}
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => handleTabPress('rx')}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name="clipboard-edit-outline"
+                size={22}
+                color={activeTab === 'rx' ? theme.accent : theme.textMuted}
+              />
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.tabLabel,
+                  { color: activeTab === 'rx' ? theme.accent : theme.textMuted },
+                  activeTab === 'rx' && styles.tabLabelActive,
+                ]}
+              >
+                Prescription
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
+      </View>
+
+      {/* ─────────────────────────────────────────────────────────
+          PATIENT DETAIL BOTTOM SHEET MODAL
+          - Initials avatar, name, "age • sex • Blood: B+", close button
+          - Allergy alert (red) OR calm "No known allergies" card
+          - Info grid (token, appointment time, NIC, phone, reason for visit)
+          - Hospital box (hospital name with dot, room, address)
+          - Two buttons: "Call patient" and "Open EHR"
+          - Close with X, tap outside, or Escape
+         ───────────────────────────────────────────────────────── */}
+      <Modal
+        visible={Boolean(selectedPatient)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedPatient(null)}
+      >
+        <TouchableOpacity
+          style={[styles.modalOverlay, { backgroundColor: theme.modalOverlay }]}
+          activeOpacity={1}
+          onPress={() => setSelectedPatient(null)}
+        >
+          <TouchableOpacity
+            style={[
+              styles.sheetContainer,
+              {
+                backgroundColor: theme.sheetBg,
+                borderColor: theme.cardBorder,
+              },
+            ]}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Sheet Handle */}
+            <View
+              style={[
+                styles.sheetHandle,
+                { backgroundColor: theme.cardBorder },
+              ]}
+            />
+
+            {selectedPatient && (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.sheetScrollContent}
+              >
+                {/* Header: Avatar, Name, Demographics, Close X */}
+                <View style={styles.sheetHeaderRow}>
+                  <View style={styles.sheetAvatarGroup}>
+                    <View
+                      style={[
+                        styles.sheetAvatar,
+                        { backgroundColor: theme.tint },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.sheetAvatarText,
+                          { color: theme.primaryDeep },
+                        ]}
+                      >
+                        {selectedPatient.patientName
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')
+                          .slice(0, 2)
+                          .toUpperCase()}
+                      </Text>
+                    </View>
+
+                    <View style={styles.sheetNameCol}>
+                      <Text
+                        style={[
+                          styles.sheetPatientName,
+                          { color: theme.textDark },
+                        ]}
+                      >
+                        {selectedPatient.patientName}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.sheetDemographics,
+                          { color: theme.textMuted },
+                        ]}
+                      >
+                        {selectedPatient.age} yrs · {selectedPatient.sex} ·{' '}
+                        Blood: {selectedPatient.bloodGroup}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.sheetCloseBtn,
+                      { backgroundColor: theme.cardBorder },
+                    ]}
+                    onPress={() => setSelectedPatient(null)}
+                  >
+                    <Ionicons name="close" size={20} color={theme.textDark} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Allergy Section: Red Alert or Calm Green Card */}
+                {selectedPatient.allergy ? (
+                  <View style={styles.allergyAlertBox}>
+                    <View style={styles.allergyIconCol}>
+                      <Ionicons name="warning" size={22} color="#dc2626" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.allergyAlertTitle}>
+                        CRITICAL DRUG ALLERGY ALERT
+                      </Text>
+                      <Text style={styles.allergyAlertDesc}>
+                        {selectedPatient.allergy}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View
+                    style={[
+                      styles.noAllergyBox,
+                      {
+                        backgroundColor: isDark ? '#12261e' : '#f0fdf4',
+                        borderColor: isDark ? '#1c3e31' : '#bbf7d0',
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={20}
+                      color="#16a34a"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text
+                      style={[
+                        styles.noAllergyText,
+                        { color: isDark ? '#86efac' : '#15803d' },
+                      ]}
+                    >
+                      No known drug allergies reported
+                    </Text>
+                  </View>
+                )}
+
+                {/* Info Grid (Token, Time, NIC, Phone, Reason) */}
+                <View
+                  style={[
+                    styles.infoGrid,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <View style={styles.infoGridRow}>
+                    <View style={styles.infoCol}>
+                      <Text
+                        style={[styles.infoLabel, { color: theme.textMuted }]}
+                      >
+                        QUEUE TOKEN
+                      </Text>
+                      <Text
+                        style={[styles.infoValue, { color: theme.textDark }]}
+                      >
+                        {selectedPatient.token}
+                      </Text>
+                    </View>
+                    <View style={styles.infoCol}>
+                      <Text
+                        style={[styles.infoLabel, { color: theme.textMuted }]}
+                      >
+                        APPOINTMENT TIME
+                      </Text>
+                      <Text
+                        style={[styles.infoValue, { color: theme.textDark }]}
+                      >
+                        {selectedPatient.time}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.infoDivider,
+                      { backgroundColor: theme.divider },
+                    ]}
+                  />
+
+                  <View style={styles.infoGridRow}>
+                    <View style={styles.infoCol}>
+                      <Text
+                        style={[styles.infoLabel, { color: theme.textMuted }]}
+                      >
+                        NIC NUMBER
+                      </Text>
+                      <Text
+                        style={[styles.infoValue, { color: theme.textDark }]}
+                      >
+                        {selectedPatient.nic}
+                      </Text>
+                    </View>
+                    <View style={styles.infoCol}>
+                      <Text
+                        style={[styles.infoLabel, { color: theme.textMuted }]}
+                      >
+                        PHONE NUMBER
+                      </Text>
+                      <Text
+                        style={[styles.infoValue, { color: theme.textDark }]}
+                      >
+                        {selectedPatient.phone}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.infoDivider,
+                      { backgroundColor: theme.divider },
+                    ]}
+                  />
+
+                  <View style={{ paddingTop: 8 }}>
+                    <Text
+                      style={[styles.infoLabel, { color: theme.textMuted }]}
+                    >
+                      REASON FOR VISIT
+                    </Text>
+                    <Text
+                      style={[
+                        styles.infoValueReason,
+                        { color: theme.textDark },
+                      ]}
+                    >
+                      {selectedPatient.reason}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Hospital Box */}
+                {(() => {
+                  const hosp =
+                    HOSPITALS[selectedPatient.hospitalId] || HOSPITALS.cgh;
+                  return (
+                    <View
+                      style={[
+                        styles.hospitalBox,
+                        {
+                          backgroundColor: isDark
+                            ? '#142023'
+                            : hosp.accentLight,
+                          borderColor: hosp.accentColor + '44',
+                        },
+                      ]}
+                    >
+                      <View style={styles.hospBoxTop}>
+                        <View
+                          style={[
+                            styles.colorDot,
+                            { backgroundColor: hosp.accentColor },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.hospBoxName,
+                            { color: hosp.accentColor },
+                          ]}
+                        >
+                          {hosp.name}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[styles.hospBoxSub, { color: theme.textDark }]}
+                      >
+                        {hosp.room} · {hosp.address}
+                      </Text>
+                    </View>
+                  );
+                })()}
+
+                {/* Bottom Action Buttons: Call patient & Open EHR */}
+                <View style={styles.sheetBtnRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.sheetBtnSecondary,
+                      {
+                        backgroundColor: theme.card,
+                        borderColor: theme.cardBorder,
+                      },
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      showToast(`Calling ${selectedPatient.phone}...`);
+                    }}
+                  >
+                    <Ionicons
+                      name="call-outline"
+                      size={18}
+                      color={theme.primaryDeep}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        styles.sheetBtnSecondaryText,
+                        { color: theme.primaryDeep },
+                      ]}
+                    >
+                      Call patient
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.sheetBtnPrimary,
+                      { backgroundColor: theme.primaryDeep },
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setSelectedPatient(null);
+                      showToast(
+                        `Opening EHR Record for ${selectedPatient.patientName}`
+                      );
+                    }}
+                  >
+                    <Ionicons
+                      name="folder-open-outline"
+                      size={18}
+                      color="#ffffff"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.sheetBtnPrimaryText}>Open EHR</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
+
+      {/* ─────────────────────────────────────────────────────────
+          FLOATING TOAST NOTIFICATION
+         ───────────────────────────────────────────────────────── */}
+      {toastMessage && (
+        <Animated.View
+          style={[
+            styles.toastContainer,
+            {
+              opacity: toastFade,
+              backgroundColor: isDark ? '#1a3338' : '#0b4f5a',
+            },
+          ]}
+        >
+          <Ionicons
+            name="information-circle-outline"
+            size={18}
+            color="#ffffff"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// STYLESHEET
+// Clean clinic aesthetic:
+// - Max width 440px centered on desktop
+// - Soft light-teal background (#eef6f8)
+// - White cards with 20-22px rounded corners
+// - Deep teal primary (#0b4f5a), teal accent (#0e8a96)
+// ─────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#f7fbfd',
   },
-  scrollArea: {
+  outerFrame: {
     flex: 1,
+    alignItems: 'center',
+    width: '100%',
+  },
+  mobileContainer: {
+    width: '100%',
+    maxWidth: 440,
+    flex: 1,
+    position: 'relative',
+    ...Platform.select({
+      web: {
+        fontFamily:
+          'Lexend, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        boxShadow: '0 4px 24px rgba(11, 79, 90, 0.08)',
+      },
+    }),
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 28,
+    paddingTop: 14,
+    paddingBottom: 24,
   },
 
-  // 1. TOP PROFILE BAR
-  topProfileBar: {
+  // 1. Header Row
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    marginBottom: 16,
   },
-  profileLeft: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   avatarWrapper: {
     position: 'relative',
+    marginRight: 12,
   },
-  avatarImg: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    backgroundColor: '#e2e8f0',
+  avatarBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  onlineGreenDot: {
+  avatarInitials: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  onlineDot: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: 1,
+    right: 1,
     width: 12,
     height: 12,
     borderRadius: 6,
@@ -1050,829 +2196,885 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#ffffff',
   },
-  profileTextWrap: {
-    marginLeft: 10,
-  },
-  profileName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  roomStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  roomStatusDot: {
-    fontSize: 14,
-    color: '#0d6371',
-    marginRight: 4,
-    fontWeight: '900',
-  },
-  roomStatusText: {
-    fontSize: 12,
-    color: '#0d6371',
-    fontWeight: '600',
-  },
-  bellBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#edf2f7',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  redBadgeDot: {
-    position: 'absolute',
-    top: 8,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ef4444',
-  },
-
-  // 2. DATE SUBTITLE & HEADER TITLE
-  dateAndHeaderSection: {
-    marginTop: 14,
-    marginBottom: 12,
-  },
-  dateSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  dateSubText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0d6371',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  titleWithFilterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  screenHeading: {
-    fontSize: 27,
-    fontWeight: '800',
-    color: '#0f242d',
-    letterSpacing: -0.3,
-  },
-  filterBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#e6f3f6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#d2ebef',
-  },
-
-  // 3. WEEKLY DAY SELECTOR STRIP
-  weekStripContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 18,
-  },
-  dayCard: {
+  doctorInfo: {
     flex: 1,
-    marginHorizontal: 3.5,
-    backgroundColor: '#edf6f8',
-    borderRadius: 20,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  dayCardActive: {
-    backgroundColor: '#0c424c',
-    shadowColor: '#0c424c',
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  dayNameText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748b',
-    marginBottom: 4,
-  },
-  dayNameTextActive: {
-    color: '#99f6e4',
-    fontWeight: '600',
-  },
-  dayNumberText: {
+  doctorName: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1e293b',
-  },
-  dayNumberTextActive: {
-    color: '#ffffff',
     fontWeight: '800',
-    fontSize: 20,
+    letterSpacing: -0.2,
   },
-  activeDayDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#22d3ee',
-    marginTop: 4,
-  },
-
-  // 4. SHIFT CARD (MORNING OPD SHIFT)
-  shiftCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5eef2',
-    shadowColor: '#0f2932',
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
-    marginBottom: 22,
-  },
-  shiftHeaderRow: {
+  doctorSubRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  shiftTitleLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-  },
-  shiftIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#e3f5f8',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
     marginTop: 2,
   },
-  shiftTitleText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f242d',
+  onlineMiniDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10b981',
+    marginRight: 6,
   },
-  shiftSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 3,
-  },
-  shiftSubTime: {
-    fontSize: 12,
-    color: '#64748b',
+  doctorSubtitle: {
+    fontSize: 13,
     fontWeight: '500',
   },
-  shiftSubBullet: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginHorizontal: 6,
-  },
-  shiftSubRoom: {
-    fontSize: 12,
-    color: '#0d6371',
-    fontWeight: '600',
-  },
-  shiftStatusPill: {
-    flexDirection: 'row',
+  bellButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#c7f4f8',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
+    position: 'relative',
   },
-  shiftStatusGreenDot: {
+  redDot: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: '#059669',
-    marginRight: 5,
-  },
-  shiftStatusText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0d6371',
+    backgroundColor: '#ef4444',
   },
 
-  // Shift Progress
-  progressSection: {
-    marginTop: 16,
+  // 2. Title Section
+  titleSection: {
+    marginBottom: 16,
   },
-  progressCountsRow: {
+  dateBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  headerDateLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  screenTitle: {
+    fontSize: 27,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  filterButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterButtonActive: {
+    borderWidth: 0,
+  },
+
+  // 3. Week Strip
+  weekStripContainer: {
+    borderRadius: 22,
+    padding: 14,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  weekControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  weekNavGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  weekNavArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  weekRangeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginHorizontal: 10,
+  },
+  todayPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  todayPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  daysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dayBox: {
+    width: 44,
+    height: 64,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    borderWidth: 1,
+  },
+  dayBoxSelected: {
+    borderWidth: 0,
+    elevation: 3,
+    shadowColor: '#0b4f5a',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  dayBoxWeekend: {
+    borderStyle: 'dashed',
+  },
+  dayWeekday: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  dayDateNum: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  dayTextSelected: {
+    color: '#d9f2f5',
+  },
+  dayTextSelectedBold: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+  todayUnderline: {
+    position: 'absolute',
+    bottom: 7,
+    width: 14,
+    height: 2.5,
+    borderRadius: 1.5,
+  },
+  leaveOffBadge: {
+    position: 'absolute',
+    top: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: '#fef3c7',
+  },
+  leaveOffText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#b45309',
+    textTransform: 'uppercase',
+  },
+
+  // 4. Hospital Dropdown
+  dropdownWrapper: {
+    position: 'relative',
+    zIndex: 50,
+    marginBottom: 16,
+  },
+  dropdownPillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  dropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  colorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 10,
+  },
+  colorDotSmall: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    marginRight: 6,
+  },
+  dropdownButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    right: 0,
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    zIndex: 100,
+    elevation: 8,
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  dropdownMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+  },
+  dropdownMenuItemActive: {},
+  dropdownMenuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dropdownItemTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dropdownItemSub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  dropdownItemBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // 5. Shift Cards
+  shiftsSection: {
+    marginBottom: 20,
+    gap: 12,
+  },
+  shiftCard: {
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 1,
+  },
+  shiftHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  shiftTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  shiftIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  shiftNameText: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  shiftTimeText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  hospitalTagRow: {
+    flexDirection: 'row',
+    marginBottom: 14,
+  },
+  hospitalTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  hospitalTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  progressSection: {
+    marginBottom: 14,
+  },
+  progressLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 6,
   },
-  consultedCountText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f242d',
-  },
-  waitingCountText: {
+  statLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#64748b',
   },
-  progressBarTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#d8f2f6',
+  statNumber: {
+    fontWeight: '800',
+  },
+  progressBarBg: {
+    height: 6,
+    borderRadius: 3,
     overflow: 'hidden',
   },
   progressBarFill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: '#0c4954',
+    height: 6,
+    borderRadius: 3,
   },
-
-  // Shift Footer
-  shiftFooterRow: {
+  shiftFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 14,
+    justifyContent: 'space-between',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f1f6f8',
   },
-  avgTimeWrap: {
+  avgConsultRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  avgTimeText: {
+  avgConsultText: {
     fontSize: 12,
-    color: '#526b78',
+    marginLeft: 5,
     fontWeight: '500',
   },
-  breakBtn: {
+  breakPillButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#e3f5f8',
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
   },
-  breakBtnText: {
+  breakPillText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0c4c57',
   },
 
-  // 5. TODAY'S TIMELINE HEADER
-  timelineHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  timelineTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  timelineTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0f242d',
-    marginRight: 8,
-  },
-  patientsCountBadge: {
-    backgroundColor: '#edf6f8',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
+  // State Card (On Leave / No Clinics)
+  stateCard: {
+    borderRadius: 22,
+    padding: 24,
     borderWidth: 1,
-    borderColor: '#dceef2',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  patientsCountText: {
+  stateIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  stateCardTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  stateCardSubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  blockedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#fffbeb',
+  },
+  blockedPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#0d6371',
-  },
-  currentSlotText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0891b2',
+    color: '#b45309',
   },
 
-  // 6. TIMELINE LIST
-  timelineList: {
-    gap: 10,
+  // 6. Timeline
+  timelineSection: {
     marginBottom: 20,
   },
-
-  // HERO CARD: NOW ATTENDING
-  nowAttendingCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 14,
-    borderLeftWidth: 5,
-    borderLeftColor: '#0b5662',
-    borderWidth: 1,
-    borderColor: '#e1ecf0',
-    shadowColor: '#0d5560',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 8,
-    elevation: 3,
+  timelineHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
-  attendingContentRow: {
+  timelineTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timelineHeading: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginRight: 8,
+  },
+  patientCountBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  patientCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  currentClockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  clockPulseDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#10b981',
+    marginRight: 6,
+  },
+  clockTimeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  emptyTimelineBox: {
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  emptyTimelineText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  appointmentsList: {
+    gap: 10,
+  },
+
+  // Highlighted NOW ATTENDING Card
+  nowAttendingCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderLeftWidth: 4,
+    padding: 16,
+    marginBottom: 4,
+  },
+  nowAttendingTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    marginBottom: 12,
   },
-  tokenCircleCyan: {
+  tokenCircle: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#c7f3f8',
-    alignItems: 'center',
+    backgroundColor: '#0b4f5a',
     justifyContent: 'center',
-    marginRight: 12,
-    marginTop: 2,
+    alignItems: 'center',
   },
-  tokenNumberBig: {
-    fontSize: 18,
+  tokenCircleText: {
+    color: '#ffffff',
+    fontSize: 15,
     fontWeight: '800',
-    color: '#084b55',
-  },
-  attendingDetailsWrap: {
-    flex: 1,
   },
   nowAttendingBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   nowAttendingLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#0c6f7e',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
+    marginRight: 6,
   },
-  inRoomPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0c4650',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 12,
+  inRoomBadge: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  inRoomPillText: {
-    fontSize: 11,
-    fontWeight: '700',
+  inRoomText: {
     color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
-  attendingPatientName: {
+  nowPatientName: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0f242d',
-    marginTop: 1,
   },
-  attendingReason: {
+  nowPatientSub: {
     fontSize: 12,
-    color: '#0a6c7b',
-    fontWeight: '600',
     marginTop: 2,
   },
-  attendingFooterRow: {
+  nowAttendingFooter: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 10,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f1f6f8',
   },
-  elapsedCounterWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  nowFooterLeft: {
+    flexDirection: 'column',
+    gap: 4,
   },
-  elapsedCounterText: {
-    fontSize: 12,
-    color: '#526b78',
+  elapsedText: {
+    fontSize: 11,
     fontWeight: '500',
   },
-  openEhrBtn: {
-    backgroundColor: '#b6f1f7',
+  openEhrPill: {
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 14,
   },
-  openEhrBtnText: {
+  openEhrText: {
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: '700',
-    color: '#084b55',
   },
 
-  // STANDARD TIMELINE SLOT ROW
-  standardSlotRow: {
+  // Regular Timeline Row
+  timelineRowCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    justifyContent: 'space-between',
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#e8f0f3',
-    shadowColor: '#000',
-    shadowOpacity: 0.02,
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 3,
-    elevation: 1,
   },
-  slotTimeColumn: {
-    width: 52,
-    marginRight: 10,
-  },
-  slotTimeHour: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f242d',
-  },
-  slotTimePeriod: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748b',
-    marginTop: 1,
-  },
-  slotPatientInfo: {
+  timelineRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
-  slotPatientName: {
+  timeBlock: {
+    width: 68,
+    marginRight: 8,
+  },
+  timeTextMain: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  patientInfoBlock: {
+    flex: 1,
+  },
+  rowPatientName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0f242d',
   },
-  slotReasonSub: {
-    fontSize: 12,
-    color: '#64748b',
+  rowReasonText: {
+    fontSize: 11,
     marginTop: 2,
-    fontWeight: '500',
   },
-  slotStatusRight: {
-    marginLeft: 10,
-  },
-
-  // Status Badges
-  badgeDone: {
+  rowTagRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eef3f6',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    marginTop: 4,
   },
-  badgeDoneText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+  statusPillSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginLeft: 8,
   },
-  badgeWaiting: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#d8f4f7',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  hourglassEmoji: {
-    fontSize: 11,
-    marginRight: 3,
-  },
-  badgeWaitingText: {
-    fontSize: 11,
+  statusPillSmallText: {
+    fontSize: 10,
     fontWeight: '700',
-    color: '#0d6371',
-  },
-  badgeScheduled: {
-    backgroundColor: '#eef3f6',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeScheduledText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748b',
   },
 
-  // 7. PRIMARY ACTION: ADD WALK-IN SLOT
-  walkinSection: {
-    marginTop: 6,
-    marginBottom: 10,
+  // 7. Add Walk-In
+  walkInSection: {
+    marginBottom: 20,
     alignItems: 'center',
   },
-  addWalkinBtn: {
+  addWalkInButton: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0c4650',
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 25,
-    shadowColor: '#0c4650',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 6,
+    paddingVertical: 15,
+    borderRadius: 22,
+    marginBottom: 10,
     elevation: 3,
+    shadowColor: '#0b4f5a',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
-  addWalkinBtnText: {
+  addWalkInButtonText: {
+    color: '#ffffff',
     fontSize: 15,
     fontWeight: '700',
-    color: '#ffffff',
+    letterSpacing: 0.3,
   },
-  walkinRemainingSubtext: {
-    fontSize: 11.5,
-    color: '#64748b',
-    marginTop: 8,
-    textAlign: 'center',
+  allocationsContainer: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  allocationText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 
-  // 8. BOTTOM NAVIGATION BAR
+  // 8. Bottom Navigation Bar (5 tabs preserved)
   bottomTabBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 10,
     borderTopWidth: 1,
-    borderTopColor: '#e5edf2',
-    paddingVertical: 10,
-    elevation: 8,
-    shadowColor: 'rgba(0, 0, 0, 0.05)',
-    shadowOpacity: 1,
-    shadowRadius: 10,
+    elevation: 10,
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: -2 },
   },
   tabItem: {
     alignItems: 'center',
+    justifyContent: 'center',
     flex: 1,
   },
   tabLabel: {
     fontSize: 10,
-    fontWeight: '600',
-    color: '#64748b',
-    marginTop: 4,
+    fontWeight: '500',
+    marginTop: 3,
   },
   tabLabelActive: {
-    color: '#0d6371',
     fontWeight: '700',
   },
 
-  // MODAL COMMON STYLES
+  // Modal Sheet
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
     justifyContent: 'flex-end',
-  },
-  modalContainer: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0f242d',
+  sheetContainer: {
+    width: '100%',
+    maxWidth: 440,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    maxHeight: '85%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
   },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 6,
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
     marginTop: 10,
-  },
-  textInput: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0f172a',
-  },
-  genderRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  genderChip: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  genderChipActive: {
-    backgroundColor: '#0c4650',
-    borderColor: '#0c4650',
-  },
-  genderChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  genderChipTextActive: {
-    color: '#ffffff',
-  },
-  tokenNoticeBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e6f6f8',
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 16,
-  },
-  tokenNoticeText: {
-    fontSize: 12,
-    color: '#0d6371',
-    fontWeight: '600',
-    flex: 1,
-  },
-  modalBtnRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 18,
-  },
-  modalCancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-  },
-  modalCancelBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  modalSubmitBtn: {
-    flex: 1.6,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#0c4650',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalSubmitBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-
-  // EHR SPECIFIC
-  ehrModalToken: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0d6371',
-    backgroundColor: '#d8f4f7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  ehrSub: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  sectionHeaderSmall: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#64748b',
-    letterSpacing: 0.6,
-    marginTop: 14,
     marginBottom: 8,
   },
-  vitalsGrid: {
+  sheetScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  sheetHeaderRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  vitalCard: {
-    width: '48%',
-    backgroundColor: '#f8fafc',
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+  sheetAvatarGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
-  vitalLabel: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '500',
+  sheetAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  vitalValue: {
+  sheetAvatarText: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#0f242d',
+  },
+  sheetNameCol: {
+    flex: 1,
+  },
+  sheetPatientName: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  sheetDemographics: {
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  allergyAlertBox: {
+    flexDirection: 'row',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 14,
+  },
+  allergyIconCol: {
+    marginRight: 10,
+    paddingTop: 1,
+  },
+  allergyAlertTitle: {
+    color: '#b91c1c',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  allergyAlertDesc: {
+    color: '#991b1b',
+    fontSize: 13,
+    fontWeight: '700',
     marginTop: 2,
   },
-  vitalUnit: {
-    fontSize: 10,
-    color: '#94a3b8',
-    marginTop: 1,
-  },
-  complaintBox: {
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  complaintText: {
-    fontSize: 13,
-    color: '#1e293b',
-    lineHeight: 18,
-  },
-  ehrNotesInput: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 13,
-    color: '#0f172a',
-    height: 80,
-    textAlignVertical: 'top',
-  },
-
-  // BREAK OPTIONS
-  breakOptionCard: {
+  noAllergyBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    padding: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 10,
+    padding: 12,
+    marginBottom: 14,
   },
-  breakOptionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f242d',
-  },
-  breakOptionDesc: {
+  noAllergyText: {
     fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
+    fontWeight: '600',
   },
-
-  // FILTER OPTIONS
-  filterOptionRow: {
+  infoGrid: {
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  infoGridRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
   },
-  filterOptionRowActive: {
-    backgroundColor: '#e6f6f8',
-    borderColor: '#b9e6ec',
+  infoCol: {
+    flex: 1,
   },
-  filterOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
+  infoLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 3,
   },
-  filterOptionTextActive: {
-    color: '#0d6371',
+  infoValue: {
+    fontSize: 13,
     fontWeight: '700',
+  },
+  infoValueReason: {
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  infoDivider: {
+    height: 1,
+    marginVertical: 10,
+  },
+  hospitalBox: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 18,
+  },
+  hospBoxTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  hospBoxName: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  hospBoxSub: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  sheetBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  sheetBtnSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  sheetBtnSecondaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  sheetBtnPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: 18,
+  },
+  sheetBtnPrimaryText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  // Toast
+  toastContainer: {
+    position: 'absolute',
+    bottom: 84,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    zIndex: 999,
+    elevation: 6,
+    shadowColor: '#000000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  toastText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
