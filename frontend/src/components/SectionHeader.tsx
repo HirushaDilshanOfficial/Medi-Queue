@@ -16,6 +16,7 @@ export interface SectionHeaderProps {
   actionText?: string;
   onActionPress?: () => void;
   actionIcon?: keyof typeof Ionicons.glyphMap;
+  rightElement?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -25,6 +26,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
   actionText,
   onActionPress,
   actionIcon,
+  rightElement,
   style,
 }) => {
   return (
@@ -34,7 +36,9 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
 
-      {onActionPress && (actionText || actionIcon) ? (
+      {rightElement ? (
+        rightElement
+      ) : onActionPress && (actionText || actionIcon) ? (
         <TouchableOpacity
           onPress={onActionPress}
           activeOpacity={0.7}

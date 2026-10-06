@@ -48,7 +48,7 @@ const getOrderedQueue = async (date, filters = {}) => {
   }
 
   // Filter by Appointment type (walk_in | pre_booked)
-  if (filters.type) {
+  if (filters.type && filters.type !== 'all') {
     const appointmentQuery = {
       date: targetDate,
       type: filters.type,
