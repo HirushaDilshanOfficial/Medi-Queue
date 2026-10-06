@@ -15,6 +15,7 @@ import {
   ReceptionistHomeScreen,
   RegisterPatientScreen,
   LiveQueueScreen,
+  PatientsScreen,
 } from '../screens/Receptionist';
 
 // ─────────────────────────────────────────────────────────
@@ -183,7 +184,7 @@ export function ReceptionistTabNavigator() {
       />
       <Tab.Screen
         name="PatientsTab"
-        component={PatientsPlaceholderScreen}
+        component={PatientsScreen}
         options={{ tabBarLabel: 'Patients' }}
       />
       <Tab.Screen
