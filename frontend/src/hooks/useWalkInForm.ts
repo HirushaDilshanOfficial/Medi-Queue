@@ -4,6 +4,7 @@ import { QueuePriority, AppointmentType } from '../types';
 
 export interface WalkInPatientState {
   fullName: string;
+  name?: string;
   nic: string;
   phone: string;
   age: string | number;
@@ -57,8 +58,11 @@ export interface UseWalkInFormReturn {
 
   // Actions
   setField: (field: string, value: any) => void;
-  setPatient: (patientData: Partial<WalkInPatientState>) => void;
-  setExistingPatient: (patientId: string | null, patientData?: Partial<WalkInPatientState>) => void;
+  setPatient: (patientData: Partial<WalkInPatientState> & { name?: string }) => void;
+  setExistingPatient: (
+    patientId: string | null,
+    patientData?: Partial<WalkInPatientState> & { name?: string }
+  ) => void;
   setErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   clearError: (field: string) => void;
   reset: () => void;
@@ -68,16 +72,56 @@ export interface UseWalkInFormReturn {
 /**
  * Custom hook to manage walk-in / pre-booked intake form state and validation.
  */
-export const useWalkInForm = (initialValues?: Partial<WalkInFormState>): UseWalkInFormReturn => {
-  const [form, setForm] = useState<WalkInFormState>(() => ({
-    ...INITIAL_FORM_STATE,
-    ...initialValues,
-    patient: {
-      ...INITIAL_PATIENT_STATE,
-      ...(initialValues?.patient || {}),
-    },
-    errors: initialValues?.errors || {},
-  }));
+export const useWalkInForm = (
+  initialValues?: Partial<WalkInFormState> & {
+    name?: string;
+    fullName?: string;
+    nic?: string;
+    phone?: string;
+    age?: string | number;
+    gender?: string;
+    existingPatientId?: string | null;
+  }
+): UseWalkInFormReturn => {
+  const [form, setForm] = useState<WalkInFormState>(() => {
+    const rawPatient: Partial<WalkInPatientState> & { name?: string } =
+      initialValues?.patient || {};
+    const resolvedFullName =
+      rawPatient.fullName ||
+      rawPatient.name ||
+      initialValues?.fullName ||
+      initialValues?.name ||
+      '';
+    const resolvedNic = rawPatient.nic || initialValues?.nic || '';
+    const resolvedPhone = rawPatient.phone || initialValues?.phone || '';
+    const resolvedAge =
+      rawPatient.age !== undefined && rawPatient.age !== null
+        ? String(rawPatient.age)
+        : initialValues?.age !== undefined && initialValues?.age !== null
+        ? String(initialValues.age)
+        : '';
+    const resolvedGender = (rawPatient.gender || initialValues?.gender || '') as any;
+    const resolvedExistingId =
+      initialValues?.existingPatientId !== undefined
+        ? initialValues.existingPatientId
+        : null;
+
+    return {
+      ...INITIAL_FORM_STATE,
+      ...initialValues,
+      existingPatientId: resolvedExistingId,
+      patient: {
+        ...INITIAL_PATIENT_STATE,
+        ...rawPatient,
+        fullName: resolvedFullName,
+        nic: resolvedNic,
+        phone: resolvedPhone,
+        age: resolvedAge,
+        gender: resolvedGender,
+      },
+      errors: initialValues?.errors || {},
+    };
+  });
 
   // Update a single field dynamically and clear its error
   const setField = useCallback((field: string, value: any) => {
@@ -99,13 +143,15 @@ export const useWalkInForm = (initialValues?: Partial<WalkInFormState>): UseWalk
       }
 
       // Direct patient field aliases
-      if (['fullName', 'nic', 'phone', 'age', 'gender'].includes(field)) {
+      if (['fullName', 'name', 'nic', 'phone', 'age', 'gender'].includes(field)) {
+        const targetField = field === 'name' ? 'fullName' : field;
+        delete newErrors[targetField];
         delete newErrors[field];
         return {
           ...prev,
           patient: {
             ...prev.patient,
-            [field]: value,
+            [targetField]: value,
           },
           errors: newErrors,
         };
@@ -122,26 +168,34 @@ export const useWalkInForm = (initialValues?: Partial<WalkInFormState>): UseWalk
   }, []);
 
   // Update partial or full patient information
-  const setPatient = useCallback((patientData: Partial<WalkInPatientState>) => {
-    setForm((prev) => ({
-      ...prev,
-      patient: {
-        ...prev.patient,
-        ...patientData,
-      },
-      errors: Object.keys(patientData).reduce(
-        (acc, key) => {
-          delete acc[key];
-          return acc;
+  const setPatient = useCallback(
+    (patientData: Partial<WalkInPatientState> & { name?: string }) => {
+      setForm((prev) => ({
+        ...prev,
+        patient: {
+          ...prev.patient,
+          ...patientData,
+          fullName:
+            patientData.fullName || patientData.name || prev.patient.fullName,
         },
-        { ...prev.errors }
-      ),
-    }));
-  }, []);
+        errors: Object.keys(patientData).reduce(
+          (acc, key) => {
+            delete acc[key];
+            return acc;
+          },
+          { ...prev.errors }
+        ),
+      }));
+    },
+    []
+  );
 
-  // Set existing patient selection from search
+  // Set existing patient selection from search or navigation prefill
   const setExistingPatient = useCallback(
-    (patientId: string | null, patientData?: Partial<WalkInPatientState>) => {
+    (
+      patientId: string | null,
+      patientData?: Partial<WalkInPatientState> & { name?: string }
+    ) => {
       setForm((prev) => ({
         ...prev,
         existingPatientId: patientId,
@@ -149,6 +203,8 @@ export const useWalkInForm = (initialValues?: Partial<WalkInFormState>): UseWalk
           ? {
               ...prev.patient,
               ...patientData,
+              fullName:
+                patientData.fullName || patientData.name || prev.patient.fullName,
             }
           : prev.patient,
       }));

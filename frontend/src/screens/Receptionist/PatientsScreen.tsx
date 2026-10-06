@@ -125,12 +125,28 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
 
   const handleBookFutureSlot = () => {
     if (!selected) return;
-    showToast(`Navigating to appointment booking for ${selected.fullName}...`, 'info');
+    const existingId = selected._id || selected.id;
+    const ageStr =
+      selected.age !== undefined && selected.age !== null
+        ? String(selected.age)
+        : '';
+
+    showToast(`Prefilling OPD registration for ${selected.fullName}...`, 'info');
+
+    const params = {
+      existingPatientId: existingId,
+      name: selected.fullName,
+      fullName: selected.fullName,
+      nic: selected.nic || '',
+      phone: selected.phone || '',
+      age: ageStr,
+      gender: selected.gender || '',
+      patient: selected,
+      intakeType: 'pre_booked',
+    };
+
     if (navigation?.navigate) {
-      navigation.navigate('RegisterTab', {
-        patientId: selected._id || selected.id,
-        patient: selected,
-      });
+      navigation.navigate('RegisterTab', params);
     } else if (onNavigate) {
       onNavigate('register');
     }

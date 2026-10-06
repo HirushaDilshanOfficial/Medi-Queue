@@ -30,6 +30,7 @@ import { TokenBadge } from '../../components/TokenBadge';
 
 export interface RegisterPatientScreenProps {
   navigation?: any;
+  route?: any;
   onNavigate?: (route: string) => void;
 }
 
@@ -74,13 +75,43 @@ export const DEPARTMENTS: DepartmentItem[] = [
 
 export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   navigation,
+  route,
   onNavigate,
 }) => {
-  const form = useWalkInForm();
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const form = useWalkInForm(route?.params);
+  const [searchQuery, setSearchQuery] = useState<string>(
+    route?.params?.nic ||
+      route?.params?.phone ||
+      route?.params?.name ||
+      route?.params?.fullName ||
+      ''
+  );
   const [searching, setSearching] = useState<boolean>(false);
-  const [searchStatus, setSearchStatus] = useState<'idle' | 'found' | 'not_found'>('idle');
-  const [matchedPatient, setMatchedPatient] = useState<Patient | null>(null);
+  const [searchStatus, setSearchStatus] = useState<'idle' | 'found' | 'not_found'>(
+    route?.params?.existingPatientId ||
+      route?.params?.name ||
+      route?.params?.fullName ||
+      route?.params?.patient
+      ? 'found'
+      : 'idle'
+  );
+  const [matchedPatient, setMatchedPatient] = useState<Patient | null>(
+    route?.params?.patient ||
+      (route?.params?.existingPatientId
+        ? {
+            _id: route.params.existingPatientId,
+            fullName:
+              route.params.name ||
+              route.params.fullName ||
+              'Patient',
+            nic: route.params.nic || '',
+            phone: route.params.phone || '',
+            age: route.params.age ? Number(route.params.age) : undefined,
+            gender: route.params.gender || undefined,
+            registeredVia: 'reception',
+          }
+        : null)
+  );
 
   // Doctors and Slots state
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
@@ -106,6 +137,71 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setToastType(type);
     setToastVisible(true);
   };
+
+  // ── PREFILL PATIENT FROM NAVIGATION PARAMS ──
+  useEffect(() => {
+    const params = route?.params;
+    if (!params) return;
+
+    const existingId =
+      params.existingPatientId ||
+      params.patient?._id ||
+      params.patient?.id ||
+      null;
+    const pName =
+      params.name ||
+      params.fullName ||
+      params.patient?.fullName ||
+      '';
+    const pNic = params.nic || params.patient?.nic || '';
+    const pPhone = params.phone || params.patient?.phone || '';
+    const pAge =
+      params.age !== undefined && params.age !== null
+        ? String(params.age)
+        : params.patient?.age !== undefined && params.patient?.age !== null
+        ? String(params.patient.age)
+        : '';
+    const pGender = params.gender || params.patient?.gender || '';
+
+    // Only proceed if at least one identifying param is passed
+    if (existingId || pName || pNic || pPhone) {
+      const patientObj: Patient = params.patient || {
+        _id: existingId || '',
+        fullName: pName || 'Patient',
+        nic: pNic,
+        phone: pPhone,
+        age: pAge ? Number(pAge) : undefined,
+        gender: (pGender as any) || undefined,
+        registeredVia: 'reception',
+      };
+
+      setMatchedPatient(patientObj);
+      setSearchStatus('found');
+      setSearchQuery(pNic || pPhone || pName);
+
+      form.setExistingPatient(existingId, {
+        fullName: pName,
+        nic: pNic,
+        phone: pPhone,
+        age: pAge,
+        gender: (pGender as any) || '',
+      });
+
+      if (params.intakeType) {
+        form.setField('intakeType', params.intakeType);
+      }
+
+      // Auto-suggest Senior if age is 60+
+      if (pAge) {
+        const ageNum = Number(pAge);
+        if (!isNaN(ageNum) && ageNum >= 60) {
+          form.setField('priority', 'senior');
+        }
+      }
+
+      showToast(`Prefilled with record for ${pName || 'patient'}`, 'success');
+    }
+  }, [route?.params]);
 
   // Currently selected doctor object
   const selectedDoctor = allDoctors.find((d) => d._id === form.doctorId);
