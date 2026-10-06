@@ -349,20 +349,20 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
           </View>
         </View>
 
-        {/* ── NOW SERVING CARD ── */}
+        {/* ── NOW SERVING CARD (DARK TEAL) ── */}
         <View style={styles.servingSection}>
           <View style={styles.servingCard}>
             <View style={styles.servingHeader}>
               <View style={styles.servingTag}>
-                <Ionicons name="radio" size={14} color={Colors.white} style={{ marginRight: 4 }} />
+                <Ionicons name="radio" size={14} color={Colors.white} style={{ marginRight: 5 }} />
                 <Text style={styles.servingTagText}>NOW SERVING</Text>
               </View>
 
-              {serving?.room && (
+              {serving?.room ? (
                 <View style={styles.roomPill}>
                   <Text style={styles.roomPillText}>Room {serving.room}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
 
             {serving ? (
@@ -389,54 +389,67 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                   </View>
                 </View>
 
-                {/* Doctor & Dept row */}
+                {/* Doctor & Room info */}
                 <View style={styles.servingDoctorRow}>
-                  <Ionicons name="medical" size={16} color={Colors.secondary} />
+                  <Ionicons name="medical" size={16} color="#A7F3D0" />
                   <Text style={styles.servingDoctorText} numberOfLines={1}>
                     {typeof serving.doctor === 'object' && serving.doctor?.name
                       ? `${serving.doctor.name} (${serving.doctor.department || 'OPD'})`
                       : typeof serving.doctor === 'string'
                       ? serving.doctor
                       : 'General OPD Consultation'}
+                    {serving.room ? ` · Room ${serving.room}` : ''}
                   </Text>
                 </View>
 
                 {/* Serving Actions */}
                 <View style={styles.servingActions}>
                   <TouchableOpacity
-                    style={[styles.actionBtn, styles.callNextBtn]}
+                    style={[
+                      styles.actionBtn,
+                      styles.callNextBtn,
+                      actionLoading && styles.btnDisabled,
+                    ]}
                     onPress={handleCallNext}
                     disabled={actionLoading}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="play-forward" size={18} color={Colors.white} />
-                    <Text style={styles.callNextBtnText}>Call Next</Text>
+                    <Ionicons name="play-forward" size={16} color={Colors.primary} />
+                    <Text style={styles.callNextBtnText}>Call Next Patient</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.actionBtn, styles.recallBtn]}
+                    style={[
+                      styles.actionBtn,
+                      styles.recallBtn,
+                      actionLoading && styles.btnDisabled,
+                    ]}
                     onPress={() => handleRecall(serving.tokenLabel)}
                     disabled={actionLoading}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="repeat" size={16} color={Colors.primary} />
-                    <Text style={styles.recallBtnText}>Recall</Text>
+                    <Ionicons name="notifications" size={15} color={Colors.white} />
+                    <Text style={styles.recallBtnText}>Chime / Recall</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.actionBtn, styles.noShowBtn]}
+                    style={[
+                      styles.actionBtn,
+                      styles.noShowBtn,
+                      actionLoading && styles.btnDisabled,
+                    ]}
                     onPress={() => handleNoShow(serving.tokenLabel)}
                     disabled={actionLoading}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="close-circle-outline" size={16} color={Colors.danger} />
-                    <Text style={styles.noShowBtnText}>No-Show</Text>
+                    <Ionicons name="close-circle-outline" size={15} color="#FECACA" />
+                    <Text style={styles.noShowBtnText}>Mark No-Show</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             ) : (
               <View style={styles.emptyServingBody}>
-                <Ionicons name="person-outline" size={40} color={Colors.textLight} />
+                <Ionicons name="person-outline" size={38} color="rgba(255, 255, 255, 0.5)" />
                 <Text style={styles.emptyServingTitle}>No Active Patient Being Served</Text>
                 <Text style={styles.emptyServingSub}>
                   {data?.inWaiting && data.inWaiting > 0
@@ -445,16 +458,28 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 </Text>
 
                 <TouchableOpacity
-                  style={[styles.actionBtn, styles.callNextBtnEmpty]}
+                  style={[
+                    styles.actionBtn,
+                    styles.callNextBtnEmpty,
+                    (actionLoading || data?.inWaiting === 0) && styles.btnDisabled,
+                  ]}
                   onPress={handleCallNext}
-                  disabled={actionLoading || (data?.inWaiting === 0)}
+                  disabled={actionLoading || data?.inWaiting === 0}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="play-forward" size={18} color={Colors.white} style={{ marginRight: 6 }} />
-                  <Text style={styles.callNextBtnText}>Call Next Patient</Text>
+                  <Ionicons name="play-forward" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
+                  <Text style={styles.callNextBtnEmptyText}>Call Next Patient</Text>
                 </TouchableOpacity>
               </View>
             )}
+
+            {/* Helper notice */}
+            <View style={styles.helperNoticeRow}>
+              <Ionicons name="sync-outline" size={13} color="rgba(255, 255, 255, 0.7)" style={{ marginRight: 5 }} />
+              <Text style={styles.helperNoticeText}>
+                Patient display and doctor queue update automatically.
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -780,16 +805,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   servingCard: {
-    backgroundColor: Colors.cardBackground,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: '#BAE6FD',
-    padding: 16,
-    shadowColor: Colors.primary,
+    backgroundColor: Colors.primary,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    padding: 18,
+    shadowColor: Colors.primaryDark,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.25,
     shadowRadius: 10,
-    elevation: 3,
+    elevation: 4,
   },
   servingHeader: {
     flexDirection: 'row',
@@ -800,7 +825,9 @@ const styles = StyleSheet.create({
   servingTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -812,15 +839,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   roomPill: {
-    backgroundColor: Colors.tint,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   roomPillText: {
-    color: Colors.primary,
+    color: Colors.white,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -837,25 +864,25 @@ const styles = StyleSheet.create({
   servingPatientName: {
     fontSize: 18,
     fontWeight: '800',
-    color: Colors.textDark,
+    color: Colors.white,
     letterSpacing: -0.3,
   },
   servingPatientMeta: {
     fontSize: 13,
-    color: Colors.textMedium,
+    color: 'rgba(255, 255, 255, 0.9)',
     marginTop: 2,
     fontWeight: '500',
   },
   servingPatientNic: {
     fontSize: 11,
-    color: Colors.textLight,
+    color: 'rgba(255, 255, 255, 0.75)',
     marginTop: 2,
     fontWeight: '500',
   },
   servingDoctorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.tint,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -864,7 +891,7 @@ const styles = StyleSheet.create({
   servingDoctorText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.white,
     marginLeft: 8,
     flex: 1,
   },
@@ -879,72 +906,99 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 10,
     minHeight: 44,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
+  },
+  btnDisabled: {
+    opacity: 0.5,
   },
   callNextBtn: {
-    flex: 2,
-    backgroundColor: Colors.primary,
-    marginRight: 8,
-    shadowColor: Colors.primary,
+    flex: 1.8,
+    backgroundColor: Colors.white,
+    marginRight: 6,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 2,
   },
   callNextBtnText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: '700',
-    marginLeft: 6,
-  },
-  recallBtn: {
-    flex: 1.2,
-    backgroundColor: Colors.tint,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginRight: 8,
-  },
-  recallBtnText: {
     color: Colors.primary,
     fontSize: 13,
+    fontWeight: '800',
+    marginLeft: 5,
+  },
+  recallBtn: {
+    flex: 1.3,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    marginRight: 6,
+  },
+  recallBtnText: {
+    color: Colors.white,
+    fontSize: 12,
     fontWeight: '700',
     marginLeft: 4,
   },
   noShowBtn: {
     flex: 1.2,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: 'rgba(239, 68, 68, 0.25)',
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: 'rgba(239, 68, 68, 0.45)',
   },
   noShowBtnText: {
-    color: Colors.danger,
-    fontSize: 13,
+    color: '#FECACA',
+    fontSize: 12,
     fontWeight: '700',
     marginLeft: 4,
   },
   emptyServingBody: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
   emptyServingTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.textDark,
+    color: Colors.white,
     marginTop: 8,
   },
   emptyServingSub: {
     fontSize: 13,
-    color: Colors.textMedium,
+    color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 4,
     textAlign: 'center',
     marginBottom: 16,
   },
   callNextBtnEmpty: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.white,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    minWidth: 180,
+    minWidth: 190,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  callNextBtnEmptyText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  helperNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  helperNoticeText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 11,
+    fontWeight: '500',
   },
   quickActionsSection: {
     marginBottom: 20,
