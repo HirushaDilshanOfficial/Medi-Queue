@@ -238,13 +238,8 @@ const getDoctorDashboard = async (req, res) => {
       doctor = await Doctor.findOne().catch(() => null);
     }
 
-    // If no doctor exists in DB yet, return the realistic mock dashboard state
     if (!doctor) {
-      return res.status(200).json({
-        success: true,
-        source: 'mock',
-        data: currentSessionState,
-      });
+      return res.status(404).json({ success: false, message: 'Doctor record not found' });
     }
 
     // Doctor found in DB - calculate real metrics
@@ -310,24 +305,6 @@ const getDoctorDashboard = async (req, res) => {
       };
     }
 
-    // If DB has no active queue for today, synchronize with currentSessionState so doctor always has an interactive queue!
-    if (!currentPatient && formattedUpcoming.length === 0) {
-      currentSessionState.doctor = {
-        ...currentSessionState.doctor,
-        _id: doctor._id,
-        name: doctor.name || currentSessionState.doctor.name,
-        room: doctor.room || currentSessionState.doctor.room,
-        specialization: doctor.specialization || currentSessionState.doctor.specialization,
-        department: doctor.department || currentSessionState.doctor.department,
-      };
-
-      return res.status(200).json({
-        success: true,
-        source: 'session_sync',
-        data: currentSessionState,
-      });
-    }
-
     return res.status(200).json({
       success: true,
       source: 'database',
@@ -337,18 +314,18 @@ const getDoctorDashboard = async (req, res) => {
           name: doctor.name,
           specialization: doctor.specialization,
           department: doctor.department,
-          room: doctor.room || 'Room 01',
+          room: doctor.room || '',
           status: doctor.status || 'active',
-          dailyCapacity: doctor.dailyCapacity || 30,
-          avgConsultMinutes: doctor.avgConsultMinutes || 10,
-          workingHours: doctor.workingHours || { start: '08:00', end: '16:00' },
+          dailyCapacity: doctor.dailyCapacity || 0,
+          avgConsultMinutes: doctor.avgConsultMinutes || 0,
+          workingHours: doctor.workingHours || { start: '', end: '' },
         },
         metrics: {
           currentCallingToken: currentPatient ? currentPatient.tokenNumber : (completedCount > 0 ? completedCount : 0),
           waitingCount,
           completedCount,
           totalToday,
-          avgWaitMinutes: doctor.avgConsultMinutes || 10,
+          avgWaitMinutes: doctor.avgConsultMinutes || 0,
         },
         currentPatient,
         upcomingQueue: formattedUpcoming,
@@ -356,12 +333,7 @@ const getDoctorDashboard = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in getDoctorDashboard:', error);
-    // Return mock on unexpected error so frontend never breaks
-    return res.status(200).json({
-      success: true,
-      source: 'fallback',
-      data: currentSessionState,
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 

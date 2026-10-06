@@ -220,8 +220,8 @@ export default function PatientRecordsScreen() {
               </View>
 
               <View style={styles.doctorTextWrap}>
-                <Text style={[styles.doctorName, { color: theme.textMain }]}>Dr. Emilia Emelson</Text>
-                <Text style={[styles.doctorSubtitle, { color: theme.accent }]}>Room 3B online</Text>
+                <Text style={[styles.doctorName, { color: theme.textMain }]}>Doctor</Text>
+                <Text style={[styles.doctorSubtitle, { color: theme.accent }]}>Database profile</Text>
               </View>
             </View>
 

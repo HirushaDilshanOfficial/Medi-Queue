@@ -22,7 +22,6 @@ import {
   toggleDoctorBreakApi,
   DoctorScheduleData,
   ScheduleTimelineItem,
-  fallbackScheduleData,
   toDateKey,
   formatRealtimeDateHeader,
   formatRealtimeClock,
@@ -132,52 +131,13 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
       }));
       loadSchedule(dateKey);
     } else {
-      setData({
-        ...fallbackScheduleData,
+      loadSchedule(dateKey);
+      setData((prev) => ({
+        ...prev,
         dateHeader: dynamicHeader,
         selectedDayKey: dateKey,
-        timeline: [
-          {
-            id: 'slot-alt-1',
-            time: '08:30 AM',
-            timeHour: '08:30',
-            timePeriod: 'AM',
-            patientName: 'Bandara Wijesekara',
-            reason: 'Ortho Follow-up • Token #001',
-            tokenNumber: 1,
-            status: 'done',
-            age: 52,
-            gender: 'Male',
-          },
-          {
-            id: 'slot-alt-2',
-            time: '09:00 AM',
-            timeHour: '09:00',
-            timePeriod: 'AM',
-            patientName: 'Anoma Jayawardena',
-            reason: 'Joint Stiffness • Token #002',
-            tokenNumber: 2,
-            status: 'now_attending',
-            isNowAttending: true,
-            elapsedMinutes: 4,
-            locationStatus: 'In Room',
-            age: 63,
-            gender: 'Female',
-          },
-          {
-            id: 'slot-alt-3',
-            time: '09:30 AM',
-            timeHour: '09:30',
-            timePeriod: 'AM',
-            patientName: 'Saman Kumara',
-            reason: 'Fracture Review • Token #003',
-            tokenNumber: 3,
-            status: 'waiting',
-            age: 38,
-            gender: 'Male',
-          },
-        ],
-      });
+        timeline: [],
+      }));
     }
   };
 
@@ -374,7 +334,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               <View style={styles.onlineGreenDot} />
             </View>
             <View style={styles.profileTextWrap}>
-              <Text style={styles.profileName}>{doctor.name || 'Dr. Emilia Emelson'}</Text>
+              <Text style={styles.profileName}>{doctor.name || 'Doctor'}</Text>
               <View style={styles.roomStatusRow}>
                 <Text style={styles.roomStatusDot}>•</Text>
                 <Text style={styles.roomStatusText}>{doctor.room || 'Room 3B Online'}</Text>
@@ -819,8 +779,10 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             <View style={styles.modalHeader}>
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={styles.ehrModalToken}>Token #028</Text>
-                  <Text style={styles.modalTitle}>Kamal Gunaratne</Text>
+                  <Text style={styles.ehrModalToken}>
+                    {data.currentPatient ? `Token #${data.currentPatient.tokenNumber}` : 'No active token'}
+                  </Text>
+                  <Text style={styles.modalTitle}>{data.currentPatient?.patientName || 'No active patient'}</Text>
                 </View>
                 <Text style={styles.ehrSub}>Male, 48 Years • File REC-841 • Room 3B</Text>
               </View>

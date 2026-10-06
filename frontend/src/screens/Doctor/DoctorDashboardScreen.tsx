@@ -73,17 +73,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       if (queue.length > 0) {
         nextPat = queue.shift()!;
       } else {
-        const lastNum = prev.currentPatient?.tokenNumber || 28;
-        nextPat = {
-          tokenNumber: lastNum + 1,
-          patientName: 'Aurelia Sisca',
-          age: 32,
-          gender: 'Female',
-          priority: 'normal',
-          status: 'next',
-          reason: 'Post-op Inspection',
-          slotTime: '11:15 AM',
-        };
+        return prev;
       }
 
       if (queue.length < 3) {
@@ -240,8 +230,8 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   const metrics = data?.metrics;
   const currentPatient = data?.currentPatient;
   const upcomingQueue = data?.upcomingQueue || [];
-  const completedCount = metrics?.completedCount || 18;
-  const totalCapacity = doctor?.dailyCapacity || 32;
+  const completedCount = metrics?.completedCount || 0;
+  const totalCapacity = doctor?.dailyCapacity || 0;
   const progressRatio = Math.min(1, completedCount / totalCapacity);
 
   return (
@@ -265,10 +255,10 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               style={styles.avatarImg}
             />
             <View style={styles.profileTextWrap}>
-              <Text style={styles.profileName}>{doctor?.name || 'Dr. Emilia Emelson'}</Text>
+              <Text style={styles.profileName}>{doctor?.name || 'Doctor'}</Text>
               <View style={styles.onlineBadgeRow}>
                 <View style={styles.onlineGreenDot} />
-                <Text style={styles.onlineBadgeText}>{doctor?.room || 'Room 3B'} Online</Text>
+                <Text style={styles.onlineBadgeText}>{doctor?.room || 'No room assigned'}</Text>
               </View>
             </View>
           </View>
@@ -287,12 +277,12 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
           <View style={styles.greetingLeft}>
             <Text style={styles.greetingTitle}>
               Good morning, Dr.{'\n'}
-              {doctor?.name ? doctor.name.replace(/^Dr\.\s*/i, '').split(' ')[0] : 'Emilia'}
+              {doctor?.name ? doctor.name.replace(/^Dr\.\s*/i, '').split(' ')[0] : 'Doctor'}
             </Text>
             <View style={styles.departmentBadge}>
               <Ionicons name="business-outline" size={14} color="#0d6371" style={{ marginRight: 5 }} />
               <Text style={styles.departmentText}>
-                {doctor?.department || 'Orthopedics OPD'} • {doctor?.room || 'Room 3B'}
+                {doctor?.department || 'No department'} • {doctor?.room || 'No room'}
               </Text>
             </View>
           </View>
@@ -316,12 +306,12 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               </View>
             </View>
             <View style={styles.metricNumberRow}>
-              <Text style={styles.metricBigNumber}>{metrics?.waitingCount ?? 14}</Text>
-              <Text style={styles.metricDeltaText}>+3 since 10am</Text>
+              <Text style={styles.metricBigNumber}>{metrics?.waitingCount ?? 0}</Text>
+              <Text style={styles.metricDeltaText}>From database</Text>
             </View>
             <View style={styles.metricFooter}>
               <Ionicons name="time-outline" size={13} color="#64748b" style={{ marginRight: 4 }} />
-              <Text style={styles.metricFooterText}>Avg wait {metrics?.avgWaitMinutes ?? 15} min</Text>
+              <Text style={styles.metricFooterText}>Avg wait {metrics?.avgWaitMinutes ?? 0} min</Text>
             </View>
           </View>
 
@@ -354,7 +344,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             </View>
             <View style={styles.timerWrap}>
               <Ionicons name="time-outline" size={14} color="#0d6371" style={{ marginRight: 4 }} />
-              <Text style={styles.timerText}>{currentPatient?.calledAtTime || '08:47'}</Text>
+              <Text style={styles.timerText}>{currentPatient?.calledAtTime || '--:--'}</Text>
             </View>
           </View>
 
@@ -362,22 +352,24 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
           <View style={styles.patientInfoRow}>
             <View style={styles.patientDetailsCol}>
               <View style={styles.patientNameRow}>
-                <Text style={styles.patientNameText}>{currentPatient?.patientName || 'Kamal Gunaratne'}</Text>
+                <Text style={styles.patientNameText}>{currentPatient?.patientName || 'No patient in consultation'}</Text>
                 <View style={styles.genderPill}>
                   <Text style={styles.genderText}>{currentPatient?.gender || 'Male'}</Text>
                 </View>
               </View>
               <Text style={styles.complaintText}>
-                {currentPatient?.reason || 'Spine checkup'} • {currentPatient?.age || 46} yrs
+                {currentPatient?.reason || 'No consultation data'} {currentPatient?.age ? `• ${currentPatient.age} yrs` : ''}
               </Text>
 
               {/* Vitals Tags */}
               <View style={styles.vitalsRow}>
                 <View style={styles.vitalTag}>
-                  <Text style={styles.vitalTagText}>BP: 124/82 mmHg</Text>
+                  <Text style={styles.vitalTagText}>
+                    {currentPatient?.bloodPressure ? `BP: ${currentPatient.bloodPressure} mmHg` : 'BP: --'}
+                  </Text>
                 </View>
                 <View style={styles.vitalTag}>
-                  <Text style={styles.vitalTagText}>Previous: MRI 2024</Text>
+                  <Text style={styles.vitalTagText}>Previous: --</Text>
                 </View>
               </View>
             </View>
@@ -386,7 +378,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={styles.tokenShield}>
               <Text style={styles.tokenShieldLabel}>TOKEN</Text>
               <Text style={styles.tokenShieldNumber}>
-                #{currentPatient?.tokenNumber ? String(currentPatient.tokenNumber).padStart(3, '0') : '#028'}
+                {currentPatient?.tokenNumber ? `#${String(currentPatient.tokenNumber).padStart(3, '0')}` : '--'}
               </Text>
             </View>
           </View>
