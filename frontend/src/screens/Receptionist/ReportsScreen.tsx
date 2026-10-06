@@ -10,13 +10,14 @@ import {
   StatusBar,
   ActivityIndicator,
   Platform,
+  Alert,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { useShiftSummary } from '../../hooks';
-import { downloadDailyReport, getErrorMessage } from '../../services/api';
+import { downloadDailyReport, closeShift, getErrorMessage } from '../../services/api';
 import {
   StatCard,
   SectionHeader,
@@ -38,6 +39,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 }) => {
   const { data, loading, error, refreshing, refresh } = useShiftSummary();
   const [exporting, setExporting] = useState<boolean>(false);
+  const [closingShift, setClosingShift] = useState<boolean>(false);
+  const [shiftClosed, setShiftClosed] = useState<boolean>(false);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -48,6 +51,49 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     setToastMessage(message);
     setToastType(type);
     setToastVisible(true);
+  };
+
+  const executeCloseShift = async () => {
+    if (closingShift || shiftClosed) return;
+    try {
+      setClosingShift(true);
+      await closeShift();
+      setShiftClosed(true);
+      showToast('Shift closed successfully. Summary snapshot saved.', 'success');
+      refresh(false);
+    } catch (err: any) {
+      if (err?.status === 409 || err?.message?.toLowerCase().includes('already closed')) {
+        setShiftClosed(true);
+        showToast('Shift already closed', 'warning');
+      } else {
+        const msg = getErrorMessage(err) || 'Failed to close shift';
+        showToast(msg, 'error');
+      }
+    } finally {
+      setClosingShift(false);
+    }
+  };
+
+  const handleCloseShiftPress = () => {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm("Close shift? This saves today's summary.")) {
+        executeCloseShift();
+      }
+    } else {
+      Alert.alert(
+        'Close shift?',
+        "This saves today's summary.",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Close Shift',
+            style: 'destructive',
+            onPress: executeCloseShift,
+          },
+        ],
+        { cancelable: true }
+      );
+    }
   };
 
   const handleExportDailyReport = async () => {
@@ -610,6 +656,73 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* ── CLOSE SHIFT ACTION SECTION ── */}
+            <View style={styles.section}>
+              <View style={styles.closeShiftCard}>
+                <View style={styles.closeShiftHeaderRow}>
+                  <View
+                    style={[
+                      styles.closeShiftIconBox,
+                      shiftClosed && { backgroundColor: '#ECFDF5' },
+                    ]}
+                  >
+                    <Ionicons
+                      name={shiftClosed ? 'checkmark-circle' : 'power'}
+                      size={22}
+                      color={shiftClosed ? Colors.success : Colors.danger}
+                    />
+                  </View>
+                  <View style={styles.closeShiftTextWrap}>
+                    <View style={styles.closeShiftTitleRow}>
+                      <Text style={styles.closeShiftTitle}>End Shift</Text>
+                      {shiftClosed && (
+                        <View style={styles.shiftClosedBadge}>
+                          <Ionicons name="lock-closed" size={11} color={Colors.success} style={{ marginRight: 3 }} />
+                          <Text style={styles.shiftClosedBadgeText}>Shift closed</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.closeShiftSubtitle}>
+                      {shiftClosed
+                        ? "Today's summary figures have been locked and archived."
+                        : "Finalize today's intake and store the shift performance snapshot."}
+                    </Text>
+                  </View>
+                </View>
+
+                {shiftClosed ? (
+                  <View style={styles.shiftClosedSuccessState}>
+                    <Ionicons name="checkmark-done-circle" size={20} color={Colors.success} style={{ marginRight: 8 }} />
+                    <Text style={styles.shiftClosedSuccessText}>Shift closed</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.closeShiftButton,
+                      (closingShift || loading) && styles.closeShiftButtonDisabled,
+                    ]}
+                    onPress={handleCloseShiftPress}
+                    disabled={closingShift || loading}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close Counter 01 Shift"
+                  >
+                    {closingShift ? (
+                      <View style={styles.btnInnerRow}>
+                        <ActivityIndicator size="small" color={Colors.white} style={{ marginRight: 8 }} />
+                        <Text style={styles.closeShiftButtonText}>Closing Shift...</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.btnInnerRow}>
+                        <Ionicons name="power-outline" size={18} color={Colors.white} style={{ marginRight: 8 }} />
+                        <Text style={styles.closeShiftButtonText}>Close Counter 01 Shift</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           </>
         )}
 
@@ -1138,6 +1251,115 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   exportButtonText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  /* ── Close Shift Card Styles ── */
+  closeShiftCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 18,
+    marginTop: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.8,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  closeShiftHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  closeShiftIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  closeShiftTextWrap: {
+    flex: 1,
+  },
+  closeShiftTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  closeShiftTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  shiftClosedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  shiftClosedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.success,
+  },
+  closeShiftSubtitle: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    lineHeight: 16,
+  },
+  shiftClosedSuccessState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    minHeight: 48,
+  },
+  shiftClosedSuccessText: {
+    color: '#065F46',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  closeShiftButton: {
+    backgroundColor: '#DC2626',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  closeShiftButtonDisabled: {
+    opacity: 0.65,
+  },
+  btnInnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeShiftButtonText: {
     color: Colors.white,
     fontSize: 15,
     fontWeight: '700',
