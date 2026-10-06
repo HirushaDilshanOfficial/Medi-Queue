@@ -286,18 +286,6 @@ const leaveQueue = async (req, res, next) => {
   }
 };
 
-module.exports = {
-  checkIn,
-  myPass,
-  liveState,
-  board,
-  liveDepartments,
-  leaveQueue,
-  mapPass,
-  generatePassCode,
-  passQrValue,
-};
- 
 const mongoose = require('mongoose');
 const { asyncHandler, createError } = require('../utils/errorHandler');
 const { getOrderedQueue } = require('../services/queueService');
@@ -853,6 +841,15 @@ const getAutoAdvance = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  checkIn,
+  myPass,
+  liveState,
+  board,
+  liveDepartments,
+  leaveQueue,
+  mapPass,
+  generatePassCode,
+  passQrValue,
   getQueue,
   getNextInQueue,
   callNext,

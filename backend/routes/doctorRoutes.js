@@ -5,20 +5,15 @@ const {
   listDepartments,
   getDoctor,
 } = require('../controllers/doctorController');
-const { protect } = require('../middleware/authMiddleware');
 const { patientOnly } = require('../middleware/patientMiddleware');
 
-router.use(protect, patientOnly);
+const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
 // Keep the literal path above the /:id route so it is not swallowed by the param.
-router.get('/departments', listDepartments);
-router.get('/', listDoctors);
-router.get('/:id', getDoctor);
- 
-const { authorizeRoles } = require('../middleware/authMiddleware');
-const { getDoctors } = require('../controllers/doctorController');
-
-// All doctor routes in reception require auth + receptionist role
-router.get('/doctors', protect, authorizeRoles('receptionist'), getDoctors);
+router.get('/departments', protect, patientOnly, listDepartments);
+router.get('/', protect, patientOnly, listDoctors);
+// Reception mounts this router at /api/reception, so expose /doctors there.
+router.get('/doctors', protect, authorizeRoles('receptionist'), listDoctors);
+router.get('/:id', protect, patientOnly, getDoctor);
 
 module.exports = router;

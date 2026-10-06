@@ -19,6 +19,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const policyRoutes = require('./routes/policyRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 const v1DoctorRoutes = require('./routes/v1DoctorRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -80,4 +81,3 @@ const HOST = process.env.HOST || '0.0.0.0';
 app.listen(PORT, HOST, () => {
   console.log(`Server is running on http://${HOST}:${PORT}`);
 });
-
