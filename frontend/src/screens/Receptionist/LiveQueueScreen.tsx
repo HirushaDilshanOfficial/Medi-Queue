@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { QueueToken, Doctor } from '../../types';
 import { useLiveQueue, LiveQueueFilter } from '../../hooks';
+import { useShiftContext } from '../../context/ShiftContext';
 import {
   callNext,
   markNoShow,
@@ -45,6 +46,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
   navigation,
   onNavigate,
 }) => {
+  const { isShiftClosed } = useShiftContext();
   const [filter, setFilter] = useState<LiveQueueFilter>('all');
   const { data, loading, error, refreshing, refresh } = useLiveQueue(filter);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
@@ -224,7 +226,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
 
   // 1. Call Next to Room
   const handleCallNext = async (roomNumber: string, docId?: string, department?: string) => {
-    if (!nextInLine || actionLoading) return;
+    if (!nextInLine || actionLoading || isShiftClosed) return;
     try {
       setActionLoading(true);
       const res = await callNext({
@@ -452,7 +454,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
             <TouchableOpacity
               style={[
                 styles.primaryCallBtn,
-                actionLoading && styles.btnDisabled,
+                (actionLoading || isShiftClosed) && styles.btnDisabled,
               ]}
               onPress={() =>
                 handleCallNext(
@@ -461,14 +463,19 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                   nextInLine.department
                 )
               }
-              disabled={actionLoading}
+              disabled={actionLoading || isShiftClosed}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel={`Call Next to Room ${roomNumber}`}
             >
-              <Ionicons name="play-forward" size={18} color={Colors.white} style={styles.btnIcon} />
+              <Ionicons
+                name={isShiftClosed ? 'lock-closed' : 'play-forward'}
+                size={18}
+                color={Colors.white}
+                style={styles.btnIcon}
+              />
               <Text style={styles.primaryCallBtnText}>
-                Call Next to Room {roomNumber}
+                {isShiftClosed ? 'Shift Closed (Intake Disabled)' : `Call Next to Room ${roomNumber}`}
               </Text>
             </TouchableOpacity>
 
@@ -792,6 +799,14 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
           />
         }
       >
+        {/* ── SHIFT CLOSED NOTICE BANNER ── */}
+        {isShiftClosed && (
+          <View style={styles.shiftClosedNoticeBanner}>
+            <Ionicons name="lock-closed" size={16} color="#92400E" style={{ marginRight: 8 }} />
+            <Text style={styles.shiftClosedNoticeText}>Shift closed. Intake is disabled.</Text>
+          </View>
+        )}
+
         {/* ======================================================== */}
         {/* 1. DISPATCH BANNER                                        */}
         {/* ======================================================== */}
@@ -1891,6 +1906,23 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+  shiftClosedNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  shiftClosedNoticeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+    flex: 1,
   },
 });
 

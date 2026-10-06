@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { CurrentlyServingToken, QueueToken } from '../../types';
 import { useAuth, useDashboard } from '../../hooks';
+import { useShiftContext } from '../../context/ShiftContext';
 import {
   callNext,
   recallToken,
@@ -43,6 +44,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   onNavigate,
 }) => {
   const { user } = useAuth();
+  const { isShiftClosed } = useShiftContext();
   const { data, loading, error, refreshing, refresh } = useDashboard();
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
@@ -102,7 +104,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
 
   // Action: Call Next
   const handleCallNext = async () => {
-    if (actionLoading) return;
+    if (actionLoading || isShiftClosed) return;
     try {
       setActionLoading(true);
       await callNext();
@@ -262,6 +264,14 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
           />
         }
       >
+        {/* ── SHIFT CLOSED NOTICE BANNER ── */}
+        {isShiftClosed && (
+          <View style={styles.shiftClosedNoticeBanner}>
+            <Ionicons name="lock-closed" size={16} color="#92400E" style={{ marginRight: 8 }} />
+            <Text style={styles.shiftClosedNoticeText}>Shift closed. Intake is disabled.</Text>
+          </View>
+        )}
+
         {/* ── 2x2 STAT CARDS ── */}
         <View style={styles.statGrid}>
           <View style={styles.statRow}>
@@ -415,10 +425,10 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                   style={[
                     styles.actionBtn,
                     styles.callNextBtnEmpty,
-                    (actionLoading || data?.inWaiting === 0) && styles.btnDisabled,
+                    (actionLoading || isShiftClosed || data?.inWaiting === 0) && styles.btnDisabled,
                   ]}
                   onPress={handleCallNext}
-                  disabled={actionLoading || data?.inWaiting === 0}
+                  disabled={actionLoading || isShiftClosed || data?.inWaiting === 0}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="play-forward" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
@@ -442,16 +452,20 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
           <SectionHeader title="Desk Quick Actions" subtitle="Fast registration and desk navigation" />
           <View style={styles.quickActionsGrid}>
             <TouchableOpacity
-              style={styles.quickActionItem}
-              onPress={() => handleNav('RegisterTab')}
+              style={[
+                styles.quickActionItem,
+                isShiftClosed && styles.quickActionDisabled,
+              ]}
+              onPress={() => !isShiftClosed && handleNav('RegisterTab')}
+              disabled={isShiftClosed}
               activeOpacity={0.7}
               accessibilityLabel="New Intake"
               accessibilityRole="button"
             >
-              <View style={[styles.quickActionIconWrap, { backgroundColor: '#E0F2FE' }]}>
-                <Ionicons name="person-add" size={22} color={Colors.primary} />
+              <View style={[styles.quickActionIconWrap, { backgroundColor: isShiftClosed ? '#F3F4F6' : '#E0F2FE' }]}>
+                <Ionicons name="person-add" size={22} color={isShiftClosed ? Colors.textLight : Colors.primary} />
               </View>
-              <Text style={styles.quickActionLabel}>+ New Intake</Text>
+              <Text style={[styles.quickActionLabel, isShiftClosed && { color: Colors.textLight }]}>+ New Intake</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1114,6 +1128,26 @@ const styles = StyleSheet.create({
     color: Colors.textMedium,
     marginTop: 4,
     textAlign: 'center',
+  },
+  shiftClosedNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  shiftClosedNoticeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+    flex: 1,
+  },
+  quickActionDisabled: {
+    opacity: 0.5,
   },
 });
 

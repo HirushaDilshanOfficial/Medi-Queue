@@ -18,6 +18,7 @@ import {
   PatientsScreen,
   ReportsScreen,
 } from '../screens/Receptionist';
+import { ShiftProvider } from '../context/ShiftContext';
 
 // ─────────────────────────────────────────────────────────
 // Type Definitions
@@ -228,24 +229,26 @@ export default function AppNavigator({
   return (
     // @ts-ignore - Expo router and React Navigation conflict workaround
     <NavigationContainer independent={true}>
-      <Stack.Navigator
-        initialRouteName={resolvedInitialRoute}
-        screenOptions={{ headerShown: false }}
-      >
-        {/* ---- AUTH SCREENS ---- */}
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Register" component={RegisterScreen} />
+      <ShiftProvider>
+        <Stack.Navigator
+          initialRouteName={resolvedInitialRoute}
+          screenOptions={{ headerShown: false }}
+        >
+          {/* ---- AUTH SCREENS ---- */}
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Register" component={RegisterScreen} />
 
-        {/* ---- MOH DASHBOARD ---- */}
-        <Stack.Screen name="MOHDashboard" component={MOHDashboardScreen} />
+          {/* ---- MOH DASHBOARD ---- */}
+          <Stack.Screen name="MOHDashboard" component={MOHDashboardScreen} />
 
-        {/* ---- RECEPTIONIST NAVIGATION ---- */}
-        <Stack.Screen name="ReceptionistTabs" component={ReceptionistTabNavigator} />
-        <Stack.Screen name="Queue" component={LiveQueueScreen} />
+          {/* ---- RECEPTIONIST NAVIGATION ---- */}
+          <Stack.Screen name="ReceptionistTabs" component={ReceptionistTabNavigator} />
+          <Stack.Screen name="Queue" component={LiveQueueScreen} />
 
-        {/* ---- DOCTOR DASHBOARD ---- */}
-        <Stack.Screen name="DoctorDashboard" component={DoctorDashboardScreen} />
-      </Stack.Navigator>
+          {/* ---- DOCTOR DASHBOARD ---- */}
+          <Stack.Screen name="DoctorDashboard" component={DoctorDashboardScreen} />
+        </Stack.Navigator>
+      </ShiftProvider>
     </NavigationContainer>
   );
 }

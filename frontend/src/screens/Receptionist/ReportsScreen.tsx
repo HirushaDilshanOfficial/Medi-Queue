@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,8 @@ import {
   ToastType,
 } from '../../components';
 
+import { useShiftContext } from '../../context/ShiftContext';
+
 export interface ReportsScreenProps {
   navigation?: any;
   onNavigate?: (route: string) => void;
@@ -38,9 +40,16 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   onNavigate,
 }) => {
   const { data, loading, error, refreshing, refresh } = useShiftSummary();
+  const { isShiftClosed, setIsShiftClosed } = useShiftContext();
   const [exporting, setExporting] = useState<boolean>(false);
   const [closingShift, setClosingShift] = useState<boolean>(false);
-  const [shiftClosed, setShiftClosed] = useState<boolean>(false);
+  const [shiftClosed, setShiftClosed] = useState<boolean>(isShiftClosed);
+
+  useEffect(() => {
+    if (isShiftClosed) {
+      setShiftClosed(true);
+    }
+  }, [isShiftClosed]);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -59,11 +68,13 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       setClosingShift(true);
       await closeShift();
       setShiftClosed(true);
+      setIsShiftClosed(true);
       showToast('Shift closed successfully. Summary snapshot saved.', 'success');
       refresh(false);
     } catch (err: any) {
       if (err?.status === 409 || err?.message?.toLowerCase().includes('already closed')) {
         setShiftClosed(true);
+        setIsShiftClosed(true);
         showToast('Shift already closed', 'warning');
       } else {
         const msg = getErrorMessage(err) || 'Failed to close shift';

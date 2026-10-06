@@ -27,6 +27,7 @@ import {
 import { Patient, Doctor, QueuePriority, AppointmentType } from '../../types';
 import { Toast, ToastType } from '../../components/Toast';
 import { TokenBadge } from '../../components/TokenBadge';
+import { useShiftContext } from '../../context/ShiftContext';
 
 export interface RegisterPatientScreenProps {
   navigation?: any;
@@ -78,6 +79,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   route,
   onNavigate,
 }) => {
+  const { isShiftClosed } = useShiftContext();
   const form = useWalkInForm(route?.params);
   const [searchQuery, setSearchQuery] = useState<string>(
     route?.params?.nic ||
@@ -462,8 +464,11 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
 
   // Submit and issue token
   const handlePrintAndIssueToken = async () => {
-    // Prevent double tap / multiple submissions
-    if (submitting || submittingRef.current) {
+    // Prevent double tap / multiple submissions or if shift is closed
+    if (submitting || submittingRef.current || isShiftClosed) {
+      if (isShiftClosed) {
+        showToast('Shift closed. Intake is disabled.', 'warning');
+      }
       return;
     }
 
@@ -771,6 +776,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             </View>
           ) : (
             <>
+              {/* ── SHIFT CLOSED NOTICE BANNER ── */}
+              {isShiftClosed && (
+                <View style={styles.shiftClosedNoticeBanner}>
+                  <Ionicons name="lock-closed" size={16} color="#92400E" style={{ marginRight: 8 }} />
+                  <Text style={styles.shiftClosedNoticeText}>Shift closed. Intake is disabled.</Text>
+                </View>
+              )}
+
               {/* ── SEARCH BAR (NIC / PHONE / QR) ── */}
               <View style={styles.searchCard}>
                 <Text style={styles.searchTitle}>Search Existing Record</Text>
@@ -1563,10 +1576,10 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 <TouchableOpacity
                   style={[
                     styles.submitButton,
-                    submitting ? styles.submitButtonDisabled : null,
+                    (submitting || isShiftClosed) ? styles.submitButtonDisabled : null,
                   ]}
                   onPress={handlePrintAndIssueToken}
-                  disabled={submitting}
+                  disabled={submitting || isShiftClosed}
                   activeOpacity={0.8}
                   accessibilityLabel="Print Ticket and Issue Token"
                   accessibilityRole="button"
@@ -1585,13 +1598,13 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   ) : (
                     <View style={styles.btnContentRow}>
                       <Ionicons
-                        name="print"
+                        name={isShiftClosed ? 'lock-closed' : 'print'}
                         size={20}
                         color={Colors.white}
                         style={{ marginRight: 8 }}
                       />
                       <Text style={styles.submitButtonText}>
-                        Print Ticket & Issue Token
+                        {isShiftClosed ? 'Shift Closed (Intake Disabled)' : 'Print Ticket & Issue Token'}
                       </Text>
                     </View>
                   )}
@@ -2681,6 +2694,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: Colors.white,
+  },
+  shiftClosedNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  shiftClosedNoticeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+    flex: 1,
   },
 });
 
