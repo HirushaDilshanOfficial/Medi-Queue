@@ -447,6 +447,30 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     form.reset();
   };
 
+  const handleNicBlur = async () => {
+    const nicVal = form.patient.nic?.trim();
+    if (nicVal && nicVal.length >= 9 && !form.existingPatientId) {
+      try {
+        const res = await searchPatients(nicVal);
+        if (res?.found && res?.patients?.length > 0) {
+          const p = res.patients[0];
+          setMatchedPatient(p);
+          setSearchStatus('found');
+          form.setExistingPatient(p._id, {
+            fullName: p.fullName,
+            nic: p.nic || nicVal,
+            phone: p.phone || form.patient.phone,
+            age: p.age ? String(p.age) : form.patient.age,
+            gender: p.gender || form.patient.gender,
+          });
+          showToast(`Existing record found for ${p.fullName}`, 'info');
+        }
+      } catch {
+        // Ignore lookup errors
+      }
+    }
+  };
+
   // Full form reset for "Clear Form / New Entry" button
   const handleClearForm = () => {
     if (searchTimeoutRef.current) {
@@ -839,7 +863,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 </View>
 
                 {/* ── SEARCH STATUS BANNERS ── */}
-                {searchStatus === 'found' && matchedPatient && (
+                {(searchStatus === 'found' || !!form.existingPatientId) && (matchedPatient || form.patient.fullName) && (
                   <View style={styles.foundBanner}>
                     <View style={styles.bannerIconCircleSuccess}>
                       <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
@@ -847,14 +871,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <View style={styles.bannerTextWrap}>
                       <Text style={styles.foundBannerTitle}>Existing record found (auto-filled)</Text>
                       <Text style={styles.foundBannerSub}>
-                        Patient: {matchedPatient.fullName} • Reg:{' '}
-                        {matchedPatient.registeredVia || 'Hospital'}
+                        Patient: {matchedPatient?.fullName || form.patient.fullName}
+                        {matchedPatient?.nic || form.patient.nic ? ` • NIC: ${matchedPatient?.nic || form.patient.nic}` : ''}
                       </Text>
                     </View>
                   </View>
                 )}
 
-                {searchStatus === 'not_found' && (
+                {searchStatus === 'not_found' && !form.existingPatientId && (
                   <View style={styles.notFoundBanner}>
                     <View style={styles.bannerIconCircleInfo}>
                       <Ionicons name="person-add" size={16} color={Colors.primary} />
@@ -918,6 +942,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       placeholderTextColor={Colors.textLight}
                       value={form.patient.nic}
                       onChangeText={(val) => form.setField('nic', val)}
+                      onBlur={handleNicBlur}
                       autoCapitalize="characters"
                     />
                     {form.errors.nic ? (

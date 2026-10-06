@@ -132,69 +132,81 @@ export function ReceptionistHomeStackNavigator() {
   );
 }
 
+import { ReceptionistRoleGuard } from '../components/ReceptionistRoleGuard';
+
 // ─────────────────────────────────────────────────────────
-// Receptionist Bottom Tab Navigator
+// Receptionist Bottom Tab Navigator (Guarded)
 // ─────────────────────────────────────────────────────────
 
 const Tab = createBottomTabNavigator<ReceptionistTabParamList>();
 
 export function ReceptionistTabNavigator() {
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textLight,
-        tabBarStyle: {
-          backgroundColor: Colors.white,
-          borderTopColor: Colors.border,
-          borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 8,
-          paddingTop: 8,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = 'home';
+    <ReceptionistRoleGuard>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          tabBarActiveTintColor: Colors.primary,
+          tabBarInactiveTintColor: Colors.textLight,
+          tabBarStyle: {
+            backgroundColor: Colors.white,
+            borderTopColor: Colors.border,
+            borderTopWidth: 1,
+            height: 64,
+            paddingBottom: 8,
+            paddingTop: 8,
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '600',
+          },
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName: keyof typeof Ionicons.glyphMap = 'home';
 
-          if (route.name === 'HomeTab') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'RegisterTab') {
-            iconName = focused ? 'person-add' : 'person-add-outline';
-          } else if (route.name === 'PatientsTab') {
-            iconName = focused ? 'people' : 'people-outline';
-          } else if (route.name === 'ReportsTab') {
-            iconName = focused ? 'document-text' : 'document-text-outline';
-          }
+            if (route.name === 'HomeTab') {
+              iconName = focused ? 'home' : 'home-outline';
+            } else if (route.name === 'RegisterTab') {
+              iconName = focused ? 'person-add' : 'person-add-outline';
+            } else if (route.name === 'PatientsTab') {
+              iconName = focused ? 'people' : 'people-outline';
+            } else if (route.name === 'ReportsTab') {
+              iconName = focused ? 'document-text' : 'document-text-outline';
+            }
 
-          return <Ionicons name={iconName} size={size || 22} color={color} />;
-        },
-      })}
-    >
-      <Tab.Screen
-        name="HomeTab"
-        component={ReceptionistHomeStackNavigator}
-        options={{ tabBarLabel: 'Home' }}
-      />
-      <Tab.Screen
-        name="RegisterTab"
-        component={RegisterPatientScreen}
-        options={{ tabBarLabel: 'Register' }}
-      />
-      <Tab.Screen
-        name="PatientsTab"
-        component={PatientsScreen}
-        options={{ tabBarLabel: 'Patients' }}
-      />
-      <Tab.Screen
-        name="ReportsTab"
-        component={ReportsScreen}
-        options={{ tabBarLabel: 'Reports' }}
-      />
-    </Tab.Navigator>
+            return <Ionicons name={iconName} size={size || 22} color={color} />;
+          },
+        })}
+      >
+        <Tab.Screen
+          name="HomeTab"
+          component={ReceptionistHomeStackNavigator}
+          options={{ tabBarLabel: 'Home' }}
+        />
+        <Tab.Screen
+          name="RegisterTab"
+          component={RegisterPatientScreen}
+          options={{ tabBarLabel: 'Register' }}
+        />
+        <Tab.Screen
+          name="PatientsTab"
+          component={PatientsScreen}
+          options={{ tabBarLabel: 'Patients' }}
+        />
+        <Tab.Screen
+          name="ReportsTab"
+          component={ReportsScreen}
+          options={{ tabBarLabel: 'Reports' }}
+        />
+      </Tab.Navigator>
+    </ReceptionistRoleGuard>
+  );
+}
+
+function GuardedQueueScreen(props: any) {
+  return (
+    <ReceptionistRoleGuard>
+      <LiveQueueScreen {...props} />
+    </ReceptionistRoleGuard>
   );
 }
 
@@ -243,7 +255,7 @@ export default function AppNavigator({
 
           {/* ---- RECEPTIONIST NAVIGATION ---- */}
           <Stack.Screen name="ReceptionistTabs" component={ReceptionistTabNavigator} />
-          <Stack.Screen name="Queue" component={LiveQueueScreen} />
+          <Stack.Screen name="Queue" component={GuardedQueueScreen} />
 
           {/* ---- DOCTOR DASHBOARD ---- */}
           <Stack.Screen name="DoctorDashboard" component={DoctorDashboardScreen} />

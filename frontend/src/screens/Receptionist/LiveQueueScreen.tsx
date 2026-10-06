@@ -530,6 +530,14 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                 <Text style={styles.noShowBtnText}>Mark No-Show</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Automatic update helper notice */}
+            <View style={styles.callNextHelperNoticeRow}>
+              <Ionicons name="sync-outline" size={13} color={Colors.textLight} style={{ marginRight: 5 }} />
+              <Text style={styles.callNextHelperNoticeText}>
+                Patient display and doctor queue update automatically.
+              </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -1923,6 +1931,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#92400E',
     flex: 1,
+  },
+  callNextHelperNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  callNextHelperNoticeText: {
+    fontSize: 11,
+    color: Colors.textMedium,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
 
