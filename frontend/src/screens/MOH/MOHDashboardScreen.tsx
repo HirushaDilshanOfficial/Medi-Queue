@@ -25,7 +25,7 @@ export default function MOHDashboardScreen() {
 
   const quickActions = [
     { id: 1, icon: <Ionicons name="people-outline" size={24} color={Colors.primaryDark} />, label: 'Patients', route: '/(moh)/manage-patients' as any },
-    { id: 2, icon: <Ionicons name="notifications-outline" size={24} color={Colors.primaryDark} />, label: 'Alerts', route: '/(moh)/alerts' as any },
+    { id: 2, icon: <Ionicons name="notifications-outline" size={24} color={Colors.primaryDark} />, label: 'Send Alert', route: '/(moh)/send-notification' as any },
     { id: 3, icon: <Ionicons name="stats-chart-outline" size={24} color={Colors.primaryDark} />, label: 'Reports', route: '/(moh)/reports' as any },
     { id: 4, icon: <Ionicons name="shield-checkmark-outline" size={24} color={Colors.primaryDark} />, label: 'Policy', route: '/(moh)/policy' as any },
   ];
@@ -66,7 +66,7 @@ export default function MOHDashboardScreen() {
               </View>
             </View>
             <View style={styles.headerIcons}>
-              <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/(moh)/alerts')}>
+              <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
                 <Ionicons name="notifications" size={20} color={Colors.white} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconButton} onPress={() => router.replace('/(auth)/login')}>
