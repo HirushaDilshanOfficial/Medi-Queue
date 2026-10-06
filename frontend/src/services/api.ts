@@ -3,6 +3,8 @@
  * Reads backend API URL from EXPO_PUBLIC_API_URL. Never uses localhost.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import {
   Patient,
   Doctor,
@@ -55,11 +57,19 @@ export const getErrorMessage = (error: unknown): string => {
   return 'An unexpected error occurred. Please try again.';
 };
 
-const getHeaders = (
+const getHeaders = async (
   customHeaders?: HeadersInit,
   explicitToken?: string
-): HeadersInit => {
-  const token = explicitToken || storedAuthToken;
+): Promise<HeadersInit> => {
+  let token = explicitToken || storedAuthToken;
+  if (!token) {
+    try {
+      token = await AsyncStorage.getItem('token');
+      if (token) {
+        storedAuthToken = token;
+      }
+    } catch {}
+  }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...((customHeaders as Record<string, string>) || {}),
@@ -107,7 +117,7 @@ export const api = {
     options?: ApiRequestOptions
   ): Promise<T> => {
     const targetUrl = resolveUrl(url);
-    const headers = getHeaders(options?.headers, options?.token);
+    const headers = await getHeaders(options?.headers, options?.token);
     const response = await fetch(targetUrl, {
       method: 'GET',
       headers,
@@ -121,7 +131,7 @@ export const api = {
     options?: ApiRequestOptions
   ): Promise<T> => {
     const targetUrl = resolveUrl(url);
-    const headers = getHeaders(options?.headers, options?.token);
+    const headers = await getHeaders(options?.headers, options?.token);
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers,
@@ -136,7 +146,7 @@ export const api = {
     options?: ApiRequestOptions
   ): Promise<T> => {
     const targetUrl = resolveUrl(url);
-    const headers = getHeaders(options?.headers, options?.token);
+    const headers = await getHeaders(options?.headers, options?.token);
     const response = await fetch(targetUrl, {
       method: 'PATCH',
       headers,
@@ -150,7 +160,7 @@ export const api = {
     options?: ApiRequestOptions
   ): Promise<T> => {
     const targetUrl = resolveUrl(url);
-    const headers = getHeaders(options?.headers, options?.token);
+    const headers = await getHeaders(options?.headers, options?.token);
     const response = await fetch(targetUrl, {
       method: 'DELETE',
       headers,

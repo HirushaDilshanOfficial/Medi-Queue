@@ -11,6 +11,7 @@ import LoginScreen from '../app/(auth)/login';
 import RegisterScreen from '../app/(auth)/register';
 import MOHDashboardScreen from '../screens/MOH/MOHDashboardScreen';
 import DoctorDashboardScreen from '../screens/Doctor/DoctorDashboardScreen';
+import { ReceptionistHomeScreen } from '../screens/Receptionist/ReceptionistHomeScreen';
 
 // ─────────────────────────────────────────────────────────
 // Type Definitions
@@ -118,7 +119,7 @@ const HomeStack = createNativeStackNavigator<ReceptionistHomeStackParamList>();
 export function ReceptionistHomeStackNavigator() {
   return (
     <HomeStack.Navigator screenOptions={{ headerShown: false }}>
-      <HomeStack.Screen name="Home" component={HomePlaceholderScreen} />
+      <HomeStack.Screen name="Home" component={ReceptionistHomeScreen} />
       <HomeStack.Screen name="Queue" component={QueuePlaceholderScreen} />
     </HomeStack.Navigator>
   );
