@@ -16,6 +16,7 @@ import { useShiftSummary } from '../../hooks';
 import {
   StatCard,
   SectionHeader,
+  StatusChip,
   LoadingState,
   ErrorState,
 } from '../../components';
@@ -384,6 +385,101 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 </View>
               </View>
             </View>
+
+            {/* ── DOCTOR SCHEDULES & ROSTER SECTION ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                title="Doctor Schedules & Roster"
+                subtitle="Physician consultation progress & room allocation"
+              />
+
+              {!data?.doctors || data.doctors.length === 0 ? (
+                <View style={styles.emptyDoctorCard}>
+                  <View style={styles.emptyDoctorIconWrap}>
+                    <Ionicons name="medkit-outline" size={28} color={Colors.textLight} />
+                  </View>
+                  <Text style={styles.emptyDoctorTitle}>No Doctors Scheduled</Text>
+                  <Text style={styles.emptyDoctorSubtitle}>
+                    There are no rostered doctors assigned for this shift.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.doctorsList}>
+                  {data.doctors.map((doc) => {
+                    const capacity = doc.capacity || 30;
+                    const attendedCount = doc.attended || 0;
+                    const docCapPct = capacity > 0 ? Math.min(100, Math.round((attendedCount / capacity) * 100)) : 0;
+                    const isFull = attendedCount >= capacity;
+
+                    return (
+                      <View key={doc._id || doc.name} style={styles.doctorCard}>
+                        {/* Doctor Card Top Row */}
+                        <View style={styles.doctorTopRow}>
+                          <View style={styles.doctorInfoLeft}>
+                            <View style={styles.doctorAvatar}>
+                              <Ionicons name="person" size={18} color={Colors.primary} />
+                            </View>
+                            <View style={styles.doctorNameWrap}>
+                              <Text style={styles.doctorName} numberOfLines={1}>
+                                {doc.name}
+                              </Text>
+                              <View style={styles.doctorMetaRow}>
+                                {doc.room ? (
+                                  <View style={styles.roomTag}>
+                                    <Ionicons name="business-outline" size={11} color={Colors.primary} style={{ marginRight: 3 }} />
+                                    <Text style={styles.roomTagText}>
+                                      {doc.room.toLowerCase().startsWith('room') ? doc.room : `Room ${doc.room}`}
+                                    </Text>
+                                  </View>
+                                ) : (
+                                  <Text style={styles.unassignedRoomText}>Room unassigned</Text>
+                                )}
+                              </View>
+                            </View>
+                          </View>
+
+                          <StatusChip
+                            status={doc.status}
+                            label={
+                              doc.status === 'on_break' || doc.status === 'on break'
+                                ? 'On Break'
+                                : doc.status === 'available' || doc.status === 'active' || doc.status === 'consulting'
+                                ? 'Online / Active'
+                                : undefined
+                            }
+                            size="small"
+                          />
+                        </View>
+
+                        {/* Doctor Capacity & Progress Row */}
+                        <View style={styles.doctorProgressContainer}>
+                          <View style={styles.doctorProgressHeader}>
+                            <Text style={styles.doctorProgressLabel}>Attended Patients</Text>
+                            <Text style={styles.doctorCapacityText}>
+                              <Text style={styles.doctorAttendedNumber}>{attendedCount}</Text>
+                              <Text style={styles.doctorTotalCapacity}> / {capacity}</Text>
+                              <Text style={styles.doctorCapPercent}> ({docCapPct}%)</Text>
+                            </Text>
+                          </View>
+
+                          <View style={styles.doctorProgressBarTrack}>
+                            <View
+                              style={[
+                                styles.doctorProgressBarFill,
+                                {
+                                  width: `${docCapPct}%`,
+                                  backgroundColor: isFull ? Colors.warning : Colors.primary,
+                                },
+                              ]}
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
           </>
         )}
 
@@ -683,6 +779,158 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   breakdownBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  /* ── Doctor Schedules & Roster Styles ── */
+  emptyDoctorCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  emptyDoctorIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F1F7F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  emptyDoctorTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textDark,
+    marginBottom: 4,
+  },
+  emptyDoctorSubtitle: {
+    fontSize: 13,
+    color: Colors.textMedium,
+    textAlign: 'center',
+  },
+  doctorsList: {
+    gap: 12,
+    marginTop: 4,
+  },
+  doctorCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.shadow,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.6,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 1.5,
+      },
+    }),
+  },
+  doctorTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  doctorInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  doctorAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#E6F4F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  doctorNameWrap: {
+    flex: 1,
+  },
+  doctorName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  doctorMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  roomTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5F7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  roomTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  unassignedRoomText: {
+    fontSize: 11,
+    color: Colors.textLight,
+    fontStyle: 'italic',
+  },
+  doctorProgressContainer: {
+    backgroundColor: '#F8FCFD',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E8F4F6',
+  },
+  doctorProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  doctorProgressLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMedium,
+  },
+  doctorCapacityText: {
+    fontSize: 12,
+    color: Colors.textMedium,
+  },
+  doctorAttendedNumber: {
+    fontWeight: '800',
+    color: Colors.textDark,
+    fontSize: 13,
+  },
+  doctorTotalCapacity: {
+    fontWeight: '600',
+    color: Colors.textMedium,
+    fontSize: 13,
+  },
+  doctorCapPercent: {
+    fontWeight: '600',
+    color: Colors.textLight,
+    fontSize: 11,
+  },
+  doctorProgressBarTrack: {
+    height: 8,
+    backgroundColor: '#E2EEF1',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  doctorProgressBarFill: {
     height: '100%',
     borderRadius: 4,
   },
