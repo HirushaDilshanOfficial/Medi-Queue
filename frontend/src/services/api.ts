@@ -526,4 +526,31 @@ export const downloadDailyReport = async (
   });
 };
 
+/**
+ * Get Auto-Advance queue setting.
+ */
+export const getAutoAdvance = async (
+  token?: string
+): Promise<{ success: boolean; enabled: boolean }> => {
+  return api.get<{ success: boolean; enabled: boolean }>(
+    '/api/reception/queue/auto-advance',
+    { token }
+  );
+};
+
+/**
+ * Update Auto-Advance queue setting.
+ */
+export const updateAutoAdvance = async (
+  enabled: boolean,
+  token?: string
+): Promise<{ success: boolean; enabled: boolean }> => {
+  return api.patch<{ success: boolean; enabled: boolean }>(
+    '/api/reception/queue/auto-advance',
+    { enabled },
+    { token }
+  );
+};
+
 export default api;
+

@@ -11,6 +11,7 @@ import {
   Alert,
   Animated,
   Platform,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -21,6 +22,8 @@ import {
   markNoShow,
   moveBack,
   getErrorMessage,
+  getAutoAdvance,
+  updateAutoAdvance,
 } from '../../services/api';
 import {
   TokenBadge,
@@ -55,6 +58,11 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
   const [doctorModalVisible, setDoctorModalVisible] = useState<boolean>(false);
   const [selectedTokenForDoctor, setSelectedTokenForDoctor] = useState<QueueToken | null>(null);
 
+  // Auto-Advance Switch state
+  const [autoAdvanceEnabled, setAutoAdvanceEnabled] = useState<boolean>(false);
+  const [loadingAutoAdvance, setLoadingAutoAdvance] = useState<boolean>(false);
+  const [savingAutoAdvance, setSavingAutoAdvance] = useState<boolean>(false);
+
   // Pulsing animation for ACTIVE badge dot
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const isMounted = useRef<boolean>(true);
@@ -82,6 +90,32 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
       pulse.stop();
     };
   }, [pulseAnim]);
+
+  // Load Auto-Advance Setting from backend on mount
+  useEffect(() => {
+    let isSubscribed = true;
+    const fetchAutoAdvanceSetting = async () => {
+      try {
+        setLoadingAutoAdvance(true);
+        const res = await getAutoAdvance();
+        if (isSubscribed && res && typeof res.enabled === 'boolean') {
+          setAutoAdvanceEnabled(res.enabled);
+        }
+      } catch (err) {
+        // Fallback default
+      } finally {
+        if (isSubscribed) {
+          setLoadingAutoAdvance(false);
+        }
+      }
+    };
+
+    fetchAutoAdvanceSetting();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, []);
 
   // Toast Helper
   const showToast = (message: string, type: ToastType = 'success') => {
@@ -154,6 +188,33 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
       return `${diffMins} min${diffMins === 1 ? '' : 's'}`;
     } catch {
       return '5 mins';
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────
+  // Auto-Advance Toggle Handler
+  // ─────────────────────────────────────────────────────────
+  const handleAutoAdvanceToggle = async (newValue: boolean) => {
+    if (savingAutoAdvance) return;
+    // Optimistically update switch state
+    setAutoAdvanceEnabled(newValue);
+    setSavingAutoAdvance(true);
+
+    try {
+      await updateAutoAdvance(newValue);
+      showToast(
+        newValue ? 'Auto-Advance queue enabled' : 'Auto-Advance queue disabled',
+        'success'
+      );
+    } catch (err: any) {
+      // Revert switch on error
+      setAutoAdvanceEnabled(!newValue);
+      const msg = getErrorMessage(err);
+      showToast(msg || 'Failed to update auto-advance setting', 'error');
+    } finally {
+      if (isMounted.current) {
+        setSavingAutoAdvance(false);
+      }
     }
   };
 
@@ -945,17 +1006,42 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         </View>
 
         {/* ======================================================== */}
-        {/* 3. NEXT IN LINE HERO CARD                                */}
+        {/* 3. AUTO-ADVANCE SWITCH CONTROL                            */}
+        {/* ======================================================== */}
+        <View style={styles.autoAdvanceCard}>
+          <View style={styles.autoAdvanceInfo}>
+            <View style={styles.autoAdvanceTitleRow}>
+              <Ionicons name="flash-outline" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.autoAdvanceTitle}>Auto-Advance Queue</Text>
+            </View>
+            <Text style={styles.autoAdvanceSubtitle}>
+              Automatically dispatch next waiting patient when doctor finishes
+            </Text>
+          </View>
+
+          <Switch
+            value={autoAdvanceEnabled}
+            onValueChange={handleAutoAdvanceToggle}
+            disabled={savingAutoAdvance || loadingAutoAdvance}
+            trackColor={{ false: '#E2E8F0', true: '#99F6E4' }}
+            thumbColor={autoAdvanceEnabled ? Colors.primary : '#94A3B8'}
+            ios_backgroundColor="#E2E8F0"
+            style={styles.switchStyle}
+          />
+        </View>
+
+        {/* ======================================================== */}
+        {/* 4. NEXT IN LINE HERO CARD                                */}
         {/* ======================================================== */}
         {!loading || data ? renderNextInLineCard() : null}
 
         {/* ======================================================== */}
-        {/* 4. UPCOMING PATIENTS LIST                                 */}
+        {/* 5. UPCOMING PATIENTS LIST                                 */}
         {/* ======================================================== */}
         {!loading || data ? renderUpcomingPatientsList() : null}
 
         {/* ======================================================== */}
-        {/* 5. LOADING / ERROR STATES                                 */}
+        {/* 6. LOADING / ERROR STATES                                 */}
         {/* ======================================================== */}
         {loading && !data ? (
           <View style={styles.stateContainer}>
@@ -976,6 +1062,18 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
             />
           </View>
         ) : null}
+
+        {/* ======================================================== */}
+        {/* 7. TIP BANNER                                             */}
+        {/* ======================================================== */}
+        <View style={styles.tipBanner}>
+          <View style={styles.tipIconWrap}>
+            <Ionicons name="information-circle" size={20} color={Colors.primary} />
+          </View>
+          <Text style={styles.tipText}>
+            Pressing Call Next alerts the patient display and doctor queue automatically.
+          </Text>
+        </View>
 
         {/* Bottom padding for tab bar / safe layout */}
         <View style={styles.bottomSpacer} />
@@ -1202,7 +1300,7 @@ const styles = StyleSheet.create({
   // Filter Chips Section
   // ─────────────────────────────────────────────────────────
   filterSection: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   filterSectionTitle: {
     fontSize: 13,
@@ -1277,6 +1375,49 @@ const styles = StyleSheet.create({
   },
   countBadgeTextActive: {
     color: Colors.white,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Auto-Advance Switch Card
+  // ─────────────────────────────────────────────────────────
+  autoAdvanceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  autoAdvanceInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  autoAdvanceTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  autoAdvanceTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  autoAdvanceSubtitle: {
+    fontSize: 11.5,
+    color: Colors.textMedium,
+    lineHeight: 16,
+  },
+  switchStyle: {
+    transform: Platform.OS === 'ios' ? [{ scaleX: 0.85 }, { scaleY: 0.85 }] : [],
   },
 
   // ─────────────────────────────────────────────────────────
@@ -1496,7 +1637,7 @@ const styles = StyleSheet.create({
   // Upcoming Patients Section Styles
   // ─────────────────────────────────────────────────────────
   upcomingSection: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   upcomingCard: {
     backgroundColor: Colors.cardBackground,
@@ -1702,6 +1843,31 @@ const styles = StyleSheet.create({
     color: Colors.textMedium,
     textAlign: 'center',
     lineHeight: 16,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Tip Banner Styles
+  // ─────────────────────────────────────────────────────────
+  tipBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  tipIconWrap: {
+    marginRight: 10,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.textMedium,
+    lineHeight: 17,
+    fontWeight: '500',
   },
 
   // ─────────────────────────────────────────────────────────
