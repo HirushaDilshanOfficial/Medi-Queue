@@ -1,7 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { Platform } from 'react-native';
 import {
   Patient,
   Doctor,
@@ -19,7 +18,11 @@ export const getApiBaseUrl = (): string => {
     const hostname = window.location.hostname;
     return `http://${hostname === 'localhost' || hostname === '127.0.0.1' ? 'localhost' : hostname}:5001`;
   }
-  return process.env.EXPO_PUBLIC_API_URL || FALLBACK_IP_URL;
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && !envUrl.includes('192.168.56.')) {
+    return envUrl.includes(':5001') ? envUrl : `${envUrl.replace(/\/+$/, '')}:5001`;
+  }
+  return FALLBACK_IP_URL;
 };
 
 export const API_BASE_URL: string = getApiBaseUrl();
@@ -69,7 +72,18 @@ const getHeaders = async (
   let token = explicitToken || storedAuthToken;
   if (!token) {
     try {
-      token = await AsyncStorage.getItem('token');
+      token =
+        (await AsyncStorage.getItem('token')) ||
+        (await AsyncStorage.getItem('jwt'));
+      if (!token) {
+        const userStr = await AsyncStorage.getItem('user');
+        if (userStr) {
+          try {
+            const parsed = JSON.parse(userStr);
+            token = parsed.token || null;
+          } catch {}
+        }
+      }
       if (token) {
         storedAuthToken = token;
       }
