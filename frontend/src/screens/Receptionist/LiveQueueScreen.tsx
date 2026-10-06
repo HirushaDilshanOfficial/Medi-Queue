@@ -1,0 +1,1075 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  Animated,
+  Platform,
+} from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Colors } from '../../constants/Colors';
+import { QueueToken } from '../../types';
+import { useLiveQueue, LiveQueueFilter } from '../../hooks';
+import {
+  TokenBadge,
+  StatusChip,
+  LoadingState,
+  ErrorState,
+  SectionHeader,
+} from '../../components';
+
+export interface LiveQueueScreenProps {
+  navigation?: any;
+  onNavigate?: (route: string) => void;
+}
+
+export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
+  navigation,
+  onNavigate,
+}) => {
+  const [filter, setFilter] = useState<LiveQueueFilter>('all');
+  const { data, loading, error, refreshing, refresh } = useLiveQueue(filter);
+
+  // Pulsing animation for ACTIVE badge dot
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const isMounted = useRef<boolean>(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.25,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+
+    return () => {
+      isMounted.current = false;
+      pulse.stop();
+    };
+  }, [pulseAnim]);
+
+  // Derive metrics
+  const totalInQueue = data?.totals?.inQueue ?? data?.queue?.length ?? 0;
+  const walkInsCount = data?.totals?.walkIns ?? 0;
+  const preBookedCount = data?.totals?.preBooked ?? 0;
+  const avgWaitMinutes = data?.totals?.avgWaitMinutes ?? (totalInQueue > 0 ? totalInQueue * 10 : 0);
+
+  const filterCounts: Record<LiveQueueFilter, number> = {
+    all: totalInQueue,
+    walk_in: walkInsCount,
+    pre_booked: preBookedCount,
+  };
+
+  const handleFilterChange = (selected: LiveQueueFilter) => {
+    if (filter !== selected) {
+      setFilter(selected);
+    }
+  };
+
+  const handleBack = () => {
+    if (navigation?.canGoBack?.()) {
+      navigation.goBack();
+    } else if (onNavigate) {
+      onNavigate('Home');
+    }
+  };
+
+  // Format timestamp for display
+  const formatTime = (isoString?: string) => {
+    if (!isoString) return 'Just now';
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return 'Just now';
+    }
+  };
+
+  const formatWaitTime = (minutes: number) => {
+    if (minutes <= 0) return '0 min';
+    if (minutes < 60) return `~${minutes} min`;
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `~${hrs}h ${mins}m` : `~${hrs}h`;
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+
+      {/* Screen Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          {navigation?.canGoBack?.() ? (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={handleBack}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="arrow-back" size={22} color={Colors.white} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="layers" size={20} color={Colors.white} />
+            </View>
+          )}
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.headerTitle}>OPD Live Queue</Text>
+            <Text style={styles.headerSubtitle}>Real-time Patient Dispatch</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.refreshIconButton}
+          onPress={() => refresh(true)}
+          activeOpacity={0.7}
+          disabled={refreshing}
+        >
+          <Ionicons
+            name="refresh"
+            size={18}
+            color={Colors.white}
+            style={refreshing ? styles.rotatingIcon : undefined}
+          />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => refresh(true)}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
+      >
+        {/* ======================================================== */}
+        {/* 1. DISPATCH BANNER                                        */}
+        {/* ======================================================== */}
+        <View style={styles.dispatchBannerCard}>
+          {/* Banner Top Row */}
+          <View style={styles.bannerTopRow}>
+            <View style={styles.bannerTagWrap}>
+              <Ionicons name="flash" size={13} color="#F59E0B" style={styles.bannerTagIcon} />
+              <Text style={styles.bannerTagText}>LIVE DISPATCH QUEUE</Text>
+            </View>
+
+            {/* Green ACTIVE Badge */}
+            <View style={styles.activeBadge}>
+              <Animated.View
+                style={[
+                  styles.activeDot,
+                  {
+                    opacity: pulseAnim,
+                    transform: [
+                      {
+                        scale: pulseAnim.interpolate({
+                          inputRange: [0.25, 1],
+                          outputRange: [0.8, 1.2],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+              <Text style={styles.activeBadgeText}>ACTIVE</Text>
+            </View>
+          </View>
+
+          {/* Banner Metrics Grid */}
+          <View style={styles.metricsGrid}>
+            {/* Total In Queue Card */}
+            <View style={styles.metricCard}>
+              <View style={styles.metricIconBox}>
+                <Ionicons name="people" size={20} color={Colors.primary} />
+              </View>
+              <View style={styles.metricInfo}>
+                <Text style={styles.metricValue}>{totalInQueue}</Text>
+                <Text style={styles.metricLabel}>Total in Queue</Text>
+              </View>
+            </View>
+
+            <View style={styles.metricDivider} />
+
+            {/* Average Wait Card */}
+            <View style={styles.metricCard}>
+              <View style={[styles.metricIconBox, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="time" size={20} color="#D97706" />
+              </View>
+              <View style={styles.metricInfo}>
+                <Text style={styles.metricValue}>{formatWaitTime(avgWaitMinutes)}</Text>
+                <Text style={styles.metricLabel}>Average Wait</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Banner Footer Info */}
+          <View style={styles.bannerFooter}>
+            <View style={styles.bannerFooterItem}>
+              <Ionicons name="walk-outline" size={13} color={Colors.textLight} />
+              <Text style={styles.bannerFooterText}>
+                Walk-ins: <Text style={styles.boldText}>{walkInsCount}</Text>
+              </Text>
+            </View>
+            <Text style={styles.bannerFooterDot}>•</Text>
+            <View style={styles.bannerFooterItem}>
+              <Ionicons name="calendar-outline" size={13} color={Colors.textLight} />
+              <Text style={styles.bannerFooterText}>
+                Pre-booked: <Text style={styles.boldText}>{preBookedCount}</Text>
+              </Text>
+            </View>
+            <Text style={styles.bannerFooterDot}>•</Text>
+            <View style={styles.bannerFooterItem}>
+              <Ionicons name="sync-outline" size={13} color={Colors.textLight} />
+              <Text style={styles.bannerFooterText}>
+                {formatTime(data?.lastUpdated)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ======================================================== */}
+        {/* 2. FILTER CHIPS ROW                                       */}
+        {/* ======================================================== */}
+        <View style={styles.filterSection}>
+          <Text style={styles.filterSectionTitle}>Filter By Intake Type</Text>
+          <View style={styles.filterChipsRow}>
+            {/* Filter: All */}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                filter === 'all' && styles.filterChipActive,
+              ]}
+              onPress={() => handleFilterChange('all')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Filter all queue tokens"
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  filter === 'all' && styles.filterChipTextActive,
+                ]}
+              >
+                All
+              </Text>
+              <View
+                style={[
+                  styles.countBadge,
+                  filter === 'all' ? styles.countBadgeActive : styles.countBadgeInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.countBadgeText,
+                    filter === 'all' && styles.countBadgeTextActive,
+                  ]}
+                >
+                  {filterCounts.all}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Filter: Walk-ins */}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                filter === 'walk_in' && styles.filterChipActive,
+              ]}
+              onPress={() => handleFilterChange('walk_in')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Filter walk in queue tokens"
+            >
+              <Ionicons
+                name="walk"
+                size={14}
+                color={filter === 'walk_in' ? Colors.white : Colors.secondary}
+                style={styles.chipIcon}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  filter === 'walk_in' && styles.filterChipTextActive,
+                ]}
+              >
+                Walk-ins
+              </Text>
+              <View
+                style={[
+                  styles.countBadge,
+                  filter === 'walk_in' ? styles.countBadgeActive : styles.countBadgeInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.countBadgeText,
+                    filter === 'walk_in' && styles.countBadgeTextActive,
+                  ]}
+                >
+                  {filterCounts.walk_in}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Filter: Pre-booked */}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                filter === 'pre_booked' && styles.filterChipActive,
+              ]}
+              onPress={() => handleFilterChange('pre_booked')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Filter pre booked appointments"
+            >
+              <Ionicons
+                name="calendar"
+                size={14}
+                color={filter === 'pre_booked' ? Colors.white : Colors.secondary}
+                style={styles.chipIcon}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  filter === 'pre_booked' && styles.filterChipTextActive,
+                ]}
+              >
+                Pre-booked
+              </Text>
+              <View
+                style={[
+                  styles.countBadge,
+                  filter === 'pre_booked' ? styles.countBadgeActive : styles.countBadgeInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.countBadgeText,
+                    filter === 'pre_booked' && styles.countBadgeTextActive,
+                  ]}
+                >
+                  {filterCounts.pre_booked}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ======================================================== */}
+        {/* 3. QUEUE LIST CONTENT / STATES                            */}
+        {/* ======================================================== */}
+        {loading && !data ? (
+          <View style={styles.stateContainer}>
+            <LoadingState
+              message="Fetching live queue dispatch..."
+              size="large"
+              fullscreen={false}
+            />
+          </View>
+        ) : error && !data ? (
+          <View style={styles.stateContainer}>
+            <ErrorState
+              title="Unable to load queue"
+              message={error}
+              onRetry={() => refresh(false)}
+              retryLabel="Retry Queue Fetch"
+              fullscreen={false}
+            />
+          </View>
+        ) : (
+          <View style={styles.queueContentSection}>
+            <SectionHeader
+              title={`Queue Order (${data?.queue?.length ?? 0})`}
+              subtitle={
+                filter === 'all'
+                  ? 'All waiting & active tokens'
+                  : filter === 'walk_in'
+                  ? 'Walk-in patients only'
+                  : 'Pre-booked appointments only'
+              }
+              rightElement={
+                <View style={styles.autoRefreshBadge}>
+                  <View style={styles.autoRefreshDot} />
+                  <Text style={styles.autoRefreshText}>10s live sync</Text>
+                </View>
+              }
+            />
+
+            {data?.queue && data.queue.length > 0 ? (
+              data.queue.map((token: QueueToken, index: number) => {
+                const patientObj =
+                  typeof token.patient === 'object' && token.patient !== null
+                    ? token.patient
+                    : null;
+                const patientName = patientObj?.fullName || `Patient #${token.tokenNumber}`;
+                const appointmentObj =
+                  typeof token.appointment === 'object' && token.appointment !== null
+                    ? token.appointment
+                    : null;
+                const isWalkIn = appointmentObj?.type === 'walk_in';
+                const doctorObj =
+                  typeof token.assignedDoctor === 'object' && token.assignedDoctor !== null
+                    ? token.assignedDoctor
+                    : null;
+                const doctorName = doctorObj?.name || 'Assigned OPD Doctor';
+                const roomName = doctorObj?.room || 'OPD Room';
+
+                return (
+                  <View key={token._id || `token-${index}`} style={styles.queueItemCard}>
+                    {/* Position Badge & Token Number */}
+                    <View style={styles.cardHeaderRow}>
+                      <View style={styles.tokenIdentifierWrap}>
+                        <View style={styles.positionBadge}>
+                          <Text style={styles.positionBadgeText}>#{index + 1}</Text>
+                        </View>
+                        <TokenBadge
+                          tokenLabel={token.tokenLabel || `OPD-${token.tokenNumber}`}
+                          priority={token.priority}
+                          size="medium"
+                        />
+                      </View>
+
+                      <View style={styles.statusBadgesRow}>
+                        <StatusChip status={token.status} size="small" />
+                        <View
+                          style={[
+                            styles.intakeTypeChip,
+                            isWalkIn ? styles.walkInChip : styles.preBookedChip,
+                          ]}
+                        >
+                          <Ionicons
+                            name={isWalkIn ? 'walk' : 'calendar'}
+                            size={11}
+                            color={isWalkIn ? '#0284C7' : '#0D9488'}
+                          />
+                          <Text
+                            style={[
+                              styles.intakeTypeChipText,
+                              { color: isWalkIn ? '#0284C7' : '#0D9488' },
+                            ]}
+                          >
+                            {isWalkIn ? 'Walk-in' : 'Pre-booked'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Patient & Doctor Meta */}
+                    <View style={styles.cardBody}>
+                      <View style={styles.patientInfoRow}>
+                        <Ionicons name="person" size={14} color={Colors.primary} />
+                        <Text style={styles.patientNameText} numberOfLines={1}>
+                          {patientName}
+                        </Text>
+                        {patientObj?.age ? (
+                          <Text style={styles.patientSubMeta}>• {patientObj.age} yrs</Text>
+                        ) : null}
+                        {patientObj?.gender ? (
+                          <Text style={styles.patientSubMeta}>
+                            • {patientObj.gender.charAt(0).toUpperCase() + patientObj.gender.slice(1)}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      {patientObj?.nic || patientObj?.phone ? (
+                        <View style={styles.contactDetailsRow}>
+                          {patientObj?.nic ? (
+                            <Text style={styles.nicDetailText}>NIC: {patientObj.nic}</Text>
+                          ) : null}
+                          {patientObj?.phone ? (
+                            <Text style={styles.phoneDetailText}>
+                              {patientObj.nic ? ' | ' : ''}
+                              {patientObj.phone}
+                            </Text>
+                          ) : null}
+                        </View>
+                      ) : null}
+
+                      {/* Doctor / Room / Slot Row */}
+                      <View style={styles.doctorRoomRow}>
+                        <View style={styles.metaBadge}>
+                          <Ionicons name="medkit-outline" size={12} color={Colors.textMedium} />
+                          <Text style={styles.metaBadgeText}>{doctorName}</Text>
+                        </View>
+                        <View style={styles.metaBadge}>
+                          <Ionicons name="location-outline" size={12} color={Colors.textMedium} />
+                          <Text style={styles.metaBadgeText}>{roomName}</Text>
+                        </View>
+                        {appointmentObj?.slotTime ? (
+                          <View style={styles.metaBadge}>
+                            <Ionicons name="time-outline" size={12} color={Colors.textMedium} />
+                            <Text style={styles.metaBadgeText}>{appointmentObj.slotTime}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <Ionicons name="checkmark-done-circle" size={40} color={Colors.primary} />
+                </View>
+                <Text style={styles.emptyTitle}>Queue Is Clear</Text>
+                <Text style={styles.emptySubtitle}>
+                  {filter === 'all'
+                    ? 'There are no active patients waiting in the OPD queue.'
+                    : `No ${filter === 'walk_in' ? 'walk-in' : 'pre-booked'} patients waiting.`}
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyActionButton}
+                  onPress={() => refresh(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="refresh" size={15} color={Colors.primary} style={{ marginRight: 6 }} />
+                  <Text style={styles.emptyActionButtonText}>Check for Updates</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Bottom padding for tab bar / safe layout */}
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+  },
+  header: {
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? 12 : 8,
+    paddingBottom: 16,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  headerIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  headerTitleWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#D0E8ED',
+    marginTop: 1,
+    fontWeight: '500',
+  },
+  refreshIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  rotatingIcon: {
+    transform: [{ rotate: '45deg' }],
+  },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Dispatch Banner Styles
+  // ─────────────────────────────────────────────────────────
+  dispatchBannerCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+    marginBottom: 16,
+  },
+  bannerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  bannerTagWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  bannerTagIcon: {
+    marginRight: 5,
+  },
+  bannerTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#92400E',
+    letterSpacing: 0.5,
+  },
+  activeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    minHeight: 28,
+  },
+  activeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.success,
+    marginRight: 6,
+  },
+  activeBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.6,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tint,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  metricCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metricIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: Colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  metricInfo: {
+    flex: 1,
+  },
+  metricValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.textDark,
+    lineHeight: 26,
+  },
+  metricLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMedium,
+    marginTop: 1,
+  },
+  metricDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: '#BAE6FD',
+    marginHorizontal: 10,
+  },
+  bannerFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+  },
+  bannerFooterItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bannerFooterText: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    marginLeft: 4,
+  },
+  boldText: {
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  bannerFooterDot: {
+    color: Colors.textLight,
+    fontSize: 12,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Filter Chips Section
+  // ─────────────────────────────────────────────────────────
+  filterSection: {
+    marginBottom: 16,
+  },
+  filterSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textMedium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginLeft: 2,
+  },
+  filterChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44, // 44px touch target requirement
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: Colors.cardBackground,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  chipIcon: {
+    marginRight: 4,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textDark,
+    marginRight: 6,
+  },
+  filterChipTextActive: {
+    color: Colors.white,
+  },
+  countBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countBadgeInactive: {
+    backgroundColor: Colors.tint,
+  },
+  countBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  countBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  countBadgeTextActive: {
+    color: Colors.white,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Content & State Handling
+  // ─────────────────────────────────────────────────────────
+  stateContainer: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: 4,
+  },
+  queueContentSection: {
+    marginTop: 4,
+  },
+  autoRefreshBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tint,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  autoRefreshDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primary,
+    marginRight: 5,
+  },
+  autoRefreshText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Token Item Card
+  // ─────────────────────────────────────────────────────────
+  queueItemCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  tokenIdentifierWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  positionBadge: {
+    backgroundColor: Colors.background,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  positionBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.textMedium,
+  },
+  statusBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  intakeTypeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  walkInChip: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+  },
+  preBookedChip: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#99F6E4',
+  },
+  intakeTypeChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginLeft: 3,
+  },
+  cardBody: {
+    paddingTop: 10,
+  },
+  patientInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  patientNameText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textDark,
+    marginLeft: 6,
+    flexShrink: 1,
+  },
+  patientSubMeta: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginLeft: 4,
+  },
+  contactDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+    marginLeft: 20,
+  },
+  nicDetailText: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    fontWeight: '600',
+  },
+  phoneDetailText: {
+    fontSize: 12,
+    color: Colors.textMedium,
+  },
+  doctorRoomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+    marginLeft: 20,
+  },
+  metaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  metaBadgeText: {
+    fontSize: 11,
+    color: Colors.textMedium,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Empty State
+  // ─────────────────────────────────────────────────────────
+  emptyContainer: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: 4,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textDark,
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: Colors.textMedium,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 260,
+    marginBottom: 16,
+  },
+  emptyActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tint,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    minHeight: 44, // Touch target
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  emptyActionButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  bottomSpacer: {
+    height: 40,
+  },
+});
+
+export default LiveQueueScreen;

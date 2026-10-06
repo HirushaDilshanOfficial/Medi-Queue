@@ -14,6 +14,7 @@ import DoctorDashboardScreen from '../screens/Doctor/DoctorDashboardScreen';
 import {
   ReceptionistHomeScreen,
   RegisterPatientScreen,
+  LiveQueueScreen,
 } from '../screens/Receptionist';
 
 // ─────────────────────────────────────────────────────────
@@ -123,7 +124,7 @@ export function ReceptionistHomeStackNavigator() {
   return (
     <HomeStack.Navigator screenOptions={{ headerShown: false }}>
       <HomeStack.Screen name="Home" component={ReceptionistHomeScreen} />
-      <HomeStack.Screen name="Queue" component={QueuePlaceholderScreen} />
+      <HomeStack.Screen name="Queue" component={LiveQueueScreen} />
     </HomeStack.Navigator>
   );
 }
@@ -238,7 +239,7 @@ export default function AppNavigator({
 
         {/* ---- RECEPTIONIST NAVIGATION ---- */}
         <Stack.Screen name="ReceptionistTabs" component={ReceptionistTabNavigator} />
-        <Stack.Screen name="Queue" component={QueuePlaceholderScreen} />
+        <Stack.Screen name="Queue" component={LiveQueueScreen} />
 
         {/* ---- DOCTOR DASHBOARD ---- */}
         <Stack.Screen name="DoctorDashboard" component={DoctorDashboardScreen} />
