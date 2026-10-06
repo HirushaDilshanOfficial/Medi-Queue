@@ -71,6 +71,21 @@ const getDoctors = asyncHandler(async (req, res) => {
   res.json(doctorsWithTodayPatients);
 });
 
+const listDoctors = getDoctors;
+
+const listDepartments = asyncHandler(async (req, res) => {
+  const departments = await Doctor.distinct('department');
+  res.json(departments.filter(Boolean).sort());
+});
+
+const getDoctor = asyncHandler(async (req, res) => {
+  const doctor = await Doctor.findById(req.params.id).lean();
+  if (!doctor) {
+    return res.status(404).json({ message: 'Doctor not found' });
+  }
+  res.json(doctor);
+});
+
 // Realistic mock data matching the Figma "Patient Queue & Next Call" design
 const getMockDashboardData = () => {
   return {
@@ -1181,6 +1196,9 @@ const getPatientRecords = async (req, res) => {
 
 module.exports = {
   getDoctors,
+  listDoctors,
+  listDepartments,
+  getDoctor,
   getReceptionDoctors: getDoctors,
   getDoctorDashboard,
   updateDoctorStatus,
@@ -1195,4 +1213,3 @@ module.exports = {
   referPatient,
   getPatientRecords,
 };
-

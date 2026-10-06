@@ -9,6 +9,7 @@ export default function RootLayout() {
       <Stack.Screen name="(auth)/login" />
       <Stack.Screen name="(auth)/register" />
       <Stack.Screen name="(moh)/dashboard" />
+      <Stack.Screen name="(patient)" />
       <Stack.Screen name="(reception)" />
       <Stack.Screen name="(doctor)" />
       <Stack.Screen name="(doctor)/dashboard" />
@@ -20,4 +21,3 @@ export default function RootLayout() {
     </Stack>
   );
 }
-

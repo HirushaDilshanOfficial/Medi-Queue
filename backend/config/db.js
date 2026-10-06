@@ -8,7 +8,7 @@ try {
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/mediqueue', {
+    const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://Medi-Queue:Mediqueue123@medi-queu.ibgfrtb.mongodb.net/mediqueue?retryWrites=true&w=majority&appName=Medi-Queu', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });

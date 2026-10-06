@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { AppIcon } from '../../components/AppIcon';
 import { registerPatient } from '../../services/authService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -110,7 +111,7 @@ export default function RegisterScreen() {
           <View style={styles.circleTopRight} />
           <View style={styles.circleBottomLeft} />
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>← Back</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>Back</Text></View>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Account</Text>
           <Text style={styles.headerSubtitle}>Register as a new patient</Text>
@@ -175,15 +176,16 @@ export default function RegisterScreen() {
           <TextInput style={styles.input} placeholder="Re-enter your password"
             placeholderTextColor={Colors.textLight} value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
 
-          <View style={styles.infoBox}>
-            <Text style={styles.infoText}>
-              🏥  Your account will be linked to your NIC for identity verification at the hospital.
+          <View style={[styles.infoBox, { flexDirection: 'row', alignItems: 'flex-start', gap: 8 }]} >
+            <AppIcon name="medical" size={18} color={Colors.primaryDark} />
+            <Text style={[styles.infoText, { flex: 1 }]}>
+              Your account will be linked to your NIC for identity verification at the hospital.
             </Text>
           </View>
 
           <TouchableOpacity style={styles.registerButton} onPress={handleRegister} disabled={isLoading}>
             {isLoading ? <ActivityIndicator color={Colors.white} /> :
-              <Text style={styles.registerButtonText}>Create Account  →</Text>}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.registerButtonText}>Create Account</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>}
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.loginLink} onPress={() => router.replace('/(auth)/login')}>
