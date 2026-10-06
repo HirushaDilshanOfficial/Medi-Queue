@@ -11,14 +11,22 @@ import {
   Alert,
   StatusBar,
   Image,
+  Modal,
+  TextInput,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import {
   fetchDoctorDashboard,
   updateDoctorStatusApi,
+  updateDoctorHospitalApi,
+  fetchDoctorHospitalsApi,
   callNextPatientApi,
+  undoPatientApi,
+  addWalkInSlotApi,
+  getCatalogPatient,
   DoctorDashboardData,
   PatientQueueItem,
 } from '../../services/doctorService';
@@ -33,11 +41,49 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   const [refreshing, setRefreshing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('home');
+  const [currentHospital, setCurrentHospital] = useState<string>('Colombo Teaching Hospital 1');
+  const [isHospitalModalOpen, setIsHospitalModalOpen] = useState(false);
+
+  // Walk-in Registration Modal state
+  const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
+  const [walkInName, setWalkInName] = useState('');
+  const [walkInAge, setWalkInAge] = useState('');
+  const [walkInGender, setWalkInGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [walkInPriority, setWalkInPriority] = useState<'walkin' | 'urgent' | 'normal'>('walkin');
+  const [walkInReason, setWalkInReason] = useState('');
+  const [isSubmittingWalkIn, setIsSubmittingWalkIn] = useState(false);
+  const [availableHospitals, setAvailableHospitals] = useState<string[]>([
+    'Colombo Teaching Hospital 1',
+    'Colombo National Hospital',
+    'City General Hospital',
+  ]);
+  const [patientUndoHistory, setPatientUndoHistory] = useState<any[]>([]);
 
   const loadData = useCallback(async () => {
     try {
+      let savedHospital = '';
+      try {
+        const storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
+        if (storedHosp) savedHospital = storedHosp;
+        const userRaw = await AsyncStorage.getItem('user');
+        if (userRaw && !savedHospital) {
+          const u = JSON.parse(userRaw);
+          if (u.hospitalName) savedHospital = u.hospitalName;
+        }
+      } catch (e) {}
+
       const res = await fetchDoctorDashboard();
+      const hosp = savedHospital || res?.doctor?.hospitalName || 'Colombo Teaching Hospital 1';
+      setCurrentHospital(hosp);
       setData(res);
+
+      try {
+        const dbHospitals = await fetchDoctorHospitalsApi();
+        if (dbHospitals && dbHospitals.length > 0) {
+          const names = dbHospitals.map((h: any) => h.name).filter(Boolean);
+          setAvailableHospitals((prev) => Array.from(new Set([...names, ...prev])));
+        }
+      } catch (e) {}
     } catch (err) {
       console.log('Error loading dashboard:', err);
     } finally {
@@ -45,6 +91,26 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       setRefreshing(false);
     }
   }, []);
+
+  const handleSelectHospital = async (hospName: string) => {
+    setCurrentHospital(hospName);
+    setIsHospitalModalOpen(false);
+    try {
+      await AsyncStorage.setItem('doctor_current_hospital', hospName);
+      if (data) {
+        setData({
+          ...data,
+          doctor: {
+            ...data.doctor,
+            hospitalName: hospName,
+          },
+        });
+      }
+      await updateDoctorHospitalApi(hospName, undefined, data?.doctor?._id);
+    } catch (e) {
+      console.log('Error updating hospital:', e);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -69,73 +135,56 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
     setData((prev) => {
       if (!prev) return prev;
       const queue = [...(prev.upcomingQueue || [])];
-      let nextPat: PatientQueueItem;
+
       if (queue.length > 0) {
-        nextPat = queue.shift()!;
-      } else {
-        const lastNum = prev.currentPatient?.tokenNumber || 28;
-        nextPat = {
-          tokenNumber: lastNum + 1,
-          patientName: 'Aurelia Sisca',
-          age: 32,
-          gender: 'Female',
-          priority: 'normal',
-          status: 'next',
-          reason: 'Post-op Inspection',
-          slotTime: '11:15 AM',
+        const nextPat = queue.shift()!;
+        return {
+          ...prev,
+          metrics: {
+            ...prev.metrics,
+            completedCount: (prev.metrics?.completedCount || 0) + 1,
+            waitingCount: queue.length,
+            currentCallingToken: nextPat.tokenNumber,
+          },
+          currentPatient: {
+            tokenNumber: nextPat.tokenNumber,
+            patientName: nextPat.patientName,
+            age: nextPat.age,
+            gender: nextPat.gender,
+            priority: (nextPat.priority === 'urgent' ? 'urgent' : 'normal') as 'normal' | 'urgent',
+            status: 'in_consultation',
+            reason: nextPat.reason || 'General OPD Consultation',
+            bloodPressure: '120/80',
+            heartRate: '75 bpm',
+            fileRecord: `REC-${800 + nextPat.tokenNumber}`,
+            checkedInTime: nextPat.slotTime || '10:30 AM',
+            calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+          upcomingQueue: queue,
         };
       }
 
-      if (queue.length < 3) {
-        const highestToken = Math.max(
-          nextPat.tokenNumber,
-          ...queue.map((q) => q.tokenNumber),
-          30
-        );
-        const nextNames = ['Kasun Bandara', 'Nadeesha Silva', 'Ruwan Jayasinghe', 'Chathuri Perera'];
-        const chosen = nextNames[(highestToken + 1) % nextNames.length];
-        queue.push({
-          tokenNumber: highestToken + 1,
-          patientName: chosen,
-          age: 28 + ((highestToken * 3) % 40),
-          gender: highestToken % 2 === 0 ? 'Female' : 'Male',
-          priority: highestToken % 3 === 0 ? 'elderly' : 'normal',
-          category: highestToken % 3 === 0 ? 'priority' : 'all',
-          status: 'Waiting',
-          reason: 'Routine Medical Checkup',
-          slotTime: '12:30 PM',
-        });
-      }
-
+      // No more patients waiting: Complete the last patient consultation
       return {
         ...prev,
         metrics: {
           ...prev.metrics,
           completedCount: (prev.metrics?.completedCount || 0) + 1,
-          waitingCount: Math.max(0, (prev.metrics?.waitingCount || queue.length + 1) - 1),
-          currentCallingToken: nextPat.tokenNumber,
+          waitingCount: 0,
+          currentCallingToken: 0,
         },
-        currentPatient: {
-          tokenNumber: nextPat.tokenNumber,
-          patientName: nextPat.patientName,
-          age: nextPat.age,
-          gender: nextPat.gender,
-          priority: (nextPat.priority === 'urgent' ? 'urgent' : 'normal') as 'normal' | 'urgent',
-          status: 'in_consultation',
-          reason: nextPat.reason || 'General OPD Consultation',
-          bloodPressure: '120/80',
-          heartRate: '75 bpm',
-          fileRecord: `REC-${800 + nextPat.tokenNumber}`,
-          checkedInTime: nextPat.slotTime || '10:30 AM',
-          calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-        upcomingQueue: queue,
+        currentPatient: null,
+        upcomingQueue: [],
       };
     });
   }, []);
 
   const handleCompleteAndNext = async () => {
     setIsProcessing(true);
+    if (data?.currentPatient) {
+      setPatientUndoHistory((prev) => [...prev, { ...data.currentPatient! }]);
+    }
+    const isLast = (data?.upcomingQueue?.length || 0) === 0;
     try {
       const res = await callNextPatientApi();
       if (res && res.data) {
@@ -143,13 +192,101 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       } else {
         advanceQueueLocally();
       }
-      Alert.alert('Consultation Completed', res?.message || 'Advanced to next patient.');
+      Alert.alert(
+        isLast ? 'Queue Completed' : 'Consultation Completed',
+        isLast ? 'All patients completed for today!' : res?.message || 'Advanced to next patient.'
+      );
     } catch (err: any) {
       advanceQueueLocally();
-      Alert.alert('Consultation Completed', 'Advanced to next patient.');
+      Alert.alert(
+        isLast ? 'Queue Completed' : 'Consultation Completed',
+        isLast ? 'All patients completed for today!' : 'Advanced to next patient.'
+      );
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleUndoPatient = async () => {
+    if (data?.currentPatient && data.currentPatient.tokenNumber <= 1) {
+      Alert.alert('First Patient Reached', 'You are already at Token #001 (the 1st patient). Cannot undo further.');
+      return;
+    }
+
+    if (!data?.currentPatient && patientUndoHistory.length === 0 && (!data?.metrics?.completedCount || data.metrics.completedCount <= 0)) {
+      Alert.alert('Nothing to Undo', 'No completed consultations to undo.');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const res = await undoPatientApi();
+      if (res && res.success && res.data) {
+        setData(res.data);
+        Alert.alert('Action Undone', res.message || 'Reverted to previous patient.');
+        setIsProcessing(false);
+        return;
+      }
+    } catch (err) {
+      console.log('Error calling undo API:', err);
+    }
+
+    // Local client-side fallback (guarantees undo all the way down to Token #001 even offline)
+    let restoredToken = 1;
+    setData((prev) => {
+      if (!prev) return prev;
+      const curr = prev.currentPatient;
+
+      let prevPatientData: any = null;
+      if (patientUndoHistory.length > 0) {
+        const historyCopy = [...patientUndoHistory];
+        prevPatientData = historyCopy.pop();
+        setPatientUndoHistory(historyCopy);
+      } else {
+        const targetToken = curr ? curr.tokenNumber - 1 : (prev.metrics?.completedCount || 28);
+        prevPatientData = getCatalogPatient(Math.max(1, targetToken));
+      }
+      restoredToken = prevPatientData.tokenNumber;
+
+      let updatedQueue = [...(prev.upcomingQueue || [])];
+      if (curr) {
+        const currAsQueueItem: PatientQueueItem = {
+          tokenNumber: curr.tokenNumber,
+          patientName: curr.patientName,
+          age: curr.age,
+          gender: curr.gender,
+          priority: curr.priority === 'urgent' ? 'urgent' : 'normal',
+          category: 'all',
+          status: 'next',
+          reason: curr.reason || 'General OPD Consultation',
+          slotTime: curr.checkedInTime || '10:30 AM',
+        };
+
+        updatedQueue = [
+          currAsQueueItem,
+          ...updatedQueue.filter((q) => q.tokenNumber !== curr.tokenNumber),
+        ];
+      }
+
+      return {
+        ...prev,
+        metrics: {
+          ...prev.metrics,
+          completedCount: Math.max(0, (prev.metrics?.completedCount || 1) - 1),
+          waitingCount: updatedQueue.length,
+          currentCallingToken: prevPatientData.tokenNumber,
+        },
+        currentPatient: {
+          ...prevPatientData,
+          status: 'in_consultation',
+          calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+        upcomingQueue: updatedQueue,
+      };
+    });
+
+    Alert.alert('Action Undone', `Reverted back to Token #${String(restoredToken).padStart(3, '0')}.`);
+    setIsProcessing(false);
   };
 
   const handleCallNext = async () => {
@@ -168,6 +305,116 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleOpenWalkInModal = () => {
+    setWalkInName('');
+    setWalkInAge('');
+    setWalkInGender('Male');
+    setWalkInPriority('walkin');
+    setWalkInReason('');
+    setIsWalkInModalOpen(true);
+  };
+
+  const handleRegisterWalkIn = async () => {
+    const trimmedName = walkInName.trim();
+    if (!trimmedName) {
+      Alert.alert('Required Field', 'Please enter patient full name.');
+      return;
+    }
+
+    setIsSubmittingWalkIn(true);
+    try {
+      const res = await addWalkInSlotApi({
+        patientName: trimmedName,
+        age: walkInAge ? Number(walkInAge) : 35,
+        gender: walkInGender,
+        priority: walkInPriority,
+        reason: walkInReason.trim() || 'Walk-in OPD Consultation',
+      });
+
+      if (res && res.data) {
+        setData(res.data);
+      } else {
+        // Client-side fallback update
+        setData((prev) => {
+          if (!prev) return prev;
+          const currentTokens = [
+            prev.currentPatient?.tokenNumber || 0,
+            ...prev.upcomingQueue.map((q) => q.tokenNumber || 0),
+          ];
+          const nextToken = Math.max(28, ...currentTokens) + 1;
+          const newPatient: PatientQueueItem = {
+            tokenNumber: nextToken,
+            patientName: trimmedName,
+            age: walkInAge ? Number(walkInAge) : 35,
+            gender: walkInGender,
+            priority: walkInPriority === 'urgent' ? 'urgent' : 'walkin',
+            category: 'walkin',
+            status: 'Waiting',
+            reason: walkInReason.trim() || 'Walk-in OPD Consultation',
+            slotTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+
+          const newQueue =
+            walkInPriority === 'urgent'
+              ? [newPatient, ...prev.upcomingQueue]
+              : [...prev.upcomingQueue, newPatient];
+
+          return {
+            ...prev,
+            metrics: {
+              ...prev.metrics,
+              waitingCount: newQueue.length,
+            },
+            upcomingQueue: newQueue,
+          };
+        });
+      }
+
+      Alert.alert(
+        'Walk-in Added',
+        res?.message || `Patient ${trimmedName} has been registered and added to the queue.`
+      );
+      setIsWalkInModalOpen(false);
+      setWalkInName('');
+      setWalkInAge('');
+      setWalkInReason('');
+    } catch (err: any) {
+      console.log('Error registering walk-in patient:', err);
+      Alert.alert('Error', 'Failed to register walk-in patient.');
+    } finally {
+      setIsSubmittingWalkIn(false);
+    }
+  };
+
+  const handleRemoveQueuePatient = (tokenNumber: number, patientName: string) => {
+    Alert.alert(
+      'Remove Patient',
+      `Are you sure you want to remove ${patientName} (Token #${String(tokenNumber).padStart(3, '0')}) from today's queue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setData((prev) => {
+              if (!prev) return prev;
+              const updatedQueue = prev.upcomingQueue.filter((p) => p.tokenNumber !== tokenNumber);
+              return {
+                ...prev,
+                metrics: {
+                  ...prev.metrics,
+                  waitingCount: updatedQueue.length,
+                },
+                upcomingQueue: updatedQueue,
+              };
+            });
+            Alert.alert('Patient Removed', `${patientName} has been removed from today's queue.`);
+          },
+        },
+      ]
+    );
   };
 
   const handleTabPress = (tab: 'home' | 'queue' | 'records' | 'schedule' | 'rx') => {
@@ -240,7 +487,8 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   const metrics = data?.metrics;
   const currentPatient = data?.currentPatient;
   const upcomingQueue = data?.upcomingQueue || [];
-  const completedCount = metrics?.completedCount || 18;
+  const completedCount = metrics?.completedCount !== undefined ? metrics.completedCount : 18;
+  const allSeenCompletedCount = metrics?.completedCount !== undefined && metrics.completedCount > 0 ? metrics.completedCount : 38;
   const totalCapacity = doctor?.dailyCapacity || 32;
   const progressRatio = Math.min(1, completedCount / totalCapacity);
 
@@ -287,14 +535,8 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
           <View style={styles.greetingLeft}>
             <Text style={styles.greetingTitle}>
               Good morning, Dr.{'\n'}
-              {doctor?.name ? doctor.name.replace(/^Dr\.\s*/i, '').split(' ')[0] : 'Emilia'}
+              {doctor?.name ? doctor.name.replace(/^Dr\.\s*/i, '').split(' ')[0] : 'Palitha'}
             </Text>
-            <View style={styles.departmentBadge}>
-              <Ionicons name="business-outline" size={14} color="#0d6371" style={{ marginRight: 5 }} />
-              <Text style={styles.departmentText}>
-                {doctor?.department || 'Orthopedics OPD'} • {doctor?.room || 'Room 3B'}
-              </Text>
-            </View>
           </View>
 
           <TouchableOpacity style={styles.shiftBadgeBtn} onPress={handleToggleShift}>
@@ -304,6 +546,38 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* ---- CURRENT ACTIVE HOSPITAL CARD ---- */}
+        <TouchableOpacity
+          style={styles.hospitalCard}
+          activeOpacity={0.88}
+          onPress={() => setIsHospitalModalOpen(true)}
+        >
+          <View style={styles.hospitalIconCircle}>
+            <MaterialCommunityIcons name="hospital-building" size={24} color="#0d6371" />
+          </View>
+          <View style={styles.hospitalInfoWrap}>
+            <View style={styles.hospitalLabelRow}>
+              <Text style={styles.hospitalLabelText}>CURRENT HOSPITAL</Text>
+              <View style={styles.hospitalActivePill}>
+                <View style={styles.activeDot} />
+                <Text style={styles.hospitalActivePillText}>Active Duty</Text>
+              </View>
+            </View>
+            <Text style={styles.hospitalTitleText} numberOfLines={1}>
+              {currentHospital}
+            </Text>
+            <View style={styles.hospitalDeptRow}>
+              <Ionicons name="business-outline" size={13} color="#0d6371" style={{ marginRight: 4 }} />
+              <Text style={styles.hospitalDeptText}>
+                {doctor?.department || 'General OPD'} • {doctor?.room || 'Room 101'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.hospitalChangeIconWrap}>
+            <Ionicons name="swap-horizontal" size={18} color="#0d6371" />
+          </View>
+        </TouchableOpacity>
 
         {/* ---- 3. METRICS ROW (2 Side-by-Side Cards) ---- */}
         <View style={styles.metricsRow}>
@@ -344,79 +618,169 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
           </View>
         </View>
 
-        {/* ---- 4. IN CONSULTATION HERO CARD ---- */}
-        <View style={styles.consultationCard}>
-          {/* Card Top Pill & Timer */}
-          <View style={styles.consultationHeader}>
-            <View style={styles.inConsultationPill}>
-              <View style={styles.tealPulseDot} />
-              <Text style={styles.inConsultationText}>IN CONSULTATION</Text>
-            </View>
-            <View style={styles.timerWrap}>
-              <Ionicons name="time-outline" size={14} color="#0d6371" style={{ marginRight: 4 }} />
-              <Text style={styles.timerText}>{currentPatient?.calledAtTime || '08:47'}</Text>
-            </View>
-          </View>
-
-          {/* Patient Details & Token Shield */}
-          <View style={styles.patientInfoRow}>
-            <View style={styles.patientDetailsCol}>
-              <View style={styles.patientNameRow}>
-                <Text style={styles.patientNameText}>{currentPatient?.patientName || 'Kamal Gunaratne'}</Text>
-                <View style={styles.genderPill}>
-                  <Text style={styles.genderText}>{currentPatient?.gender || 'Male'}</Text>
-                </View>
+        {/* ---- 4. IN CONSULTATION / ALL PATIENTS SEEN HERO CARD ---- */}
+        {!currentPatient ? (
+          <View style={styles.allSeenCard}>
+            <View style={styles.allSeenHeader}>
+              <View style={styles.allSeenPill}>
+                <Ionicons name="checkmark-done-circle" size={14} color="#059669" style={{ marginRight: 5 }} />
+                <Text style={styles.allSeenPillText}>ALL PATIENTS SEEN</Text>
               </View>
-              <Text style={styles.complaintText}>
-                {currentPatient?.reason || 'Spine checkup'} • {currentPatient?.age || 46} yrs
-              </Text>
 
-              {/* Vitals Tags */}
-              <View style={styles.vitalsRow}>
-                <View style={styles.vitalTag}>
-                  <Text style={styles.vitalTagText}>BP: 124/82 mmHg</Text>
-                </View>
-                <View style={styles.vitalTag}>
-                  <Text style={styles.vitalTagText}>Previous: MRI 2024</Text>
-                </View>
-              </View>
+              <TouchableOpacity
+                style={styles.headerUndoBadge}
+                onPress={handleUndoPatient}
+                disabled={isProcessing}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-undo" size={12} color="#0d6371" style={{ marginRight: 3 }} />
+                <Text style={styles.headerUndoBadgeText}>Undo</Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Token Badge */}
-            <View style={styles.tokenShield}>
-              <Text style={styles.tokenShieldLabel}>TOKEN</Text>
-              <Text style={styles.tokenShieldNumber}>
-                #{currentPatient?.tokenNumber ? String(currentPatient.tokenNumber).padStart(3, '0') : '#028'}
+            <View style={styles.allSeenCenterContent}>
+              <View style={styles.allSeenIconCircle}>
+                <Ionicons name="checkmark-done" size={32} color="#059669" />
+              </View>
+              <Text style={styles.allSeenTitle}>✅ All patients seen</Text>
+              <Text style={styles.allSeenSubtitle}>
+                {allSeenCompletedCount} completed today • Queue is empty
               </Text>
             </View>
-          </View>
 
-          {/* Action Buttons */}
-          <View style={styles.consultationActions}>
-            <TouchableOpacity
-              style={styles.rxButton}
-              onPress={() => handleTabPress('rx')}
-            >
-              <Ionicons name="document-text-outline" size={17} color="#0d6371" style={{ marginRight: 6 }} />
-              <Text style={styles.rxButtonText}>Rx Prescribe</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.completeNextButton}
-              onPress={handleCompleteAndNext}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                  <Text style={styles.completeNextText}>Complete & Next</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={styles.allSeenActionsRow}>
+              <TouchableOpacity
+                style={styles.allSeenUndoButton}
+                onPress={handleUndoPatient}
+                disabled={isProcessing}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="arrow-undo" size={16} color="#0d6371" style={{ marginRight: 6 }} />
+                <Text style={styles.allSeenUndoButtonText}>Undo Last Consultation</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.consultationCard}>
+            {/* Card Top Pill & Timer */}
+            <View style={styles.consultationHeader}>
+              <View style={styles.inConsultationPill}>
+                <View style={styles.tealPulseDot} />
+                <Text style={styles.inConsultationText}>IN CONSULTATION</Text>
+              </View>
+
+              <View style={styles.headerRightControls}>
+                {currentPatient.tokenNumber > 1 && (
+                  <TouchableOpacity
+                    style={styles.headerUndoBadge}
+                    onPress={handleUndoPatient}
+                    disabled={isProcessing}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-undo" size={12} color="#0d6371" style={{ marginRight: 3 }} />
+                    <Text style={styles.headerUndoBadgeText}>Undo</Text>
+                  </TouchableOpacity>
+                )}
+                <View style={styles.timerWrap}>
+                  <Ionicons name="time-outline" size={14} color="#0d6371" style={{ marginRight: 4 }} />
+                  <Text style={styles.timerText}>{currentPatient.calledAtTime || '08:47'}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Patient Details & Token Shield */}
+            <View style={styles.patientInfoRow}>
+              <View style={styles.patientDetailsCol}>
+                <View style={styles.patientNameRow}>
+                  <Text style={styles.patientNameText}>{currentPatient.patientName || 'Kamal Gunaratne'}</Text>
+                  <View style={styles.genderPill}>
+                    <Text style={styles.genderText}>{currentPatient.gender || 'Male'}</Text>
+                  </View>
+                </View>
+                <Text style={styles.complaintText}>
+                  {currentPatient.reason || 'Spine checkup'} • {currentPatient.age || 46} yrs
+                </Text>
+
+                {/* Vitals Tags */}
+                <View style={styles.vitalsRow}>
+                  <View style={styles.vitalTag}>
+                    <Text style={styles.vitalTagText}>BP: {currentPatient.bloodPressure || '120/80 mmHg'}</Text>
+                  </View>
+                  <View style={styles.vitalTag}>
+                    <Text style={styles.vitalTagText}>HR: {currentPatient.heartRate || '75 bpm'}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Token Badge */}
+              <View style={styles.tokenShield}>
+                <Text style={styles.tokenShieldLabel}>TOKEN</Text>
+                <Text style={styles.tokenShieldNumber}>
+                  #{String(currentPatient.tokenNumber).padStart(3, '0')}
+                </Text>
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.consultationActions}>
+              {/* Undo Button - allows undoing all the way to Token #001 */}
+              <TouchableOpacity
+                style={[
+                  styles.undoButton,
+                  currentPatient.tokenNumber <= 1 && styles.undoButtonDisabled,
+                ]}
+                onPress={handleUndoPatient}
+                disabled={isProcessing || currentPatient.tokenNumber <= 1}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name="arrow-undo"
+                  size={16}
+                  color={currentPatient.tokenNumber <= 1 ? '#94a3b8' : '#0d6371'}
+                  style={{ marginRight: 4 }}
+                />
+                <Text
+                  style={[
+                    styles.undoButtonText,
+                    currentPatient.tokenNumber <= 1 && styles.undoButtonTextDisabled,
+                  ]}
+                >
+                  Undo
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.rxButton}
+                onPress={() => handleTabPress('rx')}
+              >
+                <Ionicons name="document-text-outline" size={16} color="#0d6371" style={{ marginRight: 5 }} />
+                <Text style={styles.rxButtonText}>Rx Prescribe</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.completeNextButton}
+                onPress={handleCompleteAndNext}
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <Ionicons
+                      name={upcomingQueue.length === 0 ? 'checkmark-circle' : 'checkmark-done-circle'}
+                      size={16}
+                      color="#ffffff"
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text style={styles.completeNextText}>
+                      {upcomingQueue.length === 0 ? 'Complete' : 'Complete & Next'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* ---- 5. QUICK ACTIONS SECTION ---- */}
         <Text style={styles.sectionHeaderTitle}>QUICK ACTIONS</Text>
@@ -432,7 +796,8 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
           {/* Add Walk-in */}
           <TouchableOpacity
             style={styles.quickActionCard}
-            onPress={() => Alert.alert('Walk-in Patient', 'Quick walk-in registration modal will appear.')}
+            onPress={handleOpenWalkInModal}
+            activeOpacity={0.75}
           >
             <View style={styles.quickActionIconCircle}>
               <Ionicons name="person-add-outline" size={20} color="#0d6371" />
@@ -469,35 +834,61 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         </View>
 
         <View style={styles.queueList}>
-          {upcomingQueue.map((item, index) => (
-            <View key={index} style={styles.queueItemCard}>
-              {/* TKN Box */}
-              <View style={styles.tknBox}>
-                <Text style={styles.tknLabel}>TKN</Text>
-                <Text style={styles.tknNumber}>{String(item.tokenNumber).padStart(3, '0')}</Text>
+          {upcomingQueue.length === 0 ? (
+            <View style={styles.emptyQueueCard}>
+              <View style={styles.emptyQueueIconCircle}>
+                <Ionicons name="people-outline" size={24} color="#0d6371" />
               </View>
-
-              {/* Patient Info */}
-              <View style={styles.queueItemInfo}>
-                <Text style={styles.queueItemName}>{item.patientName}</Text>
-                <Text style={styles.queueItemSub}>
-                  {index === 0 ? 'Post-op Check' : 'Hypertension Follow-up'} • {item.age} yrs
-                </Text>
-              </View>
-
-              {/* Time Pill & Options */}
-              <View style={styles.queueItemRight}>
-                <View style={styles.timePill}>
-                  <Text style={styles.timePillText}>{item.slotTime || (index === 0 ? '11:15 AM' : '11:30 AM')}</Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => Alert.alert('Patient Options', `Manage queue entry for ${item.patientName}`)}
-                >
-                  <Ionicons name="ellipsis-vertical" size={17} color="#94a3b8" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.emptyQueueTitle}>No patients waiting</Text>
+              <Text style={styles.emptyQueueSubtitle}>
+                The queue is empty. Next patients will appear here once registered.
+              </Text>
             </View>
-          ))}
+          ) : (
+            upcomingQueue.map((item, index) => (
+              <View key={index} style={styles.queueItemCard}>
+                {/* TKN Box */}
+                <View style={styles.tknBox}>
+                  <Text style={styles.tknLabel}>TKN</Text>
+                  <Text style={styles.tknNumber}>{String(item.tokenNumber).padStart(3, '0')}</Text>
+                </View>
+
+                {/* Patient Info */}
+                <View style={styles.queueItemInfo}>
+                  <Text style={styles.queueItemName}>{item.patientName}</Text>
+                  <Text style={styles.queueItemSub}>
+                    {index === 0 ? 'Post-op Check' : 'Hypertension Follow-up'} • {item.age} yrs
+                  </Text>
+                </View>
+
+                {/* Time Pill & Options */}
+                <View style={styles.queueItemRight}>
+                  <View style={styles.timePill}>
+                    <Text style={styles.timePillText}>{item.slotTime || (index === 0 ? '11:15 AM' : '11:30 AM')}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() =>
+                      Alert.alert(
+                        `${item.patientName} (Token #${String(item.tokenNumber).padStart(3, '0')})`,
+                        'Select an option for this patient in the queue:',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Remove from Queue',
+                            style: 'destructive',
+                            onPress: () => handleRemoveQueuePatient(item.tokenNumber, item.patientName),
+                          },
+                        ]
+                      )
+                    }
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="ellipsis-vertical" size={17} color="#94a3b8" style={{ marginLeft: 6 }} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -554,6 +945,252 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Hospital Switcher Modal */}
+      <Modal
+        visible={isHospitalModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsHospitalModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsHospitalModalOpen(false)}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <MaterialCommunityIcons name="hospital-building" size={22} color="#0d6371" style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitle}>Select Hospital Duty</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsHospitalModalOpen(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Select the hospital you are currently stationed at for OPD patient consultations.
+            </Text>
+
+            <View style={styles.modalHospitalList}>
+              {availableHospitals.map((hosp, idx) => {
+                const isSelected = currentHospital === hosp;
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[styles.modalHospitalItem, isSelected && styles.modalHospitalItemSelected]}
+                    onPress={() => handleSelectHospital(hosp)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.modalHospitalItemLeft}>
+                      <View style={[styles.modalItemIconCircle, isSelected && styles.modalItemIconCircleSelected]}>
+                        <Ionicons
+                          name="business"
+                          size={18}
+                          color={isSelected ? '#0d6371' : '#64748b'}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.modalHospitalItemName, isSelected && styles.modalHospitalItemNameSelected]} numberOfLines={1}>
+                          {hosp}
+                        </Text>
+                        <Text style={styles.modalHospitalItemSub}>
+                          {isSelected ? 'Currently Stationed • Active' : 'Tap to switch location'}
+                        </Text>
+                      </View>
+                    </View>
+                    {isSelected ? (
+                      <Ionicons name="checkmark-circle" size={22} color="#0d6371" />
+                    ) : (
+                      <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Walk-in Registration Modal */}
+      <Modal
+        visible={isWalkInModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsWalkInModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsWalkInModalOpen(false)}
+        >
+          <View style={styles.walkInModalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <View style={styles.walkInHeaderIconCircle}>
+                  <Ionicons name="person-add" size={18} color="#0d6371" />
+                </View>
+                <Text style={styles.modalTitle}>Add Walk-in Patient</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsWalkInModalOpen(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Register an unscheduled or emergency walk-in patient directly to today's queue.
+            </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {/* Patient Full Name */}
+              <View style={styles.walkInFieldGroup}>
+                <Text style={styles.walkInFieldLabel}>Patient Full Name *</Text>
+                <TextInput
+                  style={styles.walkInTextInput}
+                  placeholder="e.g. Kasun Bandara"
+                  placeholderTextColor="#94a3b8"
+                  value={walkInName}
+                  onChangeText={setWalkInName}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              {/* Age & Gender Row */}
+              <View style={styles.walkInRowGroup}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text style={styles.walkInFieldLabel}>Age</Text>
+                  <TextInput
+                    style={styles.walkInTextInput}
+                    placeholder="e.g. 38"
+                    placeholderTextColor="#94a3b8"
+                    value={walkInAge}
+                    onChangeText={setWalkInAge}
+                    keyboardType="numeric"
+                    maxLength={3}
+                  />
+                </View>
+
+                <View style={{ flex: 1.6 }}>
+                  <Text style={styles.walkInFieldLabel}>Gender</Text>
+                  <View style={styles.genderSelectRow}>
+                    {(['Male', 'Female', 'Other'] as const).map((g) => (
+                      <TouchableOpacity
+                        key={g}
+                        style={[
+                          styles.genderSelectPill,
+                          walkInGender === g && styles.genderSelectPillActive,
+                        ]}
+                        onPress={() => setWalkInGender(g)}
+                      >
+                        <Text
+                          style={[
+                            styles.genderSelectPillText,
+                            walkInGender === g && styles.genderSelectPillTextActive,
+                          ]}
+                        >
+                          {g}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              {/* Priority Selection */}
+              <View style={styles.walkInFieldGroup}>
+                <Text style={styles.walkInFieldLabel}>Priority / Category</Text>
+                <View style={styles.prioritySelectRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.prioritySelectPill,
+                      walkInPriority === 'walkin' && styles.prioritySelectPillActive,
+                    ]}
+                    onPress={() => setWalkInPriority('walkin')}
+                  >
+                    <Ionicons
+                      name="walk-outline"
+                      size={15}
+                      color={walkInPriority === 'walkin' ? '#0d6371' : '#64748b'}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.prioritySelectPillText,
+                        walkInPriority === 'walkin' && styles.prioritySelectPillTextActive,
+                      ]}
+                    >
+                      Standard Walk-in
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.prioritySelectPill,
+                      walkInPriority === 'urgent' && styles.prioritySelectPillActiveUrgent,
+                    ]}
+                    onPress={() => setWalkInPriority('urgent')}
+                  >
+                    <Ionicons
+                      name="alert-circle-outline"
+                      size={15}
+                      color={walkInPriority === 'urgent' ? '#b91c1c' : '#64748b'}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.prioritySelectPillText,
+                        walkInPriority === 'urgent' && styles.prioritySelectPillTextActiveUrgent,
+                      ]}
+                    >
+                      Urgent / Emergency
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Reason / Complaint */}
+              <View style={styles.walkInFieldGroup}>
+                <Text style={styles.walkInFieldLabel}>Reason for Visit / Complaint</Text>
+                <TextInput
+                  style={[styles.walkInTextInput, { height: 68, textAlignVertical: 'top', paddingTop: 8 }]}
+                  placeholder="e.g. Acute abdominal pain, high fever..."
+                  placeholderTextColor="#94a3b8"
+                  value={walkInReason}
+                  onChangeText={setWalkInReason}
+                  multiline
+                />
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions */}
+            <View style={styles.walkInModalActions}>
+              <TouchableOpacity
+                style={styles.walkInCancelBtn}
+                onPress={() => setIsWalkInModalOpen(false)}
+                disabled={isSubmittingWalkIn}
+              >
+                <Text style={styles.walkInCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.walkInSubmitBtn}
+                onPress={handleRegisterWalkIn}
+                disabled={isSubmittingWalkIn}
+              >
+                {isSubmittingWalkIn ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <Ionicons name="add-circle-outline" size={16} color="#ffffff" style={{ marginRight: 6 }} />
+                    <Text style={styles.walkInSubmitBtnText}>Add to Queue</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -699,6 +1336,335 @@ const styles = StyleSheet.create({
     color: '#064e59',
   },
 
+  // CURRENT HOSPITAL CARD
+  hospitalCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#cff3f6',
+    elevation: 2,
+    shadowColor: 'rgba(13, 99, 113, 0.08)',
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  hospitalIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#e6f8fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  hospitalInfoWrap: {
+    flex: 1,
+  },
+  hospitalLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  hospitalLabelText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0d6371',
+    letterSpacing: 0.8,
+  },
+  hospitalActivePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  activeDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#16a34a',
+    marginRight: 4,
+  },
+  hospitalActivePillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+  hospitalTitleText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 1,
+  },
+  hospitalDeptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  hospitalDeptText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  hospitalChangeIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f0fbfb',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+
+  // HOSPITAL MODAL STYLES
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  modalHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  modalHospitalList: {
+    gap: 10,
+  },
+  modalHospitalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+  },
+  modalHospitalItemSelected: {
+    backgroundColor: '#effbfa',
+    borderColor: '#0d6371',
+  },
+  modalHospitalItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 10,
+  },
+  modalItemIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  modalItemIconCircleSelected: {
+    backgroundColor: '#cff3f6',
+  },
+  modalHospitalItemName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  modalHospitalItemNameSelected: {
+    color: '#0d6371',
+    fontWeight: '800',
+  },
+  modalHospitalItemSub: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+
+  // WALK-IN MODAL STYLES
+  walkInModalContent: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  walkInHeaderIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#e0f7fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  walkInFieldGroup: {
+    marginBottom: 14,
+  },
+  walkInRowGroup: {
+    flexDirection: 'row',
+    marginBottom: 14,
+    alignItems: 'flex-start',
+  },
+  walkInFieldLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  walkInTextInput: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1.2,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0f172a',
+  },
+  genderSelectRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  genderSelectPill: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  genderSelectPillActive: {
+    backgroundColor: '#e0f7fa',
+    borderColor: '#0d6371',
+  },
+  genderSelectPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  genderSelectPillTextActive: {
+    color: '#0d6371',
+    fontWeight: '800',
+  },
+  prioritySelectRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  prioritySelectPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  prioritySelectPillActive: {
+    backgroundColor: '#e0f7fa',
+    borderColor: '#0d6371',
+  },
+  prioritySelectPillActiveUrgent: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#ef4444',
+  },
+  prioritySelectPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  prioritySelectPillTextActive: {
+    color: '#0d6371',
+    fontWeight: '800',
+  },
+  prioritySelectPillTextActiveUrgent: {
+    color: '#b91c1c',
+    fontWeight: '800',
+  },
+  walkInModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  walkInCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walkInCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  walkInSubmitBtn: {
+    flex: 1.5,
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#0d6371',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+  },
+  walkInSubmitBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+
   // 3. METRICS ROW
   metricsRow: {
     flexDirection: 'row',
@@ -780,7 +1746,86 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
 
-  // 4. IN CONSULTATION HERO CARD
+  // 4. IN CONSULTATION / ALL PATIENTS SEEN HERO CARD
+  allSeenCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: '#a7f3d0',
+    elevation: 3,
+    shadowColor: 'rgba(5, 150, 105, 0.1)',
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    marginBottom: 20,
+  },
+  allSeenHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  allSeenPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+  },
+  allSeenPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.6,
+  },
+  allSeenCenterContent: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  allSeenIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#d1fae5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  allSeenTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#065f46',
+    letterSpacing: -0.2,
+    marginBottom: 6,
+  },
+  allSeenSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#047857',
+    textAlign: 'center',
+  },
+  allSeenActionsRow: {
+    marginTop: 14,
+  },
+  allSeenUndoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e6f7f9',
+    borderRadius: 12,
+    paddingVertical: 12,
+    borderWidth: 1.2,
+    borderColor: '#b2ebf2',
+  },
+  allSeenUndoButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0d6371',
+  },
   consultationCard: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -823,6 +1868,26 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 12,
+    fontWeight: '700',
+    color: '#0d6371',
+  },
+  headerRightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerUndoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e0f7fa',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#b2ebf2',
+  },
+  headerUndoBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
     color: '#0d6371',
   },
@@ -904,11 +1969,35 @@ const styles = StyleSheet.create({
   },
   consultationActions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginTop: 16,
   },
+  undoButton: {
+    flex: 0.88,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e6f7f9',
+    borderRadius: 12,
+    paddingVertical: 12,
+    borderWidth: 1.2,
+    borderColor: '#b2ebf2',
+  },
+  undoButtonDisabled: {
+    opacity: 0.45,
+    backgroundColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+  },
+  undoButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0d6371',
+  },
+  undoButtonTextDisabled: {
+    color: '#94a3b8',
+  },
   rxButton: {
-    flex: 1,
+    flex: 1.12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -922,7 +2011,7 @@ const styles = StyleSheet.create({
     color: '#0d6371',
   },
   completeNextButton: {
-    flex: 1.3,
+    flex: 1.45,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -990,6 +2079,40 @@ const styles = StyleSheet.create({
   queueList: {
     gap: 8,
     marginBottom: 10,
+  },
+  emptyQueueCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    paddingVertical: 26,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed',
+    marginBottom: 10,
+  },
+  emptyQueueIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#e6f7f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  emptyQueueTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  emptyQueueSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 18,
   },
   queueItemCard: {
     flexDirection: 'row',

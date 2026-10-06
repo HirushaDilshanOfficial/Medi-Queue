@@ -34,6 +34,7 @@ export interface ScheduleAppointment {
   phone: string;
   allergy?: string;
   elapsedMin?: number;
+  isWalkIn?: boolean;
 }
 
 export interface DaySchedule {

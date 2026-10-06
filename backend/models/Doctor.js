@@ -38,6 +38,15 @@ const doctorSchema = new mongoose.Schema(
       start: { type: String, default: '08:00' },
       end: { type: String, default: '16:30' },
     },
+    hospital: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Hospital',
+    },
+    hospitalName: {
+      type: String,
+      trim: true,
+      default: 'Colombo Teaching Hospital 1',
+    },
   },
   {
     timestamps: true,
