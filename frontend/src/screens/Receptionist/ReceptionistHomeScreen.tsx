@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { CurrentlyServingToken, QueueToken } from '../../types';
-import { useDashboard } from '../../hooks';
+import { useAuth, useDashboard } from '../../hooks';
 import {
   callNext,
   recallToken,
@@ -40,6 +40,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   navigation,
   onNavigate,
 }) => {
+  const { user } = useAuth();
   const { data, loading, error, refreshing, refresh } = useDashboard();
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
@@ -49,6 +50,9 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const isMounted = useRef<boolean>(true);
+
+  // Derive display nurse/staff name
+  const nurseName = user?.fullName || user?.name || 'Nurse In-Charge';
 
   // Helper to handle navigation whether in React Navigation stack or Expo Router
   const handleNav = (target: string) => {
@@ -61,6 +65,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
 
   // Pulsing animation for LIVE badge
   useEffect(() => {
+    isMounted.current = true;
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -78,6 +83,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     pulse.start();
 
     return () => {
+      isMounted.current = false;
       pulse.stop();
     };
   }, [pulseAnim]);
@@ -181,12 +187,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     );
   };
 
-  // Render format date string
+  // Format today's date
   const formattedToday = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
+    weekday: 'short',
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
   });
 
   if (loading && !data) {
@@ -247,30 +252,41 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         </Animated.View>
       )}
 
-      {/* ── HEADER WITH LIVE BADGE & NOTIFICATIONS ── */}
+      {/* ── HEADER WITH COUNTER, LIVE BADGE, NURSE NAME & NOTIFICATION BELL ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.counterBadge}>
-            <Ionicons name="desktop-outline" size={14} color={Colors.white} style={{ marginRight: 4 }} />
-            <Text style={styles.counterBadgeText}>COUNTER 01</Text>
+          <View style={styles.headerTopRow}>
+            <Text style={styles.headerTitle}>OPD Counter 01</Text>
+            {/* LIVE Badge */}
+            <View style={styles.livePill}>
+              <Animated.View style={[styles.liveDot, { opacity: pulseAnim }]} />
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
           </View>
-          <Text style={styles.headerTitle}>OPD Reception</Text>
-          <Text style={styles.headerDate}>{formattedToday}</Text>
+
+          {/* Nurse info & Date sub-row */}
+          <View style={styles.nurseInfoRow}>
+            <Ionicons
+              name="person-circle-outline"
+              size={15}
+              color="rgba(255, 255, 255, 0.9)"
+              style={{ marginRight: 5 }}
+            />
+            <Text style={styles.nurseNameText} numberOfLines={1}>
+              {nurseName}
+            </Text>
+            <Text style={styles.dateDot}>•</Text>
+            <Text style={styles.headerDate}>{formattedToday}</Text>
+          </View>
         </View>
 
         <View style={styles.headerRight}>
-          {/* Live indicator badge */}
-          <View style={styles.livePill}>
-            <Animated.View style={[styles.liveDot, { opacity: pulseAnim }]} />
-            <Text style={styles.liveText}>LIVE</Text>
-          </View>
-
           {/* Notification Bell */}
           <TouchableOpacity
             style={styles.bellButton}
             activeOpacity={0.8}
             onPress={() => {
-              Alert.alert('Notifications', 'All queue channels operating normally.');
+              Alert.alert('Notifications', 'All counter channels operating normally.');
             }}
           >
             <Ionicons name="notifications" size={20} color={Colors.white} />
@@ -296,9 +312,9 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         <View style={styles.statGrid}>
           <View style={styles.statRow}>
             <StatCard
-              title="Today's Intake"
+              title="Total Intake Today"
               value={data?.intake?.total ?? 0}
-              subtitle={`${data?.intake?.walkIn ?? 0} Walk-In · ${data?.intake?.preBooked ?? 0} Booked`}
+              subtitle={`${data?.intake?.walkIn ?? 0} Walk-In · ${data?.intake?.preBooked ?? 0} Pre-Booked`}
               iconName="people"
               variant="primary"
               style={styles.gridCard}
@@ -315,7 +331,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
 
           <View style={styles.statRow}>
             <StatCard
-              title="Attended"
+              title="Attended Done"
               value={data?.attendedDone ?? 0}
               subtitle="Completed visits"
               iconName="checkmark-circle"
@@ -624,32 +640,37 @@ const styles = StyleSheet.create({
   headerLeft: {
     flex: 1,
   },
-  counterBadge: {
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
     marginBottom: 4,
-  },
-  counterBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Colors.white,
-    letterSpacing: 0.5,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
     color: Colors.white,
     letterSpacing: -0.5,
+    marginRight: 10,
+  },
+  nurseInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  nurseNameText: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontWeight: '700',
+    maxWidth: 160,
+  },
+  dateDot: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginHorizontal: 6,
   },
   headerDate: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
     fontWeight: '500',
   },
   headerRight: {
@@ -662,20 +683,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16, 185, 129, 0.2)',
     borderColor: '#10B981',
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    marginRight: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
   },
   liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: '#10B981',
-    marginRight: 6,
+    marginRight: 5,
   },
   liveText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#A7F3D0',
     letterSpacing: 0.5,
