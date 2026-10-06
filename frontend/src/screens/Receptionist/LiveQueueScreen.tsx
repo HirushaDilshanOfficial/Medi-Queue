@@ -8,19 +8,28 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
+  Alert,
   Animated,
   Platform,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { QueueToken } from '../../types';
 import { useLiveQueue, LiveQueueFilter } from '../../hooks';
+import {
+  callNext,
+  markNoShow,
+  moveBack,
+  getErrorMessage,
+} from '../../services/api';
 import {
   TokenBadge,
   StatusChip,
   LoadingState,
   ErrorState,
   SectionHeader,
+  Toast,
+  ToastType,
 } from '../../components';
 
 export interface LiveQueueScreenProps {
@@ -34,6 +43,12 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
 }) => {
   const [filter, setFilter] = useState<LiveQueueFilter>('all');
   const { data, loading, error, refreshing, refresh } = useLiveQueue(filter);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
+
+  // Toast notification state
+  const [toastMessage, setToastMessage] = useState<string>('');
+  const [toastType, setToastType] = useState<ToastType>('success');
+  const [toastVisible, setToastVisible] = useState<boolean>(false);
 
   // Pulsing animation for ACTIVE badge dot
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -63,6 +78,13 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     };
   }, [pulseAnim]);
 
+  // Toast Helper
+  const showToast = (message: string, type: ToastType = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
   // Derive metrics
   const totalInQueue = data?.totals?.inQueue ?? data?.queue?.length ?? 0;
   const walkInsCount = data?.totals?.walkIns ?? 0;
@@ -74,6 +96,10 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     walk_in: walkInsCount,
     pre_booked: preBookedCount,
   };
+
+  // Identify the first patient in line (waiting status)
+  const waitingTokens = (data?.queue || []).filter((t) => t.status === 'waiting');
+  const nextInLine: QueueToken | null = waitingTokens.length > 0 ? waitingTokens[0] : null;
 
   const handleFilterChange = (selected: LiveQueueFilter) => {
     if (filter !== selected) {
@@ -108,9 +134,338 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     return mins > 0 ? `~${hrs}h ${mins}m` : `~${hrs}h`;
   };
 
+  // Calculate wait so far for a token
+  const calculateWaitSoFar = (token: QueueToken): string => {
+    const timeSource =
+      token.createdAt ||
+      (typeof token.appointment === 'object' && token.appointment?.createdAt) ||
+      null;
+    if (!timeSource) return '5 mins';
+    try {
+      const start = new Date(timeSource).getTime();
+      const now = Date.now();
+      const diffMins = Math.max(1, Math.round((now - start) / 60000));
+      return `${diffMins} min${diffMins === 1 ? '' : 's'}`;
+    } catch {
+      return '5 mins';
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────
+  // Next in Line Action Handlers
+  // ─────────────────────────────────────────────────────────
+
+  // 1. Call Next to Room
+  const handleCallNext = async (roomNumber: string, docId?: string, department?: string) => {
+    if (!nextInLine || actionLoading) return;
+    try {
+      setActionLoading(true);
+      const res = await callNext({
+        doctorId: docId,
+        department: department || nextInLine.department,
+      });
+      const tokenName = nextInLine.tokenLabel || res?.tokenLabel || `OPD-${nextInLine.tokenNumber}`;
+      showToast(`Token ${tokenName} called to Room ${roomNumber}`, 'success');
+      await refresh(false);
+    } catch (err: any) {
+      const msg = getErrorMessage(err);
+      showToast(msg || 'Failed to call next patient. Queue may be empty.', 'error');
+    } finally {
+      if (isMounted.current) {
+        setActionLoading(false);
+      }
+    }
+  };
+
+  // 2. Mark No-Show (Confirm first)
+  const handleMarkNoShow = (token: QueueToken, patientName: string) => {
+    if (!token || actionLoading) return;
+    const tokenLabel = token.tokenLabel || `OPD-${token.tokenNumber}`;
+
+    Alert.alert(
+      'Confirm No-Show',
+      `Are you sure you want to mark ${tokenLabel} (${patientName}) as No-Show?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark No-Show',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              await markNoShow(token._id || tokenLabel);
+              showToast(`Token ${tokenLabel} marked as No-Show`, 'info');
+              await refresh(false);
+            } catch (err: any) {
+              const msg = getErrorMessage(err);
+              showToast(msg || 'Failed to mark token as no-show', 'error');
+            } finally {
+              if (isMounted.current) {
+                setActionLoading(false);
+              }
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // 3. Move Back (n) (Confirm first, hide for urgent)
+  const handleMoveBack = (token: QueueToken) => {
+    if (!token || actionLoading || token.priority === 'urgent') return;
+    const tokenLabel = token.tokenLabel || `OPD-${token.tokenNumber}`;
+
+    Alert.alert(
+      'Move Token Back',
+      `Move ${tokenLabel} 3 positions back in the waiting queue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Move Back',
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              await moveBack(token._id || tokenLabel);
+              showToast(`Token ${tokenLabel} moved back in queue`, 'success');
+              await refresh(false);
+            } catch (err: any) {
+              const msg = getErrorMessage(err);
+              showToast(msg || 'Failed to move token back', 'error');
+            } finally {
+              if (isMounted.current) {
+                setActionLoading(false);
+              }
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Render "Next in Line" Card
+  const renderNextInLineCard = () => {
+    if (!nextInLine) {
+      return (
+        <View style={styles.nextInLineSection}>
+          <SectionHeader
+            title="Next in Line"
+            subtitle="Immediate priority queue"
+          />
+          <View style={styles.nextInLineEmptyCard}>
+            <View style={styles.emptyLineIconBox}>
+              <Ionicons name="people-outline" size={26} color={Colors.textLight} />
+            </View>
+            <Text style={styles.nextInLineEmptyTitle}>No patients waiting</Text>
+            <Text style={styles.nextInLineEmptySubtitle}>
+              All active patients have been called or attended.
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    const patientObj =
+      typeof nextInLine.patient === 'object' && nextInLine.patient !== null
+        ? nextInLine.patient
+        : null;
+    const patientName = patientObj?.fullName || `Patient #${nextInLine.tokenNumber}`;
+    const appointmentObj =
+      typeof nextInLine.appointment === 'object' && nextInLine.appointment !== null
+        ? nextInLine.appointment
+        : null;
+    const isWalkIn = appointmentObj?.type === 'walk_in';
+    const doctorObj =
+      typeof nextInLine.assignedDoctor === 'object' && nextInLine.assignedDoctor !== null
+        ? nextInLine.assignedDoctor
+        : null;
+    const doctorName = doctorObj?.name
+      ? doctorObj.name.startsWith('Dr.')
+        ? doctorObj.name
+        : `Dr. ${doctorObj.name}`
+      : 'General OPD Doctor';
+    const roomNumber = doctorObj?.room || '01';
+    const waitSoFar = calculateWaitSoFar(nextInLine);
+    const moveBackCount = nextInLine.moveBackCount || 0;
+    const isUrgent = nextInLine.priority === 'urgent';
+    const tokenLabel = nextInLine.tokenLabel || `OPD-${nextInLine.tokenNumber}`;
+
+    return (
+      <View style={styles.nextInLineSection}>
+        <SectionHeader
+          title="Next in Line"
+          subtitle="Top waiting token ready to be dispatched"
+          rightElement={
+            <View style={styles.readyBadge}>
+              <View style={styles.readyDot} />
+              <Text style={styles.readyBadgeText}>READY</Text>
+            </View>
+          }
+        />
+
+        <View style={styles.nextInLineCard}>
+          {/* Top Token & Patient Header */}
+          <View style={styles.nextCardHeader}>
+            <View style={styles.nextCardTokenWrap}>
+              <TokenBadge
+                tokenLabel={tokenLabel}
+                priority={nextInLine.priority}
+                size="large"
+              />
+              <View style={styles.nextPatientMeta}>
+                <Text style={styles.nextPatientName} numberOfLines={1}>
+                  {patientName}
+                </Text>
+                <View style={styles.nextPatientSubRow}>
+                  {patientObj?.age ? (
+                    <Text style={styles.nextSubText}>{patientObj.age} yrs</Text>
+                  ) : null}
+                  {patientObj?.gender ? (
+                    <Text style={styles.nextSubText}>
+                      • {patientObj.gender.charAt(0).toUpperCase() + patientObj.gender.slice(1)}
+                    </Text>
+                  ) : null}
+                  {patientObj?.nic ? (
+                    <Text style={styles.nextSubText}>• NIC: {patientObj.nic}</Text>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+
+            {/* Type Chip */}
+            <View
+              style={[
+                styles.nextTypeChip,
+                isWalkIn ? styles.walkInChip : styles.preBookedChip,
+              ]}
+            >
+              <Ionicons
+                name={isWalkIn ? 'walk' : 'calendar'}
+                size={12}
+                color={isWalkIn ? '#0284C7' : '#0D9488'}
+              />
+              <Text
+                style={[
+                  styles.nextTypeChipText,
+                  { color: isWalkIn ? '#0284C7' : '#0D9488' },
+                ]}
+              >
+                {isWalkIn ? 'Walk-in' : 'Pre-booked'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Details Row: Wait so far & Assigned Doctor */}
+          <View style={styles.nextDetailsGrid}>
+            <View style={styles.nextDetailItem}>
+              <Ionicons name="time" size={15} color="#D97706" style={{ marginRight: 6 }} />
+              <Text style={styles.nextDetailLabel}>Wait so far:</Text>
+              <Text style={styles.nextDetailValue}>{waitSoFar}</Text>
+            </View>
+
+            <View style={styles.nextDetailItem}>
+              <Ionicons name="medkit" size={15} color={Colors.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.nextDetailLabel}>Doctor:</Text>
+              <Text style={styles.nextDetailValue} numberOfLines={1}>
+                {doctorName}
+              </Text>
+            </View>
+          </View>
+
+          {/* Buttons Stack */}
+          <View style={styles.nextActionsStack}>
+            {/* Primary Action: Call Next to Room <room> */}
+            <TouchableOpacity
+              style={[
+                styles.primaryCallBtn,
+                actionLoading && styles.btnDisabled,
+              ]}
+              onPress={() =>
+                handleCallNext(
+                  roomNumber,
+                  doctorObj?._id || doctorObj?.id,
+                  nextInLine.department
+                )
+              }
+              disabled={actionLoading}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`Call Next to Room ${roomNumber}`}
+            >
+              <Ionicons name="play-forward" size={18} color={Colors.white} style={styles.btnIcon} />
+              <Text style={styles.primaryCallBtnText}>
+                Call Next to Room {roomNumber}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Secondary Action Row: Mark No-Show & Move Back (n) */}
+            <View style={styles.secondaryActionsRow}>
+              {/* Move Back (n) - Hidden for urgent tokens */}
+              {!isUrgent ? (
+                <TouchableOpacity
+                  style={[
+                    styles.secondaryActionBtn,
+                    styles.moveBackBtn,
+                    actionLoading && styles.btnDisabled,
+                  ]}
+                  onPress={() => handleMoveBack(nextInLine)}
+                  disabled={actionLoading}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Move back token ${tokenLabel}`}
+                >
+                  <Ionicons
+                    name="swap-vertical"
+                    size={16}
+                    color={Colors.secondary}
+                    style={styles.btnIcon}
+                  />
+                  <Text style={styles.moveBackBtnText}>
+                    Move Back ({moveBackCount})
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {/* Mark No-Show */}
+              <TouchableOpacity
+                style={[
+                  styles.secondaryActionBtn,
+                  styles.noShowBtn,
+                  actionLoading && styles.btnDisabled,
+                  isUrgent && { flex: 1 }, // Take full width if Move Back is hidden
+                ]}
+                onPress={() => handleMarkNoShow(nextInLine, patientName)}
+                disabled={actionLoading}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Mark token ${tokenLabel} as no show`}
+              >
+                <Ionicons
+                  name="close-circle-outline"
+                  size={16}
+                  color={Colors.danger}
+                  style={styles.btnIcon}
+                />
+                <Text style={styles.noShowBtnText}>Mark No-Show</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+
+      {/* Toast Notification */}
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        duration={2500}
+        onDismiss={() => setToastVisible(false)}
+      />
 
       {/* Screen Header */}
       <View style={styles.header}>
@@ -139,7 +494,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
           style={styles.refreshIconButton}
           onPress={() => refresh(true)}
           activeOpacity={0.7}
-          disabled={refreshing}
+          disabled={refreshing || actionLoading}
         >
           <Ionicons
             name="refresh"
@@ -377,7 +732,12 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         </View>
 
         {/* ======================================================== */}
-        {/* 3. QUEUE LIST CONTENT / STATES                            */}
+        {/* 3. NEXT IN LINE HERO CARD                                */}
+        {/* ======================================================== */}
+        {!loading || data ? renderNextInLineCard() : null}
+
+        {/* ======================================================== */}
+        {/* 4. QUEUE LIST CONTENT / STATES                            */}
         {/* ======================================================== */}
         {loading && !data ? (
           <View style={styles.stateContainer}>
@@ -400,13 +760,13 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         ) : (
           <View style={styles.queueContentSection}>
             <SectionHeader
-              title={`Queue Order (${data?.queue?.length ?? 0})`}
+              title={`Full Queue List (${data?.queue?.length ?? 0})`}
               subtitle={
                 filter === 'all'
-                  ? 'All waiting & active tokens'
+                  ? 'Ordered by priority and arrival time'
                   : filter === 'walk_in'
-                  ? 'Walk-in patients only'
-                  : 'Pre-booked appointments only'
+                  ? 'Walk-in patients waiting'
+                  : 'Pre-booked appointments waiting'
               }
               rightElement={
                 <View style={styles.autoRefreshBadge}>
@@ -851,6 +1211,219 @@ const styles = StyleSheet.create({
   },
   countBadgeTextActive: {
     color: Colors.white,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Next in Line Hero Card Styles
+  // ─────────────────────────────────────────────────────────
+  nextInLineSection: {
+    marginBottom: 20,
+  },
+  readyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  readyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.success,
+    marginRight: 5,
+  },
+  readyBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.5,
+  },
+  nextInLineCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  nextCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  nextCardTokenWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  nextPatientMeta: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  nextPatientName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  nextPatientSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    flexWrap: 'wrap',
+  },
+  nextSubText: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    marginRight: 4,
+  },
+  nextTypeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  nextTypeChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  nextDetailsGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  nextDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 130,
+  },
+  nextDetailLabel: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    marginRight: 4,
+    fontWeight: '500',
+  },
+  nextDetailValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.textDark,
+    flexShrink: 1,
+  },
+  nextActionsStack: {
+    gap: 10,
+  },
+  primaryCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    minHeight: 48, // 48px touch target
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  primaryCallBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: 0.3,
+  },
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  secondaryActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44, // 44px touch target
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1.5,
+  },
+  moveBackBtn: {
+    backgroundColor: Colors.tint,
+    borderColor: '#BAE6FD',
+  },
+  moveBackBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.secondary,
+  },
+  noShowBtn: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  noShowBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.danger,
+  },
+  btnIcon: {
+    marginRight: 6,
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  nextInLineEmptyCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  emptyLineIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  nextInLineEmptyTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.textDark,
+    marginBottom: 2,
+  },
+  nextInLineEmptySubtitle: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    textAlign: 'center',
   },
 
   // ─────────────────────────────────────────────────────────
