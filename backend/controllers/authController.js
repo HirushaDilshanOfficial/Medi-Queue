@@ -59,6 +59,7 @@ const loginUser = async (req, res) => {
         hospital,
         hospitalName,
         doctorId,
+        phone: user.phone || 'N/A',
         token: generateToken(user._id),
       });
     } else {

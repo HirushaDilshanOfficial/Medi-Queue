@@ -10,6 +10,7 @@ import { View,
   StatusBar, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 // MOH Dashboard - Expo Router version matching the premium UI design
 export default function MOHDashboardScreen() {
@@ -23,21 +24,19 @@ export default function MOHDashboardScreen() {
   }, []);
 
   const quickActions = [
-    { id: 1, icon: '🏥', label: 'Hospitals', route: '/(moh)/manage-hospitals' as any },
-    { id: 2, icon: '🤒', label: 'Patients', route: '/(moh)/manage-patients' as any },
-    { id: 3, icon: '👩‍💼', label: 'Staff', route: '/(moh)/manage-staff' as any },
-    { id: 4, icon: '⚠️', label: 'Alerts', route: '/(moh)/alerts' as any },
-    { id: 5, icon: '📊', label: 'Reports', route: '/(moh)/reports' as any },
-    { id: 6, icon: '🛡️', label: 'Policy', route: '/(moh)/policy' as any },
+    { id: 1, icon: <Ionicons name="people-outline" size={24} color={Colors.primaryDark} />, label: 'Patients', route: '/(moh)/manage-patients' as any },
+    { id: 2, icon: <Ionicons name="notifications-outline" size={24} color={Colors.primaryDark} />, label: 'Alerts', route: '/(moh)/alerts' as any },
+    { id: 3, icon: <Ionicons name="stats-chart-outline" size={24} color={Colors.primaryDark} />, label: 'Reports', route: '/(moh)/reports' as any },
+    { id: 4, icon: <Ionicons name="shield-checkmark-outline" size={24} color={Colors.primaryDark} />, label: 'Policy', route: '/(moh)/policy' as any },
   ];
 
   const hospitalClinics = [
-    { id: 1, icon: '🦴', name: 'Orthopedic' },
-    { id: 2, icon: '🧠', name: 'Neuron' },
-    { id: 3, icon: '👂', name: 'ENT' },
-    { id: 4, icon: '❤️', name: 'Cardiology' },
-    { id: 5, icon: '👶', name: 'Pediatric' },
-    { id: 6, icon: '👁️', name: 'Eye Clinic' },
+    { id: 1, icon: <MaterialCommunityIcons name="bone" size={24} color={Colors.primaryDark} />, name: 'Orthopedic' },
+    { id: 2, icon: <MaterialCommunityIcons name="brain" size={24} color={Colors.primaryDark} />, name: 'Neuron' },
+    { id: 3, icon: <MaterialCommunityIcons name="ear-hearing" size={24} color={Colors.primaryDark} />, name: 'ENT' },
+    { id: 4, icon: <Ionicons name="heart-outline" size={24} color={Colors.primaryDark} />, name: 'Cardiology' },
+    { id: 5, icon: <MaterialCommunityIcons name="baby-face-outline" size={24} color={Colors.primaryDark} />, name: 'Pediatric' },
+    { id: 6, icon: <Ionicons name="eye-outline" size={24} color={Colors.primaryDark} />, name: 'Eye Clinic' },
   ];
 
   return (
@@ -68,10 +67,10 @@ export default function MOHDashboardScreen() {
             </View>
             <View style={styles.headerIcons}>
               <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/(moh)/alerts')}>
-                <Text style={styles.iconText}>🔔</Text>
+                <Ionicons name="notifications" size={20} color={Colors.white} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconButton} onPress={() => router.replace('/(auth)/login')}>
-                <Text style={styles.iconText}>🚪</Text>
+                <Ionicons name="log-out" size={20} color={Colors.white} />
               </TouchableOpacity>
             </View>
           </View>
@@ -86,7 +85,7 @@ export default function MOHDashboardScreen() {
           <View style={styles.activeQueueCard}>
             <View style={styles.queueCardHeader}>
               <View style={styles.queueIconContainer}>
-                <Text style={styles.queueIcon}>🏥</Text>
+                <Ionicons name="business" size={20} color={Colors.white} />
               </View>
               <View style={styles.queueTitleContainer}>
                 <Text style={styles.queueTitleLabel}>SYSTEM STATUS</Text>
@@ -102,7 +101,7 @@ export default function MOHDashboardScreen() {
                 <Text style={styles.queueNumberLabel}>TOTAL QUEUES</Text>
                 <Text style={styles.queueNumber}>2,456</Text>
                 <View style={styles.queueTimeRow}>
-                  <Text style={styles.queueTimeIcon}>🕒</Text>
+                  <Ionicons name="time-outline" size={14} color={Colors.textMedium} style={{ marginRight: 4 }} />
                   <Text style={styles.queueTimeText}>Updated: Just now</Text>
                 </View>
               </View>
@@ -139,7 +138,7 @@ export default function MOHDashboardScreen() {
 
           {/* Search Bar */}
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons name="search" size={20} color={Colors.textLight} style={{ marginRight: 10 }} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search hospitals, doctors or clinics..."
@@ -150,7 +149,7 @@ export default function MOHDashboardScreen() {
           {/* Alert / Notice Banner */}
           <View style={styles.noticeBanner}>
             <View style={styles.noticeIconContainer}>
-              <Text style={styles.noticeIcon}>📢</Text>
+              <Ionicons name="megaphone" size={16} color={Colors.white} />
             </View>
             <Text style={styles.noticeText}>Next update: <Text style={styles.noticeTextBold}>System Maintenance</Text></Text>
             <Text style={styles.noticeTime}>Tonight</Text>
@@ -165,7 +164,7 @@ export default function MOHDashboardScreen() {
                 onPress={() => action.route ? router.push(action.route) : null}
               >
                 <View style={styles.quickActionIconBg}>
-                  <Text style={styles.quickActionIcon}>{action.icon}</Text>
+                  {action.icon}
                 </View>
                 <Text style={styles.quickActionLabel}>{action.label}</Text>
               </TouchableOpacity>
@@ -184,7 +183,7 @@ export default function MOHDashboardScreen() {
             {hospitalClinics.map((clinic) => (
               <TouchableOpacity key={clinic.id} style={styles.clinicCard}>
                 <View style={styles.clinicIconContainer}>
-                  <Text style={styles.clinicIcon}>{clinic.icon}</Text>
+                  {clinic.icon}
                 </View>
                 <Text style={styles.clinicName}>{clinic.name}</Text>
               </TouchableOpacity>
@@ -196,21 +195,21 @@ export default function MOHDashboardScreen() {
 
       {/* ---- BOTTOM NAVIGATION BAR ---- */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={[styles.navIcon, styles.navIconActive]}>🏠</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/dashboard')}>
+          <Ionicons name="home" size={24} color={Colors.primaryDark} />
           <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>🏥</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/manage-hospitals')}>
+          <Ionicons name="business-outline" size={24} color={Colors.textLight} />
           <Text style={styles.navLabel}>Hospitals</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>⚠️</Text>
-          <Text style={styles.navLabel}>Alerts</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/manage-staff')}>
+          <Ionicons name="id-card-outline" size={24} color={Colors.textLight} />
+          <Text style={styles.navLabel}>Staff</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>🛡️</Text>
-          <Text style={styles.navLabel}>Policy</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/profile')}>
+          <Ionicons name="person-outline" size={24} color={Colors.textLight} />
+          <Text style={styles.navLabel}>Profile</Text>
         </TouchableOpacity>
       </View>
 
@@ -374,3 +373,4 @@ const styles = StyleSheet.create({
   navLabel: { fontSize: 10, color: Colors.textLight, fontWeight: '500' },
   navLabelActive: { color: Colors.primaryDark, fontWeight: '700' },
 });
+
