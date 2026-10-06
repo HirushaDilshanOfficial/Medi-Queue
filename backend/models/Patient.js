@@ -61,6 +61,20 @@ const patientSchema = new mongoose.Schema(
       enum: ['app', 'reception'],
       default: 'reception',
     },
+    status: {
+      type: String,
+      enum: ['Active', 'Inactive'],
+      default: 'Active',
+    },
+    patientNo: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -72,7 +86,7 @@ const patientSchema = new mongoose.Schema(
 );
 
 // Indexes for fast lookup
-patientSchema.index({ nic: 1 });
+// nic index is auto-created by unique + sparse on the schema field
 patientSchema.index({ phone: 1 });
 
 module.exports = mongoose.model('Patient', patientSchema);

@@ -1,4 +1,10 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+// Fix for Windows DNS querySrv ECONNREFUSED on MongoDB Atlas
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {}
 
 const connectDB = async () => {
   try {

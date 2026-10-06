@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { AppIcon } from '../../components/AppIcon';
 import { login } from '../../services/authService';
@@ -34,10 +35,10 @@ export default function LoginScreen() {
 
     try {
       const userData = await login(email, password);
-
       // Persist the JWT for the role dashboards that need it (patient module reads
       // the same key via services/http.ts).
       await setAuthToken(userData.token);
+      await AsyncStorage.setItem('user', JSON.stringify(userData));
 
       // Successfully logged in
       Alert.alert('Success', `Welcome back, ${userData.fullName}!`);
@@ -47,8 +48,11 @@ export default function LoginScreen() {
         router.replace('/(moh)/dashboard');
       } else if (userData.role === 'Patient') {
         router.replace('/(patient)');
+      } else if (String(userData.role || '').toLowerCase() === 'receptionist') {
+        router.replace('/(reception)/dashboard');
+      } else if (String(userData.role || '').toLowerCase() === 'doctor') {
+        router.replace('/(doctor)/dashboard');
       } else {
-        // TODO: Navigate to other dashboards when they are created
         Alert.alert('Notice', `Logged in as ${userData.role}, but dashboard is not created yet.`);
       }
     } catch (error: any) {
@@ -63,8 +67,12 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        bounces={false}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <View style={{ flex: 1 }}>
         {/* ---- TEAL HEADER ---- */}
         <View style={styles.header}>
           <View style={styles.circleTopRight} />
@@ -127,7 +135,10 @@ export default function LoginScreen() {
           </View>
 
           {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotButton}>
+          <TouchableOpacity 
+            style={styles.forgotButton}
+            onPress={() => router.push('/(auth)/forgot-password')}
+          >
             <Text style={styles.forgotText}>Forgot Password?</Text>
           </TouchableOpacity>
 
@@ -163,6 +174,8 @@ export default function LoginScreen() {
               New patient? <Text style={styles.registerBold}>Create Account</Text>
             </Text>
           </TouchableOpacity>
+
+        </View>
 
         </View>
 

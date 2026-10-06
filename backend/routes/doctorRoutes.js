@@ -14,5 +14,11 @@ router.use(protect, patientOnly);
 router.get('/departments', listDepartments);
 router.get('/', listDoctors);
 router.get('/:id', getDoctor);
+ 
+const { authorizeRoles } = require('../middleware/authMiddleware');
+const { getDoctors } = require('../controllers/doctorController');
+
+// All doctor routes in reception require auth + receptionist role
+router.get('/doctors', protect, authorizeRoles('receptionist'), getDoctors);
 
 module.exports = router;

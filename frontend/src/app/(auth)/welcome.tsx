@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,36 @@ import {
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { AppIcon } from '../../components/AppIcon';
+import { BASE_URL } from '../../config';
 
 // Welcome/Splash Screen
 export default function WelcomeScreen() {
+  const [stats, setStats] = useState({ hospitals: 0, doctors: 0, patients: 0 });
+
+  useEffect(() => {
+    fetch(`${BASE_URL}/api/v1/public/stats`)
+      .then(res => res.json())
+      .then(data => {
+        if (data) {
+          setStats({
+            hospitals: data.hospitals || 0,
+            doctors: data.doctors || 0,
+            patients: data.patients || 0
+          });
+        }
+      })
+      .catch(err => console.error('Failed to fetch stats:', err));
+  }, []);
+
   return (
     <View style={styles.container}>
-      <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-
-        {/* ---- TEAL HEADER SECTION ---- */}
+      <ScrollView 
+        bounces={false} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <View style={{ flex: 1 }}>
+          {/* ---- TEAL HEADER SECTION ---- */}
         <View style={styles.header}>
           <View style={styles.circleTopRight} />
           <View style={styles.circleBottomLeft} />
@@ -34,7 +56,6 @@ export default function WelcomeScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><AppIcon name="profile" size={12} color={Colors.textMedium} /><Text style={styles.doctorsBadgeText}>CONNECTED</Text></View>
             <Text style={styles.doctorsBadgeNumber}>186 Doctors</Text>
           </View>
-
           <Text style={styles.appTitle}>Government OPD Queue{'\n'}Management System</Text>
           <Text style={styles.appSubtitle}>Ministry of Health · Sri Lanka</Text>
         </View>
@@ -42,17 +63,17 @@ export default function WelcomeScreen() {
         {/* ---- STATS SECTION ---- */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>24</Text>
+            <Text style={styles.statNumber}>{stats.hospitals}</Text>
             <Text style={styles.statLabel}>HOSPITALS</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>186</Text>
+            <Text style={styles.statNumber}>{stats.doctors}</Text>
             <Text style={styles.statLabel}>DOCTORS</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>2.6M+</Text>
+            <Text style={styles.statNumber}>{stats.patients > 1000 ? `${(stats.patients/1000).toFixed(1)}k+` : stats.patients}</Text>
             <Text style={styles.statLabel}>PATIENTS</Text>
           </View>
         </View>
@@ -74,6 +95,7 @@ export default function WelcomeScreen() {
           </View>
         </View>
 
+        </View>
 
         {/* ---- BUTTONS SECTION ---- */}
         <View style={styles.formContainer}>
@@ -121,20 +143,6 @@ const styles = StyleSheet.create({
     marginBottom: 10, elevation: 6,
   },
   logoIcon: { fontSize: 36 },
-  queueBadge: {
-    position: 'absolute', top: 70, right: 40,
-    backgroundColor: Colors.white, borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 6,
-  },
-  queueBadgeLabel: { fontSize: 9, color: Colors.textMedium, fontWeight: '600' },
-  queueBadgeNumber: { fontSize: 14, color: Colors.primaryDark, fontWeight: '700' },
-  doctorsBadge: {
-    position: 'absolute', bottom: 80, left: 30,
-    backgroundColor: Colors.white, borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 6,
-  },
-  doctorsBadgeText: { fontSize: 9, color: Colors.textMedium, fontWeight: '600' },
-  doctorsBadgeNumber: { fontSize: 13, color: Colors.primaryDark, fontWeight: '700' },
   appTitle: {
     fontSize: 22, fontWeight: '700', color: Colors.white,
     textAlign: 'center', marginTop: 16, lineHeight: 30,

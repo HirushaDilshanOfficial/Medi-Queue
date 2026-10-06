@@ -1,0 +1,97 @@
+const QueueToken = require('../models/QueueToken');
+const Appointment = require('../models/Appointment');
+const Patient = require('../models/Patient');
+const Doctor = require('../models/Doctor');
+
+// Priority order: urgent (0) > senior (1) > normal (2)
+const PRIORITY_ORDER = {
+  urgent: 0,
+  senior: 1,
+  normal: 2,
+};
+
+/**
+ * Retrieve queue tokens for a date, populated with patient and assignedDoctor,
+ * ordered by priority (urgent > senior > normal) then tokenNumber ascending.
+ *
+ * @param {string} [date] - Target date "YYYY-MM-DD" (defaults to today in Asia/Colombo)
+ * @param {Object} [filters]
+ * @param {string} [filters.type] - "walk_in" | "pre_booked" (matched via associated Appointment)
+ * @param {string|string[]} [filters.status] - Status filter (defaults to ['waiting', 'called', 'serving'])
+ * @param {string} [filters.department] - Optional department filter
+ * @param {string} [filters.doctorId] - Optional assigned doctor filter
+ * @param {string} [filters.assignedDoctor] - Optional alias for doctorId
+ * @returns {Promise<Array>} List of ordered QueueToken documents
+ */
+const getOrderedQueue = async (date, filters = {}) => {
+  // Default to today in Asia/Colombo if date is omitted
+  const targetDate =
+    date ||
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Colombo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
+  const query = { date: targetDate };
+
+  // Status filter: defaults to ['waiting', 'called', 'serving']
+  if (filters.status) {
+    if (filters.status !== 'all') {
+      query.status = Array.isArray(filters.status)
+        ? { $in: filters.status }
+        : filters.status;
+    }
+  } else {
+    query.status = { $in: ['waiting', 'called', 'serving'] };
+  }
+
+  // Filter by Appointment type (walk_in | pre_booked)
+  if (filters.type) {
+    const appointmentQuery = {
+      date: targetDate,
+      type: filters.type,
+    };
+    if (filters.department) {
+      appointmentQuery.department = filters.department;
+    }
+
+    const matchingAppointments = await Appointment.find(appointmentQuery)
+      .select('_id')
+      .lean();
+
+    const appointmentIds = matchingAppointments.map((a) => a._id);
+    query.appointment = { $in: appointmentIds };
+  }
+
+  // Additional optional filters
+  if (filters.department && !query.department) {
+    query.department = filters.department;
+  }
+  const doctor = filters.doctorId || filters.assignedDoctor;
+  if (doctor) {
+    query.assignedDoctor = doctor;
+  }
+
+  // Retrieve tokens and populate patient and assignedDoctor (and appointment)
+  const tokens = await QueueToken.find(query)
+    .populate('patient')
+    .populate('assignedDoctor')
+    .populate('appointment')
+    .sort({ priority: -1, tokenNumber: 1 });
+
+  // Guarantee strict priority ordering: urgent > senior > normal, then tokenNumber
+  tokens.sort((a, b) => {
+    const pA = PRIORITY_ORDER[a.priority] ?? 99;
+    const pB = PRIORITY_ORDER[b.priority] ?? 99;
+    if (pA !== pB) return pA - pB;
+    return a.tokenNumber - b.tokenNumber;
+  });
+
+  return tokens;
+};
+
+module.exports = {
+  getOrderedQueue,
+};

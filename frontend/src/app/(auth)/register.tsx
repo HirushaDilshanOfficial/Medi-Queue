@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
+  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { AppIcon } from '../../components/AppIcon';
 import { registerPatient } from '../../services/authService';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 // Register Screen - Expo Router version
 export default function RegisterScreen() {
@@ -16,9 +17,28 @@ export default function RegisterScreen() {
   const [gender, setGender] = useState('Male');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [bloodGroup, setBloodGroup] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showBloodGroupDropdown, setShowBloodGroupDropdown] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [date, setDate] = useState(new Date());
+
+  const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    if (selectedDate) {
+      setDate(selectedDate);
+      if (Platform.OS === 'android') {
+        const formattedDate = selectedDate.toISOString().split('T')[0];
+        setBirthday(formattedDate);
+      }
+    }
+  };
 
   const handleRegister = async () => {
     if (!fullName || !nic || !birthday || !phone || !email || !password || !confirmPassword) {
@@ -37,7 +57,7 @@ export default function RegisterScreen() {
     setIsLoading(true);
 
     try {
-      const patientData = { fullName, nic, birthday, gender, phone, email, password };
+      const patientData = { fullName, nic, birthday, gender, phone, email, password, bloodGroup };
       await registerPatient(patientData);
       
       Alert.alert('Success', 'Account created! Please login.', [
@@ -49,6 +69,36 @@ export default function RegisterScreen() {
       setIsLoading(false);
     }
   };
+
+  const renderDropdownModal = (
+    visible: boolean, 
+    setVisible: (v: boolean) => void, 
+    items: string[], 
+    onSelect: (item: string) => void, 
+    title: string,
+  ) => (
+    <Modal visible={visible} transparent={true} animationType="fade">
+      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>{title}</Text>
+          <ScrollView style={{ maxHeight: 300 }}>
+            {items.map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.modalItem}
+                onPress={() => {
+                  onSelect(item);
+                  setVisible(false);
+                }}
+              >
+                <Text style={styles.modalItemText}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   return (
     <KeyboardAvoidingView
@@ -78,8 +128,12 @@ export default function RegisterScreen() {
             placeholderTextColor={Colors.textLight} value={nic} onChangeText={setNic} />
 
           <Text style={styles.sectionLabel}>Birthday</Text>
-          <TextInput style={styles.input} placeholder="YYYY-MM-DD"
-            placeholderTextColor={Colors.textLight} value={birthday} onChangeText={setBirthday} />
+          <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowDatePicker(true)}>
+            <Text style={birthday ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
+              {birthday || 'YYYY-MM-DD'}
+            </Text>
+            <Text style={styles.dropdownIcon}>📅</Text>
+          </TouchableOpacity>
 
           <Text style={styles.sectionLabel}>Gender</Text>
           <View style={styles.genderContainer}>
@@ -100,6 +154,14 @@ export default function RegisterScreen() {
           <Text style={styles.sectionLabel}>Telephone Number</Text>
           <TextInput style={styles.input} placeholder="e.g. 0712345678" keyboardType="phone-pad"
             placeholderTextColor={Colors.textLight} value={phone} onChangeText={setPhone} />
+
+          <Text style={styles.sectionLabel}>Blood Group (Optional)</Text>
+          <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowBloodGroupDropdown(true)}>
+            <Text style={bloodGroup ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
+              {bloodGroup || 'Select Blood Group'}
+            </Text>
+            <Text style={styles.dropdownIcon}>▼</Text>
+          </TouchableOpacity>
 
           <Text style={styles.sectionLabel}>Email Address</Text>
           <TextInput style={styles.input} placeholder="Enter your email"
@@ -133,6 +195,50 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Dropdown Modal */}
+      {renderDropdownModal(showBloodGroupDropdown, setShowBloodGroupDropdown, bloodGroups, setBloodGroup, 'Select Blood Group')}
+
+      {/* Date Picker */}
+      {Platform.OS === 'ios' ? (
+        <Modal visible={showDatePicker} transparent animationType="slide">
+          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            <View style={{ backgroundColor: Colors.white, padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 40 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Text style={{ color: Colors.primary, fontSize: 16 }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => {
+                  setShowDatePicker(false);
+                  const formattedDate = date.toISOString().split('T')[0];
+                  setBirthday(formattedDate);
+                }}>
+                  <Text style={{ color: Colors.primary, fontWeight: 'bold', fontSize: 16 }}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display="spinner"
+                maximumDate={new Date()}
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) setDate(selectedDate);
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      ) : (
+        showDatePicker && (
+          <DateTimePicker
+            value={date}
+            mode="date"
+            display="default"
+            maximumDate={new Date()}
+            onChange={onDateChange}
+          />
+        )
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -183,4 +289,58 @@ const styles = StyleSheet.create({
   loginLink: { alignItems: 'center', marginTop: 20, paddingVertical: 12 },
   loginLinkText: { fontSize: 14, color: Colors.textMedium },
   loginLinkBold: { color: Colors.primary, fontWeight: '700' },
+  
+  // Modal styles
+  dropdownButton: {
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  dropdownButtonText: {
+    fontSize: 15,
+    color: Colors.textDark,
+  },
+  dropdownButtonPlaceholder: {
+    fontSize: 15,
+    color: Colors.textLight,
+  },
+  dropdownIcon: {
+    fontSize: 12,
+    color: Colors.textMedium,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: Colors.white,
+    borderRadius: 15,
+    padding: 20,
+    width: '80%',
+    maxHeight: '60%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+    marginBottom: 15,
+  },
+  modalItem: {
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: Colors.textDark,
+  },
 });
