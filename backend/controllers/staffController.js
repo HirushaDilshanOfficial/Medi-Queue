@@ -1,5 +1,6 @@
 const Staff = require('../models/Staff');
 const User = require('../models/User');
+const Doctor = require('../models/Doctor');
 
 // Add a new staff member
 exports.addStaff = async (req, res) => {
@@ -32,6 +33,17 @@ exports.addStaff = async (req, res) => {
     };
 
     const newStaff = await Staff.create(staffData);
+
+    if (String(role).toLowerCase() === 'doctor') {
+      await Doctor.create({
+        staffId: newStaff._id,
+        name: fullName,
+        specialization: req.body.specialization,
+        department: req.body.department,
+        status: 'active',
+      });
+    }
+
     res.status(201).json({ message: 'Staff created successfully', staff: newStaff });
   } catch (error) {
     console.error('Error adding staff:', error);
@@ -77,6 +89,18 @@ exports.updateStaff = async (req, res) => {
       await User.findByIdAndUpdate(updatedStaff.userId, userUpdates);
     }
 
+    if (String(updatedStaff.role).toLowerCase() === 'doctor') {
+      await Doctor.findOneAndUpdate(
+        { staffId: updatedStaff._id },
+        {
+          name: updatedStaff.fullName,
+          specialization: updatedStaff.specialization,
+          department: updatedStaff.department,
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true },
+      );
+    }
+
     res.status(200).json({ message: 'Staff updated successfully', staff: updatedStaff });
   } catch (error) {
     console.error('Error updating staff:', error);
@@ -93,6 +117,11 @@ exports.deleteStaff = async (req, res) => {
     if (!deletedStaff) {
       return res.status(404).json({ message: 'Staff member not found' });
     }
+
+    await Doctor.findOneAndUpdate(
+      { staffId: deletedStaff._id },
+      { status: 'offline' },
+    );
 
     res.status(200).json({ message: 'Staff deleted successfully' });
   } catch (error) {

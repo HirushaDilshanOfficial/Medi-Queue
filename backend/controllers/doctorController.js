@@ -3,6 +3,7 @@ const Appointment = require('../models/Appointment');
 const { asyncHandler } = require('../utils/errorHandler');
 const QueueEntry = require('../models/QueueEntry');
 const Patient = require('../models/Patient');
+const { mapDoctor } = require('../utils/mapDoctor');
 
 const ACTIVE_STATUSES = ['booked', 'checked_in', 'in_consultation'];
 
@@ -68,6 +69,10 @@ const getDoctors = asyncHandler(async (req, res) => {
     updatedAt: doc.updatedAt,
   }));
 
+  if (req.user && String(req.user.role).toLowerCase() === 'patient') {
+    return res.json({ doctors: doctors.map((doctor) => mapDoctor(doctor)) });
+  }
+
   res.json(doctorsWithTodayPatients);
 });
 
@@ -75,7 +80,7 @@ const listDoctors = getDoctors;
 
 const listDepartments = asyncHandler(async (req, res) => {
   const departments = await Doctor.distinct('department');
-  res.json(departments.filter(Boolean).sort());
+  res.json({ departments: departments.filter(Boolean).sort() });
 });
 
 const getDoctor = asyncHandler(async (req, res) => {
@@ -83,7 +88,7 @@ const getDoctor = asyncHandler(async (req, res) => {
   if (!doctor) {
     return res.status(404).json({ message: 'Doctor not found' });
   }
-  res.json(doctor);
+  res.json({ doctor: mapDoctor(doctor) });
 });
 
 // Realistic mock data matching the Figma "Patient Queue & Next Call" design
