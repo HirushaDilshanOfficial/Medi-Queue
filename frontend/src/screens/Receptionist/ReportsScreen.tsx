@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,17 +8,23 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
+  ActivityIndicator,
   Platform,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { useShiftSummary } from '../../hooks';
+import { downloadDailyReport, getErrorMessage } from '../../services/api';
 import {
   StatCard,
   SectionHeader,
   StatusChip,
   LoadingState,
   ErrorState,
+  Toast,
+  ToastType,
 } from '../../components';
 
 export interface ReportsScreenProps {
@@ -31,6 +37,89 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   onNavigate,
 }) => {
   const { data, loading, error, refreshing, refresh } = useShiftSummary();
+  const [exporting, setExporting] = useState<boolean>(false);
+
+  // Toast notification state
+  const [toastMessage, setToastMessage] = useState<string>('');
+  const [toastType, setToastType] = useState<ToastType>('success');
+  const [toastVisible, setToastVisible] = useState<boolean>(false);
+
+  const showToast = (message: string, type: ToastType = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  const handleExportDailyReport = async () => {
+    if (exporting) return;
+    try {
+      setExporting(true);
+      const targetDate = data?.date;
+      const csvData = await downloadDailyReport(targetDate);
+
+      if (!csvData || typeof csvData !== 'string' || !csvData.trim()) {
+        showToast('No report data available to export for today', 'warning');
+        return;
+      }
+
+      const dateStr =
+        targetDate ||
+        new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Colombo',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date());
+
+      const fileName = `daily_report_${dateStr}.csv`;
+
+      if (Platform.OS === 'web') {
+        // Web browser direct file download
+        const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('Daily report downloaded successfully', 'success');
+      } else {
+        // Mobile FileSystem + Sharing
+        const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+        if (!baseDir) {
+          showToast('Device storage is not accessible', 'error');
+          return;
+        }
+
+        const fileUri = `${baseDir}${fileName}`;
+
+        await FileSystem.writeAsStringAsync(fileUri, csvData, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+
+        const isSharingAvailable = await Sharing.isAvailableAsync();
+        if (!isSharingAvailable) {
+          showToast('Sharing is unavailable on this device. File saved to storage.', 'warning');
+          return;
+        }
+
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export Daily Shift Report',
+          UTI: 'public.comma-separated-values-text',
+        });
+
+        showToast('Daily report exported successfully', 'success');
+      }
+    } catch (err: any) {
+      const msg = getErrorMessage(err) || 'Failed to export daily report';
+      showToast(msg, 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Format today's date
   const todayFormatted = new Intl.DateTimeFormat('en-GB', {
@@ -480,11 +569,60 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 </View>
               )}
             </View>
+
+            {/* ── GENERATE & EXPORT DAILY REPORT ACTION ── */}
+            <View style={styles.section}>
+              <View style={styles.exportCard}>
+                <View style={styles.exportCardHeader}>
+                  <View style={styles.exportIconBox}>
+                    <Ionicons name="document-text" size={24} color={Colors.primary} />
+                  </View>
+                  <View style={styles.exportHeaderTextWrap}>
+                    <Text style={styles.exportCardTitle}>Daily Shift CSV Audit Log</Text>
+                    <Text style={styles.exportCardSubtitle}>
+                      Export complete encounter list, token history, and clinic status.
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.exportButton,
+                    (exporting || loading) && styles.exportButtonDisabled,
+                  ]}
+                  onPress={handleExportDailyReport}
+                  disabled={exporting || loading}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Generate and export daily report"
+                >
+                  {exporting ? (
+                    <View style={styles.exportBtnInner}>
+                      <ActivityIndicator size="small" color={Colors.white} style={{ marginRight: 10 }} />
+                      <Text style={styles.exportButtonText}>Exporting CSV Report...</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.exportBtnInner}>
+                      <Ionicons name="share-outline" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+                      <Text style={styles.exportButtonText}>Generate & Export Daily Report</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
           </>
         )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* ── TOAST NOTIFICATION ── */}
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onDismiss={() => setToastVisible(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -933,6 +1071,77 @@ const styles = StyleSheet.create({
   doctorProgressBarFill: {
     height: '100%',
     borderRadius: 4,
+  },
+  /* ── Export Daily Report Styles ── */
+  exportCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 18,
+    marginTop: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.8,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  exportCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  exportIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#E6F4F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  exportHeaderTextWrap: {
+    flex: 1,
+  },
+  exportCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textDark,
+    marginBottom: 2,
+  },
+  exportCardSubtitle: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    lineHeight: 16,
+  },
+  exportButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  exportButtonDisabled: {
+    opacity: 0.65,
+  },
+  exportBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportButtonText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   bottomSpacer: {
     height: 32,
