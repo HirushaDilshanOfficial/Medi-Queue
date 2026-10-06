@@ -12,9 +12,12 @@ import {
   StatusBar,
   Image,
 } from 'react-native';
-import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { getAuthToken } from '../../services/http';
+import { BASE_URL } from '../../config';
 import {
   fetchDoctorDashboard,
   updateDoctorStatusApi,
@@ -33,11 +36,57 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   const [refreshing, setRefreshing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('home');
+  const [currentHospital, setCurrentHospital] = useState<string>('Colombo Teaching Hospital 1');
+  const [isHospitalModalOpen, setIsHospitalModalOpen] = useState(false);
+
+  // Walk-in Registration Modal state
+  const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
+  const [walkInName, setWalkInName] = useState('');
+  const [walkInAge, setWalkInAge] = useState('');
+  const [walkInGender, setWalkInGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [walkInPriority, setWalkInPriority] = useState<'walkin' | 'urgent' | 'normal'>('walkin');
+  const [walkInReason, setWalkInReason] = useState('');
+  const [isSubmittingWalkIn, setIsSubmittingWalkIn] = useState(false);
+  const [availableHospitals, setAvailableHospitals] = useState<string[]>([
+    'Colombo Teaching Hospital 1',
+    'Colombo National Hospital',
+    'City General Hospital',
+  ]);
+  const [patientUndoHistory, setPatientUndoHistory] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const checkUnreadNotifications = async () => {
+    try {
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch(`${BASE_URL}/api/v1/notifications`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const lastReadTime = await AsyncStorage.getItem('last_notification_read_time');
+        const lastReadDate = lastReadTime ? new Date(lastReadTime) : new Date(0);
+        const unread = data.filter((n: any) => new Date(n.createdAt) > lastReadDate).length;
+        setUnreadCount(unread);
+      }
+    } catch (e) {
+      console.log('Failed to fetch notifications', e);
+    }
+  };
 
   const loadData = useCallback(async () => {
     try {
       const res = await fetchDoctorDashboard();
       setData(res);
+      try {
+        const dbHospitals = await fetchDoctorHospitalsApi();
+        if (dbHospitals && dbHospitals.length > 0) {
+          const names = dbHospitals.map((h: any) => h.name).filter(Boolean);
+          setAvailableHospitals((prev) => Array.from(new Set([...names, ...prev])));
+        }
+      } catch (e) {}
+      
+      await checkUnreadNotifications();
     } catch (err) {
       console.log('Error loading dashboard:', err);
     } finally {
@@ -49,6 +98,12 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      checkUnreadNotifications();
+    }, [])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -257,10 +312,17 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
 
           <TouchableOpacity
             style={styles.bellBtn}
-            onPress={() => Alert.alert('Notifications', 'No new critical alerts at this time.')}
+            onPress={() => router.push('/notifications')}
           >
             <Ionicons name="notifications-outline" size={22} color="#334155" />
-            <View style={styles.redBadgeDot} />
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute', top: 4, right: 4, backgroundColor: 'red', borderRadius: 10,
+                width: 16, height: 16, justifyContent: 'center', alignItems: 'center', zIndex: 10
+              }}>
+                <Text style={{ color: 'white', fontSize: 9, fontWeight: 'bold' }}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
