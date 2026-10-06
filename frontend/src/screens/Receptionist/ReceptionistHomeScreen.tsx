@@ -29,6 +29,8 @@ import {
   SectionHeader,
   LoadingState,
   ErrorState,
+  Toast,
+  ToastType,
 } from '../../components';
 
 export interface ReceptionistHomeScreenProps {
@@ -45,9 +47,9 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
   // Toast notification state
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastType, setToastType] = useState<'success' | 'info' | 'warning'>('success');
-  const toastAnim = useRef(new Animated.Value(-100)).current;
+  const [toastMessage, setToastMessage] = useState<string>('');
+  const [toastType, setToastType] = useState<ToastType>('success');
+  const [toastVisible, setToastVisible] = useState<boolean>(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const isMounted = useRef<boolean>(true);
 
@@ -90,29 +92,12 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
 
   // Show Toast Helper
   const showToast = useCallback(
-    (message: string, type: 'success' | 'info' | 'warning' = 'success') => {
+    (message: string, type: ToastType = 'success') => {
       setToastMessage(message);
       setToastType(type);
-
-      Animated.sequence([
-        Animated.timing(toastAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.delay(3500),
-        Animated.timing(toastAnim, {
-          toValue: -100,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        if (isMounted.current) {
-          setToastMessage(null);
-        }
-      });
+      setToastVisible(true);
     },
-    [toastAnim]
+    []
   );
 
   // Action: Call Next
@@ -120,17 +105,12 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     if (actionLoading) return;
     try {
       setActionLoading(true);
-      const res = await callNext();
-      const patientName =
-        res?.patient?.name || res?.patient?.fullName || 'Patient';
-      const token = res?.tokenLabel || 'Next Token';
-      const room = res?.room ? ` (Room ${res.room})` : '';
-
-      showToast(`Now Calling ${token} — ${patientName}${room}`, 'success');
+      await callNext();
+      showToast('Patient display updated automatically', 'success');
       await refresh(false);
     } catch (err: any) {
       const msg = getErrorMessage(err);
-      Alert.alert('Call Next Failed', msg || 'No more waiting patients or error calling next.');
+      showToast(msg || 'Failed to call next patient. Queue may be empty.', 'error');
     } finally {
       if (isMounted.current) {
         setActionLoading(false);
@@ -144,11 +124,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     try {
       setActionLoading(true);
       await recallToken(tokenLabel);
-      showToast(`Recalled ${tokenLabel} to consulting room`, 'info');
+      showToast(`Token ${tokenLabel} recalled to consultation room`, 'info');
       await refresh(false);
     } catch (err: any) {
       const msg = getErrorMessage(err);
-      Alert.alert('Recall Failed', msg || 'Unable to recall this token.');
+      showToast(msg || 'Unable to recall this token.', 'error');
     } finally {
       if (isMounted.current) {
         setActionLoading(false);
@@ -175,7 +155,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               await refresh(false);
             } catch (err: any) {
               const msg = getErrorMessage(err);
-              Alert.alert('Action Failed', msg || 'Unable to mark token as no-show.');
+              showToast(msg || 'Unable to mark token as no-show.', 'error');
             } finally {
               if (isMounted.current) {
                 setActionLoading(false);
@@ -217,40 +197,14 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
 
-      {/* ── TOAST NOTIFICATION BANNER ── */}
-      {toastMessage && (
-        <Animated.View
-          style={[
-            styles.toastContainer,
-            toastType === 'success' && styles.toastSuccess,
-            toastType === 'info' && styles.toastInfo,
-            toastType === 'warning' && styles.toastWarning,
-            { transform: [{ translateY: toastAnim }] },
-          ]}
-        >
-          <Ionicons
-            name={
-              toastType === 'success'
-                ? 'checkmark-circle'
-                : toastType === 'info'
-                ? 'megaphone'
-                : 'alert-circle'
-            }
-            size={20}
-            color={Colors.white}
-            style={styles.toastIcon}
-          />
-          <Text style={styles.toastText} numberOfLines={2}>
-            {toastMessage}
-          </Text>
-          <TouchableOpacity
-            onPress={() => setToastMessage(null)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="close" size={18} color={Colors.white} />
-          </TouchableOpacity>
-        </Animated.View>
-      )}
+      {/* ── TOAST NOTIFICATION BANNER (AUTO-HIDES IN 2.5s) ── */}
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        duration={2500}
+        onDismiss={() => setToastVisible(false)}
+      />
 
       {/* ── HEADER WITH COUNTER, LIVE BADGE, NURSE NAME & NOTIFICATION BELL ── */}
       <View style={styles.header}>
@@ -744,41 +698,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.danger,
     borderWidth: 1.5,
     borderColor: Colors.primary,
-  },
-  toastContainer: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 20,
-    left: 16,
-    right: 16,
-    zIndex: 999,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  toastSuccess: {
-    backgroundColor: '#065F46',
-  },
-  toastInfo: {
-    backgroundColor: '#0369A1',
-  },
-  toastWarning: {
-    backgroundColor: '#92400E',
-  },
-  toastIcon: {
-    marginRight: 10,
-  },
-  toastText: {
-    flex: 1,
-    color: Colors.white,
-    fontSize: 13,
-    fontWeight: '700',
   },
   scrollContainer: {
     flex: 1,
