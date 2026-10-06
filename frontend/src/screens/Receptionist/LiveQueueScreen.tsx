@@ -11,15 +11,19 @@ import {
   Alert,
   Animated,
   Platform,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { QueueToken } from '../../types';
+import { QueueToken, Doctor } from '../../types';
 import { useLiveQueue, LiveQueueFilter } from '../../hooks';
 import {
   callNext,
   markNoShow,
   moveBack,
+  getDoctors,
+  assignDoctor,
   getErrorMessage,
 } from '../../services/api';
 import {
@@ -49,6 +53,13 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
   const [toastMessage, setToastMessage] = useState<string>('');
   const [toastType, setToastType] = useState<ToastType>('success');
   const [toastVisible, setToastVisible] = useState<boolean>(false);
+
+  // Doctor Assignment Modal state
+  const [doctorModalVisible, setDoctorModalVisible] = useState<boolean>(false);
+  const [selectedTokenForDoctor, setSelectedTokenForDoctor] = useState<QueueToken | null>(null);
+  const [doctorsList, setDoctorsList] = useState<Doctor[]>([]);
+  const [loadingDoctors, setLoadingDoctors] = useState<boolean>(false);
+  const [assigningDoctorId, setAssigningDoctorId] = useState<string | null>(null);
 
   // Pulsing animation for ACTIVE badge dot
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -97,9 +108,10 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     pre_booked: preBookedCount,
   };
 
-  // Identify the first patient in line (waiting status)
+  // Identify waiting queue tokens
   const waitingTokens = (data?.queue || []).filter((t) => t.status === 'waiting');
   const nextInLine: QueueToken | null = waitingTokens.length > 0 ? waitingTokens[0] : null;
+  const upcomingTokens: QueueToken[] = waitingTokens.length > 1 ? waitingTokens.slice(1) : [];
 
   const handleFilterChange = (selected: LiveQueueFilter) => {
     if (filter !== selected) {
@@ -242,7 +254,57 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     );
   };
 
+  // ─────────────────────────────────────────────────────────
+  // Assign / Change Doctor Flow
+  // ─────────────────────────────────────────────────────────
+  const openDoctorModal = async (token: QueueToken) => {
+    setSelectedTokenForDoctor(token);
+    setDoctorModalVisible(true);
+    setLoadingDoctors(true);
+    try {
+      const docs = await getDoctors(token.department);
+      if (isMounted.current) {
+        setDoctorsList(docs || []);
+      }
+    } catch (err: any) {
+      if (isMounted.current) {
+        setDoctorsList([]);
+        showToast('Unable to load doctors list', 'error');
+      }
+    } finally {
+      if (isMounted.current) {
+        setLoadingDoctors(false);
+      }
+    }
+  };
+
+  const handleSelectDoctor = async (doctor: Doctor) => {
+    if (!selectedTokenForDoctor || assigningDoctorId) return;
+    try {
+      setAssigningDoctorId(doctor._id || doctor.id || '');
+      await assignDoctor(
+        selectedTokenForDoctor._id || selectedTokenForDoctor.tokenLabel,
+        doctor._id || doctor.id || ''
+      );
+      const tokenName = selectedTokenForDoctor.tokenLabel || `OPD-${selectedTokenForDoctor.tokenNumber}`;
+      const docName = doctor.name.startsWith('Dr.') ? doctor.name : `Dr. ${doctor.name}`;
+      showToast(`Assigned ${docName} to ${tokenName}`, 'success');
+      setDoctorModalVisible(false);
+      setSelectedTokenForDoctor(null);
+      await refresh(false);
+    } catch (err: any) {
+      const msg = getErrorMessage(err);
+      showToast(msg || 'Failed to assign doctor', 'error');
+    } finally {
+      if (isMounted.current) {
+        setAssigningDoctorId(null);
+      }
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────
   // Render "Next in Line" Card
+  // ─────────────────────────────────────────────────────────
   const renderNextInLineCard = () => {
     if (!nextInLine) {
       return (
@@ -454,6 +516,186 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     );
   };
 
+  // ─────────────────────────────────────────────────────────
+  // Render "Upcoming Patients" List
+  // ─────────────────────────────────────────────────────────
+  const renderUpcomingPatientsList = () => {
+    return (
+      <View style={styles.upcomingSection}>
+        <SectionHeader
+          title={`Upcoming Patients (${upcomingTokens.length})`}
+          subtitle="Queue order following the next-in-line patient"
+        />
+
+        {upcomingTokens.length > 0 ? (
+          upcomingTokens.map((token: QueueToken, index: number) => {
+            const patientObj =
+              typeof token.patient === 'object' && token.patient !== null
+                ? token.patient
+                : null;
+            const patientName =
+              patientObj?.fullName || (patientObj as any)?.name || `Patient #${token.tokenNumber}`;
+            const appointmentObj =
+              typeof token.appointment === 'object' && token.appointment !== null
+                ? token.appointment
+                : null;
+            const isWalkIn = appointmentObj?.type === 'walk_in';
+            const doctorObj =
+              typeof token.assignedDoctor === 'object' && token.assignedDoctor !== null
+                ? token.assignedDoctor
+                : null;
+            const doctorName = doctorObj?.name
+              ? doctorObj.name.startsWith('Dr.')
+                ? doctorObj.name
+                : `Dr. ${doctorObj.name}`
+              : null;
+            const roomName = doctorObj?.room ? `Room ${doctorObj.room}` : null;
+            const isSenior = token.priority === 'senior';
+            const isUrgent = token.priority === 'urgent';
+            const tokenLabel = token.tokenLabel || `OPD-${token.tokenNumber}`;
+
+            return (
+              <View key={token._id || `upcoming-${index}`} style={styles.upcomingCard}>
+                {/* Header Row: Token + Name + Chips */}
+                <View style={styles.upcomingTopRow}>
+                  <View style={styles.upcomingTokenWrap}>
+                    <View style={styles.upcomingPosBadge}>
+                      <Text style={styles.upcomingPosText}>#{index + 2}</Text>
+                    </View>
+                    <TokenBadge
+                      tokenLabel={tokenLabel}
+                      priority={token.priority}
+                      size="medium"
+                    />
+                  </View>
+
+                  {/* Priority & Type Chips */}
+                  <View style={styles.upcomingChipsGroup}>
+                    {/* Senior / Urgent Chip */}
+                    {isUrgent ? (
+                      <View style={[styles.priorityBadge, styles.urgentPriorityBadge]}>
+                        <Ionicons name="alert-circle" size={11} color="#DC2626" style={{ marginRight: 3 }} />
+                        <Text style={styles.urgentPriorityText}>Urgent</Text>
+                      </View>
+                    ) : isSenior ? (
+                      <View style={[styles.priorityBadge, styles.seniorPriorityBadge]}>
+                        <Ionicons name="ribbon" size={11} color="#D97706" style={{ marginRight: 3 }} />
+                        <Text style={styles.seniorPriorityText}>Senior</Text>
+                      </View>
+                    ) : null}
+
+                    {/* Walk-in / Pre-booked Chip */}
+                    <View
+                      style={[
+                        styles.upcomingTypeChip,
+                        isWalkIn ? styles.walkInChip : styles.preBookedChip,
+                      ]}
+                    >
+                      <Ionicons
+                        name={isWalkIn ? 'walk' : 'calendar'}
+                        size={11}
+                        color={isWalkIn ? '#0284C7' : '#0D9488'}
+                      />
+                      <Text
+                        style={[
+                          styles.upcomingTypeChipText,
+                          { color: isWalkIn ? '#0284C7' : '#0D9488' },
+                        ]}
+                      >
+                        {isWalkIn ? 'Walk-in' : 'Pre-booked'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Patient Name & Details */}
+                <View style={styles.upcomingPatientRow}>
+                  <Text style={styles.upcomingPatientName} numberOfLines={1}>
+                    {patientName}
+                  </Text>
+                  <View style={styles.upcomingPatientMeta}>
+                    {patientObj?.age ? (
+                      <Text style={styles.upcomingMetaText}>{patientObj.age} yrs</Text>
+                    ) : null}
+                    {patientObj?.gender ? (
+                      <Text style={styles.upcomingMetaText}>
+                        • {patientObj.gender.charAt(0).toUpperCase() + patientObj.gender.slice(1)}
+                      </Text>
+                    ) : null}
+                    {patientObj?.nic ? (
+                      <Text style={styles.upcomingMetaText}>• {patientObj.nic}</Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Doctor Assignment Row */}
+                <View style={styles.upcomingDoctorRow}>
+                  {doctorName ? (
+                    // Doctor is assigned: show name, room, and "Change" action
+                    <View style={styles.doctorAssignedWrap}>
+                      <View style={styles.doctorInfoCol}>
+                        <View style={styles.doctorIconRow}>
+                          <Ionicons name="medkit" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
+                          <Text style={styles.doctorNameText} numberOfLines={1}>
+                            {doctorName}
+                          </Text>
+                          {roomName ? (
+                            <Text style={styles.doctorRoomText}>({roomName})</Text>
+                          ) : null}
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.changeDoctorBtn}
+                        onPress={() => openDoctorModal(token)}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Change assigned doctor for ${tokenLabel}`}
+                      >
+                        <Text style={styles.changeDoctorBtnText}>Change</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    // Doctor is unassigned: show "Assign Doctor" button
+                    <View style={styles.doctorUnassignedWrap}>
+                      <View style={styles.unassignedLabelWrap}>
+                        <Ionicons name="alert-circle-outline" size={14} color="#D97706" style={{ marginRight: 4 }} />
+                        <Text style={styles.unassignedLabelText}>Doctor unassigned</Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.assignDoctorBtn}
+                        onPress={() => openDoctorModal(token)}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Assign doctor to ${tokenLabel}`}
+                      >
+                        <Ionicons name="person-add" size={12} color={Colors.white} style={{ marginRight: 4 }} />
+                        <Text style={styles.assignDoctorBtnText}>Assign Doctor</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          })
+        ) : (
+          <View style={styles.upcomingEmptyCard}>
+            <View style={styles.upcomingEmptyIconBox}>
+              <Ionicons name="people-outline" size={24} color={Colors.textLight} />
+            </View>
+            <Text style={styles.upcomingEmptyTitle}>No upcoming patients</Text>
+            <Text style={styles.upcomingEmptySubtitle}>
+              {nextInLine
+                ? 'There are no additional waiting patients queued after the next in line.'
+                : 'No patients are currently waiting in this queue.'}
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
@@ -466,6 +708,105 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         duration={2500}
         onDismiss={() => setToastVisible(false)}
       />
+
+      {/* Doctor Selection Modal */}
+      <Modal
+        visible={doctorModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setDoctorModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Assign / Change Doctor</Text>
+                <Text style={styles.modalSubtitle}>
+                  Token {selectedTokenForDoctor?.tokenLabel || ''} •{' '}
+                  {typeof selectedTokenForDoctor?.patient === 'object' && selectedTokenForDoctor?.patient?.fullName
+                    ? selectedTokenForDoctor.patient.fullName
+                    : 'Patient'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setDoctorModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={Colors.textMedium} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Doctor List */}
+            {loadingDoctors ? (
+              <View style={styles.modalLoadingWrap}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.modalLoadingText}>Loading available doctors...</Text>
+              </View>
+            ) : doctorsList.length === 0 ? (
+              <View style={styles.modalEmptyWrap}>
+                <Ionicons name="medkit-outline" size={32} color={Colors.textLight} />
+                <Text style={styles.modalEmptyText}>No active doctors found.</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.modalDocList} showsVerticalScrollIndicator={false}>
+                {doctorsList.map((doc) => {
+                  const docId = doc._id || doc.id || '';
+                  const isCurrent =
+                    typeof selectedTokenForDoctor?.assignedDoctor === 'object'
+                      ? (selectedTokenForDoctor?.assignedDoctor as any)?._id === docId
+                      : selectedTokenForDoctor?.assignedDoctor === docId;
+                  const isAssigning = assigningDoctorId === docId;
+
+                  return (
+                    <TouchableOpacity
+                      key={docId}
+                      style={[
+                        styles.docPickerItem,
+                        isCurrent && styles.docPickerItemCurrent,
+                      ]}
+                      onPress={() => handleSelectDoctor(doc)}
+                      disabled={!!assigningDoctorId}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.docPickerIconBox}>
+                        <Ionicons name="medical" size={18} color={Colors.primary} />
+                      </View>
+                      <View style={styles.docPickerInfo}>
+                        <View style={styles.docPickerNameRow}>
+                          <Text style={styles.docPickerName}>
+                            {doc.name.startsWith('Dr.') ? doc.name : `Dr. ${doc.name}`}
+                          </Text>
+                          {isCurrent ? (
+                            <View style={styles.currentTag}>
+                              <Text style={styles.currentTagText}>Assigned</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <Text style={styles.docPickerMeta}>
+                          {doc.specialization || doc.department || 'OPD'}
+                          {doc.room ? ` • Room ${doc.room}` : ''}
+                        </Text>
+                      </View>
+
+                      {isAssigning ? (
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                      ) : (
+                        <Ionicons
+                          name={isCurrent ? 'checkmark-circle' : 'chevron-forward'}
+                          size={20}
+                          color={isCurrent ? Colors.success : Colors.textLight}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Screen Header */}
       <View style={styles.header}>
@@ -737,7 +1078,12 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         {!loading || data ? renderNextInLineCard() : null}
 
         {/* ======================================================== */}
-        {/* 4. QUEUE LIST CONTENT / STATES                            */}
+        {/* 4. UPCOMING PATIENTS LIST                                 */}
+        {/* ======================================================== */}
+        {!loading || data ? renderUpcomingPatientsList() : null}
+
+        {/* ======================================================== */}
+        {/* 5. LOADING / ERROR STATES                                 */}
         {/* ======================================================== */}
         {loading && !data ? (
           <View style={styles.stateContainer}>
@@ -757,159 +1103,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
               fullscreen={false}
             />
           </View>
-        ) : (
-          <View style={styles.queueContentSection}>
-            <SectionHeader
-              title={`Full Queue List (${data?.queue?.length ?? 0})`}
-              subtitle={
-                filter === 'all'
-                  ? 'Ordered by priority and arrival time'
-                  : filter === 'walk_in'
-                  ? 'Walk-in patients waiting'
-                  : 'Pre-booked appointments waiting'
-              }
-              rightElement={
-                <View style={styles.autoRefreshBadge}>
-                  <View style={styles.autoRefreshDot} />
-                  <Text style={styles.autoRefreshText}>10s live sync</Text>
-                </View>
-              }
-            />
-
-            {data?.queue && data.queue.length > 0 ? (
-              data.queue.map((token: QueueToken, index: number) => {
-                const patientObj =
-                  typeof token.patient === 'object' && token.patient !== null
-                    ? token.patient
-                    : null;
-                const patientName = patientObj?.fullName || `Patient #${token.tokenNumber}`;
-                const appointmentObj =
-                  typeof token.appointment === 'object' && token.appointment !== null
-                    ? token.appointment
-                    : null;
-                const isWalkIn = appointmentObj?.type === 'walk_in';
-                const doctorObj =
-                  typeof token.assignedDoctor === 'object' && token.assignedDoctor !== null
-                    ? token.assignedDoctor
-                    : null;
-                const doctorName = doctorObj?.name || 'Assigned OPD Doctor';
-                const roomName = doctorObj?.room || 'OPD Room';
-
-                return (
-                  <View key={token._id || `token-${index}`} style={styles.queueItemCard}>
-                    {/* Position Badge & Token Number */}
-                    <View style={styles.cardHeaderRow}>
-                      <View style={styles.tokenIdentifierWrap}>
-                        <View style={styles.positionBadge}>
-                          <Text style={styles.positionBadgeText}>#{index + 1}</Text>
-                        </View>
-                        <TokenBadge
-                          tokenLabel={token.tokenLabel || `OPD-${token.tokenNumber}`}
-                          priority={token.priority}
-                          size="medium"
-                        />
-                      </View>
-
-                      <View style={styles.statusBadgesRow}>
-                        <StatusChip status={token.status} size="small" />
-                        <View
-                          style={[
-                            styles.intakeTypeChip,
-                            isWalkIn ? styles.walkInChip : styles.preBookedChip,
-                          ]}
-                        >
-                          <Ionicons
-                            name={isWalkIn ? 'walk' : 'calendar'}
-                            size={11}
-                            color={isWalkIn ? '#0284C7' : '#0D9488'}
-                          />
-                          <Text
-                            style={[
-                              styles.intakeTypeChipText,
-                              { color: isWalkIn ? '#0284C7' : '#0D9488' },
-                            ]}
-                          >
-                            {isWalkIn ? 'Walk-in' : 'Pre-booked'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Patient & Doctor Meta */}
-                    <View style={styles.cardBody}>
-                      <View style={styles.patientInfoRow}>
-                        <Ionicons name="person" size={14} color={Colors.primary} />
-                        <Text style={styles.patientNameText} numberOfLines={1}>
-                          {patientName}
-                        </Text>
-                        {patientObj?.age ? (
-                          <Text style={styles.patientSubMeta}>• {patientObj.age} yrs</Text>
-                        ) : null}
-                        {patientObj?.gender ? (
-                          <Text style={styles.patientSubMeta}>
-                            • {patientObj.gender.charAt(0).toUpperCase() + patientObj.gender.slice(1)}
-                          </Text>
-                        ) : null}
-                      </View>
-
-                      {patientObj?.nic || patientObj?.phone ? (
-                        <View style={styles.contactDetailsRow}>
-                          {patientObj?.nic ? (
-                            <Text style={styles.nicDetailText}>NIC: {patientObj.nic}</Text>
-                          ) : null}
-                          {patientObj?.phone ? (
-                            <Text style={styles.phoneDetailText}>
-                              {patientObj.nic ? ' | ' : ''}
-                              {patientObj.phone}
-                            </Text>
-                          ) : null}
-                        </View>
-                      ) : null}
-
-                      {/* Doctor / Room / Slot Row */}
-                      <View style={styles.doctorRoomRow}>
-                        <View style={styles.metaBadge}>
-                          <Ionicons name="medkit-outline" size={12} color={Colors.textMedium} />
-                          <Text style={styles.metaBadgeText}>{doctorName}</Text>
-                        </View>
-                        <View style={styles.metaBadge}>
-                          <Ionicons name="location-outline" size={12} color={Colors.textMedium} />
-                          <Text style={styles.metaBadgeText}>{roomName}</Text>
-                        </View>
-                        {appointmentObj?.slotTime ? (
-                          <View style={styles.metaBadge}>
-                            <Ionicons name="time-outline" size={12} color={Colors.textMedium} />
-                            <Text style={styles.metaBadgeText}>{appointmentObj.slotTime}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-                  </View>
-                );
-              })
-            ) : (
-              <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <Ionicons name="checkmark-done-circle" size={40} color={Colors.primary} />
-                </View>
-                <Text style={styles.emptyTitle}>Queue Is Clear</Text>
-                <Text style={styles.emptySubtitle}>
-                  {filter === 'all'
-                    ? 'There are no active patients waiting in the OPD queue.'
-                    : `No ${filter === 'walk_in' ? 'walk-in' : 'pre-booked'} patients waiting.`}
-                </Text>
-                <TouchableOpacity
-                  style={styles.emptyActionButton}
-                  onPress={() => refresh(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="refresh" size={15} color={Colors.primary} style={{ marginRight: 6 }} />
-                  <Text style={styles.emptyActionButtonText}>Check for Updates</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
+        ) : null}
 
         {/* Bottom padding for tab bar / safe layout */}
         <View style={styles.bottomSpacer} />
@@ -1427,44 +1621,12 @@ const styles = StyleSheet.create({
   },
 
   // ─────────────────────────────────────────────────────────
-  // Content & State Handling
+  // Upcoming Patients Section Styles
   // ─────────────────────────────────────────────────────────
-  stateContainer: {
-    backgroundColor: Colors.cardBackground,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginTop: 4,
+  upcomingSection: {
+    marginBottom: 20,
   },
-  queueContentSection: {
-    marginTop: 4,
-  },
-  autoRefreshBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.tint,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  autoRefreshDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.primary,
-    marginRight: 5,
-  },
-  autoRefreshText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-
-  // ─────────────────────────────────────────────────────────
-  // Token Item Card
-  // ─────────────────────────────────────────────────────────
-  queueItemCard: {
+  upcomingCard: {
     backgroundColor: Colors.cardBackground,
     borderRadius: 14,
     padding: 14,
@@ -1477,19 +1639,17 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
   },
-  cardHeaderRow: {
+  upcomingTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    paddingBottom: 8,
   },
-  tokenIdentifierWrap: {
+  upcomingTokenWrap: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  positionBadge: {
+  upcomingPosBadge: {
     backgroundColor: Colors.background,
     paddingHorizontal: 7,
     paddingVertical: 3,
@@ -1498,24 +1658,308 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  positionBadgeText: {
+  upcomingPosText: {
     fontSize: 11,
     fontWeight: '800',
     color: Colors.textMedium,
   },
-  statusBadgesRow: {
+  upcomingChipsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  intakeTypeChip: {
+  priorityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
   },
+  urgentPriorityBadge: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+  },
+  urgentPriorityText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  seniorPriorityBadge: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FCD34D',
+  },
+  seniorPriorityText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  upcomingTypeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  upcomingTypeChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginLeft: 3,
+  },
+  upcomingPatientRow: {
+    paddingVertical: 4,
+  },
+  upcomingPatientName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  upcomingPatientMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    flexWrap: 'wrap',
+  },
+  upcomingMetaText: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginRight: 4,
+  },
+  upcomingDoctorRow: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+  },
+  doctorAssignedWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  doctorInfoCol: {
+    flex: 1,
+    marginRight: 8,
+  },
+  doctorIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  doctorNameText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  doctorRoomText: {
+    fontSize: 11,
+    color: Colors.textMedium,
+    marginLeft: 4,
+  },
+  changeDoctorBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: Colors.tint,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    minHeight: 44, // 44px touch target
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  changeDoctorBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  doctorUnassignedWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  unassignedLabelWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  unassignedLabelText: {
+    fontSize: 12,
+    color: '#D97706',
+    fontWeight: '600',
+  },
+  assignDoctorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    minHeight: 44, // 44px touch target
+    justifyContent: 'center',
+  },
+  assignDoctorBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  upcomingEmptyCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 14,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  upcomingEmptyIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  upcomingEmptyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textDark,
+    marginBottom: 2,
+  },
+  upcomingEmptySubtitle: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Doctor Picker Modal Styles
+  // ─────────────────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '75%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: Colors.textMedium,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  modalLoadingWrap: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalLoadingText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: Colors.textMedium,
+  },
+  modalEmptyWrap: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalEmptyText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.textMedium,
+  },
+  modalDocList: {
+    marginTop: 10,
+  },
+  docPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 8,
+    backgroundColor: Colors.white,
+    minHeight: 56,
+  },
+  docPickerItemCurrent: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#99F6E4',
+  },
+  docPickerIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: Colors.tint,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  docPickerInfo: {
+    flex: 1,
+  },
+  docPickerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  docPickerName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  currentTag: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  currentTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  docPickerMeta: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    marginTop: 2,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Shared Chip & State Handling
+  // ─────────────────────────────────────────────────────────
   walkInChip: {
     backgroundColor: '#F0F9FF',
     borderColor: '#BAE6FD',
@@ -1524,121 +1968,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDFA',
     borderColor: '#99F6E4',
   },
-  intakeTypeChipText: {
-    fontSize: 10,
-    fontWeight: '700',
-    marginLeft: 3,
-  },
-  cardBody: {
-    paddingTop: 10,
-  },
-  patientInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  patientNameText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textDark,
-    marginLeft: 6,
-    flexShrink: 1,
-  },
-  patientSubMeta: {
-    fontSize: 12,
-    color: Colors.textLight,
-    marginLeft: 4,
-  },
-  contactDetailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 3,
-    marginLeft: 20,
-  },
-  nicDetailText: {
-    fontSize: 12,
-    color: Colors.textMedium,
-    fontWeight: '600',
-  },
-  phoneDetailText: {
-    fontSize: 12,
-    color: Colors.textMedium,
-  },
-  doctorRoomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
-    marginLeft: 20,
-  },
-  metaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  metaBadgeText: {
-    fontSize: 11,
-    color: Colors.textMedium,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-
-  // ─────────────────────────────────────────────────────────
-  // Empty State
-  // ─────────────────────────────────────────────────────────
-  emptyContainer: {
+  stateContainer: {
     backgroundColor: Colors.cardBackground,
     borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 16,
     borderWidth: 1,
     borderColor: Colors.border,
     marginTop: 4,
-  },
-  emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.tint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.textDark,
-    marginBottom: 4,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: Colors.textMedium,
-    textAlign: 'center',
-    lineHeight: 18,
-    maxWidth: 260,
-    marginBottom: 16,
-  },
-  emptyActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.tint,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    minHeight: 44, // Touch target
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  emptyActionButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.primary,
   },
   bottomSpacer: {
     height: 40,
