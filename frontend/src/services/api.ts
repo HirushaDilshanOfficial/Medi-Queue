@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
@@ -10,19 +11,31 @@ import {
   ShiftSummary,
 } from '../types';
 
-const FALLBACK_IP_URL =
-  Platform.OS === 'web' ? 'http://localhost:5001' : 'http://192.168.1.2:5001';
-
 export const getApiBaseUrl = (): string => {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const hostname = window.location.hostname;
     return `http://${hostname === 'localhost' || hostname === '127.0.0.1' ? 'localhost' : hostname}:5001`;
   }
+
+  // 1. Try Expo hostUri (exact IP phone used to connect to Metro bundler)
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip && ip !== 'localhost' && ip !== '127.0.0.1' && !ip.startsWith('192.168.56.')) {
+      return `http://${ip}:5001`;
+    }
+  }
+
+  // 2. Check process.env.EXPO_PUBLIC_API_URL
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && !envUrl.includes('192.168.56.')) {
+  if (envUrl && !envUrl.includes('192.168.56.') && !envUrl.includes('192.168.1.2')) {
     return envUrl.includes(':5001') ? envUrl : `${envUrl.replace(/\/+$/, '')}:5001`;
   }
-  return FALLBACK_IP_URL;
+
+  return 'http://10.240.7.66:5001';
 };
 
 export const API_BASE_URL: string = getApiBaseUrl();
