@@ -3,7 +3,10 @@ const router = express.Router();
 const {
   getDoctorDashboard,
   updateDoctorStatus,
+  updateDoctorHospital,
+  getDoctorHospitals,
   callNextPatient,
+  undoPatientConsultation,
   ringChime,
   callSpecificPatient,
   getDoctorSchedule,
@@ -17,7 +20,10 @@ const {
 
 router.get('/dashboard', getDoctorDashboard);
 router.patch('/status', updateDoctorStatus);
+router.patch('/hospital', updateDoctorHospital);
+router.get('/hospitals', getDoctorHospitals);
 router.post('/call-next', callNextPatient);
+router.post('/undo-patient', undoPatientConsultation);
 router.post('/chime', ringChime);
 router.post('/call-token', callSpecificPatient);
 router.get('/schedule', getDoctorSchedule);

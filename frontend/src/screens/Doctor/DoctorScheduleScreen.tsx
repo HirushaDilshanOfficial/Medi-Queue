@@ -11,6 +11,9 @@ import {
   useColorScheme,
   Animated,
   StatusBar,
+  Alert,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -137,6 +140,20 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastFade] = useState(new Animated.Value(0));
 
+  // Walk-in Registration Modal state
+  const [isWalkInModalVisible, setIsWalkInModalVisible] = useState(false);
+  const [walkInName, setWalkInName] = useState('');
+  const [walkInAge, setWalkInAge] = useState('');
+  const [walkInGender, setWalkInGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [walkInHospitalId, setWalkInHospitalId] = useState<string>('cgh');
+  const [walkInReason, setWalkInReason] = useState('');
+  const [walkInErrors, setWalkInErrors] = useState<{
+    name?: string;
+    age?: string;
+    hospital?: string;
+    reason?: string;
+  }>({});
+
   const showToast = useCallback(
     (msg: string) => {
       setToastMessage(msg);
@@ -166,6 +183,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
         if (e.key === 'Escape') {
           setSelectedPatient(null);
           setIsHospitalDropdownOpen(false);
+          setIsWalkInModalVisible(false);
         }
       };
       window.addEventListener('keydown', handleKeyDown);
@@ -315,10 +333,11 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   }, [filteredAppointments]);
 
   // ─────────────────────────────────────────────────────────
-  // WALK-IN SLOT HANDLER
+  // WALK-IN SLOT HANDLER (POPUP FORM MODAL)
+  // Form fields: Patient Name, Age, Gender, Hospital, Reason
   // ─────────────────────────────────────────────────────────
 
-  const handleAddWalkInSlot = () => {
+  const handleOpenWalkInModal = () => {
     if (selectedDateKey !== REFERENCE_TODAY) {
       showToast('Walk-ins can only be added for Today (Oct 6)');
       return;
@@ -333,38 +352,107 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     }
 
     // Determine target hospital
-    const targetHospitalId =
-      selectedHospitalId !== 'all' ? selectedHospitalId : dayHospitals[0]?.id || 'cgh';
-    const remaining = walkInAllocations[targetHospitalId] ?? 0;
+    const validHospWithSlots = dayHospitals.find(
+      (h) => (walkInAllocations[h.id] ?? 0) > 0
+    );
+    const targetHospId =
+      selectedHospitalId !== 'all' && (walkInAllocations[selectedHospitalId] ?? 0) > 0
+        ? selectedHospitalId
+        : validHospWithSlots?.id || dayHospitals[0]?.id || 'cgh';
 
-    if (remaining <= 0) {
-      const hName = HOSPITALS[targetHospitalId]?.shortName || 'Selected hospital';
-      showToast(`No walk-in slots remaining for ${hName}`);
+    setWalkInHospitalId(targetHospId);
+    setWalkInName('');
+    setWalkInAge('');
+    setWalkInGender('Male');
+    setWalkInReason('');
+    setWalkInErrors({});
+    setIsWalkInModalVisible(true);
+  };
+
+  const handleCloseWalkInModal = () => {
+    setIsWalkInModalVisible(false);
+    setWalkInErrors({});
+  };
+
+  const handleSubmitWalkInSlot = () => {
+    const errs: { name?: string; age?: string; hospital?: string; reason?: string } = {};
+
+    const trimmedName = walkInName.trim();
+    if (!trimmedName) {
+      errs.name = 'Patient name is required';
+    } else if (trimmedName.length < 2) {
+      errs.name = 'Name must be at least 2 characters';
+    }
+
+    const trimmedAge = walkInAge.trim();
+    const ageNum = parseInt(trimmedAge, 10);
+    if (!trimmedAge) {
+      errs.age = 'Patient age is required';
+    } else if (isNaN(ageNum) || ageNum <= 0 || ageNum > 120) {
+      errs.age = 'Please enter a valid age (1 - 120)';
+    }
+
+    if (!walkInHospitalId) {
+      errs.hospital = 'Please select a hospital';
+    } else {
+      const remaining = walkInAllocations[walkInHospitalId] ?? 0;
+      if (remaining <= 0) {
+        const hName = HOSPITALS[walkInHospitalId]?.shortName || 'Selected hospital';
+        errs.hospital = `No walk-in slots remaining for ${hName}`;
+      }
+    }
+
+    const trimmedReason = walkInReason.trim();
+    if (!trimmedReason) {
+      errs.reason = 'Reason for consultation is required';
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setWalkInErrors(errs);
       return;
     }
 
-    // Decrement allocation
+    // Decrement allocation for selected hospital
     setWalkInAllocations((prev) => ({
       ...prev,
-      [targetHospitalId]: (prev[targetHospitalId] || 0) - 1,
+      [walkInHospitalId]: Math.max(0, (prev[walkInHospitalId] || 0) - 1),
     }));
 
-    // Create walk-in appointment
-    const targetHospital = HOSPITALS[targetHospitalId];
-    const walkInTokenNum = 50 + Math.floor(Math.random() * 40);
+    // Generate Token Number
+    const daySchedule = scheduleData[selectedDateKey] || {
+      dateKey: selectedDateKey,
+      hospitals: dayHospitals.map((h) => h.id),
+      appointments: [],
+    };
+    const walkInsCount = daySchedule.appointments.filter(
+      (a) => a.isWalkIn || a.id.startsWith('walkin-')
+    ).length;
+    const walkInTokenNum = 70 + walkInsCount + Math.floor(Math.random() * 10);
+    const tokenStr = `Token #${String(walkInTokenNum).padStart(3, '0')}`;
+
+    // Current time formatted
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const formattedHours = hours % 12 || 12;
+    const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
+    const timeStr = `${String(formattedHours).padStart(2, '0')}:${formattedMinutes} ${ampm}`;
+
     const newAppointment: ScheduleAppointment = {
       id: `walkin-${Date.now()}`,
-      time: '11:15 AM',
-      patientName: `Walk-in Patient #${Math.floor(100 + Math.random() * 900)}`,
-      reason: 'Urgent Consultation',
-      token: `Token #${String(walkInTokenNum).padStart(3, '0')}`,
+      time: timeStr,
+      patientName: trimmedName,
+      reason: trimmedReason,
+      token: tokenStr,
       status: 'Waiting',
-      hospitalId: targetHospitalId,
-      age: 34,
-      sex: 'Male',
+      hospitalId: walkInHospitalId,
+      age: ageNum,
+      sex: walkInGender,
       bloodGroup: 'B+',
-      nic: `1992${Math.floor(10000000 + Math.random() * 90000000)}`,
-      phone: '077 555 0192',
+      nic: `2000${Math.floor(10000000 + Math.random() * 90000000)}`,
+      phone: `077 ${Math.floor(100 + Math.random() * 900)} ${Math.floor(1000 + Math.random() * 9000)}`,
+      isWalkIn: true,
     };
 
     setScheduleData((prev) => {
@@ -382,8 +470,52 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
       };
     });
 
-    showToast(
-      `+ Added walk-in token ${newAppointment.token} at ${targetHospital.shortName}`
+    setIsWalkInModalVisible(false);
+    const hosp = HOSPITALS[walkInHospitalId];
+    showToast(`✓ Added walk-in: ${trimmedName} (${tokenStr}) at ${hosp?.shortName || ''}`);
+  };
+
+  const handleConfirmRemoveWalkIn = (appt: ScheduleAppointment) => {
+    Alert.alert(
+      'Remove Walk-in Slot',
+      `Are you sure you want to remove ${appt.patientName} (${appt.token}) from the schedule? The walk-in allocation will be restored.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove Slot',
+          style: 'destructive',
+          onPress: () => {
+            // Remove from schedule appointments
+            setScheduleData((prev) => {
+              const daySchedule = prev[selectedDateKey];
+              if (!daySchedule) return prev;
+              return {
+                ...prev,
+                [selectedDateKey]: {
+                  ...daySchedule,
+                  appointments: daySchedule.appointments.filter((a) => a.id !== appt.id),
+                },
+              };
+            });
+
+            // Restore walk-in allocation count
+            if (appt.hospitalId) {
+              const maxCap = HOSPITALS[appt.hospitalId]?.walkInCapacity || 5;
+              setWalkInAllocations((prev) => ({
+                ...prev,
+                [appt.hospitalId]: Math.min(maxCap, (prev[appt.hospitalId] ?? 0) + 1),
+              }));
+            }
+
+            // Close patient sheet if open
+            if (selectedPatient?.id === appt.id) {
+              setSelectedPatient(null);
+            }
+
+            showToast(`Removed walk-in slot (${appt.token}). Allocation restored.`);
+          },
+        },
+      ]
     );
   };
 
@@ -1457,6 +1589,11 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   {/* Regular Appointment Rows */}
                   {regularAppointments.map((appt: ScheduleAppointment) => {
                     const hosp = HOSPITALS[appt.hospitalId] || HOSPITALS.cgh;
+                    const isWalkIn =
+                      Boolean(appt.isWalkIn) ||
+                      appt.id.startsWith('walkin-') ||
+                      appt.patientName.toLowerCase().includes('walk-in') ||
+                      appt.reason.toLowerCase().includes('walk-in');
 
                     // Status pill styling
                     let statusBg = isDark ? '#142023' : '#f1f5f9';
@@ -1551,21 +1688,38 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                           </View>
                         </View>
 
-                        {/* Status Pill */}
-                        <View
-                          style={[
-                            styles.statusPillSmall,
-                            { backgroundColor: statusBg },
-                          ]}
-                        >
-                          <Text
+                        {/* Status Pill & Remove Option for Walk-in */}
+                        <View style={styles.rowRightPillGroup}>
+                          <View
                             style={[
-                              styles.statusPillSmallText,
-                              { color: statusColor },
+                              styles.statusPillSmall,
+                              { backgroundColor: statusBg },
                             ]}
                           >
-                            {appt.status}
-                          </Text>
+                            <Text
+                              style={[
+                                styles.statusPillSmallText,
+                                { color: statusColor },
+                              ]}
+                            >
+                              {appt.status}
+                            </Text>
+                          </View>
+
+                          {isWalkIn && (
+                            <TouchableOpacity
+                              style={styles.removeWalkInRowBadge}
+                              activeOpacity={0.7}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleConfirmRemoveWalkIn(appt);
+                              }}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Ionicons name="trash-outline" size={12} color="#dc2626" style={{ marginRight: 3 }} />
+                              <Text style={styles.removeWalkInRowBadgeText}>Remove</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </TouchableOpacity>
                     );
@@ -1578,7 +1732,6 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 7. ADD WALK-IN SLOT
                 - Full-width dark teal pill button: "+ Add walk-in slot"
                 - Below it: small centered text per hospital:
-                  "{Hospital}: 4 walk-in allocations remaining"
                 - Tapping adds walk-in (today only) & reduces count
                ───────────────────────────────────────────────────────── */}
             <View style={styles.walkInSection}>
@@ -1588,7 +1741,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   { backgroundColor: theme.primaryDeep },
                 ]}
                 activeOpacity={0.85}
-                onPress={handleAddWalkInSlot}
+                onPress={handleOpenWalkInModal}
               >
                 <Ionicons
                   name="add"
@@ -1597,7 +1750,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   style={{ marginRight: 6 }}
                 />
                 <Text style={styles.addWalkInButtonText}>
-                  + Add walk-in slot
+                  Add walk-in slot
                 </Text>
               </TouchableOpacity>
 
@@ -2035,6 +2188,30 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   );
                 })()}
 
+                {/* Remove Walk-in button if this is a walk-in patient */}
+                {Boolean(
+                  selectedPatient.isWalkIn ||
+                  selectedPatient.id.startsWith('walkin-') ||
+                  selectedPatient.patientName.toLowerCase().includes('walk-in') ||
+                  selectedPatient.reason.toLowerCase().includes('walk-in')
+                ) && (
+                  <TouchableOpacity
+                    style={styles.sheetBtnRemoveWalkIn}
+                    activeOpacity={0.8}
+                    onPress={() => handleConfirmRemoveWalkIn(selectedPatient)}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={18}
+                      color="#dc2626"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.sheetBtnRemoveWalkInText}>
+                      Remove Walk-in Slot
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 {/* Bottom Action Buttons: Call patient & Open EHR */}
                 <View style={styles.sheetBtnRow}>
                   <TouchableOpacity
@@ -2091,6 +2268,467 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               </ScrollView>
             )}
           </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────
+          WALK-IN SLOT REGISTRATION MODAL
+          Form fields required:
+          1. Patient Name
+          2. Age
+          3. Gender (Male / Female / Other)
+          4. Hospital (Select from active hospitals with remaining slots)
+          5. Reason for Consultation
+         ───────────────────────────────────────────────────────── */}
+      <Modal
+        visible={isWalkInModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseWalkInModal}
+      >
+        <TouchableOpacity
+          style={[styles.modalOverlay, { backgroundColor: theme.modalOverlay }]}
+          activeOpacity={1}
+          onPress={handleCloseWalkInModal}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.keyboardAvoidingWrap}
+          >
+            <TouchableOpacity
+              style={[
+                styles.walkInModalSheet,
+                {
+                  backgroundColor: theme.sheetBg,
+                  borderColor: theme.cardBorder,
+                },
+              ]}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              {/* Sheet Handle */}
+              <View
+                style={[
+                  styles.sheetHandle,
+                  { backgroundColor: theme.cardBorder },
+                ]}
+              />
+
+              {/* Modal Header */}
+              <View style={styles.walkInModalHeader}>
+                <View style={styles.walkInModalHeaderLeft}>
+                  <View
+                    style={[
+                      styles.walkInIconBadge,
+                      { backgroundColor: theme.tint },
+                    ]}
+                  >
+                    <Ionicons
+                      name="person-add"
+                      size={20}
+                      color={theme.accent}
+                    />
+                  </View>
+                  <View>
+                    <Text
+                      style={[
+                        styles.walkInModalTitle,
+                        { color: theme.textDark },
+                      ]}
+                    >
+                      Add Walk-in Slot
+                    </Text>
+                    <Text
+                      style={[
+                        styles.walkInModalSubtitle,
+                        { color: theme.textMuted },
+                      ]}
+                    >
+                      Register a walk-in patient for today's queue
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.sheetCloseBtn,
+                    { backgroundColor: theme.cardBorder },
+                  ]}
+                  onPress={handleCloseWalkInModal}
+                >
+                  <Ionicons name="close" size={20} color={theme.textDark} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.walkInModalScroll}
+              >
+                {/* 1. Patient Name */}
+                <View style={styles.walkInFieldGroup}>
+                  <Text
+                    style={[styles.walkInFieldLabel, { color: theme.textMuted }]}
+                  >
+                    PATIENT NAME <Text style={styles.walkInRequiredStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.walkInTextInput,
+                      {
+                        backgroundColor: theme.inputBg,
+                        borderColor: walkInErrors.name ? '#ef4444' : theme.cardBorder,
+                        color: theme.textDark,
+                      },
+                    ]}
+                    placeholder="e.g. Kasun Perera"
+                    placeholderTextColor={theme.textMuted}
+                    value={walkInName}
+                    onChangeText={(val) => {
+                      setWalkInName(val);
+                      if (walkInErrors.name) {
+                        setWalkInErrors((prev) => ({ ...prev, name: undefined }));
+                      }
+                    }}
+                  />
+                  {walkInErrors.name && (
+                    <Text style={styles.walkInErrorText}>{walkInErrors.name}</Text>
+                  )}
+                </View>
+
+                {/* 2 & 3. Age & Gender */}
+                <View style={styles.walkInRowGroup}>
+                  {/* Age */}
+                  <View style={[styles.walkInFieldGroup, { flex: 0.85 }]}>
+                    <Text
+                      style={[
+                        styles.walkInFieldLabel,
+                        { color: theme.textMuted },
+                      ]}
+                    >
+                      AGE <Text style={styles.walkInRequiredStar}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.walkInTextInput,
+                        {
+                          backgroundColor: theme.inputBg,
+                          borderColor: walkInErrors.age ? '#ef4444' : theme.cardBorder,
+                          color: theme.textDark,
+                        },
+                      ]}
+                      placeholder="e.g. 34"
+                      placeholderTextColor={theme.textMuted}
+                      keyboardType="number-pad"
+                      maxLength={3}
+                      value={walkInAge}
+                      onChangeText={(val) => {
+                        setWalkInAge(val);
+                        if (walkInErrors.age) {
+                          setWalkInErrors((prev) => ({ ...prev, age: undefined }));
+                        }
+                      }}
+                    />
+                    {walkInErrors.age && (
+                      <Text style={styles.walkInErrorText}>{walkInErrors.age}</Text>
+                    )}
+                  </View>
+
+                  {/* Gender */}
+                  <View style={[styles.walkInFieldGroup, { flex: 1.35 }]}>
+                    <Text
+                      style={[
+                        styles.walkInFieldLabel,
+                        { color: theme.textMuted },
+                      ]}
+                    >
+                      GENDER <Text style={styles.walkInRequiredStar}>*</Text>
+                    </Text>
+                    <View style={styles.genderButtonGroup}>
+                      {(['Male', 'Female', 'Other'] as const).map((g) => {
+                        const isSelected = walkInGender === g;
+                        return (
+                          <TouchableOpacity
+                            key={g}
+                            style={[
+                              styles.genderBtn,
+                              {
+                                backgroundColor: isSelected
+                                  ? theme.primaryDeep
+                                  : theme.inputBg,
+                                borderColor: isSelected
+                                  ? theme.accent
+                                  : theme.cardBorder,
+                              },
+                            ]}
+                            activeOpacity={0.7}
+                            onPress={() => setWalkInGender(g)}
+                          >
+                            <Text
+                              style={[
+                                styles.genderBtnText,
+                                {
+                                  color: isSelected
+                                    ? '#ffffff'
+                                    : theme.textDark,
+                                  fontWeight: isSelected ? '700' : '500',
+                                },
+                              ]}
+                            >
+                              {g}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
+
+                {/* 4. Hospital Selection */}
+                <View style={styles.walkInFieldGroup}>
+                  <Text
+                    style={[styles.walkInFieldLabel, { color: theme.textMuted }]}
+                  >
+                    HOSPITAL / CLINIC <Text style={styles.walkInRequiredStar}>*</Text>
+                  </Text>
+                  <View style={styles.hospitalSelectionCol}>
+                    {filteredHospitals.map((hosp: HospitalInfo) => {
+                      const isSelected = walkInHospitalId === hosp.id;
+                      const remaining = walkInAllocations[hosp.id] ?? 0;
+                      const isFull = remaining <= 0;
+
+                      return (
+                        <TouchableOpacity
+                          key={hosp.id}
+                          disabled={isFull}
+                          style={[
+                            styles.hospitalCardOption,
+                            {
+                              backgroundColor: isSelected
+                                ? (isDark ? '#142a2d' : '#e6f7f9')
+                                : theme.inputBg,
+                              borderColor: isSelected
+                                ? theme.accent
+                                : theme.cardBorder,
+                              opacity: isFull ? 0.5 : 1,
+                            },
+                          ]}
+                          activeOpacity={0.75}
+                          onPress={() => {
+                            setWalkInHospitalId(hosp.id);
+                            if (walkInErrors.hospital) {
+                              setWalkInErrors((prev) => ({
+                                ...prev,
+                                hospital: undefined,
+                              }));
+                            }
+                          }}
+                        >
+                          <View style={styles.hospOptionLeft}>
+                            <View
+                              style={[
+                                styles.hospDotLarge,
+                                { backgroundColor: hosp.accentColor },
+                              ]}
+                            />
+                            <View>
+                              <Text
+                                style={[
+                                  styles.hospOptionName,
+                                  {
+                                    color: theme.textDark,
+                                    fontWeight: isSelected ? '700' : '600',
+                                  },
+                                ]}
+                              >
+                                {hosp.name}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.hospOptionRoom,
+                                  { color: theme.textMuted },
+                                ]}
+                              >
+                                {hosp.room}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View
+                            style={[
+                              styles.hospRemainingBadge,
+                              {
+                                backgroundColor: isFull
+                                  ? (isDark ? '#2a1616' : '#fee2e2')
+                                  : (isDark ? '#112920' : '#dcfce7'),
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.hospRemainingBadgeText,
+                                {
+                                  color: isFull ? '#dc2626' : '#15803d',
+                                },
+                              ]}
+                            >
+                              {isFull ? 'Full' : `${remaining} slots left`}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {walkInErrors.hospital && (
+                    <Text style={styles.walkInErrorText}>
+                      {walkInErrors.hospital}
+                    </Text>
+                  )}
+                </View>
+
+                {/* 5. Reason for Consultation */}
+                <View style={styles.walkInFieldGroup}>
+                  <Text
+                    style={[styles.walkInFieldLabel, { color: theme.textMuted }]}
+                  >
+                    REASON FOR VISIT <Text style={styles.walkInRequiredStar}>*</Text>
+                  </Text>
+
+                  {/* Fast quick-chips */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.quickChipsRow}
+                  >
+                    {[
+                      'Urgent Consultation',
+                      'Fever & Cold',
+                      'Severe Headache',
+                      'Chest Discomfort',
+                      'Routine Follow-up',
+                    ].map((chip) => (
+                      <TouchableOpacity
+                        key={chip}
+                        style={[
+                          styles.quickChip,
+                          {
+                            backgroundColor:
+                              walkInReason === chip
+                                ? theme.primaryDeep
+                                : (isDark ? '#192b2e' : '#eaf4f6'),
+                            borderColor:
+                              walkInReason === chip
+                                ? theme.accent
+                                : theme.cardBorder,
+                          },
+                        ]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setWalkInReason(chip);
+                          if (walkInErrors.reason) {
+                            setWalkInErrors((prev) => ({
+                              ...prev,
+                              reason: undefined,
+                            }));
+                          }
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.quickChipText,
+                            {
+                              color:
+                                walkInReason === chip
+                                  ? '#ffffff'
+                                  : theme.primaryDeep,
+                            },
+                          ]}
+                        >
+                          {chip}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
+                  <TextInput
+                    style={[
+                      styles.walkInTextInput,
+                      styles.walkInTextarea,
+                      {
+                        backgroundColor: theme.inputBg,
+                        borderColor: walkInErrors.reason
+                          ? '#ef4444'
+                          : theme.cardBorder,
+                        color: theme.textDark,
+                      },
+                    ]}
+                    placeholder="Enter symptoms or consultation reason..."
+                    placeholderTextColor={theme.textMuted}
+                    value={walkInReason}
+                    multiline
+                    numberOfLines={2}
+                    onChangeText={(val) => {
+                      setWalkInReason(val);
+                      if (walkInErrors.reason) {
+                        setWalkInErrors((prev) => ({
+                          ...prev,
+                          reason: undefined,
+                        }));
+                      }
+                    }}
+                  />
+                  {walkInErrors.reason && (
+                    <Text style={styles.walkInErrorText}>
+                      {walkInErrors.reason}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Form Action Buttons */}
+                <View style={styles.walkInFormBtnRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.walkInCancelBtn,
+                      {
+                        backgroundColor: theme.card,
+                        borderColor: theme.cardBorder,
+                      },
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={handleCloseWalkInModal}
+                  >
+                    <Text
+                      style={[
+                        styles.walkInCancelBtnText,
+                        { color: theme.textMedium },
+                      ]}
+                    >
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.walkInSubmitBtn,
+                      { backgroundColor: theme.primaryDeep },
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={handleSubmitWalkInSlot}
+                  >
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={18}
+                      color="#ffffff"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.walkInSubmitBtnText}>
+                      Confirm & Add Slot
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
 
@@ -2787,15 +3425,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginTop: 4,
   },
+  rowRightPillGroup: {
+    alignItems: 'flex-end',
+    gap: 6,
+    marginLeft: 8,
+  },
   statusPillSmall: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
-    marginLeft: 8,
   },
   statusPillSmallText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  removeWalkInRowBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+  },
+  removeWalkInRowBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#dc2626',
   },
 
   // 7. Add Walk-In
@@ -3024,6 +3681,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+  sheetBtnRemoveWalkIn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1.2,
+    borderColor: '#fca5a5',
+    paddingVertical: 12,
+    borderRadius: 16,
+    marginBottom: 10,
+  },
+  sheetBtnRemoveWalkInText: {
+    color: '#dc2626',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   sheetBtnRow: {
     flexDirection: 'row',
     gap: 10,
@@ -3050,6 +3723,199 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   sheetBtnPrimaryText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  // Walk-in Registration Modal
+  keyboardAvoidingWrap: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  walkInModalSheet: {
+    width: '100%',
+    maxWidth: 440,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    maxHeight: '90%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  walkInModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#00000010',
+  },
+  walkInModalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  walkInIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  walkInModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  walkInModalSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  walkInModalScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
+  walkInFieldGroup: {
+    marginBottom: 16,
+  },
+  walkInFieldLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  walkInRequiredStar: {
+    color: '#ef4444',
+  },
+  walkInTextInput: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  walkInTextarea: {
+    minHeight: 64,
+    textAlignVertical: 'top',
+    paddingTop: 10,
+  },
+  walkInRowGroup: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  genderButtonGroup: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  genderBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderBtnText: {
+    fontSize: 13,
+  },
+  hospitalSelectionCol: {
+    gap: 8,
+  },
+  hospitalCardOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1.2,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  hospOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  hospDotLarge: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  hospOptionName: {
+    fontSize: 13,
+  },
+  hospOptionRoom: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  hospRemainingBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  hospRemainingBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  quickChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+    paddingVertical: 2,
+  },
+  quickChip: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  quickChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  walkInErrorText: {
+    color: '#ef4444',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+    marginLeft: 2,
+  },
+  walkInFormBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+    paddingBottom: 10,
+  },
+  walkInCancelBtn: {
+    flex: 0.8,
+    paddingVertical: 13,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walkInCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  walkInSubmitBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    paddingVertical: 13,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walkInSubmitBtnText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
