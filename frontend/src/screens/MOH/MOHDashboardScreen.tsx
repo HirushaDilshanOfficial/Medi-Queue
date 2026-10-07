@@ -157,15 +157,7 @@ export default function MOHDashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={Colors.textLight} style={{ marginRight: 10 }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={t("Search hospitals, doctors or clinics...")}
-              placeholderTextColor={Colors.textLight}
-            />
-          </View>
+
 
           {/* Alert / Notice Banner */}
           <View style={styles.noticeBanner}>
