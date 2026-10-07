@@ -6,6 +6,8 @@ const {
   getSlots,
   walkInBooking,
   getPreBookedAppointments,
+  sendPatientOtp,
+  verifyPatientOtp,
 } = require('../controllers/walkInController');
 const {
   callNext,
@@ -19,6 +21,12 @@ const {
 
 // All routes below require auth + receptionist role
 router.use(protect, authorizeRoles('receptionist', 'admin', 'doctor'));
+
+// POST /api/reception/send-otp
+router.post('/send-otp', sendPatientOtp);
+
+// POST /api/reception/verify-otp
+router.post('/verify-otp', verifyPatientOtp);
 
 // GET /api/reception/pre-booked?date=&q=
 router.get('/pre-booked', getPreBookedAppointments);

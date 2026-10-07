@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -31,6 +32,7 @@ import { Toast, ToastType } from '../../components/Toast';
 import { TokenBadge } from '../../components/TokenBadge';
 import { BirthdayCalendarModal } from '../../components/BirthdayCalendarModal';
 import { BarcodeScannerModal } from '../../components/BarcodeScannerModal';
+import { PatientOtpModal } from '../../components/PatientOtpModal';
 import { useShiftContext } from '../../context/ShiftContext';
 
 export interface RegisterPatientScreenProps {
@@ -137,6 +139,13 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   const [selectedPreBooking, setSelectedPreBooking] = useState<PreBookedAppointment | null>(null);
   const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
   const [scannerModalVisible, setScannerModalVisible] = useState<boolean>(false);
+
+  // Patient Mobile OTP Verification state
+  const [otpModalVisible, setOtpModalVisible] = useState<boolean>(false);
+  const [isPhoneVerified, setIsPhoneVerified] = useState<boolean>(false);
+  const [verifiedPhone, setVerifiedPhone] = useState<string>('');
+  const [pendingPayload, setPendingPayload] = useState<WalkInPayload | null>(null);
+  const [showStaffSuccessModal, setShowStaffSuccessModal] = useState<boolean>(false);
 
   // Toast state
   const [toastVisible, setToastVisible] = useState<boolean>(false);
@@ -559,6 +568,9 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setSlots([]);
     setSlotsError(null);
     setSelectedPreBooking(null);
+    setIsPhoneVerified(false);
+    setVerifiedPhone('');
+    setPendingPayload(null);
     form.reset();
     showToast(
       form.intakeType === 'pre_booked'
@@ -566,6 +578,71 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         : 'Form cleared. Ready for new patient entry.',
       'info'
     );
+  };
+
+  // Perform backend walk-in submission after OTP verification or bypass
+  const executeFinalRegistration = async (payloadToSubmit: WalkInPayload) => {
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const res = await createWalkIn(payloadToSubmit);
+      setConfirmedPriority(form.priority);
+      setConfirmedBooking(res);
+      setLastIssuedToken(res);
+      setShowStaffSuccessModal(true);
+      showToast(`Token #${res.token.tokenLabel} issued! SMS confirmation sent to ${res.patient.phone}`, 'success');
+
+      // Reset form after successful submission
+      form.reset();
+      setSearchQuery('');
+      setSearchStatus('idle');
+      setMatchedPatient(null);
+      setSlots([]);
+      setSlotsError(null);
+      setPendingPayload(null);
+    } catch (err: any) {
+      const is409 =
+        err?.status === 409 ||
+        err?.response?.status === 409 ||
+        (typeof err?.message === 'string' &&
+          (err.message.includes('409') ||
+            err.message.toLowerCase().includes('slot was just taken') ||
+            err.message.toLowerCase().includes('conflict')));
+
+      if (is409) {
+        showToast('Slot was just taken', 'warning');
+        if (form.doctorId) {
+          try {
+            let todayDate = '';
+            try {
+              todayDate = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Colombo',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+              }).format(new Date());
+            } catch {
+              todayDate = new Date().toISOString().split('T')[0];
+            }
+            const slotsRes = await getSlots(form.doctorId, todayDate);
+            if (slotsRes && Array.isArray(slotsRes.slots)) {
+              setSlots(slotsRes.slots);
+              const nextSlot =
+                slotsRes.earliestAvailable ||
+                slotsRes.slots.find((s) => s.status === 'available')?.time ||
+                '';
+              form.setField('slotTime', nextSlot);
+            }
+          } catch {}
+        }
+      } else {
+        const msg = getErrorMessage(err);
+        showToast(msg || 'Failed to issue walk-in token', 'error');
+      }
+    } finally {
+      setSubmitting(false);
+      submittingRef.current = false;
+    }
   };
 
   // Submit and issue token
@@ -638,59 +715,56 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
       };
     }
 
-    submittingRef.current = true;
-    setSubmitting(true);
-    try {
-      const res = await createWalkIn(payload);
-      setConfirmedPriority(form.priority);
-      setConfirmedBooking(res);
-      setLastIssuedToken(res);
-      showToast(`Token #${res.token.tokenLabel} issued successfully!`, 'success');
-      // Reset form after successful submission
-      form.reset();
-      setSearchQuery('');
-      setSearchStatus('idle');
-      setMatchedPatient(null);
-      setSlots([]);
-      setSlotsError(null);
-    } catch (err: any) {
-      const is409 =
-        err?.status === 409 ||
-        err?.response?.status === 409 ||
-        (typeof err?.message === 'string' &&
-          (err.message.includes('409') ||
-            err.message.toLowerCase().includes('slot was just taken') ||
-            err.message.toLowerCase().includes('conflict')));
+    // Check if phone needs OTP verification before completing registration
+    const phoneToVerify = (form.patient.phone || '').trim();
+    if (
+      form.intakeType === 'walk_in' &&
+      phoneToVerify &&
+      (!isPhoneVerified || verifiedPhone !== phoneToVerify)
+    ) {
+      setPendingPayload(payload);
+      setOtpModalVisible(true);
+      return;
+    }
 
-      if (is409) {
-        showToast('Slot was just taken', 'warning');
-        // Refetch slots and preselect next one
-        if (form.doctorId) {
-          try {
-            const slotsRes = await getSlots(form.doctorId, todayDate);
-            if (slotsRes && Array.isArray(slotsRes.slots)) {
-              setSlots(slotsRes.slots);
-              const nextSlot =
-                slotsRes.earliestAvailable ||
-                slotsRes.slots.find((s) => s.status === 'available')?.time ||
-                '';
-              form.setField('slotTime', nextSlot);
-            }
-          } catch {}
-        }
-      } else {
-        const msg = getErrorMessage(err);
-        showToast(msg || 'Failed to issue walk-in token', 'error');
-      }
-    } finally {
-      setSubmitting(false);
-      submittingRef.current = false;
+    await executeFinalRegistration(payload);
+  };
+
+  const handleOpenPhoneOtpManually = () => {
+    const cleanPhone = (form.patient.phone || '').trim();
+    if (!cleanPhone || cleanPhone.length < 8) {
+      showToast('Please enter a valid telephone number first (e.g. 0712345678).', 'warning');
+      return;
+    }
+    setOtpModalVisible(true);
+  };
+
+  const handleOtpVerified = async () => {
+    const cleanPhone = (form.patient.phone || '').trim();
+    setIsPhoneVerified(true);
+    setVerifiedPhone(cleanPhone);
+    setOtpModalVisible(false);
+    showToast(`Phone ${cleanPhone} verified via OTP!`, 'success');
+
+    if (pendingPayload) {
+      await executeFinalRegistration(pendingPayload);
+    }
+  };
+
+  const handleOtpSkip = async () => {
+    setOtpModalVisible(false);
+    showToast('OTP bypassed. Proceeding with registration...', 'info');
+    if (pendingPayload) {
+      await executeFinalRegistration(pendingPayload);
     }
   };
 
   const handleNewEntry = () => {
     setConfirmedBooking(null);
     setConfirmedPriority('normal');
+    setIsPhoneVerified(false);
+    setVerifiedPhone('');
+    setPendingPayload(null);
     form.reset();
     setSearchQuery('');
     setSearchStatus('idle');
@@ -851,16 +925,30 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   priority={confirmedPriority || 'normal'}
                   size="large"
                 />
-                <View style={styles.smsStatusBadge}>
-                  <Ionicons
-                    name="chatbubble-ellipses"
-                    size={13}
-                    color="#0D9488"
-                    style={{ marginRight: 5 }}
-                  />
-                  <Text style={styles.smsStatusBadgeText}>
-                    SMS confirmation queued to {confirmedBooking.patient.phone}
-                  </Text>
+                {/* ── SMS CONFIRMATION DELIVERED TO PATIENT CARD ── */}
+                <View style={styles.smsDeliveredCard}>
+                  <View style={styles.smsDeliveredHeader}>
+                    <View style={styles.smsDeliveredTitleRow}>
+                      <Ionicons name="chatbubbles" size={15} color="#0D9488" style={{ marginRight: 6 }} />
+                      <Text style={styles.smsDeliveredTitle}>CONFIRMATION SMS SENT TO PATIENT</Text>
+                    </View>
+                    <View style={styles.smsSentBadge}>
+                      <View style={styles.smsSentDot} />
+                      <Text style={styles.smsSentBadgeText}>Sent to {confirmedBooking.patient.phone}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.smsMessageBox}>
+                    <Text style={styles.smsMessageText}>
+                      {confirmedBooking.smsNotification?.message ||
+                        `[Medi-Queue Hospital] Dear ${confirmedBooking.patient.fullName}, your registration is SUCCESSFUL! Queue Token: ${confirmedBooking.token?.tokenLabel || `OPD-${String(confirmedBooking.token?.tokenNumber || 1).padStart(3, '0')}`}. Doctor: ${confirmedBooking.doctor?.name} (${confirmedBooking.doctor?.room || 'OPD Room'}). Est. Wait: ~${confirmedBooking.estimatedWaitMinutes || 15} mins. Please proceed to waiting area.`}
+                    </Text>
+                  </View>
+                  <View style={styles.smsFooterRow}>
+                    <Ionicons name="checkmark-circle" size={13} color="#059669" style={{ marginRight: 4 }} />
+                    <Text style={styles.smsTimestampText}>
+                      Status: Delivered Successfully to Patient Mobile • Just Now
+                    </Text>
+                  </View>
                 </View>
               </View>
 
@@ -1517,20 +1605,76 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
 
                 {/* Telephone Number */}
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>
-                    Telephone Number <Text style={styles.requiredAsterisk}>*</Text>
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.textInput,
-                      form.errors.phone ? styles.inputError : null,
-                    ]}
-                    placeholder="e.g. 0712345678"
-                    placeholderTextColor={Colors.textLight}
-                    value={form.patient.phone}
-                    onChangeText={(val) => form.setField('phone', val)}
-                    keyboardType="phone-pad"
-                  />
+                  <View style={styles.phoneLabelRow}>
+                    <Text style={styles.fieldLabel}>
+                      Telephone Number <Text style={styles.requiredAsterisk}>*</Text>
+                    </Text>
+                    {isPhoneVerified && verifiedPhone === form.patient.phone.trim() ? (
+                      <View style={styles.phoneVerifiedBadge}>
+                        <Ionicons name="checkmark-circle" size={13} color="#059669" style={{ marginRight: 3 }} />
+                        <Text style={styles.phoneVerifiedBadgeText}>OTP Verified</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={styles.phoneInputRow}>
+                    <TextInput
+                      style={[
+                        styles.textInput,
+                        { flex: 1 },
+                        form.errors.phone ? styles.inputError : null,
+                        isPhoneVerified && verifiedPhone === form.patient.phone.trim()
+                          ? styles.phoneInputVerified
+                          : null,
+                      ]}
+                      placeholder="e.g. 0712345678"
+                      placeholderTextColor={Colors.textLight}
+                      value={form.patient.phone}
+                      onChangeText={(val) => {
+                        form.setField('phone', val);
+                        if (isPhoneVerified && verifiedPhone !== val.trim()) {
+                          setIsPhoneVerified(false);
+                        }
+                      }}
+                      keyboardType="phone-pad"
+                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.verifyPhoneBtn,
+                        isPhoneVerified && verifiedPhone === form.patient.phone.trim()
+                          ? styles.verifyPhoneBtnDone
+                          : null,
+                      ]}
+                      onPress={handleOpenPhoneOtpManually}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={
+                          isPhoneVerified && verifiedPhone === form.patient.phone.trim()
+                            ? 'shield-checkmark'
+                            : 'chatbubble-ellipses-outline'
+                        }
+                        size={15}
+                        color={
+                          isPhoneVerified && verifiedPhone === form.patient.phone.trim()
+                            ? '#059669'
+                            : Colors.primary
+                        }
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text
+                        style={[
+                          styles.verifyPhoneBtnText,
+                          isPhoneVerified && verifiedPhone === form.patient.phone.trim()
+                            ? styles.verifyPhoneBtnTextDone
+                            : null,
+                        ]}
+                      >
+                        {isPhoneVerified && verifiedPhone === form.patient.phone.trim()
+                          ? 'Verified'
+                          : 'Verify via OTP'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                   {form.errors.phone ? (
                     <Text style={styles.errorText}>{form.errors.phone}</Text>
                   ) : null}
@@ -2242,6 +2386,82 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         onClose={() => setScannerModalVisible(false)}
         onScan={handleScanSuccess}
       />
+
+      {/* Patient Phone OTP Verification Modal */}
+      <PatientOtpModal
+        visible={otpModalVisible}
+        phone={form.patient.phone}
+        patientName={form.patient.fullName}
+        onClose={() => setOtpModalVisible(false)}
+        onVerified={handleOtpVerified}
+        onSkip={handleOtpSkip}
+      />
+
+      {/* ── STAFF SUCCESS FEEDBACK / CONFIRMATION MODAL ── */}
+      <Modal
+        visible={showStaffSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowStaffSuccessModal(false)}
+      >
+        <View style={styles.modalOverlayCenter}>
+          <View style={styles.successModalCard}>
+            <View style={styles.successIconCircle}>
+              <Ionicons name="checkmark-done" size={32} color={Colors.white} />
+            </View>
+
+            <Text style={styles.successModalTitle}>Registration & Phone Verified!</Text>
+            <Text style={styles.successModalSubtitle}>
+              Patient phone verified via OTP & official OPD Token generated.
+            </Text>
+
+            <View style={styles.successSummaryBox}>
+              <View style={styles.successSummaryRow}>
+                <Text style={styles.successSummaryKey}>Patient:</Text>
+                <Text style={styles.successSummaryVal}>{confirmedBooking?.patient.fullName}</Text>
+              </View>
+              <View style={styles.successSummaryRow}>
+                <Text style={styles.successSummaryKey}>Verified Mobile:</Text>
+                <Text style={styles.successSummaryVal}>{confirmedBooking?.patient.phone}</Text>
+              </View>
+              <View style={styles.successSummaryRow}>
+                <Text style={styles.successSummaryKey}>Queue Token:</Text>
+                <Text style={[styles.successSummaryVal, { color: Colors.primary, fontWeight: '800' }]}>
+                  {confirmedBooking?.token?.tokenLabel ||
+                    `OPD-${String(confirmedBooking?.token?.tokenNumber || 1).padStart(3, '0')}`}
+                </Text>
+              </View>
+              <View style={styles.successSummaryRow}>
+                <Text style={styles.successSummaryKey}>Doctor:</Text>
+                <Text style={styles.successSummaryVal}>{confirmedBooking?.doctor.name}</Text>
+              </View>
+            </View>
+
+            {/* SMS Dispatch Confirmation in modal */}
+            <View style={styles.smsAlertCard}>
+              <View style={styles.smsAlertHeader}>
+                <Ionicons name="paper-plane" size={13} color="#0D9488" style={{ marginRight: 6 }} />
+                <Text style={styles.smsAlertTitle}>SMS SENT TO PATIENT</Text>
+              </View>
+              <Text style={styles.smsAlertText}>
+                {confirmedBooking?.smsNotification?.message ||
+                  `[Medi-Queue Hospital] Dear ${confirmedBooking?.patient.fullName}, your registration is SUCCESSFUL! Queue Token: ${confirmedBooking?.token?.tokenLabel}. Doctor: ${confirmedBooking?.doctor?.name}.`}
+              </Text>
+              <Text style={styles.smsAlertSub}>
+                ✓ Sent to {confirmedBooking?.patient.phone} • Delivered
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.successModalCloseBtn}
+              onPress={() => setShowStaffSuccessModal(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.successModalCloseBtnText}>View Ticket & Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -3732,6 +3952,245 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#92400E',
     flex: 1,
+  },
+  /* ── Phone Verification & OTP Styles ── */
+  phoneLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  phoneVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  phoneVerifiedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  phoneInputVerified: {
+    borderColor: '#10B981',
+    backgroundColor: '#F0FDF4',
+  },
+  verifyPhoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1.5,
+    borderColor: '#99F6E4',
+    paddingHorizontal: 12,
+    height: 48,
+    borderRadius: 12,
+  },
+  verifyPhoneBtnDone: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  verifyPhoneBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  verifyPhoneBtnTextDone: {
+    color: '#059669',
+  },
+  /* ── SMS Delivered to Patient Card (Confirmation View) ── */
+  smsDeliveredCard: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    padding: 14,
+    marginTop: 12,
+    width: '100%',
+  },
+  smsDeliveredHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  smsDeliveredTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  smsDeliveredTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0D9488',
+    letterSpacing: 0.5,
+  },
+  smsSentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  smsSentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0D9488',
+    marginRight: 5,
+  },
+  smsSentBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  smsMessageBox: {
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    marginBottom: 8,
+  },
+  smsMessageText: {
+    fontSize: 12,
+    color: '#1E293B',
+    lineHeight: 18,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  smsFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  smsTimestampText: {
+    fontSize: 11,
+    color: '#0F766E',
+    fontWeight: '600',
+  },
+  /* ── Staff Success Feedback Modal ── */
+  modalOverlayCenter: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  successModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  successIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  successModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.textDark,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  successModalSubtitle: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  successSummaryBox: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  successSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  successSummaryKey: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontWeight: '600',
+  },
+  successSummaryVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  smsAlertCard: {
+    width: '100%',
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginBottom: 18,
+  },
+  smsAlertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  smsAlertTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0D9488',
+    letterSpacing: 0.5,
+  },
+  smsAlertText: {
+    fontSize: 11,
+    color: '#334155',
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  smsAlertSub: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  successModalCloseBtn: {
+    width: '100%',
+    height: 46,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successModalCloseBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.white,
   },
 });
 

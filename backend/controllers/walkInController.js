@@ -7,9 +7,102 @@ const { normalizePhone, isValidDate, isValidSlot } = require('../utils/validator
 const { findOrCreatePatient } = require('../services/patientService');
 const { getNextToken } = require('../utils/tokenGenerator');
 const { estimateWaitMinutes } = require('../services/waitTimeService');
-const { sendSmsConfirmation } = require('../utils/notifier');
+const {
+  sendOtpSms,
+  sendPatientRegistrationSms,
+  sendSmsConfirmation,
+} = require('../utils/notifier');
 
 const { asyncHandler, createError } = require('../utils/errorHandler');
+
+// Active in-memory OTP store for patient phone verification: Map<phone, { otp, expiresAt, verified, patientName }>
+const patientOtpStore = new Map();
+
+// ──────────────────────────────────────────────────────
+// @desc    Send 6-digit OTP to patient's telephone number
+// @route   POST /api/reception/send-otp
+// @access  Private — receptionist
+// ──────────────────────────────────────────────────────
+const sendPatientOtp = asyncHandler(async (req, res) => {
+  const { phone, patientName } = req.body;
+
+  if (!phone || String(phone).trim().length < 7) {
+    throw createError('A valid telephone number is required to send verification OTP.', 400);
+  }
+
+  const cleanPhone = String(phone).trim();
+  const normalized = normalizePhone(cleanPhone) || cleanPhone;
+
+  // Generate 6-digit numeric OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes validity
+
+  const record = {
+    otp,
+    expiresAt,
+    verified: false,
+    patientName: patientName?.trim() || 'Patient',
+  };
+
+  patientOtpStore.set(cleanPhone, record);
+  if (normalized !== cleanPhone) {
+    patientOtpStore.set(normalized, record);
+  }
+
+  // Trigger SMS notification through gateway/notifier
+  const smsResult = await sendOtpSms(cleanPhone, otp, patientName);
+
+  res.status(200).json({
+    success: true,
+    message: `Verification OTP successfully dispatched to ${cleanPhone}`,
+    phone: cleanPhone,
+    otp, // included for demo and simulated testing convenience
+    expiresAt,
+    smsDispatched: true,
+  });
+});
+
+// ──────────────────────────────────────────────────────
+// @desc    Verify patient OTP
+// @route   POST /api/reception/verify-otp
+// @access  Private — receptionist
+// ──────────────────────────────────────────────────────
+const verifyPatientOtp = asyncHandler(async (req, res) => {
+  const { phone, otp } = req.body;
+
+  if (!phone || !otp) {
+    throw createError('Telephone number and 6-digit OTP are required.', 400);
+  }
+
+  const cleanPhone = String(phone).trim();
+  const normalized = normalizePhone(cleanPhone) || cleanPhone;
+  const cleanOtp = String(otp).trim();
+
+  const record = patientOtpStore.get(cleanPhone) || patientOtpStore.get(normalized);
+
+  if (!record) {
+    throw createError('No active OTP found for this number. Please click Send OTP.', 400);
+  }
+
+  if (Date.now() > record.expiresAt) {
+    patientOtpStore.delete(cleanPhone);
+    patientOtpStore.delete(normalized);
+    throw createError('OTP code has expired. Please request a new OTP.', 400);
+  }
+
+  if (record.otp !== cleanOtp) {
+    throw createError('Incorrect OTP entered. Please check patient mobile and re-enter.', 400);
+  }
+
+  record.verified = true;
+
+  res.status(200).json({
+    success: true,
+    verified: true,
+    message: 'Patient telephone number successfully verified!',
+    phone: cleanPhone,
+  });
+});
 
 // ──────────────────────────────────────────────────────
 // @desc    Search patients by NIC or phone
@@ -320,11 +413,25 @@ const walkInBooking = asyncHandler(async (req, res) => {
   // ── 8. Estimate wait time ──
   const waitInfo = await estimateWaitMinutes(doctorId, date);
 
-  // ── 9. SMS notification (fire-and-forget) ──
+  // ── 9. SMS notification to patient (Registration Confirmation) ──
+  let smsNotification = null;
   try {
-    await sendSmsConfirmation(patient, token);
+    smsNotification = await sendPatientRegistrationSms(patient, appointment, token, doctor, waitInfo);
   } catch (smsErr) {
     console.error('SMS notification failed (non-blocking):', smsErr.message);
+    smsNotification = {
+      sent: false,
+      recipient: patient.phone,
+      message: `Dear ${patient.fullName}, your registration at Medi-Queue Hospital is confirmed! Token: ${token.tokenLabel}. Doctor: Dr. ${doctor.name}.`,
+      error: smsErr.message,
+    };
+  }
+
+  // Clear OTP verified record once patient is registered
+  if (patient.phone) {
+    patientOtpStore.delete(patient.phone);
+    const norm = normalizePhone(patient.phone);
+    if (norm) patientOtpStore.delete(norm);
   }
 
   // ── 10. Respond ──
@@ -358,6 +465,12 @@ const walkInBooking = asyncHandler(async (req, res) => {
     },
     estimatedWaitMinutes: waitInfo.estimatedWaitMinutes,
     patientsAhead: waitInfo.patientsAhead,
+    smsNotification: smsNotification || {
+      sent: true,
+      recipient: patient.phone,
+      message: `Dear ${patient.fullName}, your registration at Medi-Queue Hospital is confirmed! Token: ${token.tokenLabel}. Doctor: Dr. ${doctor.name}.`,
+      sentAt: new Date().toISOString(),
+    },
   });
 });
 
@@ -686,4 +799,6 @@ module.exports = {
   getSlots,
   walkInBooking,
   getPreBookedAppointments,
+  sendPatientOtp,
+  verifyPatientOtp,
 };

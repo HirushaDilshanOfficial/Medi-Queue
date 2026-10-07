@@ -288,6 +288,30 @@ export interface WalkInResponse {
   };
   estimatedWaitMinutes?: number;
   patientsAhead?: number;
+  smsNotification?: {
+    sent: boolean;
+    recipient: string;
+    patientName?: string;
+    tokenLabel?: string;
+    message: string;
+    sentAt: string;
+  };
+}
+
+export interface SendPatientOtpResponse {
+  success: boolean;
+  message: string;
+  phone: string;
+  otp?: string;
+  expiresAt?: number;
+  smsDispatched?: boolean;
+}
+
+export interface VerifyPatientOtpResponse {
+  success: boolean;
+  verified: boolean;
+  message: string;
+  phone?: string;
 }
 
 export interface GetQueueParams {
@@ -382,6 +406,36 @@ export const createWalkIn = async (
   token?: string
 ): Promise<WalkInResponse> => {
   return api.post<WalkInResponse>('/api/reception/walk-in', data, { token });
+};
+
+/**
+ * Dispatch 6-digit verification OTP to patient mobile number.
+ */
+export const sendPatientOtp = async (
+  phone: string,
+  patientName?: string,
+  token?: string
+): Promise<SendPatientOtpResponse> => {
+  return api.post<SendPatientOtpResponse>(
+    '/api/reception/send-otp',
+    { phone, patientName },
+    { token }
+  );
+};
+
+/**
+ * Verify 6-digit OTP entered for patient telephone number.
+ */
+export const verifyPatientOtp = async (
+  phone: string,
+  otp: string,
+  token?: string
+): Promise<VerifyPatientOtpResponse> => {
+  return api.post<VerifyPatientOtpResponse>(
+    '/api/reception/verify-otp',
+    { phone, otp },
+    { token }
+  );
 };
 
 /**
