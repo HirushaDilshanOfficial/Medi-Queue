@@ -69,9 +69,45 @@ export default function EditPatientScreen() {
     }
   }, [params.editPatientData]);
 
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const validatePhone = (phone: string) => {
+    return /^(0)[0-9]{9}$/.test(phone);
+  };
+
+  const validateNIC = (nic: string) => {
+    return /^([0-9]{9}[vVxX]|[0-9]{12})$/.test(nic);
+  };
+
+  const validateName = (name: string) => {
+    return /^[a-zA-Z\s.]+$/.test(name);
+  };
+
   const handleSave = async () => {
     if (!formData.fullName || !formData.mobile || !formData.email) {
       alert('Please fill all required fields (*)');
+      return;
+    }
+
+    if (!validateName(formData.fullName)) {
+      alert('Full Name can only contain letters, spaces, and periods.');
+      return;
+    }
+    
+    if (formData.nic && !validateNIC(formData.nic)) {
+      alert('Please enter a valid NIC (e.g. 123456789V or 123456789012).');
+      return;
+    }
+    
+    if (!validatePhone(formData.mobile)) {
+      alert('Mobile number must be 10 digits starting with 0.');
+      return;
+    }
+    
+    if (!validateEmail(formData.email)) {
+      alert('Please enter a valid email address.');
       return;
     }
 
@@ -171,7 +207,7 @@ export default function EditPatientScreen() {
               style={styles.input}
               placeholder="John Doe"
               value={formData.fullName}
-              onChangeText={(text) => setFormData({ ...formData, fullName: text })}
+              onChangeText={(text) => setFormData({ ...formData, fullName: text.replace(/[^a-zA-Z\s]/g, '') })}
             />
           </View>
 
@@ -182,7 +218,8 @@ export default function EditPatientScreen() {
                 style={styles.input}
                 placeholder="98xxxxxxxV"
                 value={formData.nic}
-                onChangeText={(text) => setFormData({ ...formData, nic: text })}
+                onChangeText={(text) => setFormData({ ...formData, nic: text.replace(/[^0-9vVxX]/g, '') })}
+                maxLength={12}
               />
             </View>
             <View style={[styles.inputGroup, { flex: 1 }]}>
@@ -216,7 +253,8 @@ export default function EditPatientScreen() {
                 placeholder="07x xxxxxxx"
                 keyboardType="phone-pad"
                 value={formData.mobile}
-                onChangeText={(text) => setFormData({ ...formData, mobile: text })}
+                onChangeText={(text) => setFormData({ ...formData, mobile: text.replace(/[^0-9]/g, '') })}
+                maxLength={10}
               />
             </View>
           </View>
@@ -229,7 +267,7 @@ export default function EditPatientScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               value={formData.email}
-              onChangeText={(text) => setFormData({ ...formData, email: text })}
+              onChangeText={(text) => setFormData({ ...formData, email: text.replace(/\s/g, '') })}
             />
           </View>
 

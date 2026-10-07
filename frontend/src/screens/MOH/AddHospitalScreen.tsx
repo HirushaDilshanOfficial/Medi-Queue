@@ -62,9 +62,32 @@ export default function AddHospitalScreen() {
     }
   }, [params.editHospitalData]);
 
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const validatePhone = (phone: string) => {
+    return /^\+?[0-9\s-]{9,15}$/.test(phone);
+  };
+
   const handleSave = async () => {
     if (!formData.name || !formData.code || !formData.type || !formData.contact || !formData.location) {
       alert('Please fill all required fields');
+      return;
+    }
+
+    if (formData.name.trim().length < 3) {
+      alert('Hospital name is too short');
+      return;
+    }
+
+    const contact = formData.contact.trim();
+    const isEmail = contact.includes('@');
+    if (isEmail && !validateEmail(contact)) {
+      alert('Please enter a valid email address');
+      return;
+    } else if (!isEmail && !validatePhone(contact)) {
+      alert('Please enter a valid phone number');
       return;
     }
     
@@ -127,7 +150,7 @@ export default function AddHospitalScreen() {
                   placeholder={t("e.g. Colombo National Hospital")}
                   placeholderTextColor={Colors.textLight}
                   value={formData.name}
-                  onChangeText={(text) => setFormData({ ...formData, name: text })}
+                  onChangeText={(text) => setFormData({ ...formData, name: text.replace(/[^a-zA-Z\s]/g, '') })}
                 />
               </View>
 
@@ -139,7 +162,7 @@ export default function AddHospitalScreen() {
                     placeholder={t("e.g. CNH-001")}
                     placeholderTextColor={Colors.textLight}
                     value={formData.code}
-                    onChangeText={(text) => setFormData({ ...formData, code: text })}
+                    onChangeText={(text) => setFormData({ ...formData, code: text.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase() })}
                   />
                 </View>
 

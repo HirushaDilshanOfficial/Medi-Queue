@@ -43,7 +43,12 @@ exports.addHospital = async (req, res) => {
 // Get all hospitals
 exports.getAllHospitals = async (req, res) => {
   try {
-    const hospitals = await Hospital.find({ isDeleted: false }).sort({ createdAt: -1 });
+    const { status } = req.query;
+    const filter = { isDeleted: false };
+    if (status) {
+      filter.status = status;
+    }
+    const hospitals = await Hospital.find(filter).sort({ createdAt: -1 });
     res.status(200).json(hospitals);
   } catch (error) {
     console.error('Error fetching hospitals:', error);
