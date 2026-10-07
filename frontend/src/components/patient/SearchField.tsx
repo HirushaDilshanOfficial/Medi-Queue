@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { Text, StyleSheet, Pressable } from 'react-native';
+import {  StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage } from './DesignImage';
 
@@ -8,15 +10,16 @@ type Props = {
 };
 
 export function SearchField({ onPress }: Props) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="search"
-      accessibilityLabel="Search doctor or clinic"
+      accessibilityLabel={t("Search doctor or clinic")}
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
           <DesignImage name="search" size={18} color={PatientTheme.textMuted} />
-      <Text style={styles.placeholder}>Search doctor or clinic</Text>
+      <Text style={styles.placeholder}>{t("Search doctor or clinic")}</Text>
     </Pressable>
   );
 }

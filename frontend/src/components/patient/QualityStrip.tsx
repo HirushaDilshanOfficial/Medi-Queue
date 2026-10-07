@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 
 type Stat = { key: string; value: string; label: string };
@@ -9,6 +11,7 @@ type Props = {
 };
 
 export function QualityStrip({ stats }: Props) {
+  const { t } = useLanguage();
   return (
     <View style={styles.root}>
       {stats.map((stat, index) => (
@@ -18,7 +21,7 @@ export function QualityStrip({ stats }: Props) {
         >
           <Text style={styles.value}>{stat.value}</Text>
           <Text style={styles.label} numberOfLines={2}>
-            {stat.label}
+            {t(stat.label ?? '')}
           </Text>
         </View>
       ))}

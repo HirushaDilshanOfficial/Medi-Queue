@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 
 type StatCardProps = {
@@ -10,6 +12,7 @@ type StatCardProps = {
 };
 
 export function StatCard({ value, label, icon, style }: StatCardProps) {
+  const { t } = useLanguage();
   return (
     <View style={[styles.container, style]}>
       {icon ? <Text style={styles.icon}>{icon}</Text> : null}
@@ -17,7 +20,7 @@ export function StatCard({ value, label, icon, style }: StatCardProps) {
         {value}
       </Text>
       <Text style={styles.label} numberOfLines={1}>
-        {label}
+        {t(label ?? '')}
       </Text>
     </View>
   );

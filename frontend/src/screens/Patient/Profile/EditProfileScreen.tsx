@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../../i18n/LocalizedText';
+import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   Pressable,
@@ -40,6 +41,7 @@ const BLOOD_GROUPS: { value: NonNullable<BloodGroup>; label: string }[] = [
 ];
 
 export function EditProfileScreen() {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -136,13 +138,13 @@ export function EditProfileScreen() {
     setSaving(true);
     try {
       await patientApi.updateProfile(draft);
-      Alert.alert('Saved', 'Your details have been updated.', [
-        { text: 'Done', onPress: () => router.back() },
+      Alert.alert(t('Saved'), t('Your details have been updated.'), [
+        { text: t('Done'), onPress: () => router.back() },
       ]);
     } catch (error) {
       Alert.alert(
-        'Could not save',
-        error instanceof Error ? error.message : 'Please try again.',
+        t('Could not save'),
+        error instanceof Error ? error.message : t('Please try again.'),
       );
     } finally {
       setSaving(false);
@@ -162,13 +164,14 @@ export function EditProfileScreen() {
     remindersEnabled,
     router,
     validate,
+    t,
   ]);
 
   if (profile.loading && !profile.data) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
-        <ScreenHeader title="Edit profile" showBack />
-        <ScreenLoader label="Loading your details" />
+        <ScreenHeader title={t("Edit profile")} showBack />
+        <ScreenLoader label={t("Loading your details")} />
       </View>
     );
   }
@@ -176,12 +179,12 @@ export function EditProfileScreen() {
   if (profile.error && !profile.data) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
-        <ScreenHeader title="Edit profile" showBack />
+        <ScreenHeader title={t("Edit profile")} showBack />
         <MessageState
           icon="help"
-          title="Could not load your details"
+          title={t("Could not load your details")}
           description={profile.error}
-          actionLabel="Try again"
+          actionLabel={t("Try again")}
           onAction={profile.reload}
         />
       </View>
@@ -195,8 +198,8 @@ export function EditProfileScreen() {
     >
       <View style={{ paddingTop: insets.top + PatientTheme.spaceSm }}>
         <ScreenHeader
-          title="Edit profile"
-          subtitle="Keep your contact details current"
+          title={t("Edit profile")}
+          subtitle={t("Keep your contact details current")}
           showBack
         />
       </View>
@@ -208,15 +211,13 @@ export function EditProfileScreen() {
       >
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
-            Your name and NIC are set when you register. Contact the clinic desk to
-            change them.
-          </Text>
+            {t("Your name and NIC are set when you register. Contact the clinic desk to change them.")}</Text>
         </View>
 
         <View style={styles.group}>
-          <Text style={styles.groupTitle}>Contact</Text>
+          <Text style={styles.groupTitle}>{t("Contact")}</Text>
           <FormField
-            label="Phone number"
+            label={t("Phone number")}
             value={phone}
             onChangeText={setPhone}
             placeholder="07X XXX XXXX"
@@ -225,7 +226,7 @@ export function EditProfileScreen() {
             maxLength={30}
           />
           <FormField
-            label="Email address"
+            label={t("Email address")}
             value={email}
             onChangeText={setEmail}
             placeholder="you@example.com"
@@ -237,42 +238,42 @@ export function EditProfileScreen() {
         </View>
 
         <View style={styles.group}>
-          <Text style={styles.groupTitle}>About you</Text>
+          <Text style={styles.groupTitle}>{t("About you")}</Text>
           <FormField
-            label="Birthday"
+            label={t("Birthday")}
             value={birthday}
             onChangeText={setBirthday}
             placeholder="YYYY-MM-DD"
-            hint="Used to check your age at a consultation"
+            hint={t("Used to check your age at a consultation")}
             error={fieldErrors.birthday}
             optional
             maxLength={10}
           />
           <ChipGroup<NonNullable<Gender>>
-            label="Gender"
+            label={t("Gender")}
             value={gender}
             options={GENDERS}
             onChange={setGender}
             optional
           />
           <ChipGroup<NonNullable<BloodGroup>>
-            label="Blood group"
+            label={t("Blood group")}
             value={bloodGroup}
             options={BLOOD_GROUPS}
             onChange={setBloodGroup}
             optional
           />
           <FormField
-            label="Address"
+            label={t("Address")}
             value={address}
             onChangeText={setAddress}
-            placeholder="Street, town"
+            placeholder={t("Street, town")}
             multiline
             optional
             maxLength={200}
           />
           <FormField
-            label="District"
+            label={t("District")}
             value={district}
             onChangeText={setDistrict}
             placeholder="Colombo"
@@ -282,13 +283,13 @@ export function EditProfileScreen() {
         </View>
 
         <View style={styles.group}>
-          <Text style={styles.groupTitle}>Clinical</Text>
+          <Text style={styles.groupTitle}>{t("Clinical")}</Text>
           <FormField
-            label="Allergies"
+            label={t("Allergies")}
             value={allergies}
             onChangeText={setAllergies}
             placeholder="Penicillin, Dust"
-            hint="Separate each with a comma. Shown to your doctor at a visit."
+            hint={t("Separate each with a comma. Shown to your doctor at a visit.")}
             multiline
             optional
             maxLength={500}
@@ -296,9 +297,9 @@ export function EditProfileScreen() {
         </View>
 
         <View style={styles.group}>
-          <Text style={styles.groupTitle}>Emergency contact</Text>
+          <Text style={styles.groupTitle}>{t("Emergency contact")}</Text>
           <FormField
-            label="Name"
+            label={t("Name")}
             value={emergencyName}
             onChangeText={setEmergencyName}
             placeholder="Kamala Perera"
@@ -306,15 +307,15 @@ export function EditProfileScreen() {
             maxLength={120}
           />
           <FormField
-            label="Relationship"
+            label={t("Relationship")}
             value={emergencyRelationship}
             onChangeText={setEmergencyRelationship}
-            placeholder="Mother"
+            placeholder={t("Mother")}
             optional
             maxLength={120}
           />
           <FormField
-            label="Phone number"
+            label={t("Phone number")}
             value={emergencyPhone}
             onChangeText={setEmergencyPhone}
             placeholder="07X XXX XXXX"
@@ -325,11 +326,11 @@ export function EditProfileScreen() {
         </View>
 
         <View style={styles.group}>
-          <Text style={styles.groupTitle}>Reminders</Text>
+          <Text style={styles.groupTitle}>{t("Reminders")}</Text>
           <View style={styles.switchCard}>
             <SwitchRow
-              label="Appointment reminders"
-              description="A reminder the day before each booking"
+              label={t("Appointment reminders")}
+              description={t("A reminder the day before each booking")}
               value={remindersEnabled}
               onValueChange={setRemindersEnabled}
             />
@@ -342,14 +343,14 @@ export function EditProfileScreen() {
           onPress={onSave}
           disabled={saving}
           accessibilityRole="button"
-          accessibilityLabel="Save changes"
+          accessibilityLabel={t("Save changes")}
           style={({ pressed }) => [
             styles.save,
             pressed && styles.pressed,
             saving && styles.saveDisabled,
           ]}
         >
-          <Text style={styles.saveLabel}>{saving ? 'Saving...' : 'Save changes'}</Text>
+          <Text style={styles.saveLabel}>{saving ? t('Saving...') : t('Save changes')}</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>

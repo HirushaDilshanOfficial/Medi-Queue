@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -27,6 +28,7 @@ import {
 } from '../../services/doctorService';
 
 export default function PatientQueueScreen() {
+  const { t } = useLanguage();
   const [data, setData] = useState<DoctorDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -245,10 +247,10 @@ export default function PatientQueueScreen() {
       } else {
         advanceQueueLocally();
       }
-      Alert.alert('Consultation Completed', res?.message || 'Next patient called into room.');
+      Alert.alert(t('Consultation Completed'), res?.message || t('Next patient called into room.'));
     } catch (err: any) {
       advanceQueueLocally();
-      Alert.alert('Consultation Completed', 'Next patient called into room.');
+      Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
     } finally {
       setIsProcessing(false);
     }
@@ -260,7 +262,7 @@ export default function PatientQueueScreen() {
     const currentToken = data.currentPatient.tokenNumber;
 
     if (currentToken <= 1) {
-      Alert.alert('First Patient Reached', 'You are already at Token #001 (the 1st patient). Cannot undo further.');
+      Alert.alert(t('First Patient Reached'), t('You are already at Token #001 (the 1st patient). Cannot undo further.'));
       return;
     }
 
@@ -269,7 +271,7 @@ export default function PatientQueueScreen() {
       const res = await undoPatientApi();
       if (res && res.success && res.data) {
         setData(res.data);
-        Alert.alert('Action Undone', res.message || 'Reverted to previous patient.');
+        Alert.alert(t('Action Undone'), res.message || t('Reverted to previous patient.'));
         setIsProcessing(false);
         return;
       }
@@ -326,7 +328,7 @@ export default function PatientQueueScreen() {
       };
     });
 
-    Alert.alert('Action Undone', `Reverted back to Token #${String(currentToken - 1).padStart(3, '0')}.`);
+    Alert.alert(t('Action Undone'), t("Reverted back to Token #{value0}.", { value0: String(String(currentToken - 1).padStart(3, '0')) }));
     setIsProcessing(false);
   };
 
@@ -336,9 +338,9 @@ export default function PatientQueueScreen() {
     const room = data?.doctor?.room || 'Room 3B';
     try {
       const res = await ringRoomChimeApi(token, room);
-      Alert.alert('Chime & Room Speaker', res?.message || `Chime broadcast: Token #${token}, please enter ${room}`);
+      Alert.alert(t('Chime & Room Speaker'), res?.message || t("Chime broadcast: Token #{value0}, please enter {value1}", { value0: String(token), value1: String(room) }));
     } catch (err: any) {
-      Alert.alert('Notice', `Ring chime sent to ${room} for Token #${token}`);
+      Alert.alert(t('Notice'), t("Ring chime sent to {value0} for Token #{value1}", { value0: String(room), value1: String(token) }));
     }
   };
 
@@ -352,10 +354,10 @@ export default function PatientQueueScreen() {
       } else {
         advanceQueueLocally(tokenNumber);
       }
-      Alert.alert('Patient Called', res?.message || `Token #${tokenNumber} (${patientName}) called into room.`);
+      Alert.alert(t('Patient Called'), res?.message || t("Token #{value0} ({value1}) called into room.", { value0: String(tokenNumber), value1: String(patientName) }));
     } catch (err: any) {
       advanceQueueLocally(tokenNumber);
-      Alert.alert('Notice', `Token #${tokenNumber} called into room.`);
+      Alert.alert(t('Notice'), t("Token #{value0} called into room.", { value0: String(tokenNumber) }));
     } finally {
       setIsProcessing(false);
     }
@@ -386,15 +388,15 @@ export default function PatientQueueScreen() {
   // 4b. Patient card long press or full action
   const handlePatientAction = (patient: PatientQueueItem) => {
     Alert.alert(
-      `Token #${String(patient.tokenNumber).padStart(3, '0')} - ${patient.patientName}`,
-      `Age: ${patient.age}y, ${patient.gender}\nReason: ${patient.reason || 'Consultation'}\nStatus: ${patient.status}`,
+      t("Token #{value0} - {value1}", { value0: String(String(patient.tokenNumber).padStart(3, '0')), value1: String(patient.patientName) }),
+      t("Age: {value0}y, {value1}\nReason: {value2}\nStatus: {value3}", { value0: String(patient.age), value1: String(patient.gender), value2: String(patient.reason || 'Consultation'), value3: String(patient.status) }),
       [
         {
           text: 'Call Into Room',
           onPress: () => handleCallIntoRoom(patient.tokenNumber, patient.patientName),
         },
-        { text: 'View Records', onPress: () => handleViewPatientRecords(patient) },
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('View Records'), onPress: () => handleViewPatientRecords(patient) },
+        { text: t('Cancel'), style: 'cancel' },
       ]
     );
   };
@@ -453,7 +455,7 @@ export default function PatientQueueScreen() {
     return (
       <SafeAreaView style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color="#0d6371" />
-        <Text style={styles.loadingText}>Loading Live Patient Queue...</Text>
+        <Text style={styles.loadingText}>{t("Loading Live Patient Queue...")}</Text>
       </SafeAreaView>
     );
   }
@@ -498,14 +500,14 @@ export default function PatientQueueScreen() {
             <Text style={styles.profileName}>{doctor?.name || 'Dr. Emilia Emelson'}</Text>
             <View style={styles.onlineBadgeRow}>
               <View style={styles.onlineGreenDot} />
-              <Text style={styles.onlineBadgeText}>{doctor?.room || 'Room 3B'} Online</Text>
+              <Text style={styles.onlineBadgeText}>{doctor?.room || 'Room 3B'} {t("Online")}</Text>
             </View>
           </View>
         </View>
 
         <TouchableOpacity
           style={styles.bellBtn}
-          onPress={() => Alert.alert('Notifications', 'No new queue emergencies at this moment.')}
+          onPress={() => Alert.alert(t('Notifications'), t('No new queue emergencies at this moment.'))}
         >
           <Ionicons name="notifications-outline" size={22} color="#1e293b" />
           <View style={styles.redBadgeDot} />
@@ -524,24 +526,23 @@ export default function PatientQueueScreen() {
           <View style={styles.bannerBadgesRow}>
             <View style={styles.opdLiveBadge}>
               <View style={styles.mintDot} />
-              <Text style={styles.opdLiveText}>OPD CLINIC LIVE</Text>
+              <Text style={styles.opdLiveText}>{t("OPD CLINIC LIVE")}</Text>
             </View>
 
             <View style={styles.avgTimeBadge}>
               <Ionicons name="time-outline" size={14} color="#d1fae5" style={{ marginRight: 4 }} />
-              <Text style={styles.avgTimeText}>Avg. {doctor?.avgConsultMinutes || 9}m / patient</Text>
+              <Text style={styles.avgTimeText}>{t("Avg.")}{' '}{doctor?.avgConsultMinutes || 9}{t("m / patient")}</Text>
             </View>
           </View>
 
           {/* Banner Title */}
-          <Text style={styles.bannerTitle}>Live Patient Queue</Text>
+          <Text style={styles.bannerTitle}>{t("Live Patient Queue")}</Text>
 
           {/* Subtitle with Room and Patients Waiting */}
           <View style={styles.bannerSubtitleRow}>
             <Ionicons name="business-outline" size={16} color="#cffafe" style={{ marginRight: 6 }} />
             <Text style={styles.bannerSubtitleText}>
-              {doctor?.hospitalName || 'Colombo Teaching Hospital 1'} • {doctor?.room || 'Room 101'} • {metrics?.waitingCount ?? 14} Waiting
-            </Text>
+              {doctor?.hospitalName || 'Colombo Teaching Hospital 1'} • {doctor?.room || 'Room 101'} • {metrics?.waitingCount ?? 14} {t("Waiting")}</Text>
           </View>
 
           {/* Quick Doctor Schedule Link Button */}
@@ -563,8 +564,7 @@ export default function PatientQueueScreen() {
           >
             <Ionicons name="calendar-outline" size={15} color="#ffffff" style={{ marginRight: 6 }} />
             <Text style={{ fontSize: 12, color: '#ffffff', fontWeight: '700' }}>
-              Open Doctor Schedule (Timeline) →
-            </Text>
+              {t("Open Doctor Schedule (Timeline) →")}</Text>
           </TouchableOpacity>
         </View>
 
@@ -574,7 +574,7 @@ export default function PatientQueueScreen() {
           <View style={styles.cardTopRow}>
             <View style={styles.inConsultationPill}>
               <View style={styles.tealPulseDot} />
-              <Text style={styles.inConsultationText}>NOW IN CONSULTATION</Text>
+              <Text style={styles.inConsultationText}>{t("NOW IN CONSULTATION")}</Text>
             </View>
 
             <View style={styles.timerPill}>
@@ -595,14 +595,14 @@ export default function PatientQueueScreen() {
                   style={{ marginRight: 5, marginTop: 1 }}
                 />
                 <Text style={styles.complaintText}>
-                  {currentPatient?.reason || 'Spine Checkup'} • {currentPatient?.gender || 'Male'},{' '}
+                  {currentPatient?.reason || t('Spine Checkup')} • {t(currentPatient?.gender ?? '') || t('Male')},{' '}
                   {currentPatient?.age || 48}y
                 </Text>
               </View>
             </View>
 
             <View style={styles.tokenContainer}>
-              <Text style={styles.tokenLabel}>TOKEN</Text>
+              <Text style={styles.tokenLabel}>{t("TOKEN")}</Text>
               <Text style={styles.tokenNumber}>
                 #{currentPatient?.tokenNumber ? String(currentPatient.tokenNumber).padStart(3, '0') : '028'}
               </Text>
@@ -613,19 +613,19 @@ export default function PatientQueueScreen() {
           <View style={styles.vitalsBox}>
             {/* Blood Pressure */}
             <View style={styles.vitalCol}>
-              <Text style={styles.vitalLabel}>Blood Pressure</Text>
+              <Text style={styles.vitalLabel}>{t("Blood Pressure")}</Text>
               <Text style={styles.vitalValueDark}>{currentPatient?.bloodPressure || '124/82'}</Text>
             </View>
 
             {/* Heart Rate */}
             <View style={styles.vitalCol}>
-              <Text style={styles.vitalLabel}>Heart Rate</Text>
+              <Text style={styles.vitalLabel}>{t("Heart Rate")}</Text>
               <Text style={styles.vitalValueTeal}>{currentPatient?.heartRate || '76 bpm'}</Text>
             </View>
 
             {/* File REC */}
             <View style={styles.vitalCol}>
-              <Text style={styles.vitalLabel}>File</Text>
+              <Text style={styles.vitalLabel}>{t("File")}</Text>
               <Text style={styles.vitalValueNavy}>{currentPatient?.fileRecord || 'REC-841'}</Text>
             </View>
           </View>
@@ -642,7 +642,7 @@ export default function PatientQueueScreen() {
             ) : (
               <>
                 <Ionicons name="notifications" size={18} color="#ffffff" style={{ marginRight: 8 }} />
-                <Text style={styles.completeCallBtnText}>Complete & Call Token {nextTokenDisplay}</Text>
+                <Text style={styles.completeCallBtnText}>{t("Complete & Call Token")}{' '}{nextTokenDisplay}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -656,7 +656,7 @@ export default function PatientQueueScreen() {
               activeOpacity={0.85}
             >
               <Ionicons name="volume-medium-outline" size={18} color="#0d6371" style={{ marginRight: 6 }} />
-              <Text style={styles.recallChimeBtnText}>Recall Chime</Text>
+              <Text style={styles.recallChimeBtnText}>{t("Recall Chime")}</Text>
             </TouchableOpacity>
 
             {/* Action 3: Undo Previous Patient */}
@@ -686,8 +686,7 @@ export default function PatientQueueScreen() {
                   (!data?.currentPatient || data.currentPatient.tokenNumber <= 1) && { color: '#94a3b8' },
                 ]}
               >
-                Undo Previous
-              </Text>
+                {t("Undo Previous")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -700,7 +699,7 @@ export default function PatientQueueScreen() {
             onPress={() => setActiveFilter('all')}
           >
             <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive]}>
-              All ({upcomingQueue.length || 14})
+              {t("All (")}{upcomingQueue.length || 14})
             </Text>
           </TouchableOpacity>
 
@@ -710,8 +709,7 @@ export default function PatientQueueScreen() {
             onPress={() => setActiveFilter('priority')}
           >
             <Text style={[styles.filterPillText, activeFilter === 'priority' && styles.filterPillTextActive]}>
-              Priority / Elderly (3)
-            </Text>
+              {t("Priority / Elderly (3)")}</Text>
           </TouchableOpacity>
 
           {/* Walk-ins (5) */}
@@ -720,16 +718,15 @@ export default function PatientQueueScreen() {
             onPress={() => setActiveFilter('walkin')}
           >
             <Text style={[styles.filterPillText, activeFilter === 'walkin' && styles.filterPillTextActive]}>
-              Walk-ins (5)
-            </Text>
+              {t("Walk-ins (5)")}</Text>
           </TouchableOpacity>
         </View>
 
         {/* ---- UPCOMING QUEUE SECTION HEADER ---- */}
         <View style={styles.queueHeaderRow}>
-          <Text style={styles.queueHeaderTitle}>Upcoming Queue</Text>
+          <Text style={styles.queueHeaderTitle}>{t("Upcoming Queue")}</Text>
           <Text style={styles.estimatedWaitText}>
-            Estimated wait: {metrics?.estimatedWaitTime || '~42m'}
+            {t("Estimated wait:")}{' '}{metrics?.estimatedWaitTime || '~42m'}
           </Text>
         </View>
 
@@ -750,7 +747,7 @@ export default function PatientQueueScreen() {
                   >
                     {/* Left Token Box */}
                     <View style={styles.nextBadgeBox}>
-                      <Text style={styles.nextBadgeLabel}>NEXT</Text>
+                      <Text style={styles.nextBadgeLabel}>{t("NEXT")}</Text>
                       <Text style={styles.nextBadgeNumber}>
                         #{String(item.tokenNumber).padStart(3, '0')}
                       </Text>
@@ -761,18 +758,18 @@ export default function PatientQueueScreen() {
                       <View style={styles.nameWithBadgeRow}>
                         <Text style={styles.nextPatientName}>{item.patientName}</Text>
                         <View style={styles.nextSmallPill}>
-                          <Text style={styles.nextSmallPillText}>Next</Text>
+                          <Text style={styles.nextSmallPillText}>{t("Next")}</Text>
                         </View>
                       </View>
                       <Text style={styles.nextSubText}>
-                        {item.gender}, {item.age} yrs • {item.reason || 'Post-op Inspection'}
+                        {t(item.gender ?? '')}, {item.age} {t("yrs •")}{' '}{item.reason || t('Post-op Inspection')}
                       </Text>
                     </View>
 
                     {/* Right Arrived / Lobby */}
                     <View style={styles.nextCardRight}>
-                      <Text style={styles.readyLobbyText}>{item.location || 'Ready at Lobby'}</Text>
-                      <Text style={styles.arrivedTimeText}>Arrived {item.arrivedTime || '10:14'}</Text>
+                      <Text style={styles.readyLobbyText}>{item.location || t('Ready at Lobby')}</Text>
+                      <Text style={styles.arrivedTimeText}>{t("Arrived")}{' '}{item.arrivedTime || '10:14'}</Text>
                     </View>
                   </TouchableOpacity>
 
@@ -780,7 +777,7 @@ export default function PatientQueueScreen() {
                   <View style={styles.nextCardBottomRow}>
                     <View style={styles.vitalsVerifiedRow}>
                       <Ionicons name="shield-checkmark" size={16} color="#0d9488" style={{ marginRight: 5 }} />
-                      <Text style={styles.vitalsVerifiedText}>Vitals Verified</Text>
+                      <Text style={styles.vitalsVerifiedText}>{t("Vitals Verified")}</Text>
                     </View>
 
                     <TouchableOpacity
@@ -790,7 +787,7 @@ export default function PatientQueueScreen() {
                       activeOpacity={0.85}
                     >
                       <Ionicons name="enter-outline" size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                      <Text style={styles.callIntoRoomBtnText}>Call into Room</Text>
+                      <Text style={styles.callIntoRoomBtnText}>{t("Call into Room")}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -807,7 +804,7 @@ export default function PatientQueueScreen() {
               >
                 {/* Left Token Box */}
                 <View style={styles.standardTokenBox}>
-                  <Text style={styles.standardTokenLabel}>TOKEN</Text>
+                  <Text style={styles.standardTokenLabel}>{t("TOKEN")}</Text>
                   <Text style={styles.standardTokenNumber}>
                     #{String(item.tokenNumber).padStart(3, '0')}
                   </Text>
@@ -817,24 +814,24 @@ export default function PatientQueueScreen() {
                 <View style={styles.standardMiddle}>
                   <Text style={styles.standardPatientName}>{item.patientName}</Text>
                   <Text style={styles.standardSubText}>
-                    {item.gender}, {item.age} yrs • {item.reason || 'Follow-up'}
+                    {t(item.gender ?? '')}, {item.age} {t("yrs •")}{' '}{item.reason || t('Follow-up')}
                   </Text>
 
                   {/* Badges based on token */}
                   {item.tokenNumber === 30 || item.status === 'Checked In • Ready' ? (
                     <View style={styles.statusBadgeRow}>
                       <View style={styles.greenDotSmall} />
-                      <Text style={styles.statusBadgeText}>Checked In • Ready</Text>
+                      <Text style={styles.statusBadgeText}>{t("Checked In • Ready")}</Text>
                     </View>
                   ) : item.tokenNumber === 31 || item.status === 'X-Ray Ready' ? (
                     <View style={styles.xrayPill}>
                       <Ionicons name="document-text-outline" size={12} color="#0d9488" style={{ marginRight: 4 }} />
-                      <Text style={styles.xrayPillText}>X-Ray Ready</Text>
+                      <Text style={styles.xrayPillText}>{t("X-Ray Ready")}</Text>
                     </View>
                   ) : (
                     <View style={styles.waitingPillRow}>
                       <Ionicons name="time-outline" size={13} color="#64748b" style={{ marginRight: 4 }} />
-                      <Text style={styles.waitingPillText}>{item.status || 'Waiting (18m)'}</Text>
+                      <Text style={styles.waitingPillText}>{t(item.status ?? '') || t('Waiting (18m)')}</Text>
                     </View>
                   )}
                 </View>
@@ -859,7 +856,7 @@ export default function PatientQueueScreen() {
         {/* Home */}
         <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('home')}>
           <Ionicons name="home-outline" size={22} color={activeTab === 'home' ? '#0d6371' : '#64748b'} />
-          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>Home</Text>
+          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>{t("Home")}</Text>
         </TouchableOpacity>
 
         {/* Queue (Active) */}
@@ -869,7 +866,7 @@ export default function PatientQueueScreen() {
             size={23}
             color={activeTab === 'queue' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>Queue</Text>
+          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>{t("Queue")}</Text>
         </TouchableOpacity>
 
         {/* Records */}
@@ -879,7 +876,7 @@ export default function PatientQueueScreen() {
             size={22}
             color={activeTab === 'records' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>Records</Text>
+          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>{t("Records")}</Text>
         </TouchableOpacity>
 
         {/* Schedule */}
@@ -889,7 +886,7 @@ export default function PatientQueueScreen() {
             size={22}
             color={activeTab === 'schedule' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>Schedule</Text>
+          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>{t("Schedule")}</Text>
         </TouchableOpacity>
 
         {/* Prescription */}
@@ -903,8 +900,7 @@ export default function PatientQueueScreen() {
             numberOfLines={1}
             style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}
           >
-            Prescription
-          </Text>
+            {t("Prescription")}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

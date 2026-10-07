@@ -5,6 +5,8 @@
 // set to a different timezone, so the client must not use its own local date
 // or a Colombo booking can appear to be on the wrong day.
 
+import { translate, type Language } from '../i18n/translations';
+
 const HOSPITAL_TIME_ZONE = 'Asia/Colombo';
 
 // "YYYY-MM-DD" for a given instant, in hospital time.
@@ -33,12 +35,13 @@ function keyToUtcDate(dateKey: string): Date {
 
 // "Today" / "Tomorrow" / "Fri, 3 Oct" — the wording used on the pass and booking
 // cards, so patients do not have to read raw dates.
-export function dayLabel(dateKey: string, today: string = todayKey()): string {
-  if (dateKey === today) return 'Today';
-  if (dateKey === addDaysKey(today, 1)) return 'Tomorrow';
-  if (dateKey === addDaysKey(today, -1)) return 'Yesterday';
+export function dayLabel(dateKey: string, today: string = todayKey(), locale = 'en-GB'): string {
+  const language: Language = locale.startsWith('si') ? 'si' : locale.startsWith('ta') ? 'ta' : 'en';
+  if (dateKey === today) return translate(language, 'Today');
+  if (dateKey === addDaysKey(today, 1)) return translate(language, 'Tomorrow');
+  if (dateKey === addDaysKey(today, -1)) return translate(language, 'Yesterday');
 
-  return keyToUtcDate(dateKey).toLocaleDateString('en-GB', {
+  return keyToUtcDate(dateKey).toLocaleDateString(locale, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -46,8 +49,8 @@ export function dayLabel(dateKey: string, today: string = todayKey()): string {
   });
 }
 
-export function longDayLabel(dateKey: string): string {
-  return keyToUtcDate(dateKey).toLocaleDateString('en-GB', {
+export function longDayLabel(dateKey: string, locale = 'en-GB'): string {
+  return keyToUtcDate(dateKey).toLocaleDateString(locale, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -56,13 +59,25 @@ export function longDayLabel(dateKey: string): string {
   });
 }
 
+// A clear date for forms and report details, without exposing the storage
+// format used by the date input and API.
+export function calendarDateLabel(dateKey: string | null | undefined, locale = 'en-GB'): string | null {
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+  return keyToUtcDate(dateKey).toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 // Weekday initials plus day number, for the horizontal day strip in booking.
-export function shortDayParts(dateKey: string): { weekday: string; day: string; month: string } {
+export function shortDayParts(dateKey: string, locale = 'en-GB'): { weekday: string; day: string; month: string } {
   const date = keyToUtcDate(dateKey);
   return {
-    weekday: date.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }),
+    weekday: date.toLocaleDateString(locale, { weekday: 'short', timeZone: 'UTC' }),
     day: String(date.getUTCDate()),
-    month: date.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }),
+    month: date.toLocaleDateString(locale, { month: 'short', timeZone: 'UTC' }),
   };
 }
 
@@ -72,23 +87,23 @@ export function isPastDateKey(dateKey: string, today: string = todayKey()): bool
 
 // "in 3 min" / "in 45 min" / "now" for the live wait, which reads better than a
 // bare minute count while someone is actually standing in the clinic.
-export function waitLabel(waitMinutes: number): string {
-  if (waitMinutes <= 0) return 'Any moment now';
-  if (waitMinutes < 60) return `About ${waitMinutes} min`;
+export function waitLabel(waitMinutes: number, language: Language = 'en'): string {
+  if (waitMinutes <= 0) return translate(language, 'Any moment now');
+  if (waitMinutes < 60) return translate(language, 'About {minutes} min', { minutes: waitMinutes });
   const hours = Math.floor(waitMinutes / 60);
   const minutes = waitMinutes % 60;
-  return minutes ? `About ${hours}h ${minutes} min` : `About ${hours}h`;
+  return minutes ? translate(language, 'About {hours}h {minutes} min', { hours, minutes }) : translate(language, 'About {hours}h', { hours });
 }
 
 // "6 Mar 2026" for report and history dates. These arrive as full ISO
 // timestamps rather than "YYYY-MM-DD" keys, so they are formatted in the
 // patient's own timezone: a report dated at the clinic should read as the day
 // the patient experienced it, not a day shifted by the phone's timezone.
-export function timestampLabel(iso: string | null | undefined): string | null {
+export function timestampLabel(iso: string | null | undefined, locale = 'en-GB'): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString('en-GB', {
+  return date.toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

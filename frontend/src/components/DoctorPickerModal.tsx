@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   ScrollView,
@@ -32,6 +33,7 @@ export const DoctorPickerModal: React.FC<DoctorPickerModalProps> = ({
   onSuccess,
   onError,
 }) => {
+  const { t } = useLanguage();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [assigningDoctorId, setAssigningDoctorId] = useState<string | null>(null);
@@ -126,9 +128,9 @@ export const DoctorPickerModal: React.FC<DoctorPickerModalProps> = ({
               {/* Modal Header */}
               <View style={styles.header}>
                 <View style={styles.headerTextWrap}>
-                  <Text style={styles.title}>Assign / Change Doctor</Text>
+                  <Text style={styles.title}>{t("Assign / Change Doctor")}</Text>
                   <Text style={styles.subtitle} numberOfLines={1}>
-                    Token {tokenLabel} • {patientName}
+                    {t("Token")}{' '}{tokenLabel} • {patientName}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -145,17 +147,16 @@ export const DoctorPickerModal: React.FC<DoctorPickerModalProps> = ({
               {loading ? (
                 <View style={styles.loaderWrap}>
                   <ActivityIndicator size="large" color={Colors.primary} />
-                  <Text style={styles.loaderText}>Loading active doctors...</Text>
+                  <Text style={styles.loaderText}>{t("Loading active doctors...")}</Text>
                 </View>
               ) : doctors.length === 0 ? (
                 <View style={styles.emptyWrap}>
                   <View style={styles.emptyIconCircle}>
                     <Ionicons name="medkit-outline" size={32} color={Colors.textLight} />
                   </View>
-                  <Text style={styles.emptyTitle}>No Active Doctors Available</Text>
+                  <Text style={styles.emptyTitle}>{t("No Active Doctors Available")}</Text>
                   <Text style={styles.emptySubtitle}>
-                    There are currently no active doctors scheduled in this department.
-                  </Text>
+                    {t("There are currently no active doctors scheduled in this department.")}</Text>
                 </View>
               ) : (
                 <ScrollView
@@ -209,14 +210,14 @@ export const DoctorPickerModal: React.FC<DoctorPickerModalProps> = ({
                             </Text>
                             {isCurrent ? (
                               <View style={styles.currentBadge}>
-                                <Text style={styles.currentBadgeText}>Currently Assigned</Text>
+                                <Text style={styles.currentBadgeText}>{t("Currently Assigned")}</Text>
                               </View>
                             ) : null}
                           </View>
 
                           <View style={styles.docMetaRow}>
                             <Text style={styles.docDept} numberOfLines={1}>
-                              {doc.department || doc.specialization || 'General OPD'}
+                              {doc.department || doc.specialization || t('General OPD')}
                             </Text>
                             <Text style={styles.docMetaDot}>•</Text>
                             <View style={styles.roomBadge}>

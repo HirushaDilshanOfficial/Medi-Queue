@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -18,6 +19,7 @@ import { BASE_URL } from '../../config';
 import { ActivityIndicator } from 'react-native';
 
 export default function ResetPasswordScreen() {
+  const { t } = useLanguage();
   const { email, otp } = useLocalSearchParams();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -26,11 +28,11 @@ export default function ResetPasswordScreen() {
 
   const handleReset = async () => {
     if (!password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill all fields');
+      Alert.alert(t('Error'), t('Please fill all fields'));
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match!');
+      Alert.alert(t('Error'), t('Passwords do not match!'));
       return;
     }
     
@@ -45,15 +47,15 @@ export default function ResetPasswordScreen() {
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert('Success', 'Your password has been reset successfully.', [
-          { text: 'Login', onPress: () => router.replace('/(auth)/login') }
+        Alert.alert(t('Success'), t('Your password has been reset successfully.'), [
+          { text: t('Login'), onPress: () => router.replace('/(auth)/login') }
         ]);
       } else {
-        Alert.alert('Error', data.message || 'Failed to reset password');
+        Alert.alert(t('Error'), data.message || t('Failed to reset password'));
       }
     } catch (error) {
       console.error(error);
-      Alert.alert('Error', 'Network error. Please try again.');
+      Alert.alert(t('Error'), t('Network error. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -75,7 +77,7 @@ export default function ResetPasswordScreen() {
 
           {/* Back Button */}
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>← Back</Text>
+            <Text style={styles.backButtonText}>{t("← Back")}</Text>
           </TouchableOpacity>
 
           {/* Icon */}
@@ -83,23 +85,22 @@ export default function ResetPasswordScreen() {
             <Text style={styles.logoSmallIcon}>🔒</Text>
           </View>
 
-          <Text style={styles.headerTitle}>Create new password</Text>
-          <Text style={styles.headerSubtitle}>Please enter your new password below.</Text>
+          <Text style={styles.headerTitle}>{t("Create new password")}</Text>
+          <Text style={styles.headerSubtitle}>{t("Please enter your new password below.")}</Text>
         </View>
 
         {/* ---- FORM CARD ---- */}
         <View style={styles.formCard}>
           <Text style={styles.description}>
-            Create a new password for your account. Please make sure it is strong and secure.
-          </Text>
+            {t("Create a new password for your account. Please make sure it is strong and secure.")}</Text>
 
           {/* New Password Field */}
-          <Text style={styles.fieldLabel}>New Password</Text>
+          <Text style={styles.fieldLabel}>{t("New Password")}</Text>
           <View style={styles.inputWrapper}>
             <Text style={styles.inputIcon}>🔒</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter new password"
+              placeholder={t("Enter new password")}
               placeholderTextColor={Colors.textLight}
               value={password}
               onChangeText={setPassword}
@@ -111,12 +112,12 @@ export default function ResetPasswordScreen() {
           </View>
 
           {/* Confirm Password Field */}
-          <Text style={styles.fieldLabel}>Confirm New Password</Text>
+          <Text style={styles.fieldLabel}>{t("Confirm New Password")}</Text>
           <View style={styles.inputWrapper}>
             <Text style={styles.inputIcon}>🔐</Text>
             <TextInput
               style={styles.input}
-              placeholder="Re-enter new password"
+              placeholder={t("Re-enter new password")}
               placeholderTextColor={Colors.textLight}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
@@ -129,7 +130,7 @@ export default function ResetPasswordScreen() {
             {loading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.primaryButtonText}>Reset Password</Text>
+              <Text style={styles.primaryButtonText}>{t("Reset Password")}</Text>
             )}
           </TouchableOpacity>
 

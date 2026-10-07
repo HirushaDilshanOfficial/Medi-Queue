@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import {  StyleSheet, Pressable, ScrollView } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import type { BookableDay } from '../../types/patient';
 import { shortDayParts } from '../../utils/opdDates';
@@ -13,6 +15,7 @@ type Props = {
 // Horizontal day selector. Only days the doctor actually has free slots for are
 // listed, so a patient can never pick a date that then turns out to be closed.
 export function DayStrip({ days, selected, onSelect }: Props) {
+  const { t, locale } = useLanguage();
   if (!days.length) return null;
 
   return (
@@ -22,7 +25,7 @@ export function DayStrip({ days, selected, onSelect }: Props) {
       contentContainerStyle={styles.content}
     >
       {days.map((day) => {
-        const { weekday, day: dayNumber, month } = shortDayParts(day.date);
+        const { weekday, day: dayNumber, month } = shortDayParts(day.date, locale);
         const active = day.date === selected;
 
         return (
@@ -31,7 +34,7 @@ export function DayStrip({ days, selected, onSelect }: Props) {
             onPress={() => onSelect(day.date)}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={`${weekday} ${dayNumber} ${month}, ${day.slotsRemaining} slots free`}
+            accessibilityLabel={t("{value0} {value1} {value2}, {value3} slots free", { value0: String(weekday), value1: String(dayNumber), value2: String(month), value3: String(day.slotsRemaining) })}
             style={({ pressed }) => [
               styles.day,
               active && styles.dayActive,
@@ -42,8 +45,7 @@ export function DayStrip({ days, selected, onSelect }: Props) {
             <Text style={[styles.dayNumber, active && styles.textActive]}>{dayNumber}</Text>
             <Text style={[styles.month, active && styles.textActive]}>{month}</Text>
             <Text style={[styles.remaining, active && styles.textActive]}>
-              {day.slotsRemaining} free
-            </Text>
+              {day.slotsRemaining} {t("free")}</Text>
           </Pressable>
         );
       })}

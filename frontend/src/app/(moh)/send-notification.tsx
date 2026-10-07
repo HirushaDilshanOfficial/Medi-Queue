@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -19,6 +20,7 @@ import { getAuthToken } from '../../services/http';
 import { BASE_URL } from '../../config';
 
 export default function SendNotificationScreen() {
+  const { t } = useLanguage();
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [targetRole, setTargetRole] = useState('All');
@@ -28,7 +30,7 @@ export default function SendNotificationScreen() {
 
   const handleSend = async () => {
     if (!title || !message) {
-      Alert.alert('Error', 'Please enter a title and message.');
+      Alert.alert(t('Error'), t('Please enter a title and message.'));
       return;
     }
 
@@ -51,15 +53,15 @@ export default function SendNotificationScreen() {
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Notification sent successfully!', [
+        Alert.alert(t('Success'), t('Notification sent successfully!'), [
           { text: 'OK', onPress: () => router.back() }
         ]);
       } else {
         const data = await response.json();
-        Alert.alert('Error', data.message || 'Failed to send notification.');
+        Alert.alert(t('Error'), data.message || t('Failed to send notification.'));
       }
     } catch (error) {
-      Alert.alert('Error', 'Something went wrong while sending.');
+      Alert.alert(t('Error'), t('Something went wrong while sending.'));
       console.error(error);
     } finally {
       setIsLoading(false);
@@ -80,26 +82,26 @@ export default function SendNotificationScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Broadcast Notification</Text>
+          <Text style={styles.headerTitle}>{t("Broadcast Notification")}</Text>
           <View style={{ width: 36 }} />
         </View>
 
         <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>Create New Alert</Text>
-          <Text style={styles.sectionDesc}>This message will be instantly delivered in-app to the selected user groups.</Text>
+          <Text style={styles.sectionTitle}>{t("Create New Alert")}</Text>
+          <Text style={styles.sectionDesc}>{t("This message will be instantly delivered in-app to the selected user groups.")}</Text>
 
           {/* Title */}
-          <Text style={styles.fieldLabel}>Notification Title</Text>
+          <Text style={styles.fieldLabel}>{t("Notification Title")}</Text>
           <TextInput
             style={styles.input}
-            placeholder="E.g., Dengue Awareness Campaign"
+            placeholder={t("E.g., Dengue Awareness Campaign")}
             placeholderTextColor={Colors.textLight}
             value={title}
             onChangeText={setTitle}
           />
 
           {/* Target Role Selector */}
-          <Text style={styles.fieldLabel}>Send To</Text>
+          <Text style={styles.fieldLabel}>{t("Send To")}</Text>
           <View style={styles.roleContainer}>
             {roles.map((role) => (
               <TouchableOpacity
@@ -116,17 +118,17 @@ export default function SendNotificationScreen() {
                     targetRole === role && styles.roleBadgeTextActive
                   ]}
                 >
-                  {role}
+                  {t(role)}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
           {/* Message */}
-          <Text style={styles.fieldLabel}>Message Body</Text>
+          <Text style={styles.fieldLabel}>{t("Message Body")}</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
-            placeholder="Type your message here..."
+            placeholder={t("Type your message here...")}
             placeholderTextColor={Colors.textLight}
             value={message}
             onChangeText={setMessage}
@@ -144,7 +146,7 @@ export default function SendNotificationScreen() {
             {isLoading ? (
               <ActivityIndicator color={Colors.white} size="small" />
             ) : (
-              <Text style={styles.sendButtonText}>Send Notification</Text>
+              <Text style={styles.sendButtonText}>{t("Send Notification")}</Text>
             )}
           </TouchableOpacity>
         </View>

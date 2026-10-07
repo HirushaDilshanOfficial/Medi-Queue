@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -19,8 +20,10 @@ import { Colors } from '../../constants/Colors';
 import { BASE_URL } from '../../config';
 
 import { getAuthToken } from '../../services/http';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function EditProfileScreen() {
+  const { t } = useLanguage();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -60,7 +63,7 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!fullName || !email) {
-      Alert.alert('Error', 'Name and Email are required.');
+      Alert.alert(t('Error'), t('Name and Email are required.'));
       return;
     }
 
@@ -81,15 +84,15 @@ export default function EditProfileScreen() {
         const updatedData = await response.json();
         // Update local storage just in case
         await AsyncStorage.setItem('user', JSON.stringify(updatedData));
-        Alert.alert('Success', 'Profile updated successfully!', [
+        Alert.alert(t('Success'), t('Profile updated successfully!'), [
           { text: 'OK', onPress: () => router.back() }
         ]);
       } else {
         const errorData = await response.json();
-        Alert.alert('Error', errorData.message || 'Failed to update profile.');
+        Alert.alert(t('Error'), errorData.message || t('Failed to update profile.'));
       }
     } catch (error: any) {
-      Alert.alert('Error', 'An error occurred while updating profile.');
+      Alert.alert(t('Error'), t('An error occurred while updating profile.'));
     } finally {
       setIsLoading(false);
     }
@@ -109,7 +112,7 @@ export default function EditProfileScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Profile</Text>
+          <Text style={styles.headerTitle}>{t("Edit Profile")}</Text>
           <View style={{ width: 36 }} />
         </View>
 
@@ -119,12 +122,12 @@ export default function EditProfileScreen() {
           <View style={styles.formCard}>
             
             {/* Full Name */}
-            <Text style={styles.fieldLabel}>Full Name</Text>
+            <Text style={styles.fieldLabel}>{t("Full Name")}</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>👤</Text>
+              <Ionicons name="person" size={20} color={Colors.primary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Enter full name"
+                placeholder={t("Enter full name")}
                 placeholderTextColor={Colors.textLight}
                 value={fullName}
                 onChangeText={setFullName}
@@ -132,12 +135,12 @@ export default function EditProfileScreen() {
             </View>
 
             {/* Email */}
-            <Text style={styles.fieldLabel}>Email Address</Text>
+            <Text style={styles.fieldLabel}>{t("Email Address")}</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>✉️</Text>
+              <Ionicons name="mail" size={20} color={Colors.primary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Enter email address"
+                placeholder={t("Enter email address")}
                 placeholderTextColor={Colors.textLight}
                 value={email}
                 onChangeText={setEmail}
@@ -147,12 +150,12 @@ export default function EditProfileScreen() {
             </View>
 
             {/* Phone */}
-            <Text style={styles.fieldLabel}>Contact Number</Text>
+            <Text style={styles.fieldLabel}>{t("Contact Number")}</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>📞</Text>
+              <Ionicons name="call" size={20} color={Colors.primary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Enter contact number"
+                placeholder={t("Enter contact number")}
                 placeholderTextColor={Colors.textLight}
                 value={phone}
                 onChangeText={setPhone}
@@ -169,7 +172,7 @@ export default function EditProfileScreen() {
               {isLoading ? (
                 <ActivityIndicator color={Colors.white} size="small" />
               ) : (
-                <Text style={styles.saveButtonText}>Save Changes</Text>
+                <Text style={styles.saveButtonText}>{t("Save Changes")}</Text>
               )}
             </TouchableOpacity>
 

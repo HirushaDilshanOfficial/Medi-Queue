@@ -1,9 +1,11 @@
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 
 export default function ReceptionLayout() {
+  const { t } = useLanguage();
   return (
     <Tabs
       screenOptions={{
@@ -27,8 +29,8 @@ export default function ReceptionLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Home',
-          tabBarLabel: 'Home',
+          title: t('Home'),
+          tabBarLabel: t('Home'),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'home' : 'home-outline'}
@@ -41,8 +43,8 @@ export default function ReceptionLayout() {
       <Tabs.Screen
         name="register"
         options={{
-          title: 'Register',
-          tabBarLabel: 'Register',
+          title: t('Register'),
+          tabBarLabel: t('Register'),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'person-add' : 'person-add-outline'}
@@ -55,8 +57,8 @@ export default function ReceptionLayout() {
       <Tabs.Screen
         name="patients"
         options={{
-          title: 'Patients',
-          tabBarLabel: 'Patients',
+          title: t('Patients'),
+          tabBarLabel: t('Patients'),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'people' : 'people-outline'}
@@ -69,8 +71,8 @@ export default function ReceptionLayout() {
       <Tabs.Screen
         name="reports"
         options={{
-          title: 'Reports',
-          tabBarLabel: 'Reports',
+          title: t('Reports'),
+          tabBarLabel: t('Reports'),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'document-text' : 'document-text-outline'}

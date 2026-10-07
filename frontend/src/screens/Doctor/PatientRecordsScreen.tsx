@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -37,6 +38,7 @@ import {
 type ActiveVitalType = 'bp' | 'hr' | 'temp' | 'spo2' | 'weight' | 'bmi';
 
 export default function PatientRecordsScreen({ navigation }: { navigation?: any } = {}) {
+  const { t } = useLanguage();
   const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string; patientId?: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';

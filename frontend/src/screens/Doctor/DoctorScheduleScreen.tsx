@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -39,6 +40,7 @@ interface DoctorScheduleScreenProps {
 }
 
 export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScreenProps) {
+  const { t } = useLanguage();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -2031,7 +2033,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       { color: theme.textMuted },
                     ]}
                   >
-                    No appointments on this timeline
+                    {t("No appointments on this timeline")}
                   </Text>
                 </View>
               ) : (

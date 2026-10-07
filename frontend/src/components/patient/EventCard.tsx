@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { Image, type ImageSourcePropType, type StyleProp, type ViewStyle } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 
@@ -22,6 +24,7 @@ export function EventCard({
   onPress,
   style,
 }: Props) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
@@ -42,10 +45,10 @@ export function EventCard({
 
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>
-          {title}
+          {t(title ?? '')}
         </Text>
         <Text style={styles.description} numberOfLines={2}>
-          {description}
+          {t(description ?? '')}
         </Text>
         <Text style={styles.schedule} numberOfLines={1}>
           {schedule}

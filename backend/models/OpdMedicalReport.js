@@ -5,12 +5,8 @@ const mongoose = require('mongoose');
 // Opd* models, so the receptionist-side `Patient` and any MOH records are
 // untouched.
 //
-// Only the *metadata* is stored: the app records what document the patient is
-// referring to, not the file itself. That is deliberate. Handing the file to
-// this API would mean a binary store, an upload size limit, virus scanning and
-// retention rules, none of which this module owns. The document itself belongs
-// to the hospital's records system, so the row records `fileName` to let staff
-// match it up.
+// The report metadata and private upload metadata are stored here. File bytes
+// live outside MongoDB so the document collection remains small and queryable.
 const opdMedicalReportSchema = new mongoose.Schema(
   {
     profile: {
@@ -54,12 +50,14 @@ const opdMedicalReportSchema = new mongoose.Schema(
       maxlength: 500,
     },
 
-    // Descriptive only. See the note above: the file is not uploaded here.
     fileName: {
       type: String,
       trim: true,
       maxlength: 160,
     },
+    fileKey: { type: String, trim: true, maxlength: 260 },
+    fileMimeType: { type: String, trim: true, maxlength: 100 },
+    fileSize: { type: Number, min: 1 },
 
     // `pending` -> `reviewed` is set by staff, not the patient, so the patient
     // can never mark their own report as seen by a doctor.

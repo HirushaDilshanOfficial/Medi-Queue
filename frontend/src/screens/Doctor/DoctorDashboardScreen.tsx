@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -18,6 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { getAuthToken } from '../../services/http';
+import { BASE_URL } from '../../config';
 import {
   fetchDoctorDashboard,
   updateDoctorStatusApi,
@@ -36,6 +39,7 @@ interface DoctorDashboardScreenProps {
 }
 
 export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScreenProps) {
+  const { t } = useLanguage();
   const [data, setData] = useState<DoctorDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,6 +73,27 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
     startTime: number;
   } | null>(null);
 
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const checkUnreadNotifications = async () => {
+    try {
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch(`${BASE_URL}/api/v1/notifications`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const lastReadTime = await AsyncStorage.getItem('last_notification_read_time');
+        const lastReadDate = lastReadTime ? new Date(lastReadTime) : new Date(0);
+        const unread = data.filter((n: any) => new Date(n.createdAt) > lastReadDate).length;
+        setUnreadCount(unread);
+      }
+    } catch (e) {
+      console.log('Failed to fetch notifications', e);
+    }
+  };
+
   const loadActiveBreak = useCallback(async () => {
     try {
       const raw = await AsyncStorage.getItem('@medi_queue_doctor_break');
@@ -99,7 +124,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         });
         await updateDoctorStatusApi('active', data.doctor._id);
       }
-      Alert.alert('Break Ended', 'You have resumed your active shift.');
+      Alert.alert(t('Break Ended'), t('You have resumed your active shift.'));
     } catch (e) {
       console.log('Error ending break:', e);
     }
@@ -131,6 +156,8 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
           setAvailableHospitals((prev) => Array.from(new Set([...names, ...prev])));
         }
       } catch (e) {}
+
+      await checkUnreadNotifications();
     } catch (err) {
       console.log('Error loading dashboard:', err);
     } finally {
@@ -162,6 +189,12 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      checkUnreadNotifications();
+    }, [])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -244,14 +277,14 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         advanceQueueLocally();
       }
       Alert.alert(
-        isLast ? 'Queue Completed' : 'Consultation Completed',
-        isLast ? 'All patients completed for today!' : res?.message || 'Advanced to next patient.'
+        isLast ? t('Queue Completed') : t('Consultation Completed'),
+        isLast ? t('All patients completed for today!') : (res?.message || t('Advanced to next patient.'))
       );
     } catch (err: any) {
       advanceQueueLocally();
       Alert.alert(
-        isLast ? 'Queue Completed' : 'Consultation Completed',
-        isLast ? 'All patients completed for today!' : 'Advanced to next patient.'
+        isLast ? t('Queue Completed') : t('Consultation Completed'),
+        isLast ? t('All patients completed for today!') : t('Advanced to next patient.')
       );
     } finally {
       setIsProcessing(false);
@@ -349,10 +382,10 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       } else {
         advanceQueueLocally();
       }
-      Alert.alert('Queue Called', res?.message || 'Next token called!');
+      Alert.alert(t('Queue Called'), res?.message || t('Next token called!'));
     } catch (err: any) {
       advanceQueueLocally();
-      Alert.alert('Queue Called', 'Next token called!');
+      Alert.alert(t('Queue Called'), t('Next token called!'));
     } finally {
       setIsProcessing(false);
     }
@@ -521,7 +554,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
     return (
       <SafeAreaView style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color="#0d6371" />
-        <Text style={styles.loadingText}>Loading Doctor Dashboard...</Text>
+        <Text style={styles.loadingText}>{t("Loading Doctor Dashboard...")}</Text>
       </SafeAreaView>
     );
   }
@@ -559,17 +592,24 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               <Text style={styles.profileName}>{doctor?.name || 'Dr. Emilia Emelson'}</Text>
               <View style={styles.onlineBadgeRow}>
                 <View style={styles.onlineGreenDot} />
-                <Text style={styles.onlineBadgeText}>{doctor?.room || 'Room 3B'} Online</Text>
+                <Text style={styles.onlineBadgeText}>{doctor?.room || 'Room 3B'} {t('Online')}</Text>
               </View>
             </View>
           </View>
 
           <TouchableOpacity
             style={styles.bellBtn}
-            onPress={() => Alert.alert('Notifications', 'No new critical alerts at this time.')}
+            onPress={() => router.push('/notifications')}
           >
             <Ionicons name="notifications-outline" size={22} color="#334155" />
-            <View style={styles.redBadgeDot} />
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute', top: 4, right: 4, backgroundColor: 'red', borderRadius: 10,
+                width: 16, height: 16, justifyContent: 'center', alignItems: 'center', zIndex: 10
+              }}>
+                <Text style={{ color: 'white', fontSize: 9, fontWeight: 'bold' }}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -577,9 +617,15 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         <View style={styles.greetingRow}>
           <View style={styles.greetingLeft}>
             <Text style={styles.greetingTitle}>
-              Good morning, Dr.{'\n'}
+              {t("Good morning, Dr.")}{'\n'}
               {doctor?.name ? doctor.name.replace(/^Dr\.\s*/i, '').split(' ')[0] : 'Palitha'}
             </Text>
+            <View style={styles.departmentBadge}>
+              <Ionicons name="business-outline" size={14} color="#0d6371" style={{ marginRight: 5 }} />
+              <Text style={styles.departmentText}>
+                {doctor?.department || t('No department')} • {doctor?.room || 'Room 3B'}
+              </Text>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -605,8 +651,8 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               {activeBreak
                 ? `${activeBreak.label} (${activeBreak.duration})`
                 : doctor?.status === 'active'
-                  ? 'Active Shift'
-                  : 'On Break'}
+                  ? t('Active Shift')
+                  : t('On Break')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -686,25 +732,25 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
           {/* Patients Waiting */}
           <View style={styles.metricCard}>
             <View style={styles.metricCardTop}>
-              <Text style={styles.metricLabel}>Patients Waiting</Text>
+              <Text style={styles.metricLabel}>{t("Patients Waiting")}</Text>
               <View style={styles.metricIconWrap}>
                 <Ionicons name="people-outline" size={18} color="#0d6371" />
               </View>
             </View>
             <View style={styles.metricNumberRow}>
-              <Text style={styles.metricBigNumber}>{metrics?.waitingCount ?? 14}</Text>
-              <Text style={styles.metricDeltaText}>+3 since 10am</Text>
+              <Text style={styles.metricBigNumber}>{metrics?.waitingCount ?? 0}</Text>
+              <Text style={styles.metricDeltaText}>{metrics?.waitingCount !== undefined ? t("+3 since 10am") : t("From database")}</Text>
             </View>
             <View style={styles.metricFooter}>
               <Ionicons name="time-outline" size={13} color="#64748b" style={{ marginRight: 4 }} />
-              <Text style={styles.metricFooterText}>Avg wait {metrics?.avgWaitMinutes ?? 15} min</Text>
+              <Text style={styles.metricFooterText}>{t("Avg wait")}{' '}{metrics?.avgWaitMinutes ?? 15} {t("min")}</Text>
             </View>
           </View>
 
           {/* Completed Today */}
           <View style={styles.metricCard}>
             <View style={styles.metricCardTop}>
-              <Text style={styles.metricLabel}>Completed Today</Text>
+              <Text style={styles.metricLabel}>{t("Completed Today")}</Text>
               <View style={styles.metricIconWrap}>
                 <Ionicons name="checkmark-circle-outline" size={18} color="#0d6371" />
               </View>
@@ -726,7 +772,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={styles.allSeenHeader}>
               <View style={styles.allSeenPill}>
                 <Ionicons name="checkmark-done-circle" size={14} color="#059669" style={{ marginRight: 5 }} />
-                <Text style={styles.allSeenPillText}>ALL PATIENTS SEEN</Text>
+                <Text style={styles.allSeenPillText}>{t("ALL PATIENTS SEEN")}</Text>
               </View>
 
               <TouchableOpacity
@@ -736,7 +782,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                 activeOpacity={0.7}
               >
                 <Ionicons name="arrow-undo" size={12} color="#0d6371" style={{ marginRight: 3 }} />
-                <Text style={styles.headerUndoBadgeText}>Undo</Text>
+                <Text style={styles.headerUndoBadgeText}>{t("Undo")}</Text>
               </TouchableOpacity>
             </View>
 
@@ -744,9 +790,9 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               <View style={styles.allSeenIconCircle}>
                 <Ionicons name="checkmark-done" size={32} color="#059669" />
               </View>
-              <Text style={styles.allSeenTitle}>✅ All patients seen</Text>
+              <Text style={styles.allSeenTitle}>✅ {t("All patients seen")}</Text>
               <Text style={styles.allSeenSubtitle}>
-                {allSeenCompletedCount} completed today • Queue is empty
+                {allSeenCompletedCount} {t("completed today • Queue is empty")}
               </Text>
             </View>
 
@@ -758,7 +804,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                 activeOpacity={0.75}
               >
                 <Ionicons name="arrow-undo" size={16} color="#0d6371" style={{ marginRight: 6 }} />
-                <Text style={styles.allSeenUndoButtonText}>Undo Last Consultation</Text>
+                <Text style={styles.allSeenUndoButtonText}>{t("Undo Last Consultation")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -768,7 +814,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={styles.consultationHeader}>
               <View style={styles.inConsultationPill}>
                 <View style={styles.tealPulseDot} />
-                <Text style={styles.inConsultationText}>IN CONSULTATION</Text>
+                <Text style={styles.inConsultationText}>{t("IN CONSULTATION")}</Text>
               </View>
 
               <View style={styles.headerRightControls}>
@@ -780,7 +826,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                     activeOpacity={0.7}
                   >
                     <Ionicons name="arrow-undo" size={12} color="#0d6371" style={{ marginRight: 3 }} />
-                    <Text style={styles.headerUndoBadgeText}>Undo</Text>
+                    <Text style={styles.headerUndoBadgeText}>{t("Undo")}</Text>
                   </TouchableOpacity>
                 )}
                 <View style={styles.timerWrap}>
@@ -794,13 +840,13 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={styles.patientInfoRow}>
               <View style={styles.patientDetailsCol}>
                 <View style={styles.patientNameRow}>
-                  <Text style={styles.patientNameText}>{currentPatient.patientName || 'Kamal Gunaratne'}</Text>
+                  <Text style={styles.patientNameText}>{currentPatient.patientName || t('Kamal Gunaratne')}</Text>
                   <View style={styles.genderPill}>
-                    <Text style={styles.genderText}>{currentPatient.gender || 'Male'}</Text>
+                    <Text style={styles.genderText}>{t(currentPatient.gender || 'Male')}</Text>
                   </View>
                 </View>
                 <Text style={styles.complaintText}>
-                  {currentPatient.reason || 'Spine checkup'} • {currentPatient.age || 46} yrs
+                  {currentPatient.reason || t('Spine checkup')} • {currentPatient.age || 46} {t("yrs")}
                 </Text>
 
                 {/* Vitals Tags */}
@@ -816,7 +862,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
 
               {/* Token Badge */}
               <View style={styles.tokenShield}>
-                <Text style={styles.tokenShieldLabel}>TOKEN</Text>
+                <Text style={styles.tokenShieldLabel}>{t("TOKEN")}</Text>
                 <Text style={styles.tokenShieldNumber}>
                   #{String(currentPatient.tokenNumber).padStart(3, '0')}
                 </Text>
@@ -847,7 +893,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                     currentPatient.tokenNumber <= 1 && styles.undoButtonTextDisabled,
                   ]}
                 >
-                  Undo
+                  {t("Undo")}
                 </Text>
               </TouchableOpacity>
 
@@ -856,7 +902,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                 onPress={() => handleTabPress('rx')}
               >
                 <Ionicons name="document-text-outline" size={16} color="#0d6371" style={{ marginRight: 5 }} />
-                <Text style={styles.rxButtonText}>Rx Prescribe</Text>
+                <Text style={styles.rxButtonText}>{t("Rx Prescribe")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -875,7 +921,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                       style={{ marginRight: 5 }}
                     />
                     <Text style={styles.completeNextText}>
-                      {upcomingQueue.length === 0 ? 'Complete' : 'Complete & Next'}
+                      {upcomingQueue.length === 0 ? t('Complete') : t('Complete & Next')}
                     </Text>
                   </>
                 )}
@@ -885,14 +931,14 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         )}
 
         {/* ---- 5. QUICK ACTIONS SECTION ---- */}
-        <Text style={styles.sectionHeaderTitle}>QUICK ACTIONS</Text>
+        <Text style={styles.sectionHeaderTitle}>{t("QUICK ACTIONS")}</Text>
         <View style={styles.quickActionsGrid}>
           {/* Call Next */}
           <TouchableOpacity style={styles.quickActionCard} onPress={handleCallNext} disabled={isProcessing}>
             <View style={styles.quickActionIconCircle}>
               <Ionicons name="volume-medium-outline" size={22} color="#0d6371" />
             </View>
-            <Text style={styles.quickActionLabel}>Call Next</Text>
+            <Text style={styles.quickActionLabel}>{t("Call Next")}</Text>
           </TouchableOpacity>
 
           {/* Add Walk-in */}
@@ -904,7 +950,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={styles.quickActionIconCircle}>
               <Ionicons name="person-add-outline" size={20} color="#0d6371" />
             </View>
-            <Text style={styles.quickActionLabel}>Add Walk-in</Text>
+            <Text style={styles.quickActionLabel}>{t("Add Walk-in")}</Text>
           </TouchableOpacity>
 
           {/* Break Action */}
@@ -939,7 +985,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               ]}
               numberOfLines={1}
             >
-              {activeBreak ? 'End Break' : '15m Break'}
+              {activeBreak ? t('End Break') : t('15m Break')}
             </Text>
           </TouchableOpacity>
 
@@ -951,15 +997,15 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={[styles.quickActionIconCircle, { backgroundColor: '#e0f6f8' }]}>
               <MaterialCommunityIcons name="calendar-month-outline" size={20} color="#0d6371" />
             </View>
-            <Text style={[styles.quickActionLabel, { fontWeight: '700', color: '#0d6371' }]}>Schedule</Text>
+            <Text style={[styles.quickActionLabel, { fontWeight: '700', color: '#0d6371' }]}>{t("Schedule")}</Text>
           </TouchableOpacity>
         </View>
 
         {/* ---- 6. UP NEXT IN QUEUE SECTION ---- */}
         <View style={styles.queueHeaderRow}>
-          <Text style={styles.sectionHeaderTitle}>UP NEXT IN QUEUE</Text>
+          <Text style={styles.sectionHeaderTitle}>{t("UP NEXT IN QUEUE")}</Text>
           <TouchableOpacity onPress={() => router.push('/(doctor)/queue')}>
-            <Text style={styles.fullQueueLink}>Full Queue &gt;</Text>
+            <Text style={styles.fullQueueLink}>{t("Full Queue >")}</Text>
           </TouchableOpacity>
         </View>
 
@@ -969,9 +1015,9 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               <View style={styles.emptyQueueIconCircle}>
                 <Ionicons name="people-outline" size={24} color="#0d6371" />
               </View>
-              <Text style={styles.emptyQueueTitle}>No patients waiting</Text>
+              <Text style={styles.emptyQueueTitle}>{t("No patients waiting")}</Text>
               <Text style={styles.emptyQueueSubtitle}>
-                The queue is empty. Next patients will appear here once registered.
+                {t("The queue is empty. Next patients will appear here once registered.")}
               </Text>
             </View>
           ) : (
@@ -979,7 +1025,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               <View key={index} style={styles.queueItemCard}>
                 {/* TKN Box */}
                 <View style={styles.tknBox}>
-                  <Text style={styles.tknLabel}>TKN</Text>
+                  <Text style={styles.tknLabel}>{t("TKN")}</Text>
                   <Text style={styles.tknNumber}>{String(item.tokenNumber).padStart(3, '0')}</Text>
                 </View>
 
@@ -987,7 +1033,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                 <View style={styles.queueItemInfo}>
                   <Text style={styles.queueItemName}>{item.patientName}</Text>
                   <Text style={styles.queueItemSub}>
-                    {index === 0 ? 'Post-op Check' : 'Hypertension Follow-up'} • {item.age} yrs
+                    {index === 0 ? t('Post-op Check') : t('Hypertension Follow-up')} • {item.age} {t("yrs")}
                   </Text>
                 </View>
 
@@ -1000,11 +1046,11 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                     onPress={() =>
                       Alert.alert(
                         `${item.patientName} (Token #${String(item.tokenNumber).padStart(3, '0')})`,
-                        'Select an option for this patient in the queue:',
+                        t('Select an option for this patient in the queue:'),
                         [
-                          { text: 'Cancel', style: 'cancel' },
+                          { text: t('Cancel'), style: 'cancel' },
                           {
-                            text: 'Remove from Queue',
+                            text: t('Remove from Queue'),
                             style: 'destructive',
                             onPress: () => handleRemoveQueuePatient(item.tokenNumber, item.patientName),
                           },
@@ -1027,7 +1073,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         {/* Home */}
         <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('home')}>
           <Ionicons name="home-outline" size={22} color={activeTab === 'home' ? '#0d6371' : '#64748b'} />
-          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>Home</Text>
+          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>{t("Home")}</Text>
         </TouchableOpacity>
 
         {/* Queue */}
@@ -1037,7 +1083,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             size={23}
             color={activeTab === 'queue' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>Queue</Text>
+          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>{t("Queue")}</Text>
         </TouchableOpacity>
 
         {/* Records */}
@@ -1047,7 +1093,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             size={22}
             color={activeTab === 'records' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>Records</Text>
+          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>{t("Records")}</Text>
         </TouchableOpacity>
 
         {/* Schedule */}
@@ -1057,7 +1103,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             size={22}
             color={activeTab === 'schedule' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>Schedule</Text>
+          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>{t("Schedule")}</Text>
         </TouchableOpacity>
 
         {/* Prescription */}
@@ -1071,8 +1117,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             numberOfLines={1}
             style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}
           >
-            Prescription
-          </Text>
+            {t("Prescription")}</Text>
         </TouchableOpacity>
       </View>
 

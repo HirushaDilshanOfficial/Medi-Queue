@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -39,6 +40,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   navigation,
   onNavigate,
 }) => {
+  const { t } = useLanguage();
   const { data, loading, error, refreshing, refresh } = useShiftSummary();
   const { isShiftClosed, setIsShiftClosed } = useShiftContext();
   const [exporting, setExporting] = useState<boolean>(false);
@@ -69,13 +71,13 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       await closeShift();
       setShiftClosed(true);
       setIsShiftClosed(true);
-      showToast('Shift closed successfully. Summary snapshot saved.', 'success');
+      showToast(t('Shift closed successfully. Summary snapshot saved.'), 'success');
       refresh(false);
     } catch (err: any) {
       if (err?.status === 409 || err?.message?.toLowerCase().includes('already closed')) {
         setShiftClosed(true);
         setIsShiftClosed(true);
-        showToast('Shift already closed', 'warning');
+        showToast(t('Shift already closed'), 'warning');
       } else {
         const msg = getErrorMessage(err) || 'Failed to close shift';
         showToast(msg, 'error');
@@ -92,10 +94,10 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       }
     } else {
       Alert.alert(
-        'Close shift?',
-        "This saves today's summary.",
+        t('Close shift?'),
+        t("This saves today's summary."),
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('Cancel'), style: 'cancel' },
           {
             text: 'Close Shift',
             style: 'destructive',
@@ -115,7 +117,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       const csvData = await downloadDailyReport(targetDate);
 
       if (!csvData || typeof csvData !== 'string' || !csvData.trim()) {
-        showToast('No report data available to export for today', 'warning');
+        showToast(t('No report data available to export for today'), 'warning');
         return;
       }
 
@@ -141,12 +143,12 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        showToast('Daily report downloaded successfully', 'success');
+        showToast(t('Daily report downloaded successfully'), 'success');
       } else {
         // Mobile FileSystem + Sharing
         const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
         if (!baseDir) {
-          showToast('Device storage is not accessible', 'error');
+          showToast(t('Device storage is not accessible'), 'error');
           return;
         }
 
@@ -158,7 +160,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
         const isSharingAvailable = await Sharing.isAvailableAsync();
         if (!isSharingAvailable) {
-          showToast('Sharing is unavailable on this device. File saved to storage.', 'warning');
+          showToast(t('Sharing is unavailable on this device. File saved to storage.'), 'warning');
           return;
         }
 
@@ -168,7 +170,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           UTI: 'public.comma-separated-values-text',
         });
 
-        showToast('Daily report exported successfully', 'success');
+        showToast(t('Daily report exported successfully'), 'success');
       }
     } catch (err: any) {
       const msg = getErrorMessage(err) || 'Failed to export daily report';
@@ -220,7 +222,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
             <Ionicons name="document-text" size={20} color={Colors.white} />
           </View>
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerTitle}>End-of-Day Summary</Text>
+            <Text style={styles.headerTitle}>{t("End-of-Day Summary")}</Text>
             <View style={styles.headerMetaRow}>
               <View style={styles.headerMetaItem}>
                 <Ionicons name="calendar-outline" size={13} color="#D0E8ED" style={{ marginRight: 4 }} />
@@ -229,7 +231,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               <View style={styles.metaDot} />
               <View style={styles.headerMetaItem}>
                 <Ionicons name="time-outline" size={13} color="#D0E8ED" style={{ marginRight: 4 }} />
-                <Text style={styles.headerSubtitle}>Shift: 08:00 - 16:30</Text>
+                <Text style={styles.headerSubtitle}>{t("Shift: 08:00 - 16:30")}</Text>
               </View>
             </View>
           </View>
@@ -241,7 +243,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           activeOpacity={0.7}
           disabled={loading || refreshing}
           accessibilityRole="button"
-          accessibilityLabel="Refresh shift summary"
+          accessibilityLabel={t("Refresh shift summary")}
         >
           <Ionicons
             name="refresh"
@@ -269,7 +271,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         {loading && !data ? (
           <View style={styles.stateContainer}>
             <LoadingState
-              message="Loading End-of-Day Summary..."
+              message={t("Loading End-of-Day Summary...")}
               size="large"
               fullscreen={false}
             />
@@ -277,7 +279,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         ) : error && !data ? (
           <View style={styles.stateContainer}>
             <ErrorState
-              title="Unable to Load Summary"
+              title={t("Unable to Load Summary")}
               message={error}
               onRetry={() => refresh(false)}
               retryLabel="Retry Summary"
@@ -289,17 +291,17 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
             {/* ── SHIFT PERFORMANCE STATS SECTION ── */}
             <View style={styles.section}>
               <SectionHeader
-                title="Shift Performance"
-                subtitle="Daily clinic throughput & handling efficiency"
+                title={t("Shift Performance")}
+                subtitle={t("Daily clinic throughput & handling efficiency")}
               />
 
               <View style={styles.statsGrid}>
                 {/* 1. Total Registered */}
                 <View style={styles.statCardWrapper}>
                   <StatCard
-                    title="Total Registered"
+                    title={t("Total Registered")}
                     value={total}
-                    subtitle="Total patient intake"
+                    subtitle={t("Total patient intake")}
                     iconName="people-outline"
                     variant="primary"
                   />
@@ -308,9 +310,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 {/* 2. Attended */}
                 <View style={styles.statCardWrapper}>
                   <StatCard
-                    title="Attended"
+                    title={t("Attended")}
                     value={attended}
-                    subtitle={`${attendedPct}% completed`}
+                    subtitle={t("{value0}% completed", { value0: String(attendedPct) })}
                     iconName="checkmark-circle-outline"
                     variant="success"
                   />
@@ -319,9 +321,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 {/* 3. No-Shows / Cancelled */}
                 <View style={styles.statCardWrapper}>
                   <StatCard
-                    title="No-Shows / Cancelled"
+                    title={t("No-Shows / Cancelled")}
                     value={`${noShows} / ${cancelled}`}
-                    subtitle={`${noShows + cancelled} missed visits`}
+                    subtitle={t("{value0} missed visits", { value0: String(noShows + cancelled) })}
                     iconName="alert-circle-outline"
                     variant="warning"
                   />
@@ -330,9 +332,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 {/* 4. Counter Handling avg */}
                 <View style={styles.statCardWrapper}>
                   <StatCard
-                    title="Counter Handling avg"
-                    value={`${data?.avgHandlingMinutes ?? 0} mins`}
-                    subtitle="Average consultation time"
+                    title={t("Counter Handling avg")}
+                    value={t('{minutes} min', { minutes: data?.avgHandlingMinutes ?? 0 })}
+                    subtitle={t("Average consultation time")}
                     iconName="time-outline"
                     variant="default"
                   />
@@ -343,8 +345,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
             {/* ── QUEUE THROUGHPUT CARD ── */}
             <View style={styles.section}>
               <SectionHeader
-                title="Queue Throughput"
-                subtitle="Operational efficiency vs daily target"
+                title={t("Queue Throughput")}
+                subtitle={t("Operational efficiency vs daily target")}
               />
 
               <View style={styles.throughputCard}>
@@ -359,8 +361,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                       />
                     </View>
                     <View>
-                      <Text style={styles.throughputCardTitle}>Shift Completion</Text>
-                      <Text style={styles.throughputCardSubtitle}>95% Efficiency Benchmark</Text>
+                      <Text style={styles.throughputCardTitle}>{t("Shift Completion")}</Text>
+                      <Text style={styles.throughputCardSubtitle}>{t("95% Efficiency Benchmark")}</Text>
                     </View>
                   </View>
 
@@ -380,7 +382,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                       style={{ marginRight: 4 }}
                     />
                     <Text style={[styles.goalBadgeText, { color: goalColor }]}>
-                      {isGoalMet ? 'Goal Met (≥95%)' : 'Below 95% Target'}
+                      {isGoalMet ? t('Goal Met (≥95%)') : t('Below 95% Target')}
                     </Text>
                   </View>
                 </View>
@@ -389,16 +391,16 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 <View style={styles.heroThroughputBox}>
                   <View style={styles.heroThroughputRow}>
                     <View>
-                      <Text style={styles.heroThroughputLabel}>Throughput Rate</Text>
+                      <Text style={styles.heroThroughputLabel}>{t("Throughput Rate")}</Text>
                       <Text style={styles.heroThroughputSub}>
-                        {isGoalMet ? 'Exceeding target' : 'Target gap: ' + (95 - throughputPercent).toFixed(1) + '%'}
+                        {isGoalMet ? t('Exceeding target') : 'Target gap: ' + (95 - throughputPercent).toFixed(1) + '%'}
                       </Text>
                     </View>
                     <View style={styles.heroThroughputValueWrap}>
                       <Text style={[styles.heroThroughputPercent, { color: goalColor }]}>
                         {throughputPercent}%
                       </Text>
-                      <Text style={styles.heroGoalTarget}> / 95% Goal</Text>
+                      <Text style={styles.heroGoalTarget}> {t("/ 95% Goal")}</Text>
                     </View>
                   </View>
 
@@ -420,7 +422,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                   {/* Goal Scale Axis Labels */}
                   <View style={styles.scaleRow}>
                     <Text style={styles.scaleText}>0%</Text>
-                    <Text style={styles.scaleGoalText}>95% Target Goal</Text>
+                    <Text style={styles.scaleGoalText}>{t("95% Target Goal")}</Text>
                     <Text style={styles.scaleText}>100%</Text>
                   </View>
                 </View>
@@ -428,7 +430,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 <View style={styles.cardDivider} />
 
                 {/* Individual Breakdown Progress Bars */}
-                <Text style={styles.breakdownHeading}>Status Breakdown</Text>
+                <Text style={styles.breakdownHeading}>{t("Status Breakdown")}</Text>
 
                 <View style={styles.breakdownList}>
                   {/* 1. Attended */}
@@ -436,7 +438,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                     <View style={styles.breakdownLabelRow}>
                       <View style={styles.breakdownLabelLeft}>
                         <View style={[styles.dotIndicator, { backgroundColor: Colors.success }]} />
-                        <Text style={styles.breakdownLabel}>Attended</Text>
+                        <Text style={styles.breakdownLabel}>{t("Attended")}</Text>
                       </View>
                       <Text style={styles.breakdownValue}>
                         <Text style={styles.breakdownCount}>{attended}</Text> ({attendedPct}%)
@@ -460,7 +462,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                     <View style={styles.breakdownLabelRow}>
                       <View style={styles.breakdownLabelLeft}>
                         <View style={[styles.dotIndicator, { backgroundColor: Colors.warning }]} />
-                        <Text style={styles.breakdownLabel}>No-Shows</Text>
+                        <Text style={styles.breakdownLabel}>{t("No-Shows")}</Text>
                       </View>
                       <Text style={styles.breakdownValue}>
                         <Text style={styles.breakdownCount}>{noShows}</Text> ({noShowsPct}%)
@@ -484,7 +486,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                     <View style={styles.breakdownLabelRow}>
                       <View style={styles.breakdownLabelLeft}>
                         <View style={[styles.dotIndicator, { backgroundColor: '#94A3B8' }]} />
-                        <Text style={styles.breakdownLabel}>Cancelled</Text>
+                        <Text style={styles.breakdownLabel}>{t("Cancelled")}</Text>
                       </View>
                       <Text style={styles.breakdownValue}>
                         <Text style={styles.breakdownCount}>{cancelled}</Text> ({cancelledPct}%)
@@ -509,7 +511,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                       <View style={styles.breakdownLabelRow}>
                         <View style={styles.breakdownLabelLeft}>
                           <View style={[styles.dotIndicator, { backgroundColor: Colors.primaryLight }]} />
-                          <Text style={styles.breakdownLabel}>In Waiting Queue</Text>
+                          <Text style={styles.breakdownLabel}>{t("In Waiting Queue")}</Text>
                         </View>
                         <Text style={styles.breakdownValue}>
                           <Text style={styles.breakdownCount}>{inProgress}</Text> ({inProgressPct}%)
@@ -535,8 +537,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
             {/* ── DOCTOR SCHEDULES & ROSTER SECTION ── */}
             <View style={styles.section}>
               <SectionHeader
-                title="Doctor Schedules & Roster"
-                subtitle="Physician consultation progress & room allocation"
+                title={t("Doctor Schedules & Roster")}
+                subtitle={t("Physician consultation progress & room allocation")}
               />
 
               {!data?.doctors || data.doctors.length === 0 ? (
@@ -544,10 +546,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                   <View style={styles.emptyDoctorIconWrap}>
                     <Ionicons name="medkit-outline" size={28} color={Colors.textLight} />
                   </View>
-                  <Text style={styles.emptyDoctorTitle}>No Doctors Scheduled</Text>
+                  <Text style={styles.emptyDoctorTitle}>{t("No Doctors Scheduled")}</Text>
                   <Text style={styles.emptyDoctorSubtitle}>
-                    There are no rostered doctors assigned for this shift.
-                  </Text>
+                    {t("There are no rostered doctors assigned for this shift.")}</Text>
                 </View>
               ) : (
                 <View style={styles.doctorsList}>
@@ -574,11 +575,11 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                                   <View style={styles.roomTag}>
                                     <Ionicons name="business-outline" size={11} color={Colors.primary} style={{ marginRight: 3 }} />
                                     <Text style={styles.roomTagText}>
-                                      {doc.room.toLowerCase().startsWith('room') ? doc.room : `Room ${doc.room}`}
+                                      {doc.room.toLowerCase().startsWith('room') ? doc.room : t("Room {value0}", { value0: String(doc.room) })}
                                     </Text>
                                   </View>
                                 ) : (
-                                  <Text style={styles.unassignedRoomText}>Room unassigned</Text>
+                                  <Text style={styles.unassignedRoomText}>{t("Room unassigned")}</Text>
                                 )}
                               </View>
                             </View>
@@ -588,9 +589,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                             status={doc.status}
                             label={
                               doc.status === 'on_break' || doc.status === 'on break'
-                                ? 'On Break'
+                                ? t('On Break')
                                 : doc.status === 'available' || doc.status === 'active' || doc.status === 'consulting'
-                                ? 'Online / Active'
+                                ? t('Online / Active')
                                 : undefined
                             }
                             size="small"
@@ -600,7 +601,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                         {/* Doctor Capacity & Progress Row */}
                         <View style={styles.doctorProgressContainer}>
                           <View style={styles.doctorProgressHeader}>
-                            <Text style={styles.doctorProgressLabel}>Attended Patients</Text>
+                            <Text style={styles.doctorProgressLabel}>{t("Attended Patients")}</Text>
                             <Text style={styles.doctorCapacityText}>
                               <Text style={styles.doctorAttendedNumber}>{attendedCount}</Text>
                               <Text style={styles.doctorTotalCapacity}> / {capacity}</Text>
@@ -635,10 +636,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                     <Ionicons name="document-text" size={24} color={Colors.primary} />
                   </View>
                   <View style={styles.exportHeaderTextWrap}>
-                    <Text style={styles.exportCardTitle}>Daily Shift CSV Audit Log</Text>
+                    <Text style={styles.exportCardTitle}>{t("Daily Shift CSV Audit Log")}</Text>
                     <Text style={styles.exportCardSubtitle}>
-                      Export complete encounter list, token history, and clinic status.
-                    </Text>
+                      {t("Export complete encounter list, token history, and clinic status.")}</Text>
                   </View>
                 </View>
 
@@ -651,17 +651,17 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                   disabled={exporting || loading}
                   activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityLabel="Generate and export daily report"
+                  accessibilityLabel={t("Generate and export daily report")}
                 >
                   {exporting ? (
                     <View style={styles.exportBtnInner}>
                       <ActivityIndicator size="small" color={Colors.white} style={{ marginRight: 10 }} />
-                      <Text style={styles.exportButtonText}>Exporting CSV Report...</Text>
+                      <Text style={styles.exportButtonText}>{t("Exporting CSV Report...")}</Text>
                     </View>
                   ) : (
                     <View style={styles.exportBtnInner}>
                       <Ionicons name="share-outline" size={20} color={Colors.white} style={{ marginRight: 8 }} />
-                      <Text style={styles.exportButtonText}>Generate & Export Daily Report</Text>
+                      <Text style={styles.exportButtonText}>{t("Generate & Export Daily Report")}</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -686,18 +686,18 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                   </View>
                   <View style={styles.closeShiftTextWrap}>
                     <View style={styles.closeShiftTitleRow}>
-                      <Text style={styles.closeShiftTitle}>End Shift</Text>
+                      <Text style={styles.closeShiftTitle}>{t("End Shift")}</Text>
                       {shiftClosed && (
                         <View style={styles.shiftClosedBadge}>
                           <Ionicons name="lock-closed" size={11} color={Colors.success} style={{ marginRight: 3 }} />
-                          <Text style={styles.shiftClosedBadgeText}>Shift closed</Text>
+                          <Text style={styles.shiftClosedBadgeText}>{t("Shift closed")}</Text>
                         </View>
                       )}
                     </View>
                     <Text style={styles.closeShiftSubtitle}>
                       {shiftClosed
-                        ? "Today's summary figures have been locked and archived."
-                        : "Finalize today's intake and store the shift performance snapshot."}
+                        ? t("Today's summary figures have been locked and archived.")
+                        : t("Finalize today's intake and store the shift performance snapshot.")}
                     </Text>
                   </View>
                 </View>
@@ -705,7 +705,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 {shiftClosed ? (
                   <View style={styles.shiftClosedSuccessState}>
                     <Ionicons name="checkmark-done-circle" size={20} color={Colors.success} style={{ marginRight: 8 }} />
-                    <Text style={styles.shiftClosedSuccessText}>Shift closed</Text>
+                    <Text style={styles.shiftClosedSuccessText}>{t("Shift closed")}</Text>
                   </View>
                 ) : (
                   <TouchableOpacity
@@ -717,17 +717,17 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                     disabled={closingShift || loading}
                     activeOpacity={0.8}
                     accessibilityRole="button"
-                    accessibilityLabel="Close Counter 01 Shift"
+                    accessibilityLabel={t("Close Counter 01 Shift")}
                   >
                     {closingShift ? (
                       <View style={styles.btnInnerRow}>
                         <ActivityIndicator size="small" color={Colors.white} style={{ marginRight: 8 }} />
-                        <Text style={styles.closeShiftButtonText}>Closing Shift...</Text>
+                        <Text style={styles.closeShiftButtonText}>{t("Closing Shift...")}</Text>
                       </View>
                     ) : (
                       <View style={styles.btnInnerRow}>
                         <Ionicons name="power-outline" size={18} color={Colors.white} style={{ marginRight: 8 }} />
-                        <Text style={styles.closeShiftButtonText}>Close Counter 01 Shift</Text>
+                        <Text style={styles.closeShiftButtonText}>{t("Close Counter 01 Shift")}</Text>
                       </View>
                     )}
                   </TouchableOpacity>

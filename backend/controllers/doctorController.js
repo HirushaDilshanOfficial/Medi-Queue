@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Doctor = require('../models/Doctor');
 const Appointment = require('../models/Appointment');
 const { asyncHandler } = require('../utils/errorHandler');
@@ -12,7 +13,7 @@ const ACTIVE_STATUSES = ['booked', 'checked_in', 'in_consultation'];
  * @access  Private — receptionist
  */
 const getDoctors = asyncHandler(async (req, res) => {
-  const { department, date } = req.query;
+  const { department, hospitalId, date } = req.query;
 
   const targetDate =
     date ||
@@ -28,6 +29,9 @@ const getDoctors = asyncHandler(async (req, res) => {
     doctorFilter.department = {
       $regex: new RegExp(`^${department.trim()}$`, 'i'),
     };
+  }
+  if (hospitalId && mongoose.isValidObjectId(hospitalId)) {
+    doctorFilter.hospital = hospitalId;
   }
 
   // Fetch doctors and active appointments count for targetDate in parallel

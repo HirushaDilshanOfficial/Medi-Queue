@@ -5,6 +5,9 @@ const OpdQueueEntry = require('../models/OpdQueueEntry');
 const OpdMedicalReport = require('../models/OpdMedicalReport');
 const { today, buildLiveState, ACTIVE_STATUSES: QUEUE_ACTIVE } = require('../utils/opdQueue');
 const { mapAppointment, relativeDate, isValidObjectId } = require('../utils/opdAppointment');
+const fs = require('fs');
+const path = require('path');
+const { REPORT_UPLOAD_DIR } = require('../middleware/reportUpload');
 
 function ageFrom(birthday) {
   if (!(birthday instanceof Date) || Number.isNaN(birthday.getTime())) return null;
@@ -333,6 +336,20 @@ const getMyReports = async (req, res, next) => {
   }
 };
 
+const getMyReport = async (req, res, next) => {
+  try {
+    const report = await OpdMedicalReport.findOne({
+      _id: req.params.id,
+      profile: req.patientProfile._id,
+    }).lean();
+    if (!report) return res.status(404).json({ message: 'Report not found' });
+    return res.json({ report: toReportDto(report) });
+  } catch (error) {
+    if (error.name === 'CastError') return res.status(400).json({ message: 'That report id is not valid' });
+    return next(error);
+  }
+};
+
 function toReportDto(report) {
   return {
     id: String(report._id),
@@ -343,6 +360,9 @@ function toReportDto(report) {
     performedOn: report.performedOn ? report.performedOn.toISOString() : null,
     notes: report.notes || null,
     fileName: report.fileName || null,
+    fileMimeType: report.fileMimeType || null,
+    fileSize: report.fileSize || null,
+    fileUrl: report.fileKey ? `/api/v1/patients/me/reports/${String(report._id)}/file` : null,
     status: report.status,
     createdAt: report.createdAt ? report.createdAt.toISOString() : null,
   };
@@ -432,9 +452,10 @@ const createMyReport = async (req, res, next) => {
 
     // The optional visit link is checked here rather than in the validator,
     // because confirming it exists needs a query.
-    if (patch.appointmentId) {
+    const appointmentId = patch.appointmentId;
+    if (appointmentId) {
       const owned = await OpdAppointment.exists({
-        _id: patch.appointmentId,
+        _id: appointmentId,
         profile: req.patientProfile._id,
       });
       if (!owned) {
@@ -442,18 +463,109 @@ const createMyReport = async (req, res, next) => {
       }
     }
 
+    delete patch.appointmentId;
     const report = await OpdMedicalReport.create({
       ...patch,
+      appointment: appointmentId || null,
       profile: req.patientProfile._id,
+      ...(req.file ? {
+        fileName: req.file.originalname,
+        fileKey: req.file.filename,
+        fileMimeType: req.file.mimetype,
+        fileSize: req.file.size,
+      } : {}),
     });
 
     res.status(201).json({ report: toReportDto(report.toObject()) });
   } catch (error) {
+    if (req.file) fs.rm(req.file.path, { force: true }, () => {});
     // A schema validation error is the caller's fault, not a server fault.
     if (error.name === 'ValidationError') {
       return res.status(400).json({ message: error.message });
     }
     next(error);
+  }
+};
+
+const updateMyReport = async (req, res, next) => {
+  let previousFile;
+  try {
+    const { patch, error } = buildReportPatch(req.body);
+    if (error) {
+      if (req.file) fs.rm(req.file.path, { force: true }, () => {});
+      return res.status(400).json({ message: error });
+    }
+
+    const report = await OpdMedicalReport.findOne({
+      _id: req.params.id,
+      profile: req.patientProfile._id,
+    });
+    if (!report) {
+      if (req.file) fs.rm(req.file.path, { force: true }, () => {});
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    if (patch.appointmentId) {
+      const owned = await OpdAppointment.exists({
+        _id: patch.appointmentId,
+        profile: req.patientProfile._id,
+      });
+      if (!owned) {
+        if (req.file) fs.rm(req.file.path, { force: true }, () => {});
+        return res.status(404).json({ message: 'That visit was not found in your history' });
+      }
+    }
+
+    previousFile = report.fileKey;
+    const appointmentWasSubmitted = Object.prototype.hasOwnProperty.call(req.body, 'appointmentId');
+    const appointmentId = appointmentWasSubmitted ? (patch.appointmentId || null) : report.appointment;
+    delete patch.appointmentId;
+    Object.assign(report, {
+      ...patch,
+      appointment: appointmentId || null,
+      ...(req.file ? {
+        fileName: req.file.originalname,
+        fileKey: req.file.filename,
+        fileMimeType: req.file.mimetype,
+        fileSize: req.file.size,
+      } : {}),
+    });
+    await report.save();
+
+    if (req.file && previousFile) {
+      fs.rm(path.join(REPORT_UPLOAD_DIR, previousFile), { force: true }, () => {});
+    }
+    return res.json({ report: toReportDto(report.toObject()) });
+  } catch (error) {
+    if (req.file) fs.rm(req.file.path, { force: true }, () => {});
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: error.message });
+    }
+    if (error.name === 'CastError') {
+      return res.status(400).json({ message: 'That report id is not valid' });
+    }
+    return next(error);
+  }
+};
+
+const getMyReportFile = async (req, res, next) => {
+  try {
+    const report = await OpdMedicalReport.findOne({
+      _id: req.params.id,
+      profile: req.patientProfile._id,
+    }).lean();
+    if (!report) return res.status(404).json({ message: 'Report not found' });
+    if (!report.fileKey) return res.status(404).json({ message: 'This report has no uploaded file' });
+
+    const filePath = path.join(REPORT_UPLOAD_DIR, report.fileKey);
+    if (!filePath.startsWith(REPORT_UPLOAD_DIR + path.sep) || !fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'Uploaded file is not available' });
+    }
+    res.type(report.fileMimeType || 'application/octet-stream');
+    return res.sendFile(filePath);
+  } catch (error) {
+    if (error.name === 'CastError') return res.status(400).json({ message: 'That report id is not valid' });
+    return next(error);
   }
 };
 
@@ -473,6 +585,9 @@ const deleteMyReport = async (req, res, next) => {
       return res.status(404).json({ message: 'Report not found' });
     }
 
+    if (removed.fileKey) {
+      fs.rm(path.join(REPORT_UPLOAD_DIR, removed.fileKey), { force: true }, () => {});
+    }
     res.json({ message: 'Report removed' });
   } catch (error) {
     if (error.name === 'CastError') {
@@ -1070,8 +1185,11 @@ module.exports = {
   updateMyProfile,
   getMyHistory,
   getMyReports,
+  getMyReport,
   createMyReport,
+  updateMyReport,
   deleteMyReport,
+  getMyReportFile,
   getDashboard,
   toProfileDto,
   buildProfilePatch,
