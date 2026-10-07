@@ -7,9 +7,102 @@ const { normalizePhone, isValidDate, isValidSlot } = require('../utils/validator
 const { findOrCreatePatient } = require('../services/patientService');
 const { getNextToken } = require('../utils/tokenGenerator');
 const { estimateWaitMinutes } = require('../services/waitTimeService');
-const { sendSmsConfirmation } = require('../utils/notifier');
+const {
+  sendOtpSms,
+  sendPatientRegistrationSms,
+  sendSmsConfirmation,
+} = require('../utils/notifier');
 
 const { asyncHandler, createError } = require('../utils/errorHandler');
+
+// Active in-memory OTP store for patient phone verification: Map<phone, { otp, expiresAt, verified, patientName }>
+const patientOtpStore = new Map();
+
+// ──────────────────────────────────────────────────────
+// @desc    Send 6-digit OTP to patient's telephone number
+// @route   POST /api/reception/send-otp
+// @access  Private — receptionist
+// ──────────────────────────────────────────────────────
+const sendPatientOtp = asyncHandler(async (req, res) => {
+  const { phone, patientName } = req.body;
+
+  if (!phone || String(phone).trim().length < 7) {
+    throw createError('A valid telephone number is required to send verification OTP.', 400);
+  }
+
+  const cleanPhone = String(phone).trim();
+  const normalized = normalizePhone(cleanPhone) || cleanPhone;
+
+  // Generate 6-digit numeric OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes validity
+
+  const record = {
+    otp,
+    expiresAt,
+    verified: false,
+    patientName: patientName?.trim() || 'Patient',
+  };
+
+  patientOtpStore.set(cleanPhone, record);
+  if (normalized !== cleanPhone) {
+    patientOtpStore.set(normalized, record);
+  }
+
+  // Trigger SMS notification through gateway/notifier
+  const smsResult = await sendOtpSms(cleanPhone, otp, patientName);
+
+  res.status(200).json({
+    success: true,
+    message: `Verification OTP successfully dispatched to ${cleanPhone}`,
+    phone: cleanPhone,
+    otp, // included for demo and simulated testing convenience
+    expiresAt,
+    smsDispatched: true,
+  });
+});
+
+// ──────────────────────────────────────────────────────
+// @desc    Verify patient OTP
+// @route   POST /api/reception/verify-otp
+// @access  Private — receptionist
+// ──────────────────────────────────────────────────────
+const verifyPatientOtp = asyncHandler(async (req, res) => {
+  const { phone, otp } = req.body;
+
+  if (!phone || !otp) {
+    throw createError('Telephone number and 6-digit OTP are required.', 400);
+  }
+
+  const cleanPhone = String(phone).trim();
+  const normalized = normalizePhone(cleanPhone) || cleanPhone;
+  const cleanOtp = String(otp).trim();
+
+  const record = patientOtpStore.get(cleanPhone) || patientOtpStore.get(normalized);
+
+  if (!record) {
+    throw createError('No active OTP found for this number. Please click Send OTP.', 400);
+  }
+
+  if (Date.now() > record.expiresAt) {
+    patientOtpStore.delete(cleanPhone);
+    patientOtpStore.delete(normalized);
+    throw createError('OTP code has expired. Please request a new OTP.', 400);
+  }
+
+  if (record.otp !== cleanOtp) {
+    throw createError('Incorrect OTP entered. Please check patient mobile and re-enter.', 400);
+  }
+
+  record.verified = true;
+
+  res.status(200).json({
+    success: true,
+    verified: true,
+    message: 'Patient telephone number successfully verified!',
+    phone: cleanPhone,
+  });
+});
 
 // ──────────────────────────────────────────────────────
 // @desc    Search patients by NIC or phone
@@ -36,7 +129,7 @@ const searchPatients = asyncHandler(async (req, res) => {
   }
 
   const patients = await Patient.find({ $or: conditions })
-    .select('fullName nic phone age gender nicVerified')
+    .select('fullName nic phone age gender dob bloodGroup nicVerified')
     .limit(10)
     .lean();
 
@@ -70,15 +163,29 @@ const getSlots = asyncHandler(async (req, res) => {
   const end = doctor.workingHours?.end || '16:30';
   const allSlots = buildSlots(start, end);
 
-  const activeAppointments = await Appointment.find({
-    doctor: doctorId,
-    date,
-    isActive: true,
-  })
-    .select('slotTime')
-    .lean();
+  const OpdAppointment = require('../models/OpdAppointment');
 
-  const bookedTimes = new Set(activeAppointments.map((a) => a.slotTime));
+  const [activeAppointments, activeOpdAppointments] = await Promise.all([
+    Appointment.find({
+      doctor: doctorId,
+      date,
+      status: { $nin: ['cancelled', 'no_show'] },
+    })
+      .select('slotTime')
+      .lean(),
+    OpdAppointment.find({
+      doctor: doctorId,
+      date,
+      status: { $nin: ['cancelled', 'no_show'] },
+    })
+      .select('slotTime')
+      .lean(),
+  ]);
+
+  const bookedTimes = new Set([
+    ...activeAppointments.map((a) => a.slotTime),
+    ...activeOpdAppointments.map((a) => a.slotTime),
+  ]);
 
   const now = new Date();
   const isToday =
@@ -178,13 +285,103 @@ const walkInBooking = asyncHandler(async (req, res) => {
     }
   }
 
+  const resolvedType =
+    req.body.type === 'pre_booked' || req.body.intakeType === 'pre_booked'
+      ? 'pre_booked'
+      : 'walk_in';
+
+  // If checking in a pre-existing appointment ID (Appointment or OpdAppointment)
+  if (req.body.appointmentId && mongoose.Types.ObjectId.isValid(req.body.appointmentId)) {
+    let existing = await Appointment.findById(req.body.appointmentId);
+    let existingOpd = null;
+    if (!existing) {
+      const OpdAppointment = require('../models/OpdAppointment');
+      existingOpd = await OpdAppointment.findById(req.body.appointmentId);
+    }
+
+    if (existing || existingOpd) {
+      if (existing) {
+        existing.status = 'checked_in';
+        if (priority) existing.priority = priority;
+      }
+      if (existingOpd) {
+        existingOpd.status = 'checked_in';
+        await existingOpd.save();
+        if (!existing) {
+          existing = await Appointment.create({
+            patient: patient._id,
+            doctor: doctorId,
+            department: department.trim(),
+            date,
+            slotTime: resolvedSlot || existingOpd.slotTime,
+            type: 'pre_booked',
+            status: 'checked_in',
+            bookedBy: req.user._id,
+          });
+        }
+      }
+      let existingToken = await QueueToken.findOne({ appointment: existing._id });
+      if (!existingToken) {
+        existingToken = await getNextToken(existing.department, date, priority);
+        existingToken.appointment = existing._id;
+        existingToken.patient = existing.patient;
+        existingToken.doctor = existing.doctor;
+        await existingToken.save();
+        existing.tokenNumber = existingToken.tokenNumber;
+        await existing.save();
+      }
+      const waitInfo = await estimateWaitMinutes(existing.doctor, date);
+      return res.status(200).json({
+        isNewPatient: false,
+        patient,
+        appointment: existing,
+        token: {
+          tokenLabel: existingToken.tokenLabel,
+          tokenNumber: existingToken.tokenNumber,
+        },
+        doctor: {
+          name: doctor.name,
+          department: doctor.department,
+          room: doctor.room,
+        },
+        estimatedWaitMinutes: waitInfo.estimatedWaitMinutes,
+        patientsAhead: waitInfo.patientsAhead,
+      });
+    }
+  }
+
+  // Double booking check across both Appointment and OpdAppointment
+  const OpdAppointment = require('../models/OpdAppointment');
+  const [existingAppt, existingOpd] = await Promise.all([
+    Appointment.findOne({
+      doctor: doctorId,
+      date,
+      slotTime: resolvedSlot,
+      status: { $nin: ['cancelled', 'no_show'] },
+    }).lean(),
+    OpdAppointment.findOne({
+      doctor: doctorId,
+      date,
+      slotTime: resolvedSlot,
+      status: { $nin: ['cancelled', 'no_show'] },
+    }).lean(),
+  ]);
+
+  if (existingAppt || existingOpd) {
+    const nextAvailableSlot = await findEarliestAvailableSlot(doctor, doctorId, date);
+    const conflictErr = createError(`Slot ${resolvedSlot} is already booked by a patient. Please choose an available slot.`, 409);
+    conflictErr.requestedSlot = resolvedSlot;
+    conflictErr.nextAvailableSlot = nextAvailableSlot;
+    throw conflictErr;
+  }
+
   const appointmentData = {
     patient: patient._id,
     doctor: doctorId,
     department: department.trim(),
     date,
     slotTime: resolvedSlot,
-    type: 'walk_in',
+    type: resolvedType,
     status: 'checked_in',
     bookedBy: req.user._id,
   };
@@ -216,11 +413,25 @@ const walkInBooking = asyncHandler(async (req, res) => {
   // ── 8. Estimate wait time ──
   const waitInfo = await estimateWaitMinutes(doctorId, date);
 
-  // ── 9. SMS notification (fire-and-forget) ──
+  // ── 9. SMS notification to patient (Registration Confirmation) ──
+  let smsNotification = null;
   try {
-    await sendSmsConfirmation(patient, token);
+    smsNotification = await sendPatientRegistrationSms(patient, appointment, token, doctor, waitInfo);
   } catch (smsErr) {
     console.error('SMS notification failed (non-blocking):', smsErr.message);
+    smsNotification = {
+      sent: false,
+      recipient: patient.phone,
+      message: `Dear ${patient.fullName}, your registration at Medi-Queue Hospital is confirmed! Token: ${token.tokenLabel}. Doctor: Dr. ${doctor.name}.`,
+      error: smsErr.message,
+    };
+  }
+
+  // Clear OTP verified record once patient is registered
+  if (patient.phone) {
+    patientOtpStore.delete(patient.phone);
+    const norm = normalizePhone(patient.phone);
+    if (norm) patientOtpStore.delete(norm);
   }
 
   // ── 10. Respond ──
@@ -233,6 +444,8 @@ const walkInBooking = asyncHandler(async (req, res) => {
       phone: patient.phone,
       age: patient.age || null,
       gender: patient.gender || null,
+      dob: patient.dob ? new Date(patient.dob).toISOString().split('T')[0] : null,
+      bloodGroup: patient.bloodGroup || null,
     },
     appointment: {
       _id: appointment._id,
@@ -252,6 +465,12 @@ const walkInBooking = asyncHandler(async (req, res) => {
     },
     estimatedWaitMinutes: waitInfo.estimatedWaitMinutes,
     patientsAhead: waitInfo.patientsAhead,
+    smsNotification: smsNotification || {
+      sent: true,
+      recipient: patient.phone,
+      message: `Dear ${patient.fullName}, your registration at Medi-Queue Hospital is confirmed! Token: ${token.tokenLabel}. Doctor: Dr. ${doctor.name}.`,
+      sentAt: new Date().toISOString(),
+    },
   });
 });
 
@@ -377,10 +596,27 @@ async function findEarliestAvailableSlot(doctor, doctorId, date) {
   const end = doctor.workingHours?.end || '16:30';
   const allSlots = buildSlots(start, end);
 
-  const booked = await Appointment.find({ doctor: doctorId, date, isActive: true })
-    .select('slotTime')
-    .lean();
-  const bookedSet = new Set(booked.map((a) => a.slotTime));
+  const OpdAppointment = require('../models/OpdAppointment');
+  const [booked, opdBooked] = await Promise.all([
+    Appointment.find({
+      doctor: doctorId,
+      date,
+      status: { $nin: ['cancelled', 'no_show'] },
+    })
+      .select('slotTime')
+      .lean(),
+    OpdAppointment.find({
+      doctor: doctorId,
+      date,
+      status: { $nin: ['cancelled', 'no_show'] },
+    })
+      .select('slotTime')
+      .lean(),
+  ]);
+  const bookedSet = new Set([
+    ...booked.map((a) => a.slotTime),
+    ...opdBooked.map((a) => a.slotTime),
+  ]);
 
   const now = new Date();
   const todayStr = new Intl.DateTimeFormat('en-CA', {
@@ -402,4 +638,167 @@ async function findEarliestAvailableSlot(doctor, doctorId, date) {
   return null;
 }
 
-module.exports = { searchPatients, getSlots, walkInBooking };
+// ──────────────────────────────────────────────────────
+// @desc    List/search pre-booked appointments for today
+// @route   GET /api/reception/pre-booked?date=&q=
+// @access  Private — receptionist
+// ──────────────────────────────────────────────────────
+const getPreBookedAppointments = asyncHandler(async (req, res) => {
+  const { date, q } = req.query;
+  const now = new Date();
+  const todayStr =
+    date ||
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Colombo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now);
+
+  const appointments = await Appointment.find({
+    date: todayStr,
+    $or: [{ type: 'pre_booked' }, { status: 'booked' }],
+  })
+    .populate('patient', 'fullName nic phone age gender')
+    .populate('doctor', 'name department room specialization')
+    .sort({ slotTime: 1 })
+    .lean();
+
+  let results = appointments.map((a) => ({
+    _id: a._id,
+    bookingRef: `BK-${String(a._id).slice(-4).toUpperCase()}`,
+    date: a.date,
+    slotTime: a.slotTime,
+    department: a.department,
+    status: a.status,
+    type: a.type || 'pre_booked',
+    priority: a.priority || 'normal',
+    tokenNumber: a.tokenNumber || null,
+    patient: a.patient
+      ? {
+          _id: a.patient._id,
+          fullName: a.patient.fullName,
+          nic: a.patient.nic || '',
+          phone: a.patient.phone || '',
+          age: a.patient.age,
+          gender: a.patient.gender,
+        }
+      : null,
+    doctor: a.doctor
+      ? {
+          _id: a.doctor._id,
+          name: a.doctor.name,
+          department: a.doctor.department,
+          room: a.doctor.room,
+        }
+      : null,
+  }));
+
+  if (results.length === 0) {
+    try {
+      const OpdAppointment = require('../models/OpdAppointment');
+      const opdList = await OpdAppointment.find({
+        date: todayStr,
+      })
+        .populate('profile', 'fullName nic phone age gender')
+        .populate('doctor', 'name department room specialization')
+        .sort({ slotTime: 1 })
+        .lean();
+
+      results = opdList.map((a) => ({
+        _id: a._id,
+        bookingRef: `OPD-${String(a._id).slice(-4).toUpperCase()}`,
+        date: a.date,
+        slotTime: a.slotTime,
+        department: a.department,
+        status: a.status,
+        type: a.type || 'pre_booked',
+        priority: 'normal',
+        tokenNumber: a.tokenNumber || null,
+        patient: a.profile
+          ? {
+              _id: a.profile._id,
+              fullName: a.profile.fullName,
+              nic: a.profile.nic || '',
+              phone: a.profile.phone || '',
+              age: a.profile.age,
+              gender: a.profile.gender,
+            }
+          : null,
+        doctor: a.doctor
+          ? {
+              _id: a.doctor._id,
+              name: a.doctor.name,
+              department: a.doctor.department,
+              room: a.doctor.room,
+            }
+          : null,
+      }));
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // ── AUTO-ISSUE TOKENS FOR PRE-BOOKINGS ──
+  // Pre-booked appointments receive their queue token automatically
+  for (const item of results) {
+    let qt = await QueueToken.findOne({ appointment: item._id });
+    if (!qt && item.patient?._id) {
+      try {
+        const nextTok = await getNextToken(todayStr);
+        qt = await QueueToken.create({
+          appointment: item._id,
+          patient: item.patient._id,
+          department: item.department || item.doctor?.department || 'General OPD',
+          date: todayStr,
+          tokenNumber: nextTok.tokenNumber,
+          tokenLabel: nextTok.tokenLabel,
+          status: 'waiting',
+          priority: item.priority || 'normal',
+          assignedDoctor: item.doctor?._id || null,
+        });
+        await Appointment.findByIdAndUpdate(item._id, { tokenNumber: nextTok.tokenNumber }).catch(() => {});
+      } catch (err) {
+        qt = await QueueToken.findOne({ appointment: item._id });
+      }
+    }
+    item.tokenNumber = qt?.tokenNumber || item.tokenNumber || null;
+    item.tokenLabel = qt?.tokenLabel || (item.tokenNumber ? `OPD-${String(item.tokenNumber).padStart(3, '0')}` : null);
+    item.queueStatus = qt?.status || 'waiting';
+  }
+
+  if (q && q.trim()) {
+    const term = q.trim().toLowerCase();
+    results = results.filter((item) => {
+      const pName = (item.patient?.fullName || '').toLowerCase();
+      const pNic = (item.patient?.nic || '').toLowerCase();
+      const pPhone = (item.patient?.phone || '').toLowerCase();
+      const bRef = (item.bookingRef || '').toLowerCase();
+      const dName = (item.doctor?.name || '').toLowerCase();
+      const idStr = String(item._id).toLowerCase();
+      return (
+        pName.includes(term) ||
+        pNic.includes(term) ||
+        pPhone.includes(term) ||
+        bRef.includes(term) ||
+        dName.includes(term) ||
+        idStr.includes(term)
+      );
+    });
+  }
+
+  res.json({
+    success: true,
+    count: results.length,
+    appointments: results,
+  });
+});
+
+module.exports = {
+  searchPatients,
+  getSlots,
+  walkInBooking,
+  getPreBookedAppointments,
+  sendPatientOtp,
+  verifyPatientOtp,
+};

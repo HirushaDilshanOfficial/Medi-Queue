@@ -8,19 +8,18 @@ const {
   liveDepartments,
   leaveQueue,
 } = require('../controllers/queueController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 const { loadPatientProfile, patientOnly } = require('../middleware/patientMiddleware');
 
-router.use(protect, patientOnly, loadPatientProfile);
-
-router.get('/departments', liveDepartments);
-router.get('/board', board);
-router.post('/check-in', checkIn);
-router.get('/my-pass', myPass);
-router.get('/my-pass/live', liveState);
-router.delete('/my-pass', leaveQueue);
+// Patient queue routes (/api/v1/queue/*)
+const patientAuth = [protect, patientOnly, loadPatientProfile];
+router.get('/departments', protect, patientOnly, liveDepartments);
+router.get('/board', protect, patientOnly, board);
+router.post('/check-in', ...patientAuth, checkIn);
+router.get('/my-pass', ...patientAuth, myPass);
+router.get('/my-pass/live', ...patientAuth, liveState);
+router.delete('/my-pass', ...patientAuth, leaveQueue);
  
-const { authorizeRoles } = require('../middleware/authMiddleware');
 const {
   getQueue,
   getNextInQueue,
@@ -33,34 +32,34 @@ const {
   getAutoAdvance,
 } = require('../controllers/queueController');
 
-// All queue routes require auth + receptionist (or doctor) role
-router.use(protect, authorizeRoles('receptionist', 'doctor'));
+// All reception queue routes require auth + receptionist, admin, or doctor role
+const receptionAuth = [protect, authorizeRoles('receptionist', 'admin', 'doctor')];
 
 // GET /api/reception/queue/auto-advance -> read auto-advance setting
-router.get('/auto-advance', getAutoAdvance);
+router.get('/auto-advance', ...receptionAuth, getAutoAdvance);
 
 // PATCH /api/reception/queue/auto-advance -> update auto-advance setting
-router.patch('/auto-advance', updateAutoAdvance);
+router.patch('/auto-advance', ...receptionAuth, updateAutoAdvance);
 
 // POST /api/reception/queue/call-next -> call next waiting patient
-router.post('/call-next', callNext);
+router.post('/call-next', ...receptionAuth, callNext);
 
 // PATCH /api/reception/queue/:id/assign-doctor -> assign doctor to token and appointment
-router.patch('/:id/assign-doctor', assignDoctor);
+router.patch('/:id/assign-doctor', ...receptionAuth, assignDoctor);
 
 // POST /api/reception/queue/:id/recall -> recall a called token
-router.post('/:id/recall', recallToken);
+router.post('/:id/recall', ...receptionAuth, recallToken);
 
 // POST /api/reception/queue/:id/no-show -> mark token & appointment as no_show
-router.post('/:id/no-show', markNoShow);
+router.post('/:id/no-show', ...receptionAuth, markNoShow);
 
 // POST /api/reception/queue/:id/move-back -> move waiting token 3 positions back
-router.post('/:id/move-back', moveBackToken);
+router.post('/:id/move-back', ...receptionAuth, moveBackToken);
 
 // GET /api/reception/queue/next -> first waiting token in order, or null
-router.get('/next', getNextInQueue);
+router.get('/next', ...receptionAuth, getNextInQueue);
 
 // GET /api/reception/queue/ -> ordered queue with totals and timestamp
-router.get('/', getQueue);
+router.get('/', ...receptionAuth, getQueue);
 
 module.exports = router;

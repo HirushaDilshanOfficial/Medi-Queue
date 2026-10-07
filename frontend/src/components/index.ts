@@ -10,3 +10,6 @@ export * from './Toast';
 export * from './DoctorPickerModal';
 export * from './EditPatientModal';
 export * from './ReceptionistRoleGuard';
+export * from './BirthdayCalendarModal';
+export * from './BarcodeScannerModal';
+export * from './PatientOtpModal';

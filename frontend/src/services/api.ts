@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
@@ -10,19 +11,31 @@ import {
   ShiftSummary,
 } from '../types';
 
-const FALLBACK_IP_URL =
-  Platform.OS === 'web' ? 'http://localhost:5001' : 'http://192.168.1.2:5001';
-
 export const getApiBaseUrl = (): string => {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const hostname = window.location.hostname;
     return `http://${hostname === 'localhost' || hostname === '127.0.0.1' ? 'localhost' : hostname}:5001`;
   }
+
+  // 1. Try Expo hostUri (exact IP phone used to connect to Metro bundler)
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip && ip !== 'localhost' && ip !== '127.0.0.1' && !ip.startsWith('192.168.56.')) {
+      return `http://${ip}:5001`;
+    }
+  }
+
+  // 2. Check process.env.EXPO_PUBLIC_API_URL
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && !envUrl.includes('192.168.56.')) {
+  if (envUrl && !envUrl.includes('192.168.56.') && !envUrl.includes('192.168.1.2')) {
     return envUrl.includes(':5001') ? envUrl : `${envUrl.replace(/\/+$/, '')}:5001`;
   }
-  return FALLBACK_IP_URL;
+
+  return 'http://10.240.7.66:5001';
 };
 
 export const API_BASE_URL: string = getApiBaseUrl();
@@ -222,11 +235,42 @@ export interface WalkInPatientInput {
 export interface WalkInPayload {
   patient?: WalkInPatientInput;
   existingPatientId?: string;
+  appointmentId?: string;
   department: string;
   doctorId: string;
   date: string;
   slotTime?: string;
   priority?: 'normal' | 'senior' | 'urgent';
+  type?: 'walk_in' | 'pre_booked';
+  intakeType?: 'walk_in' | 'pre_booked';
+}
+
+export interface PreBookedAppointment {
+  _id: string;
+  bookingRef: string;
+  date: string;
+  slotTime: string;
+  department: string;
+  status: string;
+  type: string;
+  priority?: 'normal' | 'senior' | 'urgent';
+  tokenNumber?: number | null;
+  tokenLabel?: string | null;
+  queueStatus?: string | null;
+  patient: {
+    _id: string;
+    fullName: string;
+    nic: string;
+    phone: string;
+    age?: number;
+    gender?: 'male' | 'female' | 'other';
+  } | null;
+  doctor: {
+    _id: string;
+    name: string;
+    department?: string;
+    room?: string;
+  } | null;
 }
 
 export interface WalkInResponse {
@@ -244,6 +288,30 @@ export interface WalkInResponse {
   };
   estimatedWaitMinutes?: number;
   patientsAhead?: number;
+  smsNotification?: {
+    sent: boolean;
+    recipient: string;
+    patientName?: string;
+    tokenLabel?: string;
+    message: string;
+    sentAt: string;
+  };
+}
+
+export interface SendPatientOtpResponse {
+  success: boolean;
+  message: string;
+  phone: string;
+  otp?: string;
+  expiresAt?: number;
+  smsDispatched?: boolean;
+}
+
+export interface VerifyPatientOtpResponse {
+  success: boolean;
+  verified: boolean;
+  message: string;
+  phone?: string;
 }
 
 export interface GetQueueParams {
@@ -338,6 +406,54 @@ export const createWalkIn = async (
   token?: string
 ): Promise<WalkInResponse> => {
   return api.post<WalkInResponse>('/api/reception/walk-in', data, { token });
+};
+
+/**
+ * Dispatch 6-digit verification OTP to patient mobile number.
+ */
+export const sendPatientOtp = async (
+  phone: string,
+  patientName?: string,
+  token?: string
+): Promise<SendPatientOtpResponse> => {
+  return api.post<SendPatientOtpResponse>(
+    '/api/reception/send-otp',
+    { phone, patientName },
+    { token }
+  );
+};
+
+/**
+ * Verify 6-digit OTP entered for patient telephone number.
+ */
+export const verifyPatientOtp = async (
+  phone: string,
+  otp: string,
+  token?: string
+): Promise<VerifyPatientOtpResponse> => {
+  return api.post<VerifyPatientOtpResponse>(
+    '/api/reception/verify-otp',
+    { phone, otp },
+    { token }
+  );
+};
+
+/**
+ * List or search pre-booked appointments for today or a specific date.
+ */
+export const getPreBookedAppointments = async (
+  date?: string,
+  query?: string,
+  token?: string
+): Promise<{ success: boolean; count: number; appointments: PreBookedAppointment[] }> => {
+  const params = new URLSearchParams();
+  if (date) params.append('date', date);
+  if (query) params.append('q', query);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return api.get<{ success: boolean; count: number; appointments: PreBookedAppointment[] }>(
+    `/api/reception/pre-booked${qs}`,
+    { token }
+  );
 };
 
 /**
@@ -447,7 +563,7 @@ export const getDashboard = async (
  * List patients filtered by visited_today, recent (last 30 days), or all.
  */
 export const getPatients = async (
-  filter?: 'visited_today' | 'recent' | 'all',
+  filter?: 'visited_today' | 'recent' | 'all' | 'walk_in' | 'pre_booked',
   token?: string
 ): Promise<Patient[]> => {
   const qs = filter ? `?filter=${encodeURIComponent(filter)}` : '';

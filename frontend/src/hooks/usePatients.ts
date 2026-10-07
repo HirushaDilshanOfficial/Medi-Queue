@@ -7,7 +7,7 @@ import {
   getErrorMessage,
 } from '../services/api';
 
-export type PatientListFilter = 'all' | 'visited_today' | 'recent';
+export type PatientListFilter = 'all' | 'pre_booked' | 'walk_in' | 'visited_today' | 'recent';
 
 export interface UsePatientsReturn {
   list: Patient[];

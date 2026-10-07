@@ -65,6 +65,17 @@ export const PatientCard: React.FC<PatientCardProps> = ({
                 style={styles.verifiedIcon}
               />
             ) : null}
+            {patient.latestType === 'pre_booked' ? (
+              <View style={styles.preBookedBadge}>
+                <Ionicons name="calendar" size={10} color="#047857" style={{ marginRight: 3 }} />
+                <Text style={styles.preBookedBadgeText}>Pre-Booked</Text>
+              </View>
+            ) : (
+              <View style={styles.walkInBadge}>
+                <Ionicons name="walk" size={10} color={Colors.primary} style={{ marginRight: 3 }} />
+                <Text style={styles.walkInBadgeText}>Walk-In</Text>
+              </View>
+            )}
           </View>
 
           {subtitle ? (
@@ -99,6 +110,28 @@ export const PatientCard: React.FC<PatientCardProps> = ({
               </View>
             ) : null}
           </View>
+
+          {(patient.latestTokenNumber || patient.latestDoctorName || patient.latestVisitSlotTime) ? (
+            <View style={styles.latestApptRow}>
+              {patient.latestTokenNumber ? (
+                <View style={styles.tokenPill}>
+                  <Text style={styles.tokenPillText}>
+                    OPD-{String(patient.latestTokenNumber).padStart(3, '0')}
+                  </Text>
+                </View>
+              ) : null}
+              {patient.latestVisitSlotTime ? (
+                <View style={styles.slotPill}>
+                  <Text style={styles.slotPillText}>{patient.latestVisitSlotTime}</Text>
+                </View>
+              ) : null}
+              {patient.latestDoctorName ? (
+                <Text style={styles.latestDoctorText} numberOfLines={1}>
+                  Dr. {patient.latestDoctorName.replace(/^Dr\.\s*/i, '')}{patient.latestDepartment ? ` • ${patient.latestDepartment}` : ''}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {onEditPress ? (
@@ -284,6 +317,79 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     borderWidth: 1,
     borderColor: '#BAE6FD',
+  },
+  preBookedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 5,
+    marginLeft: 6,
+  },
+  preBookedBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  walkInBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tint,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 5,
+    marginLeft: 6,
+  },
+  walkInBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  latestApptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+    flexWrap: 'wrap',
+  },
+  tokenPill: {
+    backgroundColor: Colors.primary,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginRight: 6,
+  },
+  tokenPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  slotPill: {
+    backgroundColor: Colors.tint,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginRight: 6,
+  },
+  slotPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.secondary,
+  },
+  latestDoctorText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textDark,
+    flex: 1,
   },
 });
 

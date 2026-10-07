@@ -66,6 +66,11 @@ export interface Patient {
   visitHistory?: PatientVisitHistoryItem[];
   latestVisitDate?: string;
   latestVisitSlotTime?: string;
+  latestType?: 'walk_in' | 'pre_booked' | string;
+  latestDoctorName?: string;
+  latestDepartment?: string;
+  latestTokenNumber?: number;
+  latestStatus?: string;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -108,6 +108,17 @@ const createBooking = async (req, res, next) => {
       return slotTakenError(res);
     }
 
+    const Appointment = require('../models/Appointment');
+    const existingRec = await Appointment.findOne({
+      doctor: doctor._id,
+      date: String(date),
+      slotTime: String(slotTime),
+      status: { $nin: ['cancelled', 'no_show'] },
+    }).lean();
+    if (existingRec) {
+      return slotTakenError(res);
+    }
+
     // One live booking per patient per doctor per day.
     const sameDay = await OpdAppointment.findOne({
       profile: profileId,
@@ -121,6 +132,15 @@ const createBooking = async (req, res, next) => {
       });
     }
 
+    const { getNextToken } = require('../utils/tokenGenerator');
+    let tokenNumber = null;
+    let tokenLabel = null;
+    try {
+      const tok = await getNextToken(String(date));
+      tokenNumber = tok.tokenNumber;
+      tokenLabel = tok.tokenLabel;
+    } catch (e) {}
+
     const appointment = await OpdAppointment.create({
       profile: profileId,
       doctor: doctor._id,
@@ -131,11 +151,31 @@ const createBooking = async (req, res, next) => {
       slotTime: String(slotTime),
       endsAt: match.slot.endsAt || null,
       type: type === 'walk_in' ? 'walk_in' : 'pre_booked',
+      tokenNumber,
       reason: reason ? String(reason).trim() : undefined,
     });
 
+    if (tokenNumber && tokenLabel) {
+      try {
+        const QueueToken = require('../models/QueueToken');
+        await QueueToken.create({
+          appointment: appointment._id,
+          patient: profileId,
+          department: doctor.department,
+          date: String(date),
+          tokenNumber,
+          tokenLabel,
+          status: 'waiting',
+          priority: 'normal',
+          assignedDoctor: doctor._id,
+        });
+      } catch (e) {}
+    }
+
     return res.status(201).json({
       appointment: mapAppointment(appointment, { todayKey: today() }),
+      tokenLabel,
+      tokenNumber,
     });
   } catch (error) {
     return forwardConflict(error, res, next);

@@ -759,7 +759,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
       {/* Screen Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          {navigation?.canGoBack?.() ? (
+          {(navigation?.canGoBack?.() || onNavigate) ? (
             <TouchableOpacity
               style={styles.backButton}
               onPress={handleBack}
