@@ -184,12 +184,7 @@ export default function ManageHospitalsScreen() {
                     <View style={styles.hospitalIconContainer}>
                       <Text style={styles.hospitalIcon}>🏥</Text>
                     </View>
-                    <TouchableOpacity
-                      style={styles.clinicButton}
-                      onPress={() => router.push(`/(moh)/manage-clinics?hospitalId=${hospital._id}&hospitalName=${encodeURIComponent(hospital.name)}`)}
-                    >
-                      <Text style={styles.clinicButtonText}>{t("Configure clinics")}</Text>
-                    </TouchableOpacity>
+
                     <View style={styles.hospitalInfo}>
                       <Text style={styles.hospitalName} numberOfLines={1}>{hospital.name}</Text>
                       <Text style={styles.hospitalDetails}>{t(hospital.type)} • {hospital.location}</Text>
@@ -219,9 +214,18 @@ export default function ManageHospitalsScreen() {
                       <Text style={styles.codeLabel}>{t("Code:")}</Text>
                       <Text style={styles.codeValue}>{hospital.code}</Text>
                     </View>
-                    <View style={styles.deptBadge}>
-                      <Text style={styles.deptBadgeText}>
-                        {hospital.departments?.length || 0} {t("Departments")}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        style={styles.clinicButton}
+                        onPress={() => router.push(`/(moh)/manage-clinics?hospitalId=${hospital._id}&hospitalName=${encodeURIComponent(hospital.name)}`)}
+                      >
+                        <Text style={styles.clinicButtonText}>{t("Configure clinics")}</Text>
+                      </TouchableOpacity>
+                      <View style={styles.deptBadge}>
+                        <Text style={styles.deptBadgeText}>
+                          {hospital.departments?.length || 0} {t("Departments")}
+                        </Text>
+                      </View>
                     </View>
                   </View>
                 </TouchableOpacity>
