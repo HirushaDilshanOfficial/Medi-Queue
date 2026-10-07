@@ -61,9 +61,36 @@ export default function EditProfileScreen() {
     }
   };
 
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const validatePhone = (phone: string) => {
+    return /^(0)[0-9]{9}$/.test(phone);
+  };
+
+  const validateName = (name: string) => {
+    return /^[a-zA-Z\s.]+$/.test(name);
+  };
+
   const handleSave = async () => {
     if (!fullName || !email) {
       Alert.alert(t('Error'), t('Name and Email are required.'));
+      return;
+    }
+
+    if (!validateName(fullName)) {
+      Alert.alert(t('Error'), t('Full Name can only contain letters, spaces, and periods.'));
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      Alert.alert(t('Error'), t('Please enter a valid email address.'));
+      return;
+    }
+
+    if (phone && !validatePhone(phone)) {
+      Alert.alert(t('Error'), t('Mobile number must be 10 digits starting with 0.'));
       return;
     }
 
@@ -130,7 +157,7 @@ export default function EditProfileScreen() {
                 placeholder={t("Enter full name")}
                 placeholderTextColor={Colors.textLight}
                 value={fullName}
-                onChangeText={setFullName}
+                onChangeText={(text) => setFullName(text.replace(/[^a-zA-Z\s]/g, ''))}
               />
             </View>
 
@@ -143,7 +170,7 @@ export default function EditProfileScreen() {
                 placeholder={t("Enter email address")}
                 placeholderTextColor={Colors.textLight}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => setEmail(text.replace(/\s/g, ''))}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
@@ -158,8 +185,9 @@ export default function EditProfileScreen() {
                 placeholder={t("Enter contact number")}
                 placeholderTextColor={Colors.textLight}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(text) => setPhone(text.replace(/[^0-9]/g, ''))}
                 keyboardType="phone-pad"
+                maxLength={10}
               />
             </View>
 

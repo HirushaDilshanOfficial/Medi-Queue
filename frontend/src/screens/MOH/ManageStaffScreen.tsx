@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
+import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 
 export default function ManageStaffScreen() {
   const { t } = useLanguage();
@@ -334,6 +335,7 @@ export default function ManageStaffScreen() {
           </TouchableOpacity>
         </Modal>
 
+        <MOHBottomNav activeRoute="staff" />
       </SafeAreaView>
     </View>
   );
@@ -365,7 +367,7 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   topSection: {
     paddingHorizontal: 20,

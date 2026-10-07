@@ -12,6 +12,7 @@ import { View,
   Alert, RefreshControl } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 import { API_URL } from '../../config';
 
 export default function ManageHospitalsScreen() {
@@ -283,6 +284,7 @@ export default function ManageHospitalsScreen() {
           </TouchableOpacity>
         </Modal>
 
+        <MOHBottomNav activeRoute="hospitals" />
       </SafeAreaView>
     </View>
   );
@@ -318,7 +320,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   topSection: {
     marginBottom: 20,

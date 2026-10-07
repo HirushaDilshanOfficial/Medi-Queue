@@ -43,6 +43,14 @@ const loginUser = async (req, res) => {
             hospital = doc.hospital?._id || doc.hospital || null;
           }
         }
+        
+        // Block login if hospital is inactive
+        if (staff && staff.hospital && staff.hospital.status === 'Inactive') {
+          return res.status(403).json({ message: 'Your assigned hospital is currently deactivated. Please contact MOH.' });
+        }
+        if (doc && doc.hospital && doc.hospital.status === 'Inactive') {
+          return res.status(403).json({ message: 'Your assigned hospital is currently deactivated. Please contact MOH.' });
+        }
       } catch (err) {
         // Ignore lookup error
       }

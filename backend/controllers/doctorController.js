@@ -30,8 +30,17 @@ const getDoctors = asyncHandler(async (req, res) => {
       $regex: new RegExp(`^${department.trim()}$`, 'i'),
     };
   }
+  const Hospital = require('../models/Hospital');
+  const activeHospitals = await Hospital.find({ isDeleted: false, status: 'Active' }).select('_id').lean();
+  const activeHospitalIds = activeHospitals.map(h => h._id.toString());
+
   if (hospitalId && mongoose.isValidObjectId(hospitalId)) {
+    if (!activeHospitalIds.includes(hospitalId.toString())) {
+      return res.json([]);
+    }
     doctorFilter.hospital = hospitalId;
+  } else {
+    doctorFilter.hospital = { $in: activeHospitalIds };
   }
 
   // Fetch doctors and active appointments count for targetDate in parallel
@@ -78,7 +87,11 @@ const getDoctors = asyncHandler(async (req, res) => {
 const listDoctors = getDoctors;
 
 const listDepartments = asyncHandler(async (req, res) => {
-  const departments = await Doctor.distinct('department');
+  const Hospital = require('../models/Hospital');
+  const activeHospitals = await Hospital.find({ isDeleted: false, status: 'Active' }).select('_id').lean();
+  const activeHospitalIds = activeHospitals.map(h => h._id.toString());
+
+  const departments = await Doctor.distinct('department', { hospital: { $in: activeHospitalIds } });
   res.json(departments.filter(Boolean).sort());
 });
 
@@ -1450,7 +1463,7 @@ const updateDoctorHospital = async (req, res) => {
 const getDoctorHospitals = async (req, res) => {
   try {
     const Hospital = require('../models/Hospital');
-    const hospitals = await Hospital.find({ isDeleted: false }).select('name code type location departments');
+    const hospitals = await Hospital.find({ isDeleted: false, status: 'Active' }).select('name code type location departments');
     return res.status(200).json({ success: true, data: hospitals });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

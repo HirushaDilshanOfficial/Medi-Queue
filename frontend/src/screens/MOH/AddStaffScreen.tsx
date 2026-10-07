@@ -100,7 +100,7 @@ export default function AddStaffScreen() {
 
   const fetchHospitals = async () => {
     try {
-      const response = await fetch(`${API_URL}/hospitals`);
+      const response = await fetch(`${API_URL}/hospitals?status=Active`);
       const data = await response.json();
       setHospitals(data);
     } catch (error) {
@@ -185,28 +185,51 @@ export default function AddStaffScreen() {
     }
   };
 
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const validatePhone = (phone: string) => {
+    return /^(0)[0-9]{9}$/.test(phone);
+  };
+
+  const validateNIC = (nic: string) => {
+    return /^([0-9]{9}[vVxX]|[0-9]{12})$/.test(nic);
+  };
+
+  const validateName = (name: string) => {
+    return /^[a-zA-Z\s.]+$/.test(name);
+  };
+
   const validateStep1 = () => {
-    if (!formData.fullName || !formData.nic || !formData.dob || !formData.gender || !formData.mobile || !formData.email || !formData.address) return false;
-    if (!isEditMode && !formData.password) return false;
+    if (!formData.fullName || !formData.nic || !formData.dob || !formData.gender || !formData.mobile || !formData.email || !formData.address) return 'Please fill out all basic information.';
+    if (!validateName(formData.fullName)) return 'Full Name can only contain letters, spaces, and periods.';
+    if (!validateNIC(formData.nic)) return 'Please enter a valid NIC (e.g. 123456789V or 123456789012).';
+    if (!validatePhone(formData.mobile)) return 'Mobile number must be 10 digits starting with 0.';
+    if (!validateEmail(formData.email)) return 'Please enter a valid email address.';
+    if (!isEditMode && !formData.password) return 'Password is required.';
+    if (!isEditMode && formData.password.length < 6) return 'Password must be at least 6 characters long.';
     return true;
   };
 
   const validateStep2 = () => {
-    if (!formData.role || !formData.hospitalId || !formData.department) return false;
+    if (!formData.role || !formData.hospitalId || !formData.department) return 'Please fill out all employment information.';
     return true;
   };
 
   const handleNextStep1 = () => {
-    if (!validateStep1()) {
-      Alert.alert(t('Missing Fields'), t('Please fill out all basic information.'));
+    const validation = validateStep1();
+    if (validation !== true) {
+      Alert.alert(t('Validation Error'), t(validation as string));
       return;
     }
     setCurrentStep(2);
   };
 
   const handleNextStep2 = () => {
-    if (!validateStep2()) {
-      Alert.alert(t('Missing Fields'), t('Please fill out all employment information.'));
+    const validation = validateStep2();
+    if (validation !== true) {
+      Alert.alert(t('Validation Error'), t(validation as string));
       return;
     }
     setCurrentStep(3);
@@ -315,7 +338,7 @@ export default function AddStaffScreen() {
             style={styles.input}
             placeholder="John Doe"
             value={formData.fullName}
-            onChangeText={(text) => setFormData({ ...formData, fullName: text })}
+            onChangeText={(text) => setFormData({ ...formData, fullName: text.replace(/[^a-zA-Z\s]/g, '') })}
           />
         </View>
 
@@ -326,7 +349,8 @@ export default function AddStaffScreen() {
               style={styles.input}
               placeholder="98xxxxxxxV"
               value={formData.nic}
-              onChangeText={(text) => setFormData({ ...formData, nic: text })}
+              onChangeText={(text) => setFormData({ ...formData, nic: text.replace(/[^0-9vVxX]/g, '') })}
+              maxLength={12}
             />
           </View>
           <View style={[styles.inputGroup, { flex: 1 }]}>
@@ -360,7 +384,8 @@ export default function AddStaffScreen() {
               placeholder="07x xxxxxxx"
               keyboardType="phone-pad"
               value={formData.mobile}
-              onChangeText={(text) => setFormData({ ...formData, mobile: text })}
+              onChangeText={(text) => setFormData({ ...formData, mobile: text.replace(/[^0-9]/g, '') })}
+              maxLength={10}
             />
           </View>
         </View>
@@ -373,7 +398,7 @@ export default function AddStaffScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             value={formData.email}
-            onChangeText={(text) => setFormData({ ...formData, email: text })}
+            onChangeText={(text) => setFormData({ ...formData, email: text.replace(/\s/g, '') })}
           />
         </View>
 
