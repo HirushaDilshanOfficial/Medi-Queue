@@ -30,6 +30,7 @@ import { Patient, Doctor, QueuePriority, AppointmentType } from '../../types';
 import { Toast, ToastType } from '../../components/Toast';
 import { TokenBadge } from '../../components/TokenBadge';
 import { BirthdayCalendarModal } from '../../components/BirthdayCalendarModal';
+import { BarcodeScannerModal } from '../../components/BarcodeScannerModal';
 import { useShiftContext } from '../../context/ShiftContext';
 
 export interface RegisterPatientScreenProps {
@@ -135,6 +136,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   const [preBookedQuery, setPreBookedQuery] = useState<string>('');
   const [selectedPreBooking, setSelectedPreBooking] = useState<PreBookedAppointment | null>(null);
   const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
+  const [scannerModalVisible, setScannerModalVisible] = useState<boolean>(false);
 
   // Toast state
   const [toastVisible, setToastVisible] = useState<boolean>(false);
@@ -734,7 +736,25 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   };
 
   const handleQRScanPress = () => {
-    showToast('QR Code scanning coming soon', 'info');
+    setScannerModalVisible(true);
+  };
+
+  const handleScanSuccess = (scannedValue: string) => {
+    let codeToSearch = scannedValue.trim();
+    try {
+      const parsed = JSON.parse(scannedValue);
+      if (parsed.nic) codeToSearch = parsed.nic;
+      else if (parsed.bookingRef) codeToSearch = parsed.bookingRef;
+      else if (parsed.phone) codeToSearch = parsed.phone;
+      else if (parsed.patientId) codeToSearch = parsed.patientId;
+      else if (parsed.id) codeToSearch = parsed.id;
+    } catch {
+      // Direct raw barcode string
+    }
+    setSearchQuery(codeToSearch);
+    form.setField('query', codeToSearch);
+    executeSearch(codeToSearch);
+    showToast(`Scanned: ${codeToSearch}`, 'success');
   };
 
   return (
@@ -2214,6 +2234,13 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
           handleBirthdayChange(dateStr);
         }}
         onClose={() => setShowCalendarModal(false)}
+      />
+
+      {/* Barcode & QR Scanner Modal (Dual Mode: Camera + Barcode Machine Gun) */}
+      <BarcodeScannerModal
+        visible={scannerModalVisible}
+        onClose={() => setScannerModalVisible(false)}
+        onScan={handleScanSuccess}
       />
     </SafeAreaView>
   );

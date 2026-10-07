@@ -32,6 +32,7 @@ import {
   ErrorState,
   Toast,
   ToastType,
+  BarcodeScannerModal,
 } from '../../components';
 
 export interface ReceptionistHomeScreenProps {
@@ -58,6 +59,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   const [verifyNicQuery, setVerifyNicQuery] = useState<string>('');
   const [verifyNicLoading, setVerifyNicLoading] = useState<boolean>(false);
   const [verifyNicResult, setVerifyNicResult] = useState<any>(null);
+  const [scannerModalVisible, setScannerModalVisible] = useState<boolean>(false);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -235,9 +237,13 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
 
   // Action: Verify NIC Quick Lookup
   const handleVerifyNicSearch = async () => {
-    const trimmed = verifyNicQuery.trim();
+    executeSearchForVerify(verifyNicQuery);
+  };
+
+  const executeSearchForVerify = async (queryVal: string) => {
+    const trimmed = queryVal.trim();
     if (!trimmed) {
-      showToast('Please enter an NIC number', 'warning');
+      showToast('Please enter or scan an NIC / Barcode', 'warning');
       return;
     }
     try {
@@ -261,6 +267,19 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         setVerifyNicLoading(false);
       }
     }
+  };
+
+  const handleScanForVerify = (scannedValue: string) => {
+    let code = scannedValue.trim();
+    try {
+      const parsed = JSON.parse(scannedValue);
+      if (parsed.nic) code = parsed.nic;
+      else if (parsed.bookingRef) code = parsed.bookingRef;
+      else if (parsed.phone) code = parsed.phone;
+    } catch {}
+    setVerifyNicQuery(code);
+    executeSearchForVerify(code);
+    showToast(`Scanned: ${code}`, 'success');
   };
 
   if (loading && !data) {
@@ -1004,11 +1023,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* NIC Input Row */}
+            {/* NIC Input Row with Barcode / QR Scanner Button */}
             <View style={styles.verifyNicInputRow}>
               <TextInput
                 style={styles.verifyNicInput}
-                placeholder="Enter NIC (e.g. 199012345678 or 951234567V)"
+                placeholder="Enter or scan NIC / Barcode..."
                 placeholderTextColor={Colors.textLight}
                 value={verifyNicQuery}
                 onChangeText={setVerifyNicQuery}
@@ -1016,6 +1035,14 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 returnKeyType="search"
                 onSubmitEditing={handleVerifyNicSearch}
               />
+              <TouchableOpacity
+                style={styles.verifyNicScanBtn}
+                onPress={() => setScannerModalVisible(true)}
+                activeOpacity={0.7}
+                accessibilityLabel="Scan with Barcode Machine or Camera"
+              >
+                <Ionicons name="barcode-outline" size={20} color={Colors.primary} />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.verifyNicSearchBtn}
                 onPress={handleVerifyNicSearch}
@@ -1222,6 +1249,13 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Barcode & QR Scanner Modal (Dual Mode: Camera + Barcode Machine Gun) */}
+      <BarcodeScannerModal
+        visible={scannerModalVisible}
+        onClose={() => setScannerModalVisible(false)}
+        onScan={handleScanForVerify}
+      />
     </SafeAreaView>
   );
 };
@@ -2215,6 +2249,15 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
     marginRight: 8,
     fontWeight: '600',
+  },
+  verifyNicScanBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#E6F6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
   },
   verifyNicSearchBtn: {
     height: 44,
