@@ -48,7 +48,7 @@ export default function LoginScreen({ navigation }: any) {
       } else if (data.role === 'DOCTOR' || data.role === 'Doctor') {
         router.replace('/(doctor)/dashboard');
       } else {
-        router.replace('/(patient)/dashboard'); // Default patient route
+        router.replace('/(patient)'); // Default patient route
       }
     } catch (error: any) {
       Alert.alert(t('Login Failed'), error.message || t('Invalid credentials'));
