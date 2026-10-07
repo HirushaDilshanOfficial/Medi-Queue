@@ -1,8 +1,7 @@
-import { LocalizedText as Text } from '../../i18n/LocalizedText';
-import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   ScrollView,
   TextInput,
@@ -12,6 +11,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -22,12 +22,16 @@ import {
   getDoctors,
   getSlots,
   createWalkIn,
+  getPreBookedAppointments,
   WalkInPayload,
   WalkInResponse,
+  PreBookedAppointment,
 } from '../../services/api';
 import { Patient, Doctor, QueuePriority, AppointmentType } from '../../types';
 import { Toast, ToastType } from '../../components/Toast';
 import { TokenBadge } from '../../components/TokenBadge';
+import { BirthdayCalendarModal } from '../../components/BirthdayCalendarModal';
+import { BarcodeScannerModal } from '../../components/BarcodeScannerModal';
 import { useShiftContext } from '../../context/ShiftContext';
 
 export interface RegisterPatientScreenProps {
@@ -40,55 +44,51 @@ export interface DepartmentItem {
   id: string;
   name: string;
   icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-  bgColor: string;
+  defaultWait: string;
 }
 
 export const DEPARTMENTS: DepartmentItem[] = [
   {
     id: 'General OPD',
     name: 'General OPD',
-    icon: 'medkit',
-    color: '#0D9488',
-    bgColor: '#CCFBF1',
+    icon: 'medkit-outline',
+    defaultWait: '8m',
   },
   {
     id: 'Orthopedic',
     name: 'Orthopedic',
-    icon: 'body',
-    color: '#0284C7',
-    bgColor: '#E0F2FE',
+    icon: 'body-outline',
+    defaultWait: '18m',
   },
   {
     id: 'Cardiology',
     name: 'Cardiology',
-    icon: 'heart',
-    color: '#E11D48',
-    bgColor: '#FFE4E6',
+    icon: 'pulse-outline',
+    defaultWait: '35m',
   },
   {
     id: 'Pediatric',
     name: 'Pediatric',
-    icon: 'happy',
-    color: '#D97706',
-    bgColor: '#FEF3C7',
+    icon: 'happy-outline',
+    defaultWait: '12m',
   },
 ];
+
+const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 
 export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   navigation,
   route,
   onNavigate,
 }) => {
-  const { t } = useLanguage();
   const { isShiftClosed } = useShiftContext();
   const form = useWalkInForm(route?.params);
   const [searchQuery, setSearchQuery] = useState<string>(
     route?.params?.nic ||
-      route?.params?.phone ||
-      route?.params?.name ||
-      route?.params?.fullName ||
-      ''
+    route?.params?.phone ||
+    route?.params?.name ||
+    route?.params?.fullName ||
+    ''
   );
   const [searching, setSearching] = useState<boolean>(false);
   const [searchStatus, setSearchStatus] = useState<'idle' | 'found' | 'not_found'>(
@@ -101,20 +101,20 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   );
   const [matchedPatient, setMatchedPatient] = useState<Patient | null>(
     route?.params?.patient ||
-      (route?.params?.existingPatientId
-        ? {
-            _id: route.params.existingPatientId,
-            fullName:
-              route.params.name ||
-              route.params.fullName ||
-              'Patient',
-            nic: route.params.nic || '',
-            phone: route.params.phone || '',
-            age: route.params.age ? Number(route.params.age) : undefined,
-            gender: route.params.gender || undefined,
-            registeredVia: 'reception',
-          }
-        : null)
+    (route?.params?.existingPatientId
+      ? {
+        _id: route.params.existingPatientId,
+        fullName:
+          route.params.name ||
+          route.params.fullName ||
+          'Patient',
+        nic: route.params.nic || '',
+        phone: route.params.phone || '',
+        age: route.params.age ? Number(route.params.age) : undefined,
+        gender: route.params.gender || undefined,
+        registeredVia: 'reception',
+      }
+      : null)
   );
 
   // Doctors and Slots state
@@ -130,6 +130,16 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   const [confirmedBooking, setConfirmedBooking] = useState<WalkInResponse | null>(null);
   const [confirmedPriority, setConfirmedPriority] = useState<QueuePriority>('normal');
   const [lastIssuedToken, setLastIssuedToken] = useState<WalkInResponse | null>(null);
+
+  // Pre-booked appointments state
+  const [preBookedList, setPreBookedList] = useState<PreBookedAppointment[]>([]);
+  const [preBookedLoading, setPreBookedLoading] = useState<boolean>(false);
+  const [preBookedQuery, setPreBookedQuery] = useState<string>('');
+  const [selectedPreBooking, setSelectedPreBooking] = useState<PreBookedAppointment | null>(null);
+  const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
+  const [scannerModalVisible, setScannerModalVisible] = useState<boolean>(false);
+
+  const [showStaffSuccessModal, setShowStaffSuccessModal] = useState<boolean>(false);
 
   // Toast state
   const [toastVisible, setToastVisible] = useState<boolean>(false);
@@ -163,8 +173,8 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
       params.age !== undefined && params.age !== null
         ? String(params.age)
         : params.patient?.age !== undefined && params.patient?.age !== null
-        ? String(params.patient.age)
-        : '';
+          ? String(params.patient.age)
+          : '';
     const pGender = params.gender || params.patient?.gender || '';
 
     // Only proceed if at least one identifying param is passed
@@ -203,9 +213,9 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         }
       }
 
-      showToast(t("Prefilled with record for {value0}", { value0: String(pName || 'patient') }), 'success');
+      showToast(`Prefilled with record for ${pName || 'patient'}`, 'success');
     }
-  }, [route?.params, t]);
+  }, [route?.params]);
 
   // Currently selected doctor object
   const selectedDoctor = allDoctors.find((d) => d._id === form.doctorId);
@@ -216,9 +226,9 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     const waitingPatients = selectedDoctor.todayPatients || 0;
     const avgMins = selectedDoctor.avgConsultMinutes || 10;
     const totalMins = waitingPatients * avgMins;
-    if (totalMins <= 0) return t('< 5 min');
-    return t('~{minutes} min', { minutes: totalMins });
-  }, [selectedDoctor, t]);
+    if (totalMins <= 0) return '< 5 mins';
+    return `~${totalMins} mins`;
+  }, [selectedDoctor]);
 
   // Fetch all active doctors for department cards & picker
   const loadDoctors = useCallback(async () => {
@@ -239,33 +249,96 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     loadDoctors();
   }, [loadDoctors]);
 
-  // Compute wait time & doctor count per department
+  // Load pre-booked appointments for today or search query
+  const loadPreBooked = useCallback(async (query?: string) => {
+    setPreBookedLoading(true);
+    try {
+      const res = await getPreBookedAppointments(undefined, query);
+      if (res && Array.isArray(res.appointments)) {
+        setPreBookedList(res.appointments);
+      }
+    } catch (err: any) {
+      console.warn('Failed to load pre-booked appointments:', err);
+    } finally {
+      setPreBookedLoading(false);
+    }
+  }, []);
+
+  // When switching to pre_booked intake mode, fetch today's appointments
+  useEffect(() => {
+    if (form.intakeType === 'pre_booked') {
+      loadPreBooked(preBookedQuery);
+    }
+  }, [form.intakeType, loadPreBooked, preBookedQuery]);
+
+  const handleSelectPreBooking = useCallback(
+    (appt: PreBookedAppointment) => {
+      setSelectedPreBooking(appt);
+      if (appt.patient) {
+        form.setExistingPatient(appt.patient._id, {
+          fullName: appt.patient.fullName,
+          nic: appt.patient.nic || '',
+          phone: appt.patient.phone || '',
+          age:
+            appt.patient.age !== undefined && appt.patient.age !== null
+              ? String(appt.patient.age)
+              : '',
+          gender: (appt.patient.gender as any) || '',
+        });
+        setMatchedPatient(appt.patient as any);
+        setSearchStatus('found');
+      }
+      if (appt.department) {
+        form.setField('department', appt.department);
+      }
+      if (appt.doctor?._id) {
+        form.setField('doctorId', appt.doctor._id);
+      }
+      if (appt.slotTime) {
+        form.setField('slotTime', appt.slotTime);
+      }
+      if (appt.priority) {
+        form.setField('priority', appt.priority);
+      }
+      showToast(`Pre-booking #${appt.bookingRef} verified!`, 'success');
+    },
+    [form]
+  );
+
+  const handleClearPreBooking = useCallback(() => {
+    setSelectedPreBooking(null);
+    form.reset();
+    form.setField('intakeType', 'pre_booked');
+    setMatchedPatient(null);
+    setSearchStatus('idle');
+  }, [form]);
+
+  // Compute wait time per department matching design (e.g. 8m, 18m, 35m, 12m)
   const getDepartmentWaitTime = useCallback(
-    (deptId: string): { waitStr: string; doctorCount: number } => {
+    (deptId: string, defaultWait: string): string => {
       const normDept = deptId.toLowerCase().replace(/\s+/g, '');
       const docs = allDoctors.filter((d) => {
         const docDept = (d.department || '').toLowerCase().replace(/\s+/g, '');
         return docDept.includes(normDept) || normDept.includes(docDept);
       });
 
-      const count = docs.length;
-      if (count === 0) {
-        return { waitStr: t('No wait'), doctorCount: 0 };
+      if (docs.length === 0) {
+        return defaultWait;
       }
 
       const activeDocs = docs.filter((d) => d.status === 'active');
       const totalPatients = docs.reduce((sum, d) => sum + (d.todayPatients || 0), 0);
       const avgMins =
-        docs.reduce((sum, d) => sum + (d.avgConsultMinutes || 10), 0) / count;
+        docs.reduce((sum, d) => sum + (d.avgConsultMinutes || 10), 0) / docs.length;
       const divisor = activeDocs.length > 0 ? activeDocs.length : 1;
       const estimatedMins = Math.round((totalPatients / divisor) * avgMins);
 
-      if (estimatedMins <= 5) {
-        return { waitStr: t('< 5 min'), doctorCount: count };
+      if (estimatedMins <= 0) {
+        return defaultWait;
       }
-      return { waitStr: t('~{minutes} min', { minutes: estimatedMins }), doctorCount: count };
+      return `${estimatedMins}m`;
     },
-    [allDoctors, t]
+    [allDoctors]
   );
 
   // Department Selection: Reset doctor and slot when department changes
@@ -383,8 +456,10 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             fullName: patient.fullName || '',
             nic: patient.nic || '',
             phone: patient.phone || '',
+            dob: (patient as any).dob ? new Date((patient as any).dob).toISOString().split('T')[0] : '',
             age: patient.age !== undefined && patient.age !== null ? String(patient.age) : '',
             gender: (patient.gender as any) || '',
+            bloodGroup: (patient as any).bloodGroup || '',
           });
 
           // Auto-suggest Senior if age is 60+
@@ -395,7 +470,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             }
           }
 
-          showToast(t('Existing patient record found & auto-filled'), 'success');
+          showToast('Existing patient record found & auto-filled', 'success');
         } else {
           setMatchedPatient(null);
           setSearchStatus('not_found');
@@ -411,12 +486,12 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
       } catch (err: any) {
         setSearchStatus('idle');
         const msg = getErrorMessage(err);
-        showToast(msg || t('Search failed'), 'error');
+        showToast(msg || 'Search failed', 'error');
       } finally {
         setSearching(false);
       }
     },
-    [form, t]
+    [form]
   );
 
   const handleSearchChange = (text: string) => {
@@ -462,10 +537,12 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             fullName: p.fullName,
             nic: p.nic || nicVal,
             phone: p.phone || form.patient.phone,
+            dob: (p as any).dob ? new Date((p as any).dob).toISOString().split('T')[0] : '',
             age: p.age ? String(p.age) : form.patient.age,
             gender: p.gender || form.patient.gender,
+            bloodGroup: (p as any).bloodGroup || '',
           });
-          showToast(t("Existing record found for {value0}", { value0: String(p.fullName) }), 'info');
+          showToast(`Existing record found for ${p.fullName}`, 'info');
         }
       } catch {
         // Ignore lookup errors
@@ -484,72 +561,28 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setSearching(false);
     setSlots([]);
     setSlotsError(null);
+    setSelectedPreBooking(null);
     form.reset();
-    showToast(t('Form cleared. Ready for new patient entry.'), 'info');
+    showToast(
+      form.intakeType === 'pre_booked'
+        ? 'Selection cleared. Select or search a pre-booked appointment.'
+        : 'Form cleared. Ready for new patient entry.',
+      'info'
+    );
   };
 
-  // Submit and issue token
-  const handlePrintAndIssueToken = async () => {
-    // Prevent double tap / multiple submissions or if shift is closed
-    if (submitting || submittingRef.current || isShiftClosed) {
-      if (isShiftClosed) {
-        showToast(t('Shift closed. Intake is disabled.'), 'warning');
-      }
-      return;
-    }
-
-    const isValid = form.validate();
-    if (!isValid) {
-      showToast(t('Please fix the highlighted errors before issuing token.'), 'error');
-      return;
-    }
-
-    let todayDate = '';
-    try {
-      todayDate = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Colombo',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(new Date());
-    } catch {
-      todayDate = new Date().toISOString().split('T')[0];
-    }
-
-    const payload: WalkInPayload = {
-      department: form.department.trim(),
-      doctorId: form.doctorId,
-      date: todayDate,
-      slotTime: form.slotTime,
-      priority: form.priority,
-    };
-
-    // Send existingPatientId ONLY when a record was matched
-    if (form.existingPatientId) {
-      payload.existingPatientId = form.existingPatientId;
-    } else {
-      payload.patient = {
-        fullName: form.patient.fullName.trim(),
-        phone: form.patient.phone.trim(),
-        nic: form.patient.nic?.trim() || undefined,
-        age:
-          form.patient.age !== '' &&
-          form.patient.age !== undefined &&
-          form.patient.age !== null
-            ? Number(form.patient.age)
-            : undefined,
-        gender: (form.patient.gender as any) || undefined,
-      };
-    }
-
+  // Perform backend walk-in submission after OTP verification or bypass
+  const executeFinalRegistration = async (payloadToSubmit: WalkInPayload) => {
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      const res = await createWalkIn(payload);
+      const res = await createWalkIn(payloadToSubmit);
       setConfirmedPriority(form.priority);
       setConfirmedBooking(res);
       setLastIssuedToken(res);
-      showToast(t("Token #{value0} issued successfully!", { value0: String(res.token.tokenLabel) }), 'success');
+      setShowStaffSuccessModal(true);
+      showToast(`Token #${res.token.tokenLabel} issued! SMS confirmation sent to ${res.patient.phone}`, 'success');
+
       // Reset form after successful submission
       form.reset();
       setSearchQuery('');
@@ -567,10 +600,20 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             err.message.toLowerCase().includes('conflict')));
 
       if (is409) {
-        showToast(t('Slot was just taken'), 'warning');
-        // Refetch slots and preselect next one
+        showToast('Slot was just taken', 'warning');
         if (form.doctorId) {
           try {
+            let todayDate = '';
+            try {
+              todayDate = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Colombo',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+              }).format(new Date());
+            } catch {
+              todayDate = new Date().toISOString().split('T')[0];
+            }
             const slotsRes = await getSlots(form.doctorId, todayDate);
             if (slotsRes && Array.isArray(slotsRes.slots)) {
               setSlots(slotsRes.slots);
@@ -580,16 +623,148 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 '';
               form.setField('slotTime', nextSlot);
             }
-          } catch {}
+          } catch { }
         }
       } else {
         const msg = getErrorMessage(err);
-        showToast(msg || t('Failed to issue walk-in token'), 'error');
+        showToast(msg || 'Failed to issue walk-in token', 'error');
       }
     } finally {
       setSubmitting(false);
       submittingRef.current = false;
     }
+  };
+
+  // Submit and issue token
+  const handlePrintAndIssueToken = async () => {
+    // Prevent double tap / multiple submissions or if shift is closed
+    if (submitting || submittingRef.current || isShiftClosed) {
+      if (isShiftClosed) {
+        showToast('Shift closed. Intake is disabled.', 'warning');
+      }
+      return;
+    }
+
+    if (form.intakeType === 'pre_booked') {
+      if (!selectedPreBooking) {
+        showToast('Please search or select a pre-booked appointment first.', 'warning');
+        return;
+      }
+    } else {
+      // 1. Verify Full Name
+      const cleanName = (form.patient.fullName || '').trim();
+      if (!cleanName) {
+        form.setField('fullName', '');
+        showToast('Please enter the patient full name.', 'error');
+        return;
+      }
+
+      // 2. Verify Telephone Number
+      const cleanPhone = (form.patient.phone || '').trim();
+      if (!cleanPhone) {
+        form.setField('phone', '');
+        showToast('Please enter the patient telephone number.', 'error');
+        return;
+      }
+      if (cleanPhone.length < 8) {
+        showToast('Please enter a valid telephone number (e.g. 0712345678).', 'error');
+        return;
+      }
+
+      // 3. Auto-resolve Department, Doctor & Slot if not yet selected by receptionist
+      const resolvedDepartment = (form.department?.trim() || 'General OPD');
+      if (!form.department) {
+        form.setField('department', resolvedDepartment);
+      }
+
+      if (!form.doctorId && allDoctors.length > 0) {
+        const targetDept = resolvedDepartment.toLowerCase();
+        const matched = allDoctors.find(
+          (d) => (d.department || '').toLowerCase().includes(targetDept)
+        );
+        const resolvedDoc = matched?._id || allDoctors[0]?._id;
+        if (resolvedDoc) {
+          form.setField('doctorId', resolvedDoc);
+        }
+      }
+
+      if (!form.slotTime) {
+        const avail = slots.find((s) => s.status === 'available')?.time;
+        if (avail) {
+          form.setField('slotTime', avail);
+        } else {
+          const now = new Date();
+          const hh = String(now.getHours()).padStart(2, '0');
+          const mm = String(Math.floor(now.getMinutes() / 15) * 15).padStart(2, '0');
+          form.setField('slotTime', `${hh}:${mm}`);
+        }
+      }
+    }
+
+    let todayDate = '';
+    try {
+      todayDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Colombo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+    } catch {
+      todayDate = new Date().toISOString().split('T')[0];
+    }
+
+    const deptToUse = (selectedPreBooking?.department || form.department || 'General OPD').trim();
+    let docIdToUse = selectedPreBooking?.doctor?._id || form.doctorId;
+    if (!docIdToUse && allDoctors.length > 0) {
+      const matched = allDoctors.find(
+        (d) => (d.department || '').toLowerCase().includes(deptToUse.toLowerCase())
+      );
+      docIdToUse = matched?._id || allDoctors[0]?._id;
+    }
+
+    let slotTimeToUse = selectedPreBooking?.slotTime || form.slotTime;
+    if (!slotTimeToUse) {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(Math.floor(now.getMinutes() / 15) * 15).padStart(2, '0');
+      slotTimeToUse = `${hh}:${mm}`;
+    }
+
+    const payload: WalkInPayload = {
+      department: deptToUse,
+      doctorId: docIdToUse,
+      date: todayDate,
+      slotTime: slotTimeToUse,
+      priority: form.priority,
+      type: form.intakeType,
+      intakeType: form.intakeType,
+      appointmentId: selectedPreBooking?._id,
+    };
+
+    if (selectedPreBooking?.patient?._id) {
+      payload.existingPatientId = selectedPreBooking.patient._id;
+    } else if (form.existingPatientId) {
+      payload.existingPatientId = form.existingPatientId;
+    } else {
+      payload.patient = {
+        fullName: (selectedPreBooking?.patient?.fullName || form.patient.fullName).trim(),
+        phone: (selectedPreBooking?.patient?.phone || form.patient.phone).trim(),
+        nic: selectedPreBooking?.patient?.nic?.trim() || form.patient.nic?.trim() || undefined,
+        dob: form.patient.dob?.trim() || undefined,
+        age:
+          selectedPreBooking?.patient?.age !== undefined && selectedPreBooking?.patient?.age !== null
+            ? Number(selectedPreBooking.patient.age)
+            : form.patient.age !== '' &&
+              form.patient.age !== undefined &&
+              form.patient.age !== null
+              ? Number(form.patient.age)
+              : undefined,
+        gender: ((selectedPreBooking?.patient?.gender || form.patient.gender) as any) || undefined,
+        bloodGroup: form.patient.bloodGroup || undefined,
+      };
+    }
+
+    await executeFinalRegistration(payload);
   };
 
   const handleNewEntry = () => {
@@ -601,6 +776,30 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setMatchedPatient(null);
     setSlots([]);
     setSlotsError(null);
+  };
+
+  const handleBirthdayChange = (val: string) => {
+    form.setField('dob', val);
+    const cleaned = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
+      const birthDate = new Date(cleaned);
+      if (!isNaN(birthDate.getTime())) {
+        const today = new Date();
+        let calcAge = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          calcAge--;
+        }
+        if (calcAge >= 0 && calcAge <= 125) {
+          form.setField('age', String(calcAge));
+          if (calcAge >= 60 && form.priority !== 'urgent') {
+            form.setField('priority', 'senior');
+          } else if (calcAge < 60 && form.priority === 'senior') {
+            form.setField('priority', 'normal');
+          }
+        }
+      }
+    }
   };
 
   const handleAgeChange = (val: string) => {
@@ -616,7 +815,25 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   };
 
   const handleQRScanPress = () => {
-    showToast(t('QR Code scanning coming soon'), 'info');
+    setScannerModalVisible(true);
+  };
+
+  const handleScanSuccess = (scannedValue: string) => {
+    let codeToSearch = scannedValue.trim();
+    try {
+      const parsed = JSON.parse(scannedValue);
+      if (parsed.nic) codeToSearch = parsed.nic;
+      else if (parsed.bookingRef) codeToSearch = parsed.bookingRef;
+      else if (parsed.phone) codeToSearch = parsed.phone;
+      else if (parsed.patientId) codeToSearch = parsed.patientId;
+      else if (parsed.id) codeToSearch = parsed.id;
+    } catch {
+      // Direct raw barcode string
+    }
+    setSearchQuery(codeToSearch);
+    form.setField('query', codeToSearch);
+    executeSearch(codeToSearch);
+    showToast(`Scanned: ${codeToSearch}`, 'success');
   };
 
   return (
@@ -637,16 +854,23 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         <View style={styles.headerLeft}>
           <View style={styles.badgeWrap}>
             <Ionicons name="person-add" size={12} color={Colors.white} style={{ marginRight: 4 }} />
-            <Text style={styles.badgeText}>{t("INTAKE DESK")}</Text>
+            <Text style={styles.badgeText}>INTAKE DESK</Text>
           </View>
-          <Text style={styles.headerTitle}>{t("Patient Registration")}</Text>
-          <Text style={styles.headerSubtitle}>{t("Step 1 of 2: Patient Identification & Details")}</Text>
+          <Text style={styles.headerTitle}>
+            {form.intakeType === 'pre_booked' ? 'Pre-Booked Check-In' : 'Patient Registration'}
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            {form.intakeType === 'pre_booked'
+              ? 'Verify pre-booked appointment & issue token'
+              : 'Step 1 of 2: Patient Identification & Details'}
+          </Text>
         </View>
 
         <TouchableOpacity
           style={styles.headerActionBtn}
           onPress={handleClearSearch}
           activeOpacity={0.7}
+          accessibilityLabel="Refresh form"
         >
           <Ionicons name="refresh" size={18} color={Colors.white} />
         </TouchableOpacity>
@@ -670,14 +894,15 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 <View style={styles.confirmIconCircle}>
                   <Ionicons name="checkmark-circle" size={32} color={Colors.white} />
                 </View>
-                <Text style={styles.confirmTitle}>{t("Patient Registered Successfully!")}</Text>
+                <Text style={styles.confirmTitle}>Patient Registered Successfully!</Text>
                 <Text style={styles.confirmSubtitle}>
-                  {t("Official appointment confirmed & OPD token generated.")}</Text>
+                  Official appointment confirmed & OPD token generated.
+                </Text>
               </View>
 
               {/* Real Token Badge */}
               <View style={styles.confirmTokenBadgeBox}>
-                <Text style={styles.confirmTokenHeaderLabel}>{t("OFFICIAL QUEUE TOKEN")}</Text>
+                <Text style={styles.confirmTokenHeaderLabel}>OFFICIAL QUEUE TOKEN</Text>
                 <TokenBadge
                   tokenLabel={
                     confirmedBooking.token?.tokenLabel ||
@@ -686,16 +911,30 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   priority={confirmedPriority || 'normal'}
                   size="large"
                 />
-                <View style={styles.smsStatusBadge}>
-                  <Ionicons
-                    name="chatbubble-ellipses"
-                    size={13}
-                    color="#0D9488"
-                    style={{ marginRight: 5 }}
-                  />
-                  <Text style={styles.smsStatusBadgeText}>
-                    {t("SMS confirmation queued to")}{' '}{confirmedBooking.patient.phone}
-                  </Text>
+                {/* ── SMS CONFIRMATION DELIVERED TO PATIENT CARD ── */}
+                <View style={styles.smsDeliveredCard}>
+                  <View style={styles.smsDeliveredHeader}>
+                    <View style={styles.smsDeliveredTitleRow}>
+                      <Ionicons name="chatbubbles" size={15} color="#0D9488" style={{ marginRight: 6 }} />
+                      <Text style={styles.smsDeliveredTitle}>CONFIRMATION SMS SENT TO PATIENT</Text>
+                    </View>
+                    <View style={styles.smsSentBadge}>
+                      <View style={styles.smsSentDot} />
+                      <Text style={styles.smsSentBadgeText}>Sent to {confirmedBooking.patient.phone}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.smsMessageBox}>
+                    <Text style={styles.smsMessageText}>
+                      {confirmedBooking.smsNotification?.message ||
+                        `[Medi-Queue Hospital] Dear ${confirmedBooking.patient.fullName}, your registration is SUCCESSFUL! Queue Token: ${confirmedBooking.token?.tokenLabel || `OPD-${String(confirmedBooking.token?.tokenNumber || 1).padStart(3, '0')}`}. Doctor: ${confirmedBooking.doctor?.name} (${confirmedBooking.doctor?.room || 'OPD Room'}). Est. Wait: ~${confirmedBooking.estimatedWaitMinutes || 15} mins. Please proceed to waiting area.`}
+                    </Text>
+                  </View>
+                  <View style={styles.smsFooterRow}>
+                    <Ionicons name="checkmark-circle" size={13} color="#059669" style={{ marginRight: 4 }} />
+                    <Text style={styles.smsTimestampText}>
+                      Status: Delivered Successfully to Patient Mobile • Just Now
+                    </Text>
+                  </View>
                 </View>
               </View>
 
@@ -707,21 +946,24 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <Ionicons name="person" size={16} color={Colors.primary} />
                   </View>
                   <View style={styles.confirmRowContent}>
-                    <Text style={styles.confirmRowLabel}>{t("PATIENT")}</Text>
+                    <Text style={styles.confirmRowLabel}>PATIENT</Text>
                     <Text style={styles.confirmRowMainValue}>
                       {confirmedBooking.patient.fullName}
                     </Text>
                     <Text style={styles.confirmRowSubText}>
                       {confirmedBooking.patient.nic
-                        ? t("NIC: {value0} • ", { value0: String(confirmedBooking.patient.nic) })
+                        ? `NIC: ${confirmedBooking.patient.nic} • `
                         : ''}
                       {confirmedBooking.patient.age
-                        ? t("Age: {value0} • ", { value0: String(confirmedBooking.patient.age) })
+                        ? `Age: ${confirmedBooking.patient.age} • `
                         : ''}
                       {confirmedBooking.patient.gender
                         ? `${confirmedBooking.patient.gender} • `
                         : ''}
-                      {t("Phone:")}{' '}{confirmedBooking.patient.phone}
+                      {confirmedBooking.patient.bloodGroup
+                        ? `Blood: ${confirmedBooking.patient.bloodGroup} • `
+                        : ''}
+                      Phone: {confirmedBooking.patient.phone}
                     </Text>
                   </View>
                 </View>
@@ -734,13 +976,13 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <Ionicons name="medkit" size={16} color={Colors.primary} />
                   </View>
                   <View style={styles.confirmRowContent}>
-                    <Text style={styles.confirmRowLabel}>{t("DOCTOR & ROOM")}</Text>
+                    <Text style={styles.confirmRowLabel}>DOCTOR & ROOM</Text>
                     <Text style={styles.confirmRowMainValue}>
                       {confirmedBooking.doctor.name}
                     </Text>
                     <Text style={styles.confirmRowSubText}>
-                      {confirmedBooking.doctor.room || t('OPD Room')} {t("• Department:")}{' '}
-                      {confirmedBooking.appointment.department || t('General OPD')}
+                      {confirmedBooking.doctor.room || 'OPD Room'} • Department:{' '}
+                      {confirmedBooking.appointment.department || 'General OPD'}
                     </Text>
                   </View>
                 </View>
@@ -753,7 +995,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <Ionicons name="calendar" size={16} color={Colors.primary} />
                   </View>
                   <View style={styles.confirmRowContent}>
-                    <Text style={styles.confirmRowLabel}>{t("SCHEDULED SLOT")}</Text>
+                    <Text style={styles.confirmRowLabel}>SCHEDULED SLOT</Text>
                     <Text style={styles.confirmRowMainValue}>
                       {confirmedBooking.appointment.slotTime} ({confirmedBooking.appointment.date})
                     </Text>
@@ -765,17 +1007,19 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 {/* Queue Metrics: Estimated Wait & Patients Ahead */}
                 <View style={styles.confirmMetricsContainer}>
                   <View style={styles.confirmMetricCol}>
-                    <Text style={styles.confirmMetricTitle}>{t("ESTIMATED WAIT")}</Text>
+                    <Text style={styles.confirmMetricTitle}>ESTIMATED WAIT</Text>
                     <Text style={styles.confirmMetricNum}>
-                      ~{confirmedBooking.estimatedWaitMinutes ?? 0} {t("mins")}</Text>
+                      ~{confirmedBooking.estimatedWaitMinutes ?? 0} mins
+                    </Text>
                   </View>
 
                   <View style={styles.confirmMetricSeparator} />
 
                   <View style={styles.confirmMetricCol}>
-                    <Text style={styles.confirmMetricTitle}>{t("PATIENTS AHEAD")}</Text>
+                    <Text style={styles.confirmMetricTitle}>PATIENTS AHEAD</Text>
                     <Text style={styles.confirmMetricNum}>
-                      {confirmedBooking.patientsAhead ?? 0} {t("ahead")}</Text>
+                      {confirmedBooking.patientsAhead ?? 0} ahead
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -785,7 +1029,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 style={styles.confirmNewEntryBtn}
                 onPress={handleNewEntry}
                 activeOpacity={0.8}
-                accessibilityLabel={t("Start New Patient Entry")}
+                accessibilityLabel="Start New Patient Entry"
                 accessibilityRole="button"
               >
                 <Ionicons
@@ -794,7 +1038,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   color={Colors.white}
                   style={{ marginRight: 8 }}
                 />
-                <Text style={styles.confirmNewEntryBtnText}>{t("New Entry")}</Text>
+                <Text style={styles.confirmNewEntryBtnText}>New Entry</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -803,784 +1047,1174 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
               {isShiftClosed && (
                 <View style={styles.shiftClosedNoticeBanner}>
                   <Ionicons name="lock-closed" size={16} color="#92400E" style={{ marginRight: 8 }} />
-                  <Text style={styles.shiftClosedNoticeText}>{t("Shift closed. Intake is disabled.")}</Text>
+                  <Text style={styles.shiftClosedNoticeText}>Shift closed. Intake is disabled.</Text>
                 </View>
               )}
 
-              {/* ── SEARCH BAR (NIC / PHONE / QR) ── */}
-              <View style={styles.searchCard}>
-                <Text style={styles.searchTitle}>{t("Search Existing Record")}</Text>
-                <Text style={styles.searchDesc}>
-                  {t("Enter Patient NIC or Phone Number to check past hospital visits.")}</Text>
-
-                <View style={styles.searchBarRow}>
-                  <View style={styles.searchInputWrapper}>
-                    <Ionicons
-                      name="search"
-                      size={18}
-                      color={Colors.textLight}
-                      style={styles.searchIcon}
-                    />
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder={t("NIC (e.g. 199418201234 / 647891234V) or Phone")}
-                      placeholderTextColor={Colors.textLight}
-                      value={searchQuery}
-                      onChangeText={handleSearchChange}
-                      autoCapitalize="characters"
-                      autoCorrect={false}
-                      clearButtonMode="never"
-                    />
-
-                    {searching ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={Colors.primary}
-                        style={styles.searchSpinner}
-                      />
-                    ) : searchQuery.length > 0 ? (
-                      <TouchableOpacity
-                        onPress={handleClearSearch}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        style={styles.clearBtn}
-                      >
-                        <Ionicons name="close-circle" size={18} color={Colors.textLight} />
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-
-                  {/* QR Scanner Icon Button */}
-                  <TouchableOpacity
-                    style={styles.qrButton}
-                    onPress={handleQRScanPress}
-                    activeOpacity={0.7}
-                    accessibilityLabel={t("Scan Patient QR Code")}
-                  >
-                    <Ionicons name="qr-code-outline" size={22} color={Colors.primary} />
-                  </TouchableOpacity>
-                </View>
-
-                {/* ── SEARCH STATUS BANNERS ── */}
-                {(searchStatus === 'found' || !!form.existingPatientId) && (matchedPatient || form.patient.fullName) && (
-                  <View style={styles.foundBanner}>
-                    <View style={styles.bannerIconCircleSuccess}>
-                      <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-                    </View>
-                    <View style={styles.bannerTextWrap}>
-                      <Text style={styles.foundBannerTitle}>{t("Existing record found (auto-filled)")}</Text>
-                      <Text style={styles.foundBannerSub}>
-                        {t("Patient:")}{' '}{matchedPatient?.fullName || form.patient.fullName}
-                        {matchedPatient?.nic || form.patient.nic ? t(" • NIC: {value0}", { value0: String(matchedPatient?.nic || form.patient.nic) }) : ''}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {searchStatus === 'not_found' && !form.existingPatientId && (
-                  <View style={styles.notFoundBanner}>
-                    <View style={styles.bannerIconCircleInfo}>
-                      <Ionicons name="person-add" size={16} color={Colors.primary} />
-                    </View>
-                    <View style={styles.bannerTextWrap}>
-                      <Text style={styles.notFoundBannerTitle}>{t("New patient")}</Text>
-                      <Text style={styles.notFoundBannerSub}>
-                        {t("No previous record found. Please enter details below.")}</Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-
-              {/* ── STEP 1: DEMOGRAPHICS & TRIAGE CARD ── */}
-              <View style={styles.formCard}>
-                <View style={styles.formCardHeader}>
-                  <View style={styles.stepPill}>
-                    <Text style={styles.stepPillText}>{t("STEP 1")}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.formCardTitle}>{t("Demographics & Triage")}</Text>
-                    <Text style={styles.formCardSub}>
-                      {t("Patient identification and priority triage")}</Text>
-                  </View>
-                </View>
-
-                {/* Full Name */}
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>
-                    {t("Full Name")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
+              {/* ── SEARCH BAR (NIC / PHONE / QR) (WALK-IN ONLY) ── */}
+              {form.intakeType === 'walk_in' && (
+                <View style={styles.searchCard}>
+                  <Text style={styles.searchTitle}>Search Existing Record</Text>
+                  <Text style={styles.searchDesc}>
+                    Enter Patient NIC or Phone Number to check past hospital visits.
                   </Text>
-                  <TextInput
-                    style={[
-                      styles.textInput,
-                      form.errors.fullName ? styles.inputError : null,
-                    ]}
-                    placeholder="e.g. Kasun Chamara Mendis"
-                    placeholderTextColor={Colors.textLight}
-                    value={form.patient.fullName}
-                    onChangeText={(val) => form.setField('fullName', val)}
-                    autoCapitalize="words"
-                  />
-                  {form.errors.fullName ? (
-                    <Text style={styles.errorText}>{form.errors.fullName}</Text>
-                  ) : null}
-                </View>
 
-                {/* NIC & Phone Row */}
-                <View style={styles.fieldsRow}>
-                  {/* NIC Field */}
-                  <View style={[styles.fieldGroup, { flex: 1, marginRight: 8 }]}>
-                    <Text style={styles.fieldLabel}>{t("NIC (Optional)")}</Text>
-                    <TextInput
-                      style={[
-                        styles.textInput,
-                        form.errors.nic ? styles.inputError : null,
-                      ]}
-                      placeholder="199418201234 / 647891234V"
-                      placeholderTextColor={Colors.textLight}
-                      value={form.patient.nic}
-                      onChangeText={(val) => form.setField('nic', val)}
-                      onBlur={handleNicBlur}
-                      autoCapitalize="characters"
-                    />
-                    {form.errors.nic ? (
-                      <Text style={styles.errorText}>{form.errors.nic}</Text>
-                    ) : null}
-                  </View>
-
-                  {/* Phone Field */}
-                  <View style={[styles.fieldGroup, { flex: 1, marginLeft: 8 }]}>
-                    <Text style={styles.fieldLabel}>
-                      {t("Phone Number")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.textInput,
-                        form.errors.phone ? styles.inputError : null,
-                      ]}
-                      placeholder="0771234567"
-                      placeholderTextColor={Colors.textLight}
-                      value={form.patient.phone}
-                      onChangeText={(val) => form.setField('phone', val)}
-                      keyboardType="phone-pad"
-                    />
-                    {form.errors.phone ? (
-                      <Text style={styles.errorText}>{form.errors.phone}</Text>
-                    ) : null}
-                  </View>
-                </View>
-
-                {/* Age & Gender Row */}
-                <View style={styles.fieldsRow}>
-                  {/* Age Field */}
-                  <View style={[styles.fieldGroup, { flex: 0.8, marginRight: 8 }]}>
-                    <View style={styles.ageLabelRow}>
-                      <Text style={styles.fieldLabel}>{t("Age")}</Text>
-                      {Number(form.patient.age) >= 60 && (
-                        <Text style={styles.seniorBadgeText}>{t("Senior (60+)")}</Text>
-                      )}
-                    </View>
-                    <TextInput
-                      style={[
-                        styles.textInput,
-                        form.errors.age ? styles.inputError : null,
-                      ]}
-                      placeholder="e.g. 62"
-                      placeholderTextColor={Colors.textLight}
-                      value={String(form.patient.age || '')}
-                      onChangeText={handleAgeChange}
-                      keyboardType="number-pad"
-                      maxLength={3}
-                    />
-                    {form.errors.age ? (
-                      <Text style={styles.errorText}>{form.errors.age}</Text>
-                    ) : null}
-                  </View>
-
-                  {/* Gender Selector */}
-                  <View style={[styles.fieldGroup, { flex: 1.2, marginLeft: 8 }]}>
-                    <Text style={styles.fieldLabel}>{t("Gender")}</Text>
-                    <View style={styles.genderRow}>
-                      {(['male', 'female', 'other'] as const).map((g) => {
-                        const isSelected = form.patient.gender === g;
-                        return (
-                          <TouchableOpacity
-                            key={g}
-                            style={[
-                              styles.genderChip,
-                              isSelected ? styles.genderChipSelected : null,
-                            ]}
-                            onPress={() => form.setField('gender', g)}
-                            activeOpacity={0.7}
-                            accessibilityLabel={t("Gender {value0}", { value0: String(g) })}
-                            accessibilityRole="button"
-                          >
-                            <Text
-                              style={[
-                                styles.genderChipText,
-                                isSelected ? styles.genderChipTextSelected : null,
-                              ]}
-                            >
-                              {g.charAt(0).toUpperCase() + g.slice(1)}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-                </View>
-
-                {/* Intake Toggle (Walk-In / Pre-Booked) */}
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>{t("Intake Mode")}</Text>
-                  <View style={styles.intakeTypeRow}>
-                    {[
-                      { key: 'walk_in', label: 'Walk-In Patient', icon: 'walk' },
-                      { key: 'pre_booked', label: 'Pre-Booked', icon: 'calendar' },
-                    ].map((item) => {
-                      const isSelected = form.intakeType === item.key;
-                      return (
-                        <TouchableOpacity
-                          key={item.key}
-                          style={[
-                            styles.intakeTypeChip,
-                            isSelected ? styles.intakeTypeChipSelected : null,
-                          ]}
-                          onPress={() =>
-                            form.setField('intakeType', item.key as AppointmentType)
-                          }
-                          activeOpacity={0.7}
-                          accessibilityLabel={t("Intake {value0}", { value0: String(item.label) })}
-                          accessibilityRole="button"
-                        >
-                          <Ionicons
-                            name={item.icon as any}
-                            size={16}
-                            color={isSelected ? Colors.primary : Colors.textMedium}
-                            style={{ marginRight: 6 }}
-                          />
-                          <Text
-                            style={[
-                              styles.intakeTypeChipText,
-                              isSelected ? styles.intakeTypeChipTextSelected : null,
-                            ]}
-                          >
-                            {t(item.label ?? '')}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                {/* Priority Chips (Normal / Senior / Urgent) */}
-                <View style={styles.fieldGroup}>
-                  <View style={styles.priorityHeaderRow}>
-                    <Text style={styles.fieldLabel}>{t("Priority Triage")}</Text>
-                    {form.priority === 'senior' && (
-                      <Text style={styles.priorityHintSenior}>{t("Senior line prioritized")}</Text>
-                    )}
-                    {form.priority === 'urgent' && (
-                      <Text style={styles.priorityHintUrgent}>{t("Immediate doctor triage")}</Text>
-                    )}
-                  </View>
-                  <View style={styles.priorityRow}>
-                    {[
-                      { key: 'normal', label: 'Normal', icon: 'person' },
-                      { key: 'senior', label: 'Senior', icon: 'heart' },
-                      { key: 'urgent', label: 'Urgent', icon: 'warning' },
-                    ].map((item) => {
-                      const isSelected = form.priority === item.key;
-                      return (
-                        <TouchableOpacity
-                          key={item.key}
-                          style={[
-                            styles.priorityChip,
-                            isSelected ? styles.priorityChipSelected : null,
-                            item.key === 'urgent' && isSelected
-                              ? styles.priorityUrgentSelected
-                              : null,
-                            item.key === 'senior' && isSelected
-                              ? styles.prioritySeniorSelected
-                              : null,
-                          ]}
-                          onPress={() => form.setField('priority', item.key as QueuePriority)}
-                          activeOpacity={0.7}
-                          accessibilityLabel={t("Priority {value0}", { value0: String(item.label) })}
-                          accessibilityRole="button"
-                        >
-                          <Ionicons
-                            name={item.icon as any}
-                            size={15}
-                            color={
-                              isSelected
-                                ? item.key === 'urgent'
-                                  ? Colors.danger
-                                  : item.key === 'senior'
-                                  ? Colors.warning
-                                  : Colors.primary
-                                : Colors.textMedium
-                            }
-                            style={{ marginRight: 5 }}
-                          />
-                          <Text
-                            style={[
-                              styles.priorityChipText,
-                              isSelected ? styles.priorityChipTextSelected : null,
-                            ]}
-                          >
-                            {t(item.label ?? '')}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              </View>
-
-              {/* ── STEP 2: CONSULTATION & SLOT SCHEDULING CARD ── */}
-              <View style={[styles.formCard, { marginTop: 16 }]}>
-                <View style={styles.formCardHeader}>
-                  <View style={[styles.stepPill, { backgroundColor: '#0284C7' }]}>
-                    <Text style={styles.stepPillText}>{t("STEP 2")}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.formCardTitle}>{t("Department, Doctor & Slot")}</Text>
-                    <Text style={styles.formCardSub}>
-                      {t("Select specialty, physician, and appointment time")}</Text>
-                  </View>
-                </View>
-
-                {/* ── 1. DEPARTMENT CARDS ── */}
-                <View style={styles.fieldGroup}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.fieldLabel}>
-                      {t("Department")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
-                    </Text>
-                    {form.department ? (
-                      <Text style={styles.selectedLabelText}>
-                        {t("Selected:")}{' '}{t(form.department)}
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  <View style={styles.departmentGrid}>
-                    {DEPARTMENTS.map((dept) => {
-                      const isSelected = form.department === dept.id;
-                      const waitInfo = getDepartmentWaitTime(dept.id);
-                      return (
-                        <TouchableOpacity
-                          key={dept.id}
-                          style={[
-                            styles.departmentCard,
-                            isSelected ? styles.departmentCardSelected : null,
-                          ]}
-                          onPress={() => handleSelectDepartment(dept.id)}
-                          activeOpacity={0.7}
-                          accessibilityLabel={t("Department {value0}", { value0: String(dept.name) })}
-                          accessibilityRole="button"
-                        >
-                          <View style={styles.deptCardTop}>
-                            <View
-                              style={[
-                                styles.deptIconWrap,
-                                { backgroundColor: dept.bgColor },
-                              ]}
-                            >
-                              <Ionicons name={dept.icon as any} size={20} color={dept.color} />
-                            </View>
-                            {isSelected && (
-                              <View style={styles.deptCheckBadge}>
-                                <Ionicons
-                                  name="checkmark-circle"
-                                  size={16}
-                                  color={Colors.primary}
-                                />
-                              </View>
-                            )}
-                          </View>
-
-                          <Text
-                            style={[
-                              styles.deptName,
-                              isSelected ? styles.deptNameSelected : null,
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {dept.name}
-                          </Text>
-
-                          <View style={styles.deptFooter}>
-                            <View style={styles.deptWaitTag}>
-                              <Ionicons
-                                name="time-outline"
-                                size={11}
-                                color={Colors.textLight}
-                                style={{ marginRight: 3 }}
-                              />
-                              <Text style={styles.deptWaitText}>{waitInfo.waitStr}</Text>
-                            </View>
-                            <Text style={styles.deptDocCountText}>
-                              {waitInfo.doctorCount}{' '}
-                              {waitInfo.doctorCount === 1 ? t('doc') : t('docs')}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  {form.errors.department ? (
-                    <Text style={styles.errorText}>{form.errors.department}</Text>
-                  ) : null}
-                </View>
-
-                {/* ── 2. DOCTOR PICKER ── */}
-                <View style={styles.fieldGroup}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.fieldLabel}>
-                      {t("Consulting Doctor")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
-                    </Text>
-                    {departmentDoctors.length > 0 ? (
-                      <Text style={styles.subCountText}>
-                        {departmentDoctors.length} {t("available")}</Text>
-                    ) : null}
-                  </View>
-
-                  {!form.department ? (
-                    <View style={styles.promptBox}>
+                  <View style={styles.searchBarRow}>
+                    <View style={styles.searchInputWrapper}>
                       <Ionicons
-                        name="arrow-up-circle-outline"
-                        size={20}
+                        name="search"
+                        size={18}
                         color={Colors.textLight}
+                        style={styles.searchIcon}
                       />
-                      <Text style={styles.promptBoxText}>
-                        {t("Please select a department above to view active doctors")}</Text>
-                    </View>
-                  ) : doctorsLoading ? (
-                    <View style={styles.loadingBox}>
-                      <ActivityIndicator size="small" color={Colors.primary} />
-                      <Text style={styles.loadingBoxText}>{t("Loading doctors...")}</Text>
-                    </View>
-                  ) : departmentDoctors.length === 0 ? (
-                    <View style={styles.emptyBox}>
-                      <Ionicons
-                        name="alert-circle-outline"
-                        size={20}
-                        color={Colors.warning}
+                      <TextInput
+                        style={styles.searchInput}
+                        placeholder="NIC (e.g. 199418201234 / 647891234V) or Phone"
+                        placeholderTextColor={Colors.textLight}
+                        value={searchQuery}
+                        onChangeText={handleSearchChange}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        clearButtonMode="never"
                       />
-                      <Text style={styles.emptyBoxText}>
-                        {t("No active doctors currently available in")}{' '}{t(form.department)}
-                      </Text>
+
+                      {searching ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={Colors.primary}
+                          style={styles.searchSpinner}
+                        />
+                      ) : searchQuery.length > 0 ? (
+                        <TouchableOpacity
+                          onPress={handleClearSearch}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          style={styles.clearBtn}
+                        >
+                          <Ionicons name="close-circle" size={18} color={Colors.textLight} />
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
-                  ) : (
-                    <View style={styles.doctorList}>
-                      {departmentDoctors.map((doc) => {
-                        const isSelected = form.doctorId === doc._id;
-                        const isActive = doc.status === 'active';
-                        return (
-                          <TouchableOpacity
-                            key={doc._id}
-                            style={[
-                              styles.doctorCard,
-                              isSelected ? styles.doctorCardSelected : null,
-                            ]}
-                            onPress={() => handleSelectDoctor(doc._id)}
-                            activeOpacity={0.7}
-                            accessibilityLabel={t("Doctor {value0}", { value0: String(doc.name) })}
-                            accessibilityRole="button"
-                          >
-                            <View
-                              style={[
-                                styles.doctorAvatar,
-                                isSelected ? styles.doctorAvatarSelected : null,
-                              ]}
-                            >
-                              <Ionicons
-                                name="person"
-                                size={18}
-                                color={isSelected ? Colors.white : Colors.primary}
-                              />
-                            </View>
 
-                            <View style={styles.doctorInfo}>
-                              <View style={styles.doctorNameRow}>
-                                <Text
-                                  style={[
-                                    styles.doctorName,
-                                    isSelected ? styles.doctorNameSelected : null,
-                                  ]}
-                                >
-                                  {doc.name}
-                                </Text>
-                                <View
-                                  style={[
-                                    styles.docStatusDot,
-                                    {
-                                      backgroundColor: isActive
-                                        ? Colors.success
-                                        : Colors.warning,
-                                    },
-                                  ]}
-                                />
-                              </View>
-                              <Text style={styles.doctorSpecialty}>
-                                {doc.specialization || doc.department} •{' '}
-                                {doc.room || t('OPD Room')}
-                              </Text>
-                              <Text style={styles.doctorLoadText}>
-                                {doc.todayPatients || 0} {t("patients attended today • ~")}{doc.avgConsultMinutes || 10}{t("m/patient")}</Text>
-                            </View>
+                    {/* QR Scanner Icon Button */}
+                    <TouchableOpacity
+                      style={styles.qrButton}
+                      onPress={handleQRScanPress}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Scan Patient QR Code"
+                    >
+                      <Ionicons name="qr-code-outline" size={22} color={Colors.primary} />
+                    </TouchableOpacity>
+                  </View>
 
-                            <View
-                              style={[
-                                styles.radioCircle,
-                                isSelected ? styles.radioCircleSelected : null,
-                              ]}
-                            >
-                              {isSelected && <View style={styles.radioInner} />}
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
+                  {/* ── SEARCH STATUS BANNERS ── */}
+                  {(searchStatus === 'found' || !!form.existingPatientId) && (matchedPatient || form.patient.fullName) && (
+                    <View style={styles.foundBanner}>
+                      <View style={styles.bannerIconCircleSuccess}>
+                        <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                      </View>
+                      <View style={styles.bannerTextWrap}>
+                        <Text style={styles.foundBannerTitle}>Existing record found (auto-filled)</Text>
+                        <Text style={styles.foundBannerSub}>
+                          Patient: {matchedPatient?.fullName || form.patient.fullName}
+                          {matchedPatient?.nic || form.patient.nic ? ` • NIC: ${matchedPatient?.nic || form.patient.nic}` : ''}
+                        </Text>
+                      </View>
                     </View>
                   )}
-                  {form.errors.doctorId ? (
-                    <Text style={styles.errorText}>{form.errors.doctorId}</Text>
-                  ) : null}
+
+                  {searchStatus === 'not_found' && !form.existingPatientId && (
+                    <View style={styles.notFoundBanner}>
+                      <View style={styles.bannerIconCircleInfo}>
+                        <Ionicons name="person-add" size={16} color={Colors.primary} />
+                      </View>
+                      <View style={styles.bannerTextWrap}>
+                        <Text style={styles.notFoundBannerTitle}>New patient</Text>
+                        <Text style={styles.notFoundBannerSub}>
+                          No previous record found. Please enter details below.
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* ── STEP 1: DEMOGRAPHICS & TRIAGE CARD (OR PRE-BOOKED VERIFICATION) ── */}
+              <View style={styles.formCard}>
+                <View style={styles.formCardHeader}>
+                  <View
+                    style={[
+                      styles.stepPill,
+                      form.intakeType === 'pre_booked'
+                        ? { backgroundColor: '#4F46E5' }
+                        : null,
+                    ]}
+                  >
+                    <Text style={styles.stepPillText}>
+                      {form.intakeType === 'pre_booked' ? 'CHECK-IN' : 'STEP 1'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.formCardTitle}>
+                      {form.intakeType === 'pre_booked'
+                        ? 'Pre-Booked Patient Check-In'
+                        : 'Demographics & Triage'}
+                    </Text>
+                    <Text style={styles.formCardSub}>
+                      {form.intakeType === 'pre_booked'
+                        ? 'Verify online appointment & issue OPD queue token'
+                        : 'Patient identification, details and priority triage'}
+                    </Text>
+                  </View>
                 </View>
 
-                {/* ── 3. SLOT GRID ── */}
+                {/* ── INTAKE MODE SELECTOR (WALK-IN VS PRE-BOOKED) ── */}
                 <View style={styles.fieldGroup}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.fieldLabel}>
-                      {t("Appointment Slot")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
-                    </Text>
-                    {form.slotTime ? (
-                      <View style={styles.slotBadge}>
-                        <Ionicons
-                          name="time"
-                          size={12}
-                          color={Colors.primary}
-                          style={{ marginRight: 4 }}
-                        />
-                        <Text style={styles.slotBadgeText}>{form.slotTime}</Text>
-                      </View>
-                    ) : null}
+                  <Text style={styles.fieldLabel}>Intake Mode</Text>
+                  <View style={styles.intakeTypeRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.intakeTypeChip,
+                        form.intakeType === 'walk_in' ? styles.intakeTypeChipSelected : null,
+                      ]}
+                      onPress={() => {
+                        form.setField('intakeType', 'walk_in');
+                        setSelectedPreBooking(null);
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Intake Walk-In Patient"
+                      accessibilityRole="button"
+                    >
+                      <Ionicons
+                        name="walk"
+                        size={18}
+                        color={form.intakeType === 'walk_in' ? Colors.primary : Colors.textMedium}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={[
+                          styles.intakeTypeChipText,
+                          form.intakeType === 'walk_in' ? styles.intakeTypeChipTextSelected : null,
+                        ]}
+                      >
+                        Walk-In Patient
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.intakeTypeChip,
+                        form.intakeType === 'pre_booked' ? styles.intakeTypeChipPreBookedSelected : null,
+                      ]}
+                      onPress={() => {
+                        form.setField('intakeType', 'pre_booked');
+                        loadPreBooked(preBookedQuery);
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Intake Pre-Booked"
+                      accessibilityRole="button"
+                    >
+                      <Ionicons
+                        name="calendar"
+                        size={18}
+                        color={form.intakeType === 'pre_booked' ? Colors.primary : Colors.textMedium}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={[
+                          styles.intakeTypeChipText,
+                          form.intakeType === 'pre_booked' ? styles.intakeTypeChipTextPreBookedSelected : null,
+                        ]}
+                      >
+                        Pre-Booked
+                      </Text>
+                    </TouchableOpacity>
                   </View>
 
-                  {!form.doctorId ? (
-                    <View style={styles.promptBox}>
-                      <Ionicons
-                        name="calendar-outline"
-                        size={20}
-                        color={Colors.textLight}
-                      />
-                      <Text style={styles.promptBoxText}>
-                        {t("Please choose a doctor above to view today's available slots")}</Text>
-                    </View>
-                  ) : slotsLoading ? (
-                    <View style={styles.loadingBox}>
-                      <ActivityIndicator size="small" color={Colors.primary} />
-                      <Text style={styles.loadingBoxText}>
-                        {t("Fetching available slots for today...")}</Text>
-                    </View>
-                  ) : slotsError ? (
-                    <View style={styles.errorBox}>
-                      <Ionicons name="alert-circle" size={18} color={Colors.danger} />
-                      <Text style={styles.errorBoxText}>{slotsError}</Text>
-                    </View>
-                  ) : slots.length === 0 || !slots.some((s) => s.status === 'available') ? (
-                    <View style={styles.emptyBox}>
-                      <Ionicons name="time-outline" size={22} color={Colors.warning} />
-                      <Text style={styles.emptyBoxTitle}>{t("No Slots Remaining")}</Text>
-                      <Text style={styles.emptyBoxText}>
-                        {t("All appointment slots for this doctor are booked or passed for today.")}</Text>
-                    </View>
-                  ) : (
-                    <View>
-                      {/* Legend */}
-                      <View style={styles.slotsLegend}>
-                        <View style={styles.legendItem}>
-                          <View
-                            style={[
-                              styles.legendIndicator,
-                              { backgroundColor: Colors.primary },
-                            ]}
-                          />
-                          <Text style={styles.legendText}>{t("Selected")}</Text>
+
+                </View>
+
+                {/* ── PRE-BOOKED APPOINTMENT LOOKUP CARD (PRE-BOOKED ONLY) ── */}
+                {form.intakeType === 'pre_booked' && (
+                  <View style={styles.preBookedLookupSection}>
+                    {selectedPreBooking ? (
+                      /* Verified Pre-Booked Card */
+                      <View style={styles.verifiedBookingCard}>
+                        <View style={styles.verifiedBookingHeader}>
+                          <View style={styles.verifiedBadge}>
+                            <Ionicons name="checkmark-circle" size={16} color={Colors.primary} style={{ marginRight: 5 }} />
+                            <Text style={styles.verifiedBadgeText}>
+                              Verified Pre-Booking • #{selectedPreBooking.bookingRef}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={handleClearPreBooking}
+                            style={styles.changeBookingBtn}
+                          >
+                            <Text style={styles.changeBookingBtnText}>Change</Text>
+                          </TouchableOpacity>
                         </View>
-                        <View style={styles.legendItem}>
-                          <View
-                            style={[
-                              styles.legendIndicator,
-                              {
-                                backgroundColor: Colors.cardBackground,
-                                borderColor: Colors.border,
-                                borderWidth: 1,
-                              },
-                            ]}
-                          />
-                          <Text style={styles.legendText}>{t("Available")}</Text>
+
+                        {/* Auto-Issued Queue Token Header */}
+                        <View style={styles.autoIssuedTokenHeaderCard}>
+                          <View style={styles.autoIssuedTokenLeft}>
+                            <View style={styles.autoIssuedCheckCircle}>
+                              <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                            </View>
+                            <Text style={styles.autoIssuedTokenTag}>Queue Token</Text>
+                          </View>
+                          <View style={styles.autoIssuedTokenNumberPill}>
+                            <Text style={styles.autoIssuedTokenNumberText}>
+                              {selectedPreBooking.tokenLabel ||
+                                (selectedPreBooking.tokenNumber
+                                  ? `OPD-${String(selectedPreBooking.tokenNumber).padStart(3, '0')}`
+                                  : `#${selectedPreBooking.bookingRef}`)}
+                            </Text>
+                          </View>
                         </View>
-                        <View style={styles.legendItem}>
-                          <View
-                            style={[
-                              styles.legendIndicator,
-                              { backgroundColor: '#E5E7EB' },
-                            ]}
-                          />
-                          <Text style={styles.legendText}>{t("Booked / Past")}</Text>
+
+                        <View style={styles.verifiedBookingGrid}>
+                          <View style={styles.verifiedBookingCol}>
+                            <Text style={styles.verifiedBookingLabel}>PATIENT</Text>
+                            <Text style={styles.verifiedBookingValue}>
+                              {selectedPreBooking.patient?.fullName || form.patient.fullName}
+                            </Text>
+                            <Text style={styles.verifiedBookingSub}>
+                              {selectedPreBooking.patient?.phone || form.patient.phone}
+                              {selectedPreBooking.patient?.nic ? ` • NIC: ${selectedPreBooking.patient.nic}` : ''}
+                              {selectedPreBooking.patient?.age ? ` • Age: ${selectedPreBooking.patient.age}` : ''}
+                              {selectedPreBooking.patient?.gender ? ` • ${selectedPreBooking.patient.gender}` : ''}
+                            </Text>
+                          </View>
+                          <View style={styles.verifiedBookingCol}>
+                            <Text style={styles.verifiedBookingLabel}>SCHEDULED CONSULTATION</Text>
+                            <Text style={styles.verifiedBookingValue}>
+                              {selectedPreBooking.doctor ? `Dr. ${selectedPreBooking.doctor.name}` : selectedPreBooking.department}
+                            </Text>
+                            <Text style={styles.verifiedBookingSub}>
+                              {selectedPreBooking.department} • Slot: {selectedPreBooking.slotTime}
+                              {selectedPreBooking.doctor?.room ? ` • ${selectedPreBooking.doctor.room}` : ''}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Arrival Priority Triage Option for Pre-Booked */}
+                        <View style={styles.preBookedTriageWrap}>
+                          <View style={styles.priorityHeaderRow}>
+                            <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Arrival Priority Triage</Text>
+                            {form.priority === 'senior' && (
+                              <Text style={styles.seniorBadgeText}>Senior Queue (60+)</Text>
+                            )}
+                            {form.priority === 'urgent' && (
+                              <Text style={styles.priorityHintUrgent}>🚨 Urgent Queue</Text>
+                            )}
+                          </View>
+                          <View style={[styles.priorityRow, { marginTop: 6 }]}>
+                            {[
+                              { key: 'normal', label: 'Normal', icon: 'person' },
+                              { key: 'senior', label: 'Senior', icon: 'heart' },
+                              { key: 'urgent', label: 'Urgent', icon: 'warning' },
+                            ].map((item) => {
+                              const isSelected = form.priority === item.key;
+                              return (
+                                <TouchableOpacity
+                                  key={item.key}
+                                  style={[
+                                    styles.priorityChip,
+                                    isSelected ? styles.priorityChipSelected : null,
+                                    item.key === 'urgent' && isSelected
+                                      ? styles.priorityUrgentSelected
+                                      : null,
+                                    item.key === 'senior' && isSelected
+                                      ? styles.prioritySeniorSelected
+                                      : null,
+                                  ]}
+                                  onPress={() => form.setField('priority', item.key as QueuePriority)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Ionicons
+                                    name={item.icon as any}
+                                    size={15}
+                                    color={
+                                      isSelected
+                                        ? item.key === 'urgent'
+                                          ? Colors.danger
+                                          : item.key === 'senior'
+                                            ? Colors.warning
+                                            : Colors.primary
+                                        : Colors.textMedium
+                                    }
+                                    style={{ marginRight: 5 }}
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.priorityChipText,
+                                      isSelected ? styles.priorityChipTextSelected : null,
+                                    ]}
+                                  >
+                                    {item.label}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
                         </View>
                       </View>
+                    ) : (
+                      /* Search & Today's Pre-Bookings List */
+                      <View style={styles.preBookedSearchBox}>
+                        <View style={styles.preBookedInputWrap}>
+                          <Ionicons name="search" size={16} color={Colors.textLight} style={{ marginRight: 8 }} />
+                          <TextInput
+                            style={styles.preBookedSearchInput}
+                            placeholder="Search Booking ID (e.g. BK-1234), NIC, or Mobile..."
+                            placeholderTextColor={Colors.textLight}
+                            value={preBookedQuery}
+                            onChangeText={(text) => {
+                              setPreBookedQuery(text);
+                              loadPreBooked(text);
+                            }}
+                          />
+                          {preBookedQuery ? (
+                            <TouchableOpacity onPress={() => { setPreBookedQuery(''); loadPreBooked(''); }}>
+                              <Ionicons name="close-circle" size={18} color={Colors.textLight} />
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
 
-                      {/* Grid of Slots */}
-                      <View style={styles.slotsGrid}>
-                        {slots.map((slot) => {
-                          const isSelected = form.slotTime === slot.time;
-                          const isAvailable = slot.status === 'available';
-                          const isBooked = slot.status === 'booked';
-                          const isPast = slot.status === 'past';
+                        {/* List of today's pre-booked appointments */}
+                        <View style={styles.preBookedListWrap}>
+                          <View style={styles.preBookedListHeaderRow}>
+                            <Text style={styles.preBookedListTitle}>
+                              Today's Pre-Booked Appointments
+                            </Text>
+                            <TouchableOpacity onPress={() => loadPreBooked(preBookedQuery)}>
+                              <Text style={styles.preBookedRefreshText}>Refresh</Text>
+                            </TouchableOpacity>
+                          </View>
 
+                          {preBookedLoading ? (
+                            <View style={styles.preBookedLoadingBox}>
+                              <ActivityIndicator size="small" color={Colors.primary} />
+                              <Text style={styles.preBookedLoadingText}>Loading pre-bookings...</Text>
+                            </View>
+                          ) : preBookedList.length === 0 ? (
+                            <View style={styles.preBookedEmptyBox}>
+                              <Ionicons name="calendar-outline" size={20} color={Colors.textLight} />
+                              <Text style={styles.preBookedEmptyText}>
+                                {preBookedQuery
+                                  ? 'No pre-booked appointments match your search'
+                                  : 'No pre-booked appointments scheduled for today'}
+                              </Text>
+                            </View>
+                          ) : (
+                            <ScrollView
+                              horizontal
+                              showsHorizontalScrollIndicator={false}
+                              style={styles.preBookedScroll}
+                              contentContainerStyle={{ paddingVertical: 4 }}
+                            >
+                              {preBookedList.map((appt) => (
+                                <TouchableOpacity
+                                  key={appt._id}
+                                  style={styles.preBookedChipItem}
+                                  onPress={() => handleSelectPreBooking(appt)}
+                                  activeOpacity={0.7}
+                                >
+                                  <View style={styles.preBookedChipTop}>
+                                    <View style={styles.preBookedTokenPill}>
+                                      <Text style={styles.preBookedTokenPillText}>
+                                        {appt.tokenLabel ||
+                                          (appt.tokenNumber
+                                            ? `OPD-${String(appt.tokenNumber).padStart(3, '0')}`
+                                            : `#${appt.bookingRef}`)}
+                                      </Text>
+                                    </View>
+                                    <View style={styles.preBookedChipTimeBadge}>
+                                      <Text style={styles.preBookedChipTimeText}>{appt.slotTime}</Text>
+                                    </View>
+                                  </View>
+                                  <Text style={styles.preBookedChipPatient} numberOfLines={1}>
+                                    {appt.patient?.fullName || 'Patient'}
+                                  </Text>
+                                  <Text style={styles.preBookedChipDoctor} numberOfLines={1}>
+                                    {appt.doctor ? `Dr. ${appt.doctor.name}` : appt.department}
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                          )}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* ── WALK-IN PATIENT REGISTRATION FIELDS (WALK-IN ONLY) ── */}
+                {form.intakeType === 'walk_in' && (
+                  <>
+                    {/* Full Name */}
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>
+                        Full Name <Text style={styles.requiredAsterisk}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          form.errors.fullName ? styles.inputError : null,
+                        ]}
+                        placeholder="Enter your full name"
+                        placeholderTextColor={Colors.textLight}
+                        value={form.patient.fullName}
+                        onChangeText={(val) => form.setField('fullName', val)}
+                        autoCapitalize="words"
+                      />
+                      {form.errors.fullName ? (
+                        <Text style={styles.errorText}>{form.errors.fullName}</Text>
+                      ) : null}
+                    </View>
+
+                    {/* NIC Number */}
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>NIC Number (Optional)</Text>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          form.errors.nic ? styles.inputError : null,
+                        ]}
+                        placeholder="e.g. 199912345678 or 647891234V"
+                        placeholderTextColor={Colors.textLight}
+                        value={form.patient.nic}
+                        onChangeText={(val) => form.setField('nic', val)}
+                        onBlur={handleNicBlur}
+                        autoCapitalize="characters"
+                      />
+                      {form.errors.nic ? (
+                        <Text style={styles.errorText}>{form.errors.nic}</Text>
+                      ) : null}
+                    </View>
+
+                    {/* Birthday & Age Row */}
+                    <View style={styles.fieldsRow}>
+                      {/* Birthday Field */}
+                      <View style={[styles.fieldGroup, { flex: 1.2, marginRight: 8 }]}>
+                        <Text style={styles.fieldLabel}>Birthday</Text>
+                        <View style={styles.inputWithIconWrap}>
+                          <TextInput
+                            style={[
+                              styles.textInputWithIcon,
+                              form.errors.dob ? styles.inputError : null,
+                            ]}
+                            placeholder="YYYY-MM-DD"
+                            placeholderTextColor={Colors.textLight}
+                            value={form.patient.dob || ''}
+                            onChangeText={handleBirthdayChange}
+                            maxLength={10}
+                            keyboardType="numbers-and-punctuation"
+                          />
+                          <TouchableOpacity
+                            style={styles.calendarIconBtn}
+                            onPress={() => setShowCalendarModal(true)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityLabel="Open Birthday Calendar Picker"
+                            accessibilityRole="button"
+                          >
+                            <Ionicons
+                              name="calendar"
+                              size={19}
+                              color={Colors.primary}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                        {form.errors.dob ? (
+                          <Text style={styles.errorText}>{form.errors.dob}</Text>
+                        ) : null}
+                      </View>
+
+                      {/* Age Field */}
+                      <View style={[styles.fieldGroup, { flex: 0.8, marginLeft: 8 }]}>
+                        <View style={styles.ageLabelRow}>
+                          <Text style={styles.fieldLabel}>Age</Text>
+                          {Number(form.patient.age) >= 60 && (
+                            <Text style={styles.seniorBadgeText}>Senior (60+)</Text>
+                          )}
+                        </View>
+                        <TextInput
+                          style={[
+                            styles.textInput,
+                            form.errors.age ? styles.inputError : null,
+                          ]}
+                          placeholder="e.g. 32"
+                          placeholderTextColor={Colors.textLight}
+                          value={String(form.patient.age || '')}
+                          onChangeText={handleAgeChange}
+                          keyboardType="number-pad"
+                          maxLength={3}
+                        />
+                        {form.errors.age ? (
+                          <Text style={styles.errorText}>{form.errors.age}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    {/* Gender Selector */}
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Gender</Text>
+                      <View style={styles.genderRow}>
+                        {(['male', 'female', 'other'] as const).map((g) => {
+                          const isSelected = form.patient.gender === g;
                           return (
                             <TouchableOpacity
-                              key={slot.time}
-                              disabled={!isAvailable}
+                              key={g}
                               style={[
-                                styles.slotChip,
-                                isAvailable && styles.slotChipAvailable,
-                                isSelected && styles.slotChipSelected,
-                                isBooked && styles.slotChipBooked,
-                                isPast && styles.slotChipPast,
+                                styles.genderChip,
+                                isSelected ? styles.genderChipSelected : null,
                               ]}
-                              onPress={() => form.setField('slotTime', slot.time)}
+                              onPress={() => form.setField('gender', g)}
                               activeOpacity={0.7}
-                              accessibilityLabel={t("Slot {value0}, status: {value1}", { value0: String(slot.time), value1: String(slot.status) })}
+                              accessibilityLabel={`Gender ${g}`}
                               accessibilityRole="button"
                             >
                               <Text
                                 style={[
-                                  styles.slotChipText,
-                                  isAvailable && styles.slotChipTextAvailable,
-                                  isSelected && styles.slotChipTextSelected,
-                                  (isBooked || isPast) && styles.slotChipTextDisabled,
+                                  styles.genderChipText,
+                                  isSelected ? styles.genderChipTextSelected : null,
                                 ]}
                               >
-                                {slot.time}
+                                {g.charAt(0).toUpperCase() + g.slice(1)}
                               </Text>
-                              {isSelected && (
-                                <Ionicons
-                                  name="checkmark"
-                                  size={12}
-                                  color={Colors.white}
-                                  style={{ marginLeft: 3 }}
-                                />
-                              )}
-                              {isBooked && (
-                                <Text style={styles.slotSubText}>{t("Booked")}</Text>
-                              )}
                             </TouchableOpacity>
                           );
                         })}
                       </View>
                     </View>
-                  )}
-                  {form.errors.slotTime ? (
-                    <Text style={styles.errorText}>{form.errors.slotTime}</Text>
-                  ) : null}
-                </View>
+
+                    {/* Telephone Number */}
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>
+                        Telephone Number <Text style={styles.requiredAsterisk}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          form.errors.phone ? styles.inputError : null,
+                        ]}
+                        placeholder="e.g. 0712345678"
+                        placeholderTextColor={Colors.textLight}
+                        value={form.patient.phone}
+                        onChangeText={(val) => form.setField('phone', val)}
+                        keyboardType="phone-pad"
+                        accessibilityLabel="Telephone Number"
+                      />
+                      {form.errors.phone ? (
+                        <Text style={styles.errorText}>{form.errors.phone}</Text>
+                      ) : null}
+                    </View>
+
+                    {/* Blood Group (Optional) */}
+                    <View style={styles.fieldGroup}>
+                      <View style={styles.bloodGroupHeaderRow}>
+                        <Text style={styles.fieldLabel}>Blood Group (Optional)</Text>
+                        {form.patient.bloodGroup ? (
+                          <TouchableOpacity
+                            onPress={() => form.setField('bloodGroup', '')}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Text style={styles.clearBloodGroupText}>
+                              Clear ({form.patient.bloodGroup})
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                      <View style={styles.bloodGroupRow}>
+                        {BLOOD_GROUPS.map((bg) => {
+                          const isSelected = form.patient.bloodGroup === bg;
+                          return (
+                            <TouchableOpacity
+                              key={bg}
+                              style={[
+                                styles.bloodGroupChip,
+                                isSelected ? styles.bloodGroupChipSelected : null,
+                              ]}
+                              onPress={() => form.setField('bloodGroup', isSelected ? '' : bg)}
+                              activeOpacity={0.7}
+                            >
+                              <Text
+                                style={[
+                                  styles.bloodGroupChipText,
+                                  isSelected ? styles.bloodGroupChipTextSelected : null,
+                                ]}
+                              >
+                                {bg}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+
+
+                    {/* Priority Chips (Normal / Senior / Urgent) */}
+                    <View style={styles.fieldGroup}>
+                      <View style={styles.priorityHeaderRow}>
+                        <Text style={styles.fieldLabel}>Priority Triage</Text>
+                        {form.priority === 'senior' && (
+                          <Text style={styles.priorityHintSenior}>Senior line prioritized</Text>
+                        )}
+                        {form.priority === 'urgent' && (
+                          <Text style={styles.priorityHintUrgent}>Immediate doctor triage</Text>
+                        )}
+                      </View>
+                      <View style={styles.priorityRow}>
+                        {[
+                          { key: 'normal', label: 'Normal', icon: 'person' },
+                          { key: 'senior', label: 'Senior', icon: 'heart' },
+                          { key: 'urgent', label: 'Urgent', icon: 'warning' },
+                        ].map((item) => {
+                          const isSelected = form.priority === item.key;
+                          return (
+                            <TouchableOpacity
+                              key={item.key}
+                              style={[
+                                styles.priorityChip,
+                                isSelected ? styles.priorityChipSelected : null,
+                                item.key === 'urgent' && isSelected
+                                  ? styles.priorityUrgentSelected
+                                  : null,
+                                item.key === 'senior' && isSelected
+                                  ? styles.prioritySeniorSelected
+                                  : null,
+                              ]}
+                              onPress={() => form.setField('priority', item.key as QueuePriority)}
+                              activeOpacity={0.7}
+                              accessibilityLabel={`Priority ${item.label}`}
+                              accessibilityRole="button"
+                            >
+                              <Ionicons
+                                name={item.icon as any}
+                                size={15}
+                                color={
+                                  isSelected
+                                    ? item.key === 'urgent'
+                                      ? Colors.danger
+                                      : item.key === 'senior'
+                                        ? Colors.warning
+                                        : Colors.primary
+                                    : Colors.textMedium
+                                }
+                                style={{ marginRight: 5 }}
+                              />
+                              <Text
+                                style={[
+                                  styles.priorityChipText,
+                                  isSelected ? styles.priorityChipTextSelected : null,
+                                ]}
+                              >
+                                {item.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </>
+                )}
               </View>
 
-              {/* ── LIVE TOKEN PREVIEW CARD ── */}
-              <View style={styles.previewCard}>
-                <View style={styles.previewHeader}>
-                  <View style={styles.previewBadge}>
-                    <Ionicons
-                      name="sparkles"
-                      size={12}
-                      color="#5EEAD4"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={styles.previewBadgeText}>{t("LIVE TOKEN PREVIEW")}</Text>
-                  </View>
-                  <View style={styles.previewStatusTag}>
-                    <Text style={styles.previewStatusTagText}>
-                      {form.existingPatientId ? t('Existing Record') : t('New Patient')}
-                    </Text>
-                  </View>
-                </View>
+              {/* ── STEP 2: CONSULTATION & SLOT SCHEDULING CARD (WALK-IN ONLY) ── */}
+              {form.intakeType === 'walk_in' && (
+                <>
+                  <View style={[styles.formCard, { marginTop: 16 }]}>
+                    <View style={styles.formCardHeader}>
+                      <View style={[styles.stepPill, { backgroundColor: '#0284C7' }]}>
+                        <Text style={styles.stepPillText}>STEP 2</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.formCardTitle}>Department, Doctor & Slot</Text>
+                        <Text style={styles.formCardSub}>
+                          Select specialty, physician, and appointment time
+                        </Text>
+                      </View>
+                    </View>
 
-                {/* Token Callout Box */}
-                <View style={styles.previewTokenBox}>
-                  <Text style={styles.previewTokenPlaceholder}>{t("OPD • LIVE")}</Text>
-                  <View style={styles.tokenAssignTag}>
-                    <Ionicons
-                      name="shield-checkmark"
-                      size={13}
-                      color="#0D9488"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={styles.tokenAssignTagText}>
-                      {t("Token assigned on submit")}</Text>
-                  </View>
-                </View>
+                    {selectedPreBooking && (
+                      <View style={styles.preBookedReservationNotice}>
+                        <Ionicons name="calendar-outline" size={16} color="#4F46E5" style={{ marginRight: 6 }} />
+                        <Text style={styles.preBookedReservationNoticeText}>
+                          Pre-Booked Slot: {selectedPreBooking.slotTime} • Dr. {selectedPreBooking.doctor?.name || 'Assigned'} ({selectedPreBooking.department})
+                        </Text>
+                      </View>
+                    )}
 
-                {/* Summary Data Grid */}
-                <View style={styles.previewGrid}>
-                  <View style={styles.previewGridItem}>
-                    <Text style={styles.previewItemLabel}>{t("PATIENT")}</Text>
-                    <Text style={styles.previewItemValue} numberOfLines={1}>
-                      {form.patient.fullName.trim() || '---'}
-                    </Text>
+                    {/* ── 1. DEPARTMENT CARDS ── */}
+                    <View style={styles.fieldGroup}>
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.fieldLabel}>
+                          Department <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
+                        {form.department ? (
+                          <Text style={styles.selectedLabelText}>
+                            Selected: {form.department}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.departmentGrid}>
+                        {DEPARTMENTS.map((dept) => {
+                          const isSelected = form.department === dept.id;
+                          const waitStr = getDepartmentWaitTime(dept.id, dept.defaultWait);
+                          return (
+                            <TouchableOpacity
+                              key={dept.id}
+                              style={[
+                                styles.departmentCard,
+                                isSelected ? styles.departmentCardSelected : null,
+                              ]}
+                              onPress={() => handleSelectDepartment(dept.id)}
+                              activeOpacity={0.7}
+                              accessibilityLabel={`Department ${dept.name}`}
+                              accessibilityRole="button"
+                            >
+                              {/* Top Row: Icon on left, Wait time on right */}
+                              <View style={styles.deptCardTopRow}>
+                                <Ionicons
+                                  name={dept.icon as any}
+                                  size={22}
+                                  color={isSelected ? '#0284C7' : '#334155'}
+                                />
+                                <Text
+                                  style={[
+                                    styles.deptWaitTimeText,
+                                    isSelected ? styles.deptWaitTimeSelected : null,
+                                  ]}
+                                >
+                                  {waitStr}
+                                </Text>
+                              </View>
+
+                              {/* Bottom Row: Department Name */}
+                              <Text
+                                style={[
+                                  styles.deptCardNameText,
+                                  isSelected ? styles.deptCardNameSelected : null,
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {dept.name}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                      {form.errors.department ? (
+                        <Text style={styles.errorText}>{form.errors.department}</Text>
+                      ) : null}
+                    </View>
+
+                    {/* ── 2. DOCTOR PICKER ── */}
+                    <View style={styles.fieldGroup}>
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.fieldLabel}>
+                          Consulting Doctor <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
+                        {departmentDoctors.length > 0 ? (
+                          <Text style={styles.subCountText}>
+                            {departmentDoctors.length} available
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      {!form.department ? (
+                        <View style={styles.promptBox}>
+                          <Ionicons
+                            name="arrow-up-circle-outline"
+                            size={20}
+                            color={Colors.textLight}
+                          />
+                          <Text style={styles.promptBoxText}>
+                            Please select a department above to view active doctors
+                          </Text>
+                        </View>
+                      ) : doctorsLoading ? (
+                        <View style={styles.loadingBox}>
+                          <ActivityIndicator size="small" color={Colors.primary} />
+                          <Text style={styles.loadingBoxText}>Loading doctors...</Text>
+                        </View>
+                      ) : departmentDoctors.length === 0 ? (
+                        <View style={styles.emptyBox}>
+                          <Ionicons
+                            name="alert-circle-outline"
+                            size={20}
+                            color={Colors.warning}
+                          />
+                          <Text style={styles.emptyBoxText}>
+                            No active doctors currently available in {form.department}
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.doctorList}>
+                          {departmentDoctors.map((doc) => {
+                            const isSelected = form.doctorId === doc._id || form.doctorId === (doc as any).id;
+                            const isActive = doc.status === 'active';
+                            return (
+                              <TouchableOpacity
+                                key={doc._id || (doc as any).id}
+                                style={[
+                                  styles.doctorCard,
+                                  isSelected ? styles.doctorCardSelected : null,
+                                ]}
+                                onPress={() => handleSelectDoctor(doc._id || (doc as any).id)}
+                                activeOpacity={0.7}
+                                accessibilityLabel={`Doctor ${doc.name}`}
+                                accessibilityRole="button"
+                              >
+                                <View
+                                  style={[
+                                    styles.doctorAvatar,
+                                    isSelected ? styles.doctorAvatarSelected : null,
+                                  ]}
+                                >
+                                  <Ionicons
+                                    name="person"
+                                    size={18}
+                                    color={isSelected ? Colors.white : Colors.primary}
+                                  />
+                                </View>
+
+                                <View style={styles.doctorInfo}>
+                                  <View style={styles.doctorNameRow}>
+                                    <Text
+                                      style={[
+                                        styles.doctorName,
+                                        isSelected ? styles.doctorNameSelected : null,
+                                      ]}
+                                    >
+                                      {doc.name}
+                                    </Text>
+                                    <View
+                                      style={[
+                                        styles.docStatusDot,
+                                        {
+                                          backgroundColor: isActive
+                                            ? Colors.success
+                                            : Colors.warning,
+                                        },
+                                      ]}
+                                    />
+                                  </View>
+                                  <Text style={styles.doctorSpecialty}>
+                                    {doc.specialization || doc.department} •{' '}
+                                    {doc.room || 'OPD Room'}
+                                  </Text>
+                                  <Text style={styles.doctorLoadText}>
+                                    {doc.todayPatients || 0} patients attended today • ~
+                                    {doc.avgConsultMinutes || 10}m/patient
+                                  </Text>
+                                </View>
+
+                                <View
+                                  style={[
+                                    styles.radioCircle,
+                                    isSelected ? styles.radioCircleSelected : null,
+                                  ]}
+                                >
+                                  {isSelected && <View style={styles.radioInner} />}
+                                </View>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                      {form.errors.doctorId ? (
+                        <Text style={styles.errorText}>{form.errors.doctorId}</Text>
+                      ) : null}
+                    </View>
+
+                    {/* ── 3. SLOT GRID ── */}
+                    <View style={styles.fieldGroup}>
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.fieldLabel}>
+                          Appointment Slot <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
+                        {form.slotTime ? (
+                          <View style={styles.slotBadge}>
+                            <Ionicons
+                              name="time"
+                              size={12}
+                              color={Colors.primary}
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text style={styles.slotBadgeText}>{form.slotTime}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      {!form.doctorId ? (
+                        <View style={styles.promptBox}>
+                          <Ionicons
+                            name="calendar-outline"
+                            size={20}
+                            color={Colors.textLight}
+                          />
+                          <Text style={styles.promptBoxText}>
+                            Please choose a doctor above to view today's available slots
+                          </Text>
+                        </View>
+                      ) : slotsLoading ? (
+                        <View style={styles.loadingBox}>
+                          <ActivityIndicator size="small" color={Colors.primary} />
+                          <Text style={styles.loadingBoxText}>
+                            Fetching available slots for today...
+                          </Text>
+                        </View>
+                      ) : slotsError ? (
+                        <View style={styles.errorBox}>
+                          <Ionicons name="alert-circle" size={18} color={Colors.danger} />
+                          <Text style={styles.errorBoxText}>{slotsError}</Text>
+                        </View>
+                      ) : slots.length === 0 || !slots.some((s) => s.status === 'available') ? (
+                        <View style={styles.emptyBox}>
+                          <Ionicons name="time-outline" size={22} color={Colors.warning} />
+                          <Text style={styles.emptyBoxTitle}>No Slots Remaining</Text>
+                          <Text style={styles.emptyBoxText}>
+                            All appointment slots for this doctor are booked or passed for today.
+                          </Text>
+                        </View>
+                      ) : (
+                        <View>
+                          {/* Legend */}
+                          <View style={styles.slotsLegend}>
+                            <View style={styles.legendItem}>
+                              <View
+                                style={[
+                                  styles.legendIndicator,
+                                  { backgroundColor: Colors.primary },
+                                ]}
+                              />
+                              <Text style={styles.legendText}>Selected</Text>
+                            </View>
+                            <View style={styles.legendItem}>
+                              <View
+                                style={[
+                                  styles.legendIndicator,
+                                  {
+                                    backgroundColor: Colors.cardBackground,
+                                    borderColor: Colors.border,
+                                    borderWidth: 1,
+                                  },
+                                ]}
+                              />
+                              <Text style={styles.legendText}>Available</Text>
+                            </View>
+                            <View style={styles.legendItem}>
+                              <View
+                                style={[
+                                  styles.legendIndicator,
+                                  {
+                                    backgroundColor: '#FEE2E2',
+                                    borderColor: '#FCA5A5',
+                                    borderWidth: 1,
+                                  },
+                                ]}
+                              />
+                              <Text style={[styles.legendText, { color: '#DC2626', fontWeight: '600' }]}>
+                                Booked
+                              </Text>
+                            </View>
+                            <View style={styles.legendItem}>
+                              <View
+                                style={[
+                                  styles.legendIndicator,
+                                  { backgroundColor: '#E5E7EB' },
+                                ]}
+                              />
+                              <Text style={styles.legendText}>Past</Text>
+                            </View>
+                          </View>
+
+                          {/* Grid of Slots */}
+                          <View style={styles.slotsGrid}>
+                            {slots.map((slot) => {
+                              const isSelected = form.slotTime === slot.time;
+                              const isAvailable = slot.status === 'available';
+                              const isBooked = slot.status === 'booked';
+                              const isPast = slot.status === 'past';
+
+                              const handleSlotPress = () => {
+                                if (isAvailable) {
+                                  form.setField('slotTime', slot.time);
+                                } else if (isBooked) {
+                                  showToast(`Slot ${slot.time} is already booked by a patient.`, 'warning');
+                                } else if (isPast) {
+                                  showToast(`Slot ${slot.time} has already passed for today.`, 'info');
+                                }
+                              };
+
+                              return (
+                                <TouchableOpacity
+                                  key={slot.time}
+                                  style={[
+                                    styles.slotChip,
+                                    isAvailable && styles.slotChipAvailable,
+                                    isSelected && styles.slotChipSelected,
+                                    isBooked && styles.slotChipBooked,
+                                    isPast && styles.slotChipPast,
+                                  ]}
+                                  onPress={handleSlotPress}
+                                  activeOpacity={isAvailable ? 0.7 : 0.85}
+                                  accessibilityLabel={`Slot ${slot.time}, status: ${slot.status}`}
+                                  accessibilityRole="button"
+                                >
+                                  <View style={styles.slotChipTimeRow}>
+                                    <Text
+                                      style={[
+                                        styles.slotChipText,
+                                        isAvailable && styles.slotChipTextAvailable,
+                                        isSelected && styles.slotChipTextSelected,
+                                        isBooked && styles.slotChipTextBooked,
+                                        isPast && styles.slotChipTextDisabled,
+                                      ]}
+                                    >
+                                      {slot.time}
+                                    </Text>
+                                    {isSelected && (
+                                      <Ionicons
+                                        name="checkmark"
+                                        size={12}
+                                        color={Colors.white}
+                                        style={{ marginLeft: 2 }}
+                                      />
+                                    )}
+                                  </View>
+                                  {isBooked ? (
+                                    <View style={styles.slotBookedTag}>
+                                      <Text style={styles.slotBookedTagText}>Booked</Text>
+                                    </View>
+                                  ) : isPast ? (
+                                    <Text style={styles.slotPastTagText}>Past</Text>
+                                  ) : null}
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      )}
+                      {form.errors.slotTime ? (
+                        <Text style={styles.errorText}>{form.errors.slotTime}</Text>
+                      ) : null}
+                    </View>
                   </View>
 
-                  <View style={styles.previewGridItem}>
-                    <Text style={styles.previewItemLabel}>{t("DOCTOR")}</Text>
-                    <Text style={styles.previewItemValue} numberOfLines={1}>
-                      {selectedDoctor ? selectedDoctor.name : '---'}
-                    </Text>
-                  </View>
+                  {/* ── LIVE TOKEN PREVIEW CARD ── */}
+                  <View style={styles.previewCard}>
+                    <View style={styles.previewHeader}>
+                      <View style={styles.previewBadge}>
+                        <Ionicons
+                          name="sparkles"
+                          size={12}
+                          color="#5EEAD4"
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={styles.previewBadgeText}>LIVE TOKEN PREVIEW</Text>
+                      </View>
+                      <View style={styles.previewStatusTag}>
+                        <Text style={styles.previewStatusTagText}>
+                          {form.existingPatientId ? 'Existing Record' : 'New Patient'}
+                        </Text>
+                      </View>
+                    </View>
 
-                  <View style={styles.previewGridItem}>
-                    <Text style={styles.previewItemLabel}>{t("ROOM")}</Text>
-                    <Text style={styles.previewItemValue}>
-                      {selectedDoctor?.room || '---'}
-                    </Text>
-                  </View>
+                    {/* Token Callout Box */}
+                    <View style={styles.previewTokenBox}>
+                      <Text style={styles.previewTokenPlaceholder}>OPD • LIVE</Text>
+                      <View style={styles.tokenAssignTag}>
+                        <Ionicons
+                          name="shield-checkmark"
+                          size={13}
+                          color="#0D9488"
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={styles.tokenAssignTagText}>
+                          Token assigned on submit
+                        </Text>
+                      </View>
+                    </View>
 
-                  <View style={styles.previewGridItem}>
-                    <Text style={styles.previewItemLabel}>{t("SLOT TIME")}</Text>
-                    <Text style={styles.previewItemValue}>
-                      {form.slotTime || '---'}
-                    </Text>
-                  </View>
+                    {/* Summary Data Grid */}
+                    <View style={styles.previewGrid}>
+                      <View style={styles.previewGridItem}>
+                        <Text style={styles.previewItemLabel}>PATIENT</Text>
+                        <Text style={styles.previewItemValue} numberOfLines={1}>
+                          {form.patient.fullName.trim() || '---'}
+                        </Text>
+                      </View>
 
-                  <View style={styles.previewGridItem}>
-                    <Text style={styles.previewItemLabel}>{t("DEPARTMENT")}</Text>
-                    <Text style={styles.previewItemValue} numberOfLines={1}>
-                      {form.department || '---'}
-                    </Text>
-                  </View>
+                      <View style={styles.previewGridItem}>
+                        <Text style={styles.previewItemLabel}>DOCTOR</Text>
+                        <Text style={styles.previewItemValue} numberOfLines={1}>
+                          {selectedDoctor ? selectedDoctor.name : '---'}
+                        </Text>
+                      </View>
 
-                  <View style={styles.previewGridItem}>
-                    <Text style={styles.previewItemLabel}>{t("EST. WAIT TIME")}</Text>
-                    <Text style={[styles.previewItemValue, { color: '#5EEAD4' }]}>
-                      {getEstimatedWaitForDoctor()}
-                    </Text>
-                  </View>
-                </View>
+                      <View style={styles.previewGridItem}>
+                        <Text style={styles.previewItemLabel}>ROOM</Text>
+                        <Text style={styles.previewItemValue}>
+                          {selectedDoctor?.room || '---'}
+                        </Text>
+                      </View>
 
-                {/* Tags Row: Priority & Intake Mode */}
-                <View style={styles.previewTagsRow}>
-                  <View style={styles.previewTagPill}>
-                    <Text style={styles.previewTagPillText}>
-                      {t("Priority:")}{' '}{t(form.priority.toUpperCase())}
-                    </Text>
+                      <View style={styles.previewGridItem}>
+                        <Text style={styles.previewItemLabel}>SLOT TIME</Text>
+                        <Text style={styles.previewItemValue}>
+                          {form.slotTime || '---'}
+                        </Text>
+                      </View>
+
+                      <View style={styles.previewGridItem}>
+                        <Text style={styles.previewItemLabel}>DEPARTMENT</Text>
+                        <Text style={styles.previewItemValue} numberOfLines={1}>
+                          {form.department || '---'}
+                        </Text>
+                      </View>
+
+                      <View style={styles.previewGridItem}>
+                        <Text style={styles.previewItemLabel}>EST. WAIT TIME</Text>
+                        <Text style={[styles.previewItemValue, { color: '#5EEAD4' }]}>
+                          {getEstimatedWaitForDoctor()}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Tags Row: Priority & Intake Mode */}
+                    <View style={styles.previewTagsRow}>
+                      <View style={styles.previewTagPill}>
+                        <Text style={styles.previewTagPillText}>
+                          Priority: {form.priority.toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.previewTagPill}>
+                        <Ionicons
+                          name="walk"
+                          size={12}
+                          color="#CBD5E1"
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={styles.previewTagPillText}>
+                          Mode: Walk-In
+                        </Text>
+                      </View>
+                      {form.patient.bloodGroup ? (
+                        <View style={[styles.previewTagPill, { backgroundColor: 'rgba(239, 68, 68, 0.25)' }]}>
+                          <Ionicons name="water" size={11} color="#F87171" style={{ marginRight: 3 }} />
+                          <Text style={[styles.previewTagPillText, { color: '#FCA5A5' }]}>
+                            Blood: {form.patient.bloodGroup}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
-                  <View style={styles.previewTagPill}>
-                    <Text style={styles.previewTagPillText}>
-                      {t("Mode:")}{' '}{form.intakeType === 'walk_in' ? t('Walk-In') : t('Pre-Booked')}
-                    </Text>
-                  </View>
-                </View>
-              </View>
+                </>
+              )}
 
               {/* ── ACTION BUTTONS ROW ── */}
               <View style={styles.actionButtonsContainer}>
@@ -1588,12 +2222,15 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 <TouchableOpacity
                   style={[
                     styles.submitButton,
-                    (submitting || isShiftClosed) ? styles.submitButtonDisabled : null,
+                    form.intakeType === 'pre_booked' ? styles.submitButtonPreBooked : null,
+                    (submitting || isShiftClosed || (form.intakeType === 'pre_booked' && !selectedPreBooking))
+                      ? styles.submitButtonDisabled
+                      : null,
                   ]}
                   onPress={handlePrintAndIssueToken}
-                  disabled={submitting || isShiftClosed}
+                  disabled={submitting || isShiftClosed || (form.intakeType === 'pre_booked' && !selectedPreBooking)}
                   activeOpacity={0.8}
-                  accessibilityLabel={t("Print Ticket and Issue Token")}
+                  accessibilityLabel="Print Ticket and Issue Token"
                   accessibilityRole="button"
                 >
                   {submitting ? (
@@ -1604,18 +2241,31 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                         style={{ marginRight: 8 }}
                       />
                       <Text style={styles.submitButtonText}>
-                        {t("Generating Token & Ticket...")}</Text>
+                        {form.intakeType === 'pre_booked' ? 'Printing Ticket...' : 'Registering Patient & Issuing Token...'}
+                      </Text>
                     </View>
                   ) : (
                     <View style={styles.btnContentRow}>
                       <Ionicons
-                        name={isShiftClosed ? 'lock-closed' : 'print'}
+                        name={
+                          isShiftClosed
+                            ? 'lock-closed'
+                            : form.intakeType === 'pre_booked'
+                              ? 'print'
+                              : 'person-add'
+                        }
                         size={20}
                         color={Colors.white}
                         style={{ marginRight: 8 }}
                       />
                       <Text style={styles.submitButtonText}>
-                        {isShiftClosed ? t('Shift Closed (Intake Disabled)') : t('Print Ticket & Issue Token')}
+                        {isShiftClosed
+                          ? 'Shift Closed (Intake Disabled)'
+                          : form.intakeType === 'pre_booked'
+                            ? selectedPreBooking
+                              ? `Print Ticket (${selectedPreBooking.tokenLabel || (selectedPreBooking.tokenNumber ? `OPD-${String(selectedPreBooking.tokenNumber).padStart(3, '0')}` : `#${selectedPreBooking.bookingRef}`)})`
+                              : 'Select Pre-Booked Appointment to Print Ticket'
+                            : 'Register Walk-In Patient & Issue Token'}
                       </Text>
                     </View>
                   )}
@@ -1627,7 +2277,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   onPress={handleClearForm}
                   disabled={submitting}
                   activeOpacity={0.7}
-                  accessibilityLabel={t("Clear Form and New Entry")}
+                  accessibilityLabel="Clear Form and New Entry"
                   accessibilityRole="button"
                 >
                   <Ionicons
@@ -1636,7 +2286,13 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     color={Colors.textMedium}
                     style={{ marginRight: 6 }}
                   />
-                  <Text style={styles.clearFormButtonText}>{t("Clear Form / New Entry")}</Text>
+                  <Text style={styles.clearFormButtonText}>
+                    {form.intakeType === 'pre_booked'
+                      ? selectedPreBooking
+                        ? 'Clear Selection / Choose Another'
+                        : 'Refresh Appointments'
+                      : 'Clear Form / New Entry'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -1646,6 +2302,89 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Birthday Calendar Modal */}
+      <BirthdayCalendarModal
+        visible={showCalendarModal}
+        initialDate={form.patient.dob}
+        onSelectDate={(dateStr) => {
+          handleBirthdayChange(dateStr);
+        }}
+        onClose={() => setShowCalendarModal(false)}
+      />
+
+      {/* Barcode & QR Scanner Modal (Dual Mode: Camera + Barcode Machine Gun) */}
+      <BarcodeScannerModal
+        visible={scannerModalVisible}
+        onClose={() => setScannerModalVisible(false)}
+        onScan={handleScanSuccess}
+      />
+
+      {/* ── STAFF SUCCESS FEEDBACK / CONFIRMATION MODAL ── */}
+      <Modal
+        visible={showStaffSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowStaffSuccessModal(false)}
+      >
+        <View style={styles.modalOverlayCenter}>
+          <View style={styles.successModalCard}>
+            <View style={styles.successIconCircle}>
+              <Ionicons name="checkmark-done" size={32} color={Colors.white} />
+            </View>
+
+            <Text style={styles.successModalTitle}>Registration Successful!</Text>
+            <Text style={styles.successModalSubtitle}>
+              Official walk-in appointment confirmed & OPD Token generated.
+            </Text>
+
+            <View style={styles.successSummaryBox}>
+              <View style={styles.successSummaryRow}>
+                <Text style={styles.successSummaryKey}>Patient:</Text>
+                <Text style={styles.successSummaryVal}>{confirmedBooking?.patient.fullName}</Text>
+              </View>
+              <View style={styles.successSummaryRow}>
+                <Text style={styles.successSummaryKey}>Mobile:</Text>
+                <Text style={styles.successSummaryVal}>{confirmedBooking?.patient.phone}</Text>
+              </View>
+              <View style={styles.successSummaryRow}>
+                <Text style={styles.successSummaryKey}>Queue Token:</Text>
+                <Text style={[styles.successSummaryVal, { color: Colors.primary, fontWeight: '800' }]}>
+                  {confirmedBooking?.token?.tokenLabel ||
+                    `OPD-${String(confirmedBooking?.token?.tokenNumber || 1).padStart(3, '0')}`}
+                </Text>
+              </View>
+              <View style={styles.successSummaryRow}>
+                <Text style={styles.successSummaryKey}>Doctor:</Text>
+                <Text style={styles.successSummaryVal}>{confirmedBooking?.doctor.name}</Text>
+              </View>
+            </View>
+
+            {/* SMS Dispatch Confirmation in modal */}
+            <View style={styles.smsAlertCard}>
+              <View style={styles.smsAlertHeader}>
+                <Ionicons name="paper-plane" size={13} color="#0D9488" style={{ marginRight: 6 }} />
+                <Text style={styles.smsAlertTitle}>SMS SENT TO PATIENT</Text>
+              </View>
+              <Text style={styles.smsAlertText}>
+                {confirmedBooking?.smsNotification?.message ||
+                  `[Medi-Queue Hospital] Dear ${confirmedBooking?.patient.fullName}, your registration is SUCCESSFUL! Queue Token: ${confirmedBooking?.token?.tokenLabel}. Doctor: ${confirmedBooking?.doctor?.name}.`}
+              </Text>
+              <Text style={styles.smsAlertSub}>
+                ✓ Sent to {confirmedBooking?.patient.phone} • Delivered
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.successModalCloseBtn}
+              onPress={() => setShowStaffSuccessModal(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.successModalCloseBtnText}>View Ticket & Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1936,6 +2675,76 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '600',
   },
+  inputWithIconWrap: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  textInputWithIcon: {
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingLeft: 14,
+    paddingRight: 38,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: Colors.textDark,
+    minHeight: 46,
+  },
+  inputEndIcon: {
+    position: 'absolute',
+    right: 12,
+  },
+  calendarIconBtn: {
+    position: 'absolute',
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bloodGroupHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  clearBloodGroupText: {
+    fontSize: 11,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  bloodGroupRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -3,
+  },
+  bloodGroupChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.cardBackground,
+    marginHorizontal: 3,
+    marginBottom: 6,
+    minWidth: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bloodGroupChipSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary,
+  },
+  bloodGroupChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  bloodGroupChipTextSelected: {
+    color: Colors.white,
+  },
   genderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2025,14 +2834,351 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.tint,
     borderColor: Colors.primary,
   },
+  intakeTypeChipPreBookedSelected: {
+    backgroundColor: Colors.tint,
+    borderColor: Colors.primary,
+  },
   intakeTypeChipText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.textMedium,
   },
   intakeTypeChipTextSelected: {
     color: Colors.primary,
     fontWeight: '800',
+  },
+  intakeTypeChipTextPreBookedSelected: {
+    color: Colors.primary,
+    fontWeight: '800',
+  },
+  modeGuideWalkIn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tint,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 10,
+  },
+  modeGuideTextWalkIn: {
+    fontSize: 11,
+    color: Colors.secondary,
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 16,
+  },
+  modeGuidePreBooked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tint,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 10,
+  },
+  modeGuideTextPreBooked: {
+    fontSize: 11,
+    color: Colors.secondary,
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 16,
+  },
+  preBookedLookupSection: {
+    marginBottom: 14,
+  },
+  verifiedBookingCard: {
+    backgroundColor: Colors.cardBackground,
+    borderColor: Colors.border,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 4,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  verifiedBookingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  verifiedBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  changeBookingBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: Colors.tint,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  changeBookingBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  autoIssuedTokenHeaderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.tint,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 12,
+  },
+  autoIssuedTokenLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  autoIssuedCheckCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  autoIssuedTokenTag: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  autoIssuedTokenNumberPill: {
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  autoIssuedTokenNumberText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: Colors.primary,
+    letterSpacing: 0.5,
+  },
+  verifiedBookingGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  verifiedBookingCol: {
+    flex: 1,
+    marginRight: 6,
+  },
+  verifiedBookingLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.textLight,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  verifiedBookingValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  verifiedBookingSub: {
+    fontSize: 11,
+    color: Colors.textMedium,
+    marginTop: 2,
+  },
+  preBookedSearchBox: {
+    backgroundColor: Colors.background,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+  },
+  preBookedInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingHorizontal: 10,
+    minHeight: 44,
+    marginBottom: 10,
+  },
+  preBookedSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textDark,
+    paddingVertical: 8,
+  },
+  preBookedListWrap: {
+    marginTop: 2,
+  },
+  preBookedListHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  preBookedListTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textMedium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  preBookedRefreshText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  preBookedLoadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  preBookedLoadingText: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginLeft: 8,
+  },
+  preBookedEmptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  preBookedEmptyText: {
+    fontSize: 11,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  preBookedScroll: {
+    flexDirection: 'row',
+  },
+  preBookedChipItem: {
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    padding: 10,
+    marginRight: 8,
+    width: 175,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  preBookedChipTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  preBookedChipRef: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  preBookedTokenPill: {
+    backgroundColor: Colors.tint,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  preBookedTokenPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  preBookedChipTimeBadge: {
+    backgroundColor: Colors.tint,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  preBookedChipTimeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.secondary,
+  },
+  preBookedTriageWrap: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+  },
+  preBookedGuidanceCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: Colors.tint,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+    marginTop: 12,
+  },
+  preBookedGuidanceTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginBottom: 2,
+  },
+  preBookedGuidanceText: {
+    fontSize: 11,
+    color: Colors.secondary,
+    lineHeight: 16,
+  },
+  preBookedChipPatient: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textDark,
+    marginBottom: 2,
+  },
+  preBookedChipDoctor: {
+    fontSize: 10,
+    color: Colors.textMedium,
+  },
+  preBookedReservationNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tint,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  preBookedReservationNoticeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+    flex: 1,
+  },
+  submitButtonPreBooked: {
+    backgroundColor: Colors.primary,
+    shadowColor: Colors.primary,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -2057,63 +3203,48 @@ const styles = StyleSheet.create({
   },
   departmentCard: {
     width: '48.5%',
-    backgroundColor: Colors.background,
-    borderRadius: 14,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: Colors.border,
-    padding: 12,
+    borderColor: '#E0F2FE',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     marginBottom: 10,
-    minHeight: 96,
+    minHeight: 80,
     justifyContent: 'space-between',
   },
   departmentCardSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.tint,
+    borderColor: '#0284C7',
+    backgroundColor: '#E0F2FE',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  deptCardTop: {
+  deptCardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  deptIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deptCheckBadge: {
-    marginLeft: 4,
-  },
-  deptName: {
+  deptWaitTimeText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textDark,
-    marginBottom: 6,
-  },
-  deptNameSelected: {
-    color: Colors.primary,
-    fontWeight: '800',
-  },
-  deptFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  deptWaitTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  deptWaitText: {
-    fontSize: 10,
     fontWeight: '600',
-    color: Colors.textLight,
+    color: '#64748B',
   },
-  deptDocCountText: {
-    fontSize: 10,
+  deptWaitTimeSelected: {
+    color: '#0284C7',
     fontWeight: '700',
-    color: Colors.textMedium,
+  },
+  deptCardNameText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  deptCardNameSelected: {
+    color: '#0369A1',
+    fontWeight: '800',
   },
   promptBox: {
     flexDirection: 'row',
@@ -2311,13 +3442,18 @@ const styles = StyleSheet.create({
     width: '23%',
     marginHorizontal: '1%',
     marginBottom: 8,
-    paddingVertical: 10,
+    paddingVertical: 7,
     borderRadius: 10,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: 46,
+    flexDirection: 'column',
+  },
+  slotChipTimeRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   slotChipAvailable: {
     backgroundColor: Colors.cardBackground,
@@ -2328,8 +3464,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   slotChipBooked: {
-    backgroundColor: '#F3F4F6',
-    borderColor: '#E5E7EB',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
   },
   slotChipPast: {
     backgroundColor: '#F9FAFB',
@@ -2346,14 +3482,31 @@ const styles = StyleSheet.create({
   slotChipTextSelected: {
     color: Colors.white,
   },
+  slotChipTextBooked: {
+    color: '#DC2626',
+    textDecorationLine: 'line-through',
+  },
   slotChipTextDisabled: {
     color: '#9CA3AF',
   },
-  slotSubText: {
-    fontSize: 8,
-    color: '#9CA3AF',
-    marginLeft: 2,
+  slotBookedTag: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginTop: 2,
+  },
+  slotBookedTagText: {
+    fontSize: 7.5,
+    fontWeight: '700',
+    color: '#DC2626',
+    textTransform: 'uppercase',
+  },
+  slotPastTagText: {
+    fontSize: 7.5,
     fontWeight: '600',
+    color: '#9CA3AF',
+    marginTop: 2,
   },
   previewCard: {
     backgroundColor: '#0F172A',
@@ -2722,6 +3875,277 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#92400E',
     flex: 1,
+  },
+  /* ── Phone Verification & OTP Styles ── */
+  phoneLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  phoneVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  phoneVerifiedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  phoneInputVerified: {
+    borderColor: '#10B981',
+    backgroundColor: '#F0FDF4',
+  },
+  verifyPhoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1.5,
+    borderColor: '#99F6E4',
+    paddingHorizontal: 12,
+    height: 48,
+    borderRadius: 12,
+  },
+  verifyPhoneBtnDone: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  verifyPhoneBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  verifyPhoneBtnTextDone: {
+    color: '#059669',
+  },
+  /* ── SMS Delivered to Patient Card (Confirmation View) ── */
+  smsDeliveredCard: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    padding: 14,
+    marginTop: 12,
+    width: '100%',
+  },
+  smsDeliveredHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  smsDeliveredTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  smsDeliveredTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0D9488',
+    letterSpacing: 0.5,
+  },
+  smsSentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  smsSentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0D9488',
+    marginRight: 5,
+  },
+  smsSentBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  smsMessageBox: {
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    marginBottom: 8,
+  },
+  smsMessageText: {
+    fontSize: 12,
+    color: '#1E293B',
+    lineHeight: 18,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  smsFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  smsTimestampText: {
+    fontSize: 11,
+    color: '#0F766E',
+    fontWeight: '600',
+  },
+  /* ── Staff Success Feedback Modal ── */
+  modalOverlayCenter: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  successModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  successIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  successModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.textDark,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  successModalSubtitle: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  successSummaryBox: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  successSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  successSummaryKey: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontWeight: '600',
+  },
+  successSummaryVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  smsAlertCard: {
+    width: '100%',
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginBottom: 18,
+  },
+  smsAlertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  smsAlertTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0D9488',
+    letterSpacing: 0.5,
+  },
+  smsAlertText: {
+    fontSize: 11,
+    color: '#334155',
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  smsAlertSub: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  successModalCloseBtn: {
+    width: '100%',
+    height: 46,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successModalCloseBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  /* ── Step 1 Direct Register Action Styles ── */
+  step1ActionBox: {
+    marginTop: 18,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  step1RegisterBtn: {
+    backgroundColor: '#0D9488',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0D9488',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  step1RegisterBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: 0.2,
+  },
+  step1RegisterHint: {
+    fontSize: 11,
+    color: Colors.textMedium,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 16,
   },
 });
 

@@ -236,19 +236,39 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.refreshIconButton}
-          onPress={() => refresh()}
-          activeOpacity={0.7}
-          disabled={loading}
-        >
-          <Ionicons
-            name="refresh"
-            size={18}
-            color={Colors.white}
-            style={loading ? styles.rotatingIcon : undefined}
-          />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            style={styles.refreshIconButton}
+            onPress={() => refresh()}
+            activeOpacity={0.7}
+            disabled={loading}
+            accessibilityLabel="Refresh directory"
+          >
+            <Ionicons
+              name="refresh"
+              size={18}
+              color={Colors.white}
+              style={loading ? styles.rotatingIcon : undefined}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.refreshIconButton, { marginLeft: 8, backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}
+            onPress={() => {
+              if (navigation?.canGoBack?.()) {
+                navigation.goBack();
+              } else if (onNavigate) {
+                onNavigate('home');
+              } else if (navigation?.navigate) {
+                navigation.navigate('HomeTab');
+              }
+            }}
+            activeOpacity={0.7}
+            accessibilityLabel="Close and return to dashboard"
+          >
+            <Ionicons name="close" size={20} color={Colors.white} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -312,7 +332,11 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
         {/* 2. FILTER CHIPS ROW                                       */}
         {/* ======================================================== */}
         <View style={styles.filterSection}>
-          <View style={styles.filterChipsRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterChipsRow}
+          >
             {/* Filter: All Records */}
             <TouchableOpacity
               style={[
@@ -337,6 +361,60 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                 ]}
               >
                 {t("All Records")}</Text>
+            </TouchableOpacity>
+
+            {/* Filter: Pre-Booked */}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                filter === 'pre_booked' && styles.filterChipActive,
+              ]}
+              onPress={() => setFilter('pre_booked')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Filter pre-booked patients"
+            >
+              <Ionicons
+                name="calendar"
+                size={14}
+                color={filter === 'pre_booked' ? Colors.white : '#059669'}
+                style={styles.chipIcon}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  filter === 'pre_booked' && styles.filterChipTextActive,
+                ]}
+              >
+                Pre-Booked
+              </Text>
+            </TouchableOpacity>
+
+            {/* Filter: Walk-In */}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                filter === 'walk_in' && styles.filterChipActive,
+              ]}
+              onPress={() => setFilter('walk_in')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Filter walk-in patients"
+            >
+              <Ionicons
+                name="walk"
+                size={14}
+                color={filter === 'walk_in' ? Colors.white : Colors.primary}
+                style={styles.chipIcon}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  filter === 'walk_in' && styles.filterChipTextActive,
+                ]}
+              >
+                Walk-In
+              </Text>
             </TouchableOpacity>
 
             {/* Filter: Visited Today */}
@@ -390,7 +468,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
               >
                 {t("Recent")}</Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
 
         {/* ======================================================== */}
@@ -855,6 +933,10 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
             subtitle={
               query.trim().length >= 3
                 ? t("Matching \"{value0}\"", { value0: String(query.trim()) })
+                : filter === 'pre_booked'
+                ? t('Pre-booked online appointment patients')
+                : filter === 'walk_in'
+                ? t('Walk-in registered OPD patients')
                 : filter === 'visited_today'
                 ? t('Patients with consultations recorded today')
                 : filter === 'recent'
@@ -1082,14 +1164,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingVertical: 2,
   },
   filterChip: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44, // 44px touch target
-    paddingHorizontal: 8,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
     backgroundColor: Colors.cardBackground,

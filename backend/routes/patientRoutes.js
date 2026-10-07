@@ -12,24 +12,22 @@ const {
   getMyReportFile,
   getDashboard,
 } = require('../controllers/patientController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 const { loadPatientProfile, patientOnly } = require('../middleware/patientMiddleware');
 const { reportUpload } = require('../middleware/reportUpload');
 
-router.use(protect, patientOnly, loadPatientProfile);
-
-router.get('/me', getMyProfile);
-router.patch('/me', updateMyProfile);
-router.get('/me/dashboard', getDashboard);
-router.get('/me/history', getMyHistory);
-router.get('/me/reports', getMyReports);
-router.get('/me/reports/:id', getMyReport);
-router.post('/me/reports', reportUpload.single('file'), createMyReport);
-router.patch('/me/reports/:id', reportUpload.single('file'), updateMyReport);
-router.delete('/me/reports/:id', deleteMyReport);
-router.get('/me/reports/:id/file', getMyReportFile);
- 
-const { authorizeRoles } = require('../middleware/authMiddleware');
+// Patient portal routes (/api/v1/patients/me*) -> Patient role only
+const patientAuth = [protect, patientOnly, loadPatientProfile];
+router.get('/me', ...patientAuth, getMyProfile);
+router.patch('/me', ...patientAuth, updateMyProfile);
+router.get('/me/dashboard', ...patientAuth, getDashboard);
+router.get('/me/history', ...patientAuth, getMyHistory);
+router.get('/me/reports', ...patientAuth, getMyReports);
+router.get('/me/reports/:id', ...patientAuth, getMyReport);
+router.post('/me/reports', ...patientAuth, reportUpload.single('file'), createMyReport);
+router.patch('/me/reports/:id', ...patientAuth, reportUpload.single('file'), updateMyReport);
+router.delete('/me/reports/:id', ...patientAuth, deleteMyReport);
+router.get('/me/reports/:id/file', ...patientAuth, getMyReportFile);
 const {
   getPatients,
   getPatientById,
@@ -38,22 +36,22 @@ const {
   verifyPatientNIC,
 } = require('../controllers/patientController');
 
-// All reception patient routes require auth + receptionist role
-router.use(protect, authorizeRoles('receptionist'));
+// Reception patient routes (/api/reception/patients*) -> Receptionist/Admin/Doctor
+const receptionAuth = [protect, authorizeRoles('receptionist', 'admin', 'doctor')];
 
 // /patients/search MUST be registered BEFORE /patients/:id
-router.get('/patients/search', searchPatients);
+router.get('/patients/search', ...receptionAuth, searchPatients);
 
 // GET /patients?filter=visited_today|recent|all
-router.get('/patients', getPatients);
+router.get('/patients', ...receptionAuth, getPatients);
 
 // POST /patients/:id/verify-nic
-router.post('/patients/:id/verify-nic', verifyPatientNIC);
+router.post('/patients/:id/verify-nic', ...receptionAuth, verifyPatientNIC);
 
 // GET /patients/:id
-router.get('/patients/:id', getPatientById);
+router.get('/patients/:id', ...receptionAuth, getPatientById);
 
 // PATCH /patients/:id
-router.patch('/patients/:id', updatePatientProfile);
+router.patch('/patients/:id', ...receptionAuth, updatePatientProfile);
 
 module.exports = router;
