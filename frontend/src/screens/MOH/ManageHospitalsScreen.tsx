@@ -12,6 +12,7 @@ import { View,
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
+import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function ManageHospitalsScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
@@ -24,6 +25,7 @@ export default function ManageHospitalsScreen() {
   }, []);
 
   const [activeFilter, setActiveFilter] = React.useState('All');
+  const [searchQuery, setSearchQuery] = React.useState('');
   const [hospitals, setHospitals] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [selectedHospital, setSelectedHospital] = React.useState<any>(null);
@@ -93,12 +95,27 @@ export default function ManageHospitalsScreen() {
     );
   };
 
+  const filteredHospitals = hospitals.filter(h => {
+    const matchesFilter = activeFilter === 'All' || h.type === activeFilter;
+    const matchesSearch = searchQuery === '' || 
+      (h.name && h.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (h.code && h.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (h.location && h.location.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(moh)/dashboard');
+            }
+          }} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Manage Hospitals</Text>
@@ -126,6 +143,8 @@ export default function ManageHospitalsScreen() {
               style={styles.searchInput}
               placeholder="Search by name, code or district..."
               placeholderTextColor={Colors.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </View>
 
@@ -163,15 +182,15 @@ export default function ManageHospitalsScreen() {
 
           <View style={styles.listContainer}>
             <Text style={styles.listHeader}>
-              Registered Facilities ({activeFilter === 'All' ? hospitals.length : hospitals.filter(h => h.type === activeFilter).length})
+              Registered Facilities ({filteredHospitals.length})
             </Text>
             
             {loading ? (
               <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>Loading hospitals...</Text>
-            ) : hospitals.length === 0 ? (
+            ) : filteredHospitals.length === 0 ? (
               <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>No hospitals registered yet.</Text>
             ) : (
-              (activeFilter === 'All' ? hospitals : hospitals.filter(h => h.type === activeFilter)).map((hospital) => (
+              filteredHospitals.map((hospital) => (
                 <TouchableOpacity 
                   key={hospital._id} 
                   style={styles.hospitalCard}
@@ -278,6 +297,7 @@ export default function ManageHospitalsScreen() {
           </TouchableOpacity>
         </Modal>
 
+        <MOHBottomNav activeTab="hospitals" />
       </SafeAreaView>
     </View>
   );
@@ -313,7 +333,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   topSection: {
     marginBottom: 20,

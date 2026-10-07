@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
+import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function ManagePatientsScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
@@ -24,6 +25,7 @@ export default function ManagePatientsScreen() {
   }, []);
 
   const [activeFilter, setActiveFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
@@ -127,9 +129,14 @@ export default function ManagePatientsScreen() {
     );
   };
 
-  const filteredPatients = activeFilter === 'All' 
-    ? patients 
-    : patients.filter(p => p.gender === activeFilter);
+  const filteredPatients = patients.filter(p => {
+    const matchesFilter = activeFilter === 'All' || p.gender === activeFilter;
+    const matchesSearch = searchQuery === '' || 
+      (p.fullName && p.fullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (p.nic && p.nic.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (p.patientNo && p.patientNo.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -138,7 +145,13 @@ export default function ManagePatientsScreen() {
         
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(moh)/dashboard');
+            }
+          }} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Patient Management</Text>
@@ -158,6 +171,8 @@ export default function ManagePatientsScreen() {
               style={styles.searchInput}
               placeholder="Search by name, NIC or Patient ID..."
               placeholderTextColor={Colors.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </View>
 
@@ -334,6 +349,7 @@ export default function ManagePatientsScreen() {
           </TouchableOpacity>
         </Modal>
 
+        <MOHBottomNav activeTab="patients" />
       </SafeAreaView>
     </View>
   );
@@ -365,7 +381,7 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   topSection: {
     paddingHorizontal: 20,

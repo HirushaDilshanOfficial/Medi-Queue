@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
+import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function ManageStaffScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
@@ -24,6 +25,7 @@ export default function ManageStaffScreen() {
   }, []);
 
   const [activeFilter, setActiveFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
@@ -97,9 +99,15 @@ export default function ManageStaffScreen() {
     );
   };
 
-  const filteredStaff = activeFilter === 'All' 
-    ? staff 
-    : staff.filter(s => s.role === activeFilter);
+  const filteredStaff = staff.filter(s => {
+    const matchesFilter = activeFilter === 'All' || s.role === activeFilter;
+    const matchesSearch = searchQuery === '' || 
+      (s.fullName && s.fullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (s.employeeId && s.employeeId.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (s.nic && s.nic.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (s.role && s.role.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -108,7 +116,13 @@ export default function ManageStaffScreen() {
         
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(moh)/dashboard');
+            }
+          }} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Staff Management</Text>
@@ -136,6 +150,8 @@ export default function ManageStaffScreen() {
               style={styles.searchInput}
               placeholder="Search by name, role or employee ID..."
               placeholderTextColor={Colors.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </View>
 
@@ -332,6 +348,7 @@ export default function ManageStaffScreen() {
           </TouchableOpacity>
         </Modal>
 
+        <MOHBottomNav activeTab="staff" />
       </SafeAreaView>
     </View>
   );
@@ -363,7 +380,7 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   topSection: {
     paddingHorizontal: 20,

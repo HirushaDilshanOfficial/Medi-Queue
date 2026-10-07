@@ -6,6 +6,7 @@ import { Colors } from '../../constants/Colors';
 import { BASE_URL } from '../../config';
 
 import { getAuthToken, clearAuthToken } from '../../services/http';
+import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
@@ -87,7 +88,13 @@ export default function ProfileScreen() {
           {/* Header */}
           <View style={styles.headerBackground}>
             <View style={styles.headerTop}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+              <TouchableOpacity onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/(moh)/dashboard');
+                }
+              }} style={styles.iconButton}>
                 <Text style={styles.iconText}>←</Text>
               </TouchableOpacity>
               <Text style={styles.headerTitle}>My Profile</Text>
@@ -177,13 +184,14 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
         </ScrollView>
+        <MOHBottomNav activeTab="profile" />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: 100 },
   headerBackground: {
     backgroundColor: Colors.primaryDark,
     paddingTop: Platform.OS === 'android' ? 20 : 10,
