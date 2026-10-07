@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   fetchDoctorDashboard,
   callNextPatientApi,
@@ -360,7 +361,29 @@ export default function PatientQueueScreen() {
     }
   };
 
-  // 4. Patient card action
+  // 4. Navigate to Patient Records
+  const handleViewPatientRecords = async (patient: PatientQueueItem) => {
+    try {
+      await AsyncStorage.setItem('active_record_patient_token', String(patient.tokenNumber));
+      await AsyncStorage.setItem('active_record_patient_name', patient.patientName);
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      router.push({
+        pathname: '/(doctor)/records' as any,
+        params: {
+          tokenNumber: String(patient.tokenNumber),
+          patientName: patient.patientName,
+        },
+      });
+    } catch (e) {
+      router.push('/records' as any);
+    }
+  };
+
+  // 4b. Patient card long press or full action
   const handlePatientAction = (patient: PatientQueueItem) => {
     Alert.alert(
       `Token #${String(patient.tokenNumber).padStart(3, '0')} - ${patient.patientName}`,
@@ -370,7 +393,7 @@ export default function PatientQueueScreen() {
           text: 'Call Into Room',
           onPress: () => handleCallIntoRoom(patient.tokenNumber, patient.patientName),
         },
-        { text: 'View Records', onPress: () => Alert.alert('Records', `Opening records for ${patient.patientName}`) },
+        { text: 'View Records', onPress: () => handleViewPatientRecords(patient) },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
@@ -720,7 +743,11 @@ export default function PatientQueueScreen() {
               return (
                 <View key={item.tokenNumber} style={styles.nextPatientCard}>
                   {/* Card Main Info Row */}
-                  <View style={styles.nextCardMainRow}>
+                  <TouchableOpacity
+                    style={styles.nextCardMainRow}
+                    onPress={() => handleViewPatientRecords(item)}
+                    activeOpacity={0.75}
+                  >
                     {/* Left Token Box */}
                     <View style={styles.nextBadgeBox}>
                       <Text style={styles.nextBadgeLabel}>NEXT</Text>
@@ -747,7 +774,7 @@ export default function PatientQueueScreen() {
                       <Text style={styles.readyLobbyText}>{item.location || 'Ready at Lobby'}</Text>
                       <Text style={styles.arrivedTimeText}>Arrived {item.arrivedTime || '10:14'}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
 
                   {/* Card Bottom: Vitals Verified & Call into Room */}
                   <View style={styles.nextCardBottomRow}>
@@ -775,7 +802,7 @@ export default function PatientQueueScreen() {
               <TouchableOpacity
                 key={item.tokenNumber}
                 style={styles.standardCard}
-                onPress={() => handlePatientAction(item)}
+                onPress={() => handleViewPatientRecords(item)}
                 activeOpacity={0.7}
               >
                 {/* Left Token Box */}
@@ -813,9 +840,14 @@ export default function PatientQueueScreen() {
                 </View>
 
                 {/* Right Arrow Action */}
-                <View style={styles.arrowCircleBtn}>
+                <TouchableOpacity
+                  style={styles.arrowCircleBtn}
+                  onPress={() => handleViewPatientRecords(item)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
                   <Ionicons name="chevron-forward" size={18} color="#0284c7" />
-                </View>
+                </TouchableOpacity>
               </TouchableOpacity>
             );
           })}

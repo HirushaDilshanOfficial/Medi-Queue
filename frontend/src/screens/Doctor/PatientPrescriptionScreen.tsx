@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -30,7 +30,14 @@ import {
   fallbackPrescriptionData,
   aureliaPrescriptionData,
 } from '../../services/prescriptionService';
-import { ALL_DUMMY_PATIENTS } from '../../services/patientRecordsService';
+import {
+  ALL_DUMMY_PATIENTS,
+  checkMedicationAllergy,
+  checkMedicationAllergyWithList,
+  getDefaultAllergiesForPatient,
+  AllergyItem,
+} from '../../services/patientRecordsService';
+import AllergyAlertSection from '../../components/doctor/AllergyAlertSection';
 import { downloadPrescription } from '../../utils/prescriptionPdfGenerator';
 
 export default function PatientPrescriptionScreen() {
@@ -53,6 +60,8 @@ export default function PatientPrescriptionScreen() {
   const [takeMorning, setTakeMorning] = useState(true);
   const [takeLunch, setTakeLunch] = useState(false);
   const [takeDinner, setTakeDinner] = useState(true);
+  const [takeNight, setTakeNight] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [clinicalNotes, setClinicalNotes] = useState(
     isAurelia ? aureliaPrescriptionData.clinicalNotes : fallbackPrescriptionData.clinicalNotes
   );
@@ -339,19 +348,29 @@ export default function PatientPrescriptionScreen() {
     morning: boolean,
     lunch: boolean,
     dinner: boolean,
+    nightOrNote?: boolean | string,
     extraNote?: string
   ): string => {
+    let night = false;
+    let note = extraNote;
+    if (typeof nightOrNote === 'boolean') {
+      night = nightOrNote;
+    } else if (typeof nightOrNote === 'string') {
+      note = nightOrNote;
+    }
+
     const times: string[] = [];
     if (morning) times.push('Morning');
     if (lunch) times.push('Lunch');
     if (dinner) times.push('Dinner');
+    if (night) times.push('Night');
 
     let res = timing;
     if (times.length > 0) {
       res += ` (${times.join(', ')})`;
     }
-    if (extraNote && extraNote.trim()) {
-      const clean = extraNote.trim();
+    if (note && note.trim()) {
+      const clean = note.trim();
       if (!res.toLowerCase().includes(clean.toLowerCase())) {
         res += ` • ${clean}`;
       }
@@ -359,21 +378,29 @@ export default function PatientPrescriptionScreen() {
     return res;
   };
 
-  // Helper when selecting frequency in Add Medicine
+  // Helper when selecting frequency in Add Medicine (auto-fills suggested slots)
   const handleSelectFrequency = (freq: 'OD' | 'BD' | 'TDS' | 'QDS') => {
     setSelectedFrequency(freq);
     if (freq === 'OD') {
       setTakeMorning(true);
       setTakeLunch(false);
       setTakeDinner(false);
+      setTakeNight(false);
     } else if (freq === 'BD') {
       setTakeMorning(true);
       setTakeLunch(false);
       setTakeDinner(true);
-    } else if (freq === 'TDS' || freq === 'QDS') {
+      setTakeNight(false);
+    } else if (freq === 'TDS') {
       setTakeMorning(true);
       setTakeLunch(true);
       setTakeDinner(true);
+      setTakeNight(false);
+    } else if (freq === 'QDS') {
+      setTakeMorning(true);
+      setTakeLunch(true);
+      setTakeDinner(true);
+      setTakeNight(true);
     }
   };
 
@@ -475,6 +502,72 @@ export default function PatientPrescriptionScreen() {
     setEditingMed(null);
   };
 
+  const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
+  const currentPatientRecord = useMemo(() => {
+    return (
+      ALL_DUMMY_PATIENTS.find(
+        (p) =>
+          p.tokenNumber === tokenNum ||
+          (params?.patientName && p.name.includes(params.patientName)) ||
+          (data?.patient && p.name === data.patient.name)
+      ) || ALL_DUMMY_PATIENTS[0]
+    );
+  }, [params?.tokenNumber, params?.patientName, data?.patient]);
+
+  const patientAllergy = data?.patient?.allergy || currentPatientRecord?.allergy;
+
+  const [currentAllergies, setCurrentAllergies] = useState<AllergyItem[]>(() => {
+    return currentPatientRecord ? getDefaultAllergiesForPatient(currentPatientRecord) : [];
+  });
+
+  const handleAllergiesChange = useCallback((updatedList: AllergyItem[]) => {
+    setCurrentAllergies(updatedList);
+    if (updatedList.length > 0) {
+      const topAllergy = updatedList[0];
+      setData((prev) => ({
+        ...prev,
+        patient: {
+          ...prev.patient,
+          allergy: {
+            hasAllergy: true,
+            isHighRisk: topAllergy.severity === 'life-threatening' || topAllergy.severity === 'severe',
+            title: `Allergy alert • ${topAllergy.reaction}`,
+            description: `${topAllergy.allergen}${topAllergy.note ? ' – ' + topAllergy.note : ''}`,
+          },
+        },
+      }));
+    } else {
+      setData((prev) => ({
+        ...prev,
+        patient: {
+          ...prev.patient,
+          allergy: {
+            hasAllergy: false,
+            title: 'No known allergies',
+            description: 'Patient has no documented medication allergies.',
+          },
+        },
+      }));
+    }
+  }, []);
+
+  const allergyConflict = useMemo(() => {
+    if (!searchQuery.trim()) return null;
+    if (currentAllergies && currentAllergies.length > 0) {
+      const check = checkMedicationAllergyWithList(searchQuery, currentAllergies);
+      if (check.status === 'conflict') {
+        return check;
+      }
+      return null;
+    }
+    if (!currentPatientRecord) return null;
+    const check = checkMedicationAllergy(searchQuery, currentPatientRecord);
+    if (check.status === 'conflict') {
+      return check;
+    }
+    return null;
+  }, [searchQuery, currentAllergies, currentPatientRecord]);
+
   // Add medicine to prescription
   const handleAddMedicine = () => {
     const trimmed = searchQuery.trim();
@@ -488,6 +581,16 @@ export default function PatientPrescriptionScreen() {
       return;
     }
     setAddMedError(null);
+
+    const selectedSlotsCount = [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length;
+    if (selectedSlotsCount === 0) {
+      setAddMedError('Please select at least one time of day');
+      return;
+    }
+    if (selectedDuration <= 0) {
+      setAddMedError('Duration must be greater than 0');
+      return;
+    }
 
     const matchedCatalog = COMMON_MEDICINES.find(
       (m) => m.name.toLowerCase() === trimmed.toLowerCase()
@@ -506,7 +609,7 @@ export default function PatientPrescriptionScreen() {
       ? ('INHALER' as any)
       : 'TABLET';
     const dosage = matchedCatalog ? matchedCatalog.defaultDosage : '1 dose';
-    const instructions = formatInstructions(mealTiming, takeMorning, takeLunch, takeDinner);
+    const instructions = formatInstructions(mealTiming, takeMorning, takeLunch, takeDinner, takeNight);
     const tagType = 'food';
 
     const newItem: MedicineItem = {
@@ -522,13 +625,41 @@ export default function PatientPrescriptionScreen() {
       tagType,
     };
 
-    const nextPrescriptions = [...data.prescriptions, newItem];
-    const nextData = { ...data, prescriptions: nextPrescriptions, clinicalNotes };
-    setData(nextData);
-    persistPrescription(nextData);
+    const commitAddMedicine = (itemToSave: MedicineItem) => {
+      const nextPrescriptions = [...data.prescriptions, itemToSave];
+      const nextData = { ...data, prescriptions: nextPrescriptions, clinicalNotes };
+      setData(nextData);
+      persistPrescription(nextData);
+      setSearchQuery('');
+      setShowSuggestions(false);
+    };
 
-    setSearchQuery('');
-    setShowSuggestions(false);
+    if (allergyConflict) {
+      if (Platform.OS === 'web') {
+        const confirmAdd = (window as any).confirm(
+          `⚠️ ALLERGY CONFLICT WARNING!\n\n${allergyConflict.allergen} detected!\n${allergyConflict.note}\n\nDo you want to override and prescribe this medication anyway?`
+        );
+        if (!confirmAdd) return;
+        commitAddMedicine(newItem);
+        return;
+      } else {
+        Alert.alert(
+          '⚠️ Allergy Conflict Warning',
+          `${allergyConflict.allergen} detected!\n\n${allergyConflict.note}\n\nDo you want to override and prescribe this medication anyway?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Override & Prescribe',
+              style: 'destructive',
+              onPress: () => commitAddMedicine(newItem),
+            },
+          ]
+        );
+        return;
+      }
+    }
+
+    commitAddMedicine(newItem);
   };
 
   // Save Prescription & Download PDF
@@ -674,10 +805,22 @@ export default function PatientPrescriptionScreen() {
               {/* Weight */}
               <View style={styles.vitalBox}>
                 <Text style={styles.vitalLabel}>Weight</Text>
-                <Text style={styles.vitalValue}>{patient.vitals.weight}</Text>
+                <Text style={styles.vitalValue}>{patient.vitals.weight || (currentPatientRecord?.vitals?.weightNum ? `${currentPatientRecord.vitals.weightNum} kg` : '58 kg')}</Text>
               </View>
             </View>
           </View>
+
+          {/* ========================================================= */}
+          {/* 3.1 REDESIGNED ALLERGY ALERT SECTION                       */}
+          {/* ========================================================= */}
+          <AllergyAlertSection
+            patientId={patient.id}
+            tokenNumber={patient.tokenNumber}
+            patientName={patient.name}
+            patientRecord={currentPatientRecord}
+            initialAllergies={currentAllergies}
+            onAllergiesChange={handleAllergiesChange}
+          />
 
           {/* ========================================================= */}
           {/* 4. PRIMARY DIAGNOSIS (ICD-10) CARD                        */}
@@ -881,18 +1024,27 @@ export default function PatientPrescriptionScreen() {
           </View>
 
           {/* ========================================================= */}
-          {/* 7. ADD MEDICINE CARD                                       */}
+          {/* 7. ADD MEDICINE CARD (REDESIGNED)                          */}
           {/* ========================================================= */}
-          <View style={styles.card}>
+          <View style={styles.cardRedesigned}>
+            {/* Header */}
             <View style={styles.addMedHeaderRow}>
-              <Ionicons name="add-circle" size={24} color="#064e59" style={{ marginRight: 8 }} />
-              <Text style={styles.addMedHeaderTitle}>Add Medicine</Text>
+              <View style={styles.addMedHeaderIconWrap}>
+                <MaterialCommunityIcons name="pill" size={20} color="#064e59" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.addMedHeaderTitle}>Add Medicine</Text>
+                <Text style={styles.addMedHeaderSub}>Prescribe dosage, timing & duration</Text>
+              </View>
+              <View style={styles.rxBadge}>
+                <Text style={styles.rxBadgeText}>Rx Item</Text>
+              </View>
             </View>
 
-            {/* Medicine Name & Strength */}
+            {/* 1. Medicine Name & Strength */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Medicine Name & Strength</Text>
-              <View style={styles.searchInputWrap}>
+              <Text style={styles.fieldLabel}>MEDICINE NAME & STRENGTH</Text>
+              <View style={[styles.searchInputWrap, isSearchFocused && styles.searchInputWrapFocused]}>
                 <Ionicons name="search-outline" size={19} color="#64748b" style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchInput}
@@ -905,8 +1057,10 @@ export default function PatientPrescriptionScreen() {
                     if (addMedError) setAddMedError(null);
                   }}
                   onFocus={() => {
+                    setIsSearchFocused(true);
                     if (searchQuery.trim().length > 0) setShowSuggestions(true);
                   }}
+                  onBlur={() => setIsSearchFocused(false)}
                 />
                 {searchQuery.length > 0 && (
                   <TouchableOpacity
@@ -915,11 +1069,27 @@ export default function PatientPrescriptionScreen() {
                       setShowSuggestions(false);
                     }}
                     style={{ padding: 4 }}
+                    accessibilityLabel="Clear medicine search"
                   >
                     <Ionicons name="close-circle" size={18} color="#94a3b8" />
                   </TouchableOpacity>
                 )}
               </View>
+
+              {/* Allergy Conflict Detected Warning Banner (Red) */}
+              {allergyConflict && (
+                <View style={styles.allergyConflictCard}>
+                  <Ionicons name="alert-circle" size={19} color="#dc2626" style={{ marginRight: 8, marginTop: 1 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.allergyConflictTitle}>
+                      Allergy conflict detected: {allergyConflict.allergen}
+                    </Text>
+                    <Text style={styles.allergyConflictNote}>
+                      {allergyConflict.note}
+                    </Text>
+                  </View>
+                </View>
+              )}
 
               {/* Autocomplete suggestions dropdown */}
               {showSuggestions && filteredSuggestions.length > 0 && (
@@ -938,7 +1108,7 @@ export default function PatientPrescriptionScreen() {
                         <MaterialCommunityIcons
                           name={(item.type === 'TABLET' ? 'pill' : 'pill-multiple') as any}
                           size={15}
-                          color="#0d6371"
+                          color="#064e59"
                           style={{ marginRight: 8 }}
                         />
                         <Text style={styles.suggestionName}>{item.name}</Text>
@@ -952,29 +1122,37 @@ export default function PatientPrescriptionScreen() {
               )}
             </View>
 
-            {/* Dosage Frequency */}
+            {/* 2. How often: 4-Option Segmented Control */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Dosage Frequency</Text>
+              <View style={styles.fieldHeaderRow}>
+                <Text style={styles.fieldLabel}>HOW OFTEN</Text>
+                <View style={styles.syncHintRow}>
+                  <Ionicons name="time-outline" size={12} color="#0891b2" />
+                  <Text style={styles.syncHintText}>Auto-syncs timing</Text>
+                </View>
+              </View>
               <View style={styles.segmentedRow}>
-                {(['OD', 'BD', 'TDS', 'QDS'] as const).map((freq) => {
-                  const labelMap = {
-                    OD: 'OD (1x)',
-                    BD: 'BD (2x)',
-                    TDS: 'TDS (3x)',
-                    QDS: 'QDS (4x)',
-                  };
-                  const isSelected = selectedFrequency === freq;
+                {([
+                  { id: 'OD', title: 'OD', sub: 'Once' },
+                  { id: 'BD', title: 'BD', sub: 'Twice' },
+                  { id: 'TDS', title: 'TDS', sub: '3 times' },
+                  { id: 'QDS', title: 'QDS', sub: '4 times' },
+                ] as const).map((item) => {
+                  const isSelected = selectedFrequency === item.id;
                   return (
                     <TouchableOpacity
-                      key={freq}
-                      style={[styles.freqChip, isSelected && styles.freqChipSelected]}
-                      onPress={() => handleSelectFrequency(freq)}
+                      key={item.id}
+                      style={[styles.freqSegment, isSelected && styles.freqSegmentSelected]}
+                      onPress={() => handleSelectFrequency(item.id)}
                       activeOpacity={0.8}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: isSelected }}
                     >
-                      <Text
-                        style={[styles.freqChipText, isSelected && styles.freqChipTextSelected]}
-                      >
-                        {labelMap[freq]}
+                      <Text style={[styles.freqSegmentTitle, isSelected && styles.freqSegmentTitleSelected]}>
+                        {item.title}
+                      </Text>
+                      <Text style={[styles.freqSegmentSub, isSelected && styles.freqSegmentSubSelected]}>
+                        {item.sub}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -982,141 +1160,250 @@ export default function PatientPrescriptionScreen() {
               </View>
             </View>
 
-            {/* Meal Timing (After meal / Before meal) */}
+            {/* 3. With Meals: 2-Option Segmented Control */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Meal Timing</Text>
+              <Text style={styles.fieldLabel}>WITH MEALS</Text>
               <View style={styles.timingRow}>
                 <TouchableOpacity
-                  style={[styles.timingChip, mealTiming === 'After meal' && styles.timingChipSelected]}
-                  onPress={() => setMealTiming('After meal')}
-                  activeOpacity={0.8}
-                >
-                  <MaterialCommunityIcons
-                    name="silverware-fork-knife"
-                    size={15}
-                    color={mealTiming === 'After meal' ? '#ffffff' : '#0369a1'}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={[styles.timingChipText, mealTiming === 'After meal' && styles.timingChipTextSelected]}
-                  >
-                    After meal
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.timingChip, mealTiming === 'Before meal' && styles.timingChipSelected]}
+                  style={[styles.mealSegment, mealTiming === 'Before meal' && styles.mealSegmentSelected]}
                   onPress={() => setMealTiming('Before meal')}
                   activeOpacity={0.8}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: mealTiming === 'Before meal' }}
                 >
                   <MaterialCommunityIcons
                     name="clock-time-four-outline"
-                    size={15}
-                    color={mealTiming === 'Before meal' ? '#ffffff' : '#0369a1'}
+                    size={16}
+                    color={mealTiming === 'Before meal' ? '#ffffff' : '#64748b'}
                     style={{ marginRight: 6 }}
                   />
                   <Text
-                    style={[styles.timingChipText, mealTiming === 'Before meal' && styles.timingChipTextSelected]}
+                    style={[
+                      styles.mealSegmentText,
+                      mealTiming === 'Before meal' && styles.mealSegmentTextSelected,
+                    ]}
                   >
                     Before meal
                   </Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.mealSegment, mealTiming === 'After meal' && styles.mealSegmentSelected]}
+                  onPress={() => setMealTiming('After meal')}
+                  activeOpacity={0.8}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: mealTiming === 'After meal' }}
+                >
+                  <MaterialCommunityIcons
+                    name="silverware-fork-knife"
+                    size={16}
+                    color={mealTiming === 'After meal' ? '#ffffff' : '#64748b'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      styles.mealSegmentText,
+                      mealTiming === 'After meal' && styles.mealSegmentTextSelected,
+                    ]}
+                  >
+                    After meal
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
 
-            {/* Schedule / Time of Day (Morning, Lunch, Dinner) */}
+            {/* 4. Time of Day: 4 Icon Tiles (Multi-Select) */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Take Medicine</Text>
-              <View style={styles.timeScheduleRow}>
+              <View style={styles.fieldHeaderRow}>
+                <Text style={styles.fieldLabel}>TIME OF DAY</Text>
+                {[takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ? (
+                  <View style={styles.slotWarningRow}>
+                    <Ionicons name="alert-circle" size={13} color="#d97706" style={{ marginRight: 3 }} />
+                    <Text style={styles.slotWarningText}>Pick at least one</Text>
+                  </View>
+                ) : (
+                  <View style={styles.slotCountBadge}>
+                    <Text style={styles.slotCountBadgeText}>
+                      {[takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length} selected
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.timeTilesGrid}>
+                {/* Morning */}
                 <TouchableOpacity
-                  style={[styles.timeScheduleChip, takeMorning && styles.timeScheduleChipSelected]}
+                  style={[styles.timeTile, takeMorning && styles.timeTileSelected]}
                   onPress={() => setTakeMorning(!takeMorning)}
                   activeOpacity={0.8}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: takeMorning }}
                 >
-                  <Ionicons
-                    name={takeMorning ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={15}
-                    color={takeMorning ? '#ffffff' : '#0369a1'}
-                    style={{ marginRight: 5 }}
-                  />
-                  <Text
-                    style={[
-                      styles.timeScheduleChipText,
-                      takeMorning && styles.timeScheduleChipTextSelected,
-                    ]}
-                  >
-                    Morning
-                  </Text>
+                  <View style={styles.timeTileTopRow}>
+                    <View style={[styles.timeTileIconWrap, takeMorning && styles.timeTileIconWrapSelected]}>
+                      <MaterialCommunityIcons
+                        name="weather-sunset-up"
+                        size={17}
+                        color={takeMorning ? '#ffffff' : '#475569'}
+                      />
+                    </View>
+                    {takeMorning && (
+                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
+                    )}
+                  </View>
+                  <Text style={[styles.timeTileTitle, takeMorning && styles.timeTileTitleSelected]}>Morning</Text>
+                  <Text style={[styles.timeTileSub, takeMorning && styles.timeTileSubSelected]}>8:00 AM</Text>
                 </TouchableOpacity>
 
+                {/* Lunch */}
                 <TouchableOpacity
-                  style={[styles.timeScheduleChip, takeLunch && styles.timeScheduleChipSelected]}
+                  style={[styles.timeTile, takeLunch && styles.timeTileSelected]}
                   onPress={() => setTakeLunch(!takeLunch)}
                   activeOpacity={0.8}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: takeLunch }}
                 >
-                  <Ionicons
-                    name={takeLunch ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={15}
-                    color={takeLunch ? '#ffffff' : '#0369a1'}
-                    style={{ marginRight: 5 }}
-                  />
-                  <Text
-                    style={[
-                      styles.timeScheduleChipText,
-                      takeLunch && styles.timeScheduleChipTextSelected,
-                    ]}
-                  >
-                    Lunch
-                  </Text>
+                  <View style={styles.timeTileTopRow}>
+                    <View style={[styles.timeTileIconWrap, takeLunch && styles.timeTileIconWrapSelected]}>
+                      <MaterialCommunityIcons
+                        name="weather-sunny"
+                        size={17}
+                        color={takeLunch ? '#ffffff' : '#475569'}
+                      />
+                    </View>
+                    {takeLunch && (
+                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
+                    )}
+                  </View>
+                  <Text style={[styles.timeTileTitle, takeLunch && styles.timeTileTitleSelected]}>Lunch</Text>
+                  <Text style={[styles.timeTileSub, takeLunch && styles.timeTileSubSelected]}>1:00 PM</Text>
                 </TouchableOpacity>
 
+                {/* Dinner */}
                 <TouchableOpacity
-                  style={[styles.timeScheduleChip, takeDinner && styles.timeScheduleChipSelected]}
+                  style={[styles.timeTile, takeDinner && styles.timeTileSelected]}
                   onPress={() => setTakeDinner(!takeDinner)}
                   activeOpacity={0.8}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: takeDinner }}
                 >
-                  <Ionicons
-                    name={takeDinner ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={15}
-                    color={takeDinner ? '#ffffff' : '#0369a1'}
-                    style={{ marginRight: 5 }}
-                  />
-                  <Text
-                    style={[
-                      styles.timeScheduleChipText,
-                      takeDinner && styles.timeScheduleChipTextSelected,
-                    ]}
-                  >
-                    Dinner
-                  </Text>
+                  <View style={styles.timeTileTopRow}>
+                    <View style={[styles.timeTileIconWrap, takeDinner && styles.timeTileIconWrapSelected]}>
+                      <MaterialCommunityIcons
+                        name="weather-sunset-down"
+                        size={17}
+                        color={takeDinner ? '#ffffff' : '#475569'}
+                      />
+                    </View>
+                    {takeDinner && (
+                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
+                    )}
+                  </View>
+                  <Text style={[styles.timeTileTitle, takeDinner && styles.timeTileTitleSelected]}>Dinner</Text>
+                  <Text style={[styles.timeTileSub, takeDinner && styles.timeTileSubSelected]}>8:00 PM</Text>
+                </TouchableOpacity>
+
+                {/* Night */}
+                <TouchableOpacity
+                  style={[styles.timeTile, takeNight && styles.timeTileSelected]}
+                  onPress={() => setTakeNight(!takeNight)}
+                  activeOpacity={0.8}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: takeNight }}
+                >
+                  <View style={styles.timeTileTopRow}>
+                    <View style={[styles.timeTileIconWrap, takeNight && styles.timeTileIconWrapSelected]}>
+                      <MaterialCommunityIcons
+                        name="weather-night"
+                        size={17}
+                        color={takeNight ? '#ffffff' : '#475569'}
+                      />
+                    </View>
+                    {takeNight && (
+                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
+                    )}
+                  </View>
+                  <Text style={[styles.timeTileTitle, takeNight && styles.timeTileTitleSelected]}>Night</Text>
+                  <Text style={[styles.timeTileSub, takeNight && styles.timeTileSubSelected]}>10:30 PM</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Duration */}
+            {/* 5. Duration: Stepper + Quick Chips */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Duration</Text>
-              <View style={styles.durationRow}>
-                {[3, 5, 7].map((days) => {
-                  const isSelected = selectedDuration === days;
-                  return (
-                    <TouchableOpacity
-                      key={days}
-                      style={[styles.durationChip, isSelected && styles.durationChipSelected]}
-                      onPress={() => setSelectedDuration(days)}
-                      activeOpacity={0.8}
-                    >
-                      <Text
-                        style={[
-                          styles.durationChipText,
-                          isSelected && styles.durationChipTextSelected,
-                        ]}
+              <Text style={styles.fieldLabel}>DURATION</Text>
+              <View style={styles.durationControlRow}>
+                {/* Stepper (1 to 90 days) */}
+                <View style={styles.stepperWrap}>
+                  <TouchableOpacity
+                    style={[styles.stepperBtn, selectedDuration <= 1 && styles.stepperBtnDisabled]}
+                    onPress={() => setSelectedDuration((d) => Math.max(1, d - 1))}
+                    disabled={selectedDuration <= 1}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="remove" size={18} color={selectedDuration <= 1 ? '#cbd5e1' : '#0f172a'} />
+                  </TouchableOpacity>
+                  <View style={styles.stepperValueBox}>
+                    <Text style={styles.stepperValueText}>{selectedDuration}</Text>
+                    <Text style={styles.stepperUnitText}>days</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.stepperBtn, selectedDuration >= 90 && styles.stepperBtnDisabled]}
+                    onPress={() => setSelectedDuration((d) => Math.min(90, d + 1))}
+                    disabled={selectedDuration >= 90}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="add" size={18} color={selectedDuration >= 90 ? '#cbd5e1' : '#0f172a'} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Quick Chips */}
+                <View style={styles.quickChipsWrap}>
+                  {[3, 5, 7, 14].map((days) => {
+                    const isChipActive = selectedDuration === days;
+                    return (
+                      <TouchableOpacity
+                        key={days}
+                        style={[styles.quickChip, isChipActive && styles.quickChipActive]}
+                        onPress={() => setSelectedDuration(days)}
+                        activeOpacity={0.8}
                       >
-                        {days} days
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Text style={[styles.quickChipText, isChipActive && styles.quickChipTextActive]}>
+                          {days}d
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+
+            {/* 6. Live Summary Strip */}
+            <View style={styles.liveSummaryStrip}>
+              <View style={styles.liveSummaryIconWrap}>
+                <MaterialCommunityIcons name="pill" size={15} color="#064e59" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.liveSummaryLabel}>PRESCRIPTION PREVIEW</Text>
+                <Text style={styles.liveSummaryText} numberOfLines={2}>
+                  {searchQuery.trim()
+                    ? `${searchQuery.trim()} – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
+                        takeMorning && 'Morning',
+                        takeLunch && 'Lunch',
+                        takeDinner && 'Dinner',
+                        takeNight && 'Night',
+                      ]
+                        .filter(Boolean)
+                        .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`
+                    : `Paracetamol 500mg – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
+                        takeMorning && 'Morning',
+                        takeLunch && 'Lunch',
+                        takeDinner && 'Dinner',
+                        takeNight && 'Night',
+                      ]
+                        .filter(Boolean)
+                        .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`}
+                </Text>
               </View>
             </View>
 
@@ -1127,60 +1414,96 @@ export default function PatientPrescriptionScreen() {
               </View>
             )}
 
-            {/* Add to Prescription Button */}
+            {/* 7. Primary Add Button */}
             <TouchableOpacity
-              style={styles.addToPrescriptionBtn}
+              style={[
+                styles.addToPrescriptionBtnRedesigned,
+                (!searchQuery.trim() ||
+                  [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                  selectedDuration <= 0) &&
+                  styles.addToPrescriptionBtnDisabled,
+              ]}
               onPress={handleAddMedicine}
               activeOpacity={0.85}
+              disabled={
+                !searchQuery.trim() ||
+                [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                selectedDuration <= 0
+              }
             >
-              <Ionicons name="add-circle" size={20} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.addToPrescriptionBtnText}>+ Add Medicine to Prescription</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* ========================================================= */}
-          {/* 8. BOTTOM ACTION BUTTONS                                   */}
-          {/* ========================================================= */}
-          <View style={styles.actionsWrap}>
-            {/* Primary Action Button: Save Prescription and Download */}
-            <TouchableOpacity
-              style={styles.saveDigitalRxBtn}
-              onPress={handleSavePrescription}
-              activeOpacity={0.85}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <>
-                  <MaterialCommunityIcons
-                    name="cloud-download-outline"
-                    size={20}
-                    color="#ffffff"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={styles.saveDigitalRxBtnText}>
-                    Save Prescription and Download
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            {/* Secondary Referral Button */}
-            <TouchableOpacity
-              style={styles.referralBtn}
-              onPress={() => setIsReferralModalOpen(true)}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons
-                name="crosshairs-gps"
-                size={18}
-                color="#064e59"
-                style={{ marginRight: 8 }}
+              <Ionicons
+                name="add"
+                size={21}
+                color={
+                  !searchQuery.trim() ||
+                  [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                  selectedDuration <= 0
+                    ? '#94a3b8'
+                    : '#ffffff'
+                }
+                style={{ marginRight: 6 }}
               />
-              <Text style={styles.referralBtnText}>Refer to Physiotherapy / Lab</Text>
+              <Text
+                style={[
+                  styles.addToPrescriptionBtnTextRedesigned,
+                  (!searchQuery.trim() ||
+                    [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                    selectedDuration <= 0) &&
+                    styles.addToPrescriptionBtnTextDisabled,
+                ]}
+              >
+                Add to prescription
+              </Text>
             </TouchableOpacity>
+            {!searchQuery.trim() && (
+              <Text style={styles.addDisabledHint}>
+                Type or select a medicine name above to enable
+              </Text>
+            )}
+
+            {/* 8. Prescription Action Buttons (Refer & Save and download) */}
+            <View style={styles.actionButtonsRow}>
+              {/* Secondary Outline: Refer */}
+              <TouchableOpacity
+                style={styles.referralOutlineBtn}
+                onPress={() => setIsReferralModalOpen(true)}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons
+                  name="account-arrow-right-outline"
+                  size={18}
+                  color="#064e59"
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.referralOutlineBtnText}>Refer</Text>
+              </TouchableOpacity>
+
+              {/* Primary Filled: Save and download (Wider) */}
+              <TouchableOpacity
+                style={styles.saveFilledBtn}
+                onPress={handleSavePrescription}
+                activeOpacity={0.85}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons
+                      name="cloud-download-outline"
+                      size={19}
+                      color="#ffffff"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={styles.saveFilledBtnText}>Save and download</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {/* Bottom spacing inside scroll view */}
+          <View style={{ height: 24 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1887,6 +2210,64 @@ const styles = StyleSheet.create({
     color: '#0369a1',
   },
 
+  // 3.1 ALLERGY ALERT CARD (RED WARNING BANNER)
+  allergyCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1.5,
+    borderColor: '#fca5a5',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  allergyIconCol: {
+    marginRight: 12,
+  },
+  allergyTextCol: {
+    flex: 1,
+  },
+  allergyTitle: {
+    color: '#b91c1c',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  allergyDesc: {
+    color: '#991b1b',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  allergyConflictCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff1f2',
+    borderWidth: 1.5,
+    borderColor: '#fecdd3',
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 10,
+    alignItems: 'flex-start',
+  },
+  allergyConflictTitle: {
+    color: '#e11d48',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  allergyConflictNote: {
+    color: '#be123c',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+
   // 4. PRIMARY DIAGNOSIS (ICD-10) CARD
   addDiagnosisBtn: {
     flexDirection: 'row',
@@ -2087,35 +2468,104 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // 7. ADD MEDICINE CARD
+  // 7. ADD MEDICINE CARD (REDESIGNED)
+  cardRedesigned: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: 'rgba(15, 23, 42, 0.06)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    elevation: 3,
+  },
   addMedHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  addMedHeaderIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#ecfeff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addMedHeaderTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0f172a',
   },
+  addMedHeaderSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748b',
+    marginTop: 1,
+  },
+  rxBadge: {
+    backgroundColor: '#ecfeff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cffafe',
+  },
+  rxBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0e7490',
+  },
   fieldBlock: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
     color: '#475569',
-    marginBottom: 6,
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  fieldHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  syncHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  syncHintText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#0891b2',
   },
   searchInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f9ff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e0f2fe',
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
     paddingHorizontal: 12,
-    height: 44,
+    height: 48,
+  },
+  searchInputWrapFocused: {
+    borderColor: '#064e59',
+    backgroundColor: '#ffffff',
+    shadowColor: 'rgba(6, 78, 89, 0.15)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   searchIcon: {
     marginRight: 8,
@@ -2127,16 +2577,20 @@ const styles = StyleSheet.create({
   },
   suggestionsBox: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     marginTop: 6,
     overflow: 'hidden',
-    elevation: 3,
+    elevation: 4,
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
   },
   suggestionItem: {
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
     flexDirection: 'row',
@@ -2154,8 +2608,351 @@ const styles = StyleSheet.create({
   },
   segmentedRow: {
     flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 16,
+    padding: 4,
+    gap: 6,
+  },
+  freqSegment: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  freqSegmentSelected: {
+    backgroundColor: '#064e59',
+    shadowColor: 'rgba(6, 78, 89, 0.25)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  freqSegmentTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  freqSegmentTitleSelected: {
+    color: '#ffffff',
+  },
+  freqSegmentSub: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  freqSegmentSubSelected: {
+    color: '#99f6e4',
+  },
+  timingRow: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 16,
+    padding: 4,
+    gap: 6,
+  },
+  mealSegment: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  mealSegmentSelected: {
+    backgroundColor: '#064e59',
+    shadowColor: 'rgba(6, 78, 89, 0.25)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  mealSegmentText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  mealSegmentTextSelected: {
+    color: '#ffffff',
+  },
+  slotWarningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  slotWarningText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#d97706',
+  },
+  slotCountBadge: {
+    backgroundColor: '#ecfeff',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cffafe',
+  },
+  slotCountBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0e7490',
+  },
+  timeTilesGrid: {
+    flexDirection: 'row',
     gap: 8,
   },
+  timeTile: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    padding: 10,
+    minHeight: 88,
+    justifyContent: 'space-between',
+  },
+  timeTileSelected: {
+    borderColor: '#064e59',
+    backgroundColor: '#f0fdfa',
+    shadowColor: 'rgba(6, 78, 89, 0.1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  timeTileTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  timeTileIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeTileIconWrapSelected: {
+    backgroundColor: '#064e59',
+  },
+  timeTileTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  timeTileTitleSelected: {
+    color: '#064e59',
+  },
+  timeTileSub: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#94a3b8',
+    marginTop: 1,
+  },
+  timeTileSubSelected: {
+    color: '#0d9488',
+  },
+  durationControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  stepperWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 16,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  stepperBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: 'rgba(0, 0, 0, 0.05)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  stepperBtnDisabled: {
+    backgroundColor: '#f8fafc',
+    opacity: 0.5,
+  },
+  stepperValueBox: {
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  stepperValueText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  stepperUnitText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: -2,
+  },
+  quickChipsWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  quickChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickChipActive: {
+    backgroundColor: '#064e59',
+    borderColor: '#064e59',
+    shadowColor: 'rgba(6, 78, 89, 0.2)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  quickChipTextActive: {
+    color: '#ffffff',
+  },
+  liveSummaryStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f9ff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    padding: 12,
+    marginBottom: 14,
+    gap: 10,
+  },
+  liveSummaryIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#e0f2fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveSummaryLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#0369a1',
+    letterSpacing: 0.5,
+  },
+  liveSummaryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginTop: 2,
+  },
+  addMedErrorWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  addMedErrorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ef4444',
+  },
+  addToPrescriptionBtnRedesigned: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#064e59',
+    borderRadius: 20,
+    paddingVertical: 14,
+    shadowColor: 'rgba(6, 78, 89, 0.3)',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  addToPrescriptionBtnDisabled: {
+    backgroundColor: '#e2e8f0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  addToPrescriptionBtnTextRedesigned: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  addToPrescriptionBtnTextDisabled: {
+    color: '#94a3b8',
+  },
+  addDisabledHint: {
+    fontSize: 11,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 6,
+  },
+
+  // 8. ACTION BUTTONS ROW (Aligned under Add to Prescription button)
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+  },
+  referralOutlineBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingVertical: 13,
+    borderWidth: 1.5,
+    borderColor: '#064e59',
+  },
+  referralOutlineBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#064e59',
+  },
+  saveFilledBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#064e59',
+    borderRadius: 20,
+    paddingVertical: 13,
+    shadowColor: 'rgba(6, 78, 89, 0.25)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  saveFilledBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+
+  // Edit Modal legacy styles
   freqChip: {
     flex: 1,
     backgroundColor: '#e0f2fe',
@@ -2173,10 +2970,6 @@ const styles = StyleSheet.create({
   },
   freqChipTextSelected: {
     color: '#ffffff',
-  },
-  timingRow: {
-    flexDirection: 'row',
-    gap: 8,
   },
   timingChip: {
     flex: 1,
@@ -2249,96 +3042,6 @@ const styles = StyleSheet.create({
   },
   durationChipTextSelected: {
     color: '#ffffff',
-  },
-  addMedErrorWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  addMedErrorText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#ef4444',
-  },
-  addToPrescriptionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0d6371',
-    borderRadius: 22,
-    paddingVertical: 13,
-    marginTop: 6,
-    shadowColor: '#0d6371',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  addToPrescriptionBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-
-  // 8. BOTTOM ACTION BUTTONS
-  actionsWrap: {
-    gap: 10,
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  saveDigitalRxBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#064e59',
-    borderRadius: 25,
-    paddingVertical: 14,
-    elevation: 3,
-    shadowColor: 'rgba(6, 78, 89, 0.25)',
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  saveDigitalRxBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  downloadRxActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 25,
-    paddingVertical: 13,
-    borderWidth: 1.5,
-    borderColor: '#064e59',
-    elevation: 2,
-    shadowColor: 'rgba(6, 78, 89, 0.12)',
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  downloadRxActionBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#064e59',
-  },
-  referralBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e0f7fa',
-    borderRadius: 25,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#bae6fd',
-  },
-  referralBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#064e59',
   },
 
   // 9. BOTTOM NAVIGATION BAR
