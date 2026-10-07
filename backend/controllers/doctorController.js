@@ -3,6 +3,8 @@ const Appointment = require('../models/Appointment');
 const { asyncHandler } = require('../utils/errorHandler');
 const QueueEntry = require('../models/QueueEntry');
 const Patient = require('../models/Patient');
+const { mapDoctor } = require('../utils/mapDoctor');
+const Hospital = require('../models/Hospital');
 
 const ACTIVE_STATUSES = ['booked', 'checked_in', 'in_consultation'];
 
@@ -68,6 +70,10 @@ const getDoctors = asyncHandler(async (req, res) => {
     updatedAt: doc.updatedAt,
   }));
 
+  if (req.user && String(req.user.role).toLowerCase() === 'patient') {
+    return res.json({ doctors: doctors.map((doctor) => mapDoctor(doctor)) });
+  }
+
   res.json(doctorsWithTodayPatients);
 });
 
@@ -75,7 +81,7 @@ const listDoctors = getDoctors;
 
 const listDepartments = asyncHandler(async (req, res) => {
   const departments = await Doctor.distinct('department');
-  res.json(departments.filter(Boolean).sort());
+  res.json({ departments: departments.filter(Boolean).sort() });
 });
 
 const getDoctor = asyncHandler(async (req, res) => {
@@ -83,7 +89,7 @@ const getDoctor = asyncHandler(async (req, res) => {
   if (!doctor) {
     return res.status(404).json({ message: 'Doctor not found' });
   }
-  res.json(doctor);
+  res.json({ doctor: mapDoctor(doctor) });
 });
 
 // Realistic mock data matching the Figma "Patient Queue & Next Call" design
@@ -95,7 +101,6 @@ const getMockDashboardData = () => {
       specialization: 'Orthopedics Surgeon',
       department: 'Orthopedics OPD',
       room: 'Room 3B',
-      hospitalName: 'Colombo Teaching Hospital 1',
       status: 'active',
       dailyCapacity: 32,
       avgConsultMinutes: 9,
@@ -212,58 +217,6 @@ const getMockDashboardData = () => {
   };
 };
 
-const patientCatalog = [
-  { name: 'Sunil Shantha', age: 52, gender: 'Male', reason: 'Hypertension Follow-up', bp: '130/85', hr: '74 bpm' },
-  { name: 'Kanthi Rajapaksha', age: 46, gender: 'Female', reason: 'Diabetes Screening', bp: '122/80', hr: '76 bpm' },
-  { name: 'Nihal Jayawardena', age: 60, gender: 'Male', reason: 'Chest Discomfort Checkup', bp: '138/88', hr: '82 bpm' },
-  { name: 'Anoma Wickramasinghe', age: 39, gender: 'Female', reason: 'Migraine Consultation', bp: '118/76', hr: '70 bpm' },
-  { name: 'Bandula Gunasekara', age: 64, gender: 'Male', reason: 'Chronic Knee Pain', bp: '125/82', hr: '72 bpm' },
-  { name: 'Malkanthi Silva', age: 43, gender: 'Female', reason: 'Routine Physical Exam', bp: '115/75', hr: '68 bpm' },
-  { name: 'Dhammika Perera', age: 50, gender: 'Male', reason: 'Cholesterol Review', bp: '128/84', hr: '75 bpm' },
-  { name: 'Sujatha Alwis', age: 57, gender: 'Female', reason: 'Thyroid Medication Review', bp: '120/78', hr: '71 bpm' },
-  { name: 'Gamini Senanayake', age: 66, gender: 'Male', reason: 'Arthritis Follow-up', bp: '135/86', hr: '78 bpm' },
-  { name: 'Rohini Jayasuriya', age: 48, gender: 'Female', reason: 'Gastritis & Acid Reflux', bp: '122/80', hr: '74 bpm' },
-  { name: 'Prasanna Fernando', age: 35, gender: 'Male', reason: 'Lower Back Strain', bp: '120/80', hr: '72 bpm' },
-  { name: 'Chitra Samaranayake', age: 59, gender: 'Female', reason: 'Osteoporosis Consultation', bp: '126/82', hr: '75 bpm' },
-  { name: 'Mahinda Abeyrathne', age: 63, gender: 'Male', reason: 'Post-CABG Routine Check', bp: '130/80', hr: '70 bpm' },
-  { name: 'Kumari Weerasinghe', age: 41, gender: 'Female', reason: 'Allergy & Sinus Review', bp: '118/74', hr: '69 bpm' },
-  { name: 'Sarath Fonseka', age: 55, gender: 'Male', reason: 'Blood Sugar Monitoring', bp: '124/82', hr: '76 bpm' },
-  { name: 'Manel Rathnayake', age: 51, gender: 'Female', reason: 'General OPD Consultation', bp: '120/78', hr: '73 bpm' },
-  { name: 'Asoka Kulatunga', age: 47, gender: 'Male', reason: 'Skin Rash & Dermatology', bp: '118/78', hr: '72 bpm' },
-  { name: 'Priyani Samarasekera', age: 44, gender: 'Female', reason: 'Fatigue & Blood Work Review', bp: '116/76', hr: '70 bpm' },
-  { name: 'Lalith Jayatilleke', age: 58, gender: 'Male', reason: 'ECG Review & Follow-up', bp: '132/85', hr: '77 bpm' },
-  { name: 'Pushpa Dissanayake', age: 62, gender: 'Female', reason: 'Hypertension Follow-up', bp: '136/84', hr: '79 bpm' },
-  { name: 'Upul Tharanga', age: 38, gender: 'Male', reason: 'Ankle Sprain Bandage Check', bp: '120/80', hr: '71 bpm' },
-  { name: 'Shirani Nanayakkara', age: 53, gender: 'Female', reason: 'Insomnia & Anxiety Consultation', bp: '124/82', hr: '75 bpm' },
-  { name: 'Chandana Karunaratne', age: 49, gender: 'Male', reason: 'Urine Culture Follow-up', bp: '122/78', hr: '73 bpm' },
-  { name: 'Indrani Cooray', age: 65, gender: 'Female', reason: 'Joint Pain & Physiotherapy', bp: '130/84', hr: '76 bpm' },
-  { name: 'Ranil Wickramatunga', age: 56, gender: 'Male', reason: 'Cardiac Wellness Check', bp: '128/82', hr: '74 bpm' },
-  { name: 'Menaka Hettiarachchi', age: 34, gender: 'Female', reason: 'Vitamin D Deficiency Follow-up', bp: '114/74', hr: '68 bpm' },
-  { name: 'Sanath Jayasuriya', age: 54, gender: 'Male', reason: 'Shoulder Impingement', bp: '126/80', hr: '72 bpm' },
-  { name: 'Kamal Gunaratne', age: 48, gender: 'Male', reason: 'Spine Checkup', bp: '124/82', hr: '76 bpm' },
-];
-
-const getPatientForToken = (tokenNum) => {
-  const idx = Math.max(0, tokenNum - 1) % patientCatalog.length;
-  const p = patientCatalog[idx];
-  return {
-    tokenNumber: tokenNum,
-    patientName: p.name,
-    age: p.age,
-    gender: p.gender,
-    priority: tokenNum % 3 === 0 ? 'elderly' : 'normal',
-    status: 'in_consultation',
-    reason: p.reason,
-    bloodPressure: p.bp,
-    heartRate: p.hr,
-    fileRecord: `REC-${800 + tokenNum}`,
-    checkedInTime: '08:15 AM',
-    calledAtTime: '08:45 AM',
-  };
-};
-
-let sessionHistoryStack = [];
-
 // In-memory state for dev / quick testing when DB records aren't seeded yet
 let currentSessionState = getMockDashboardData();
 
@@ -279,43 +232,15 @@ const getDoctorDashboard = async (req, res) => {
     const doctorId = req.query.doctorId || (req.user && req.user._id);
 
     if (doctorId) {
-      doctor = await Doctor.findById(doctorId).populate('hospital').catch(() => null);
+      doctor = await Doctor.findById(doctorId).catch(() => null);
     }
 
     if (!doctor) {
-      doctor = await Doctor.findOne().populate('hospital').catch(() => null);
+      doctor = await Doctor.findOne().catch(() => null);
     }
 
-    // If no doctor exists in DB yet, return the realistic mock dashboard state
     if (!doctor) {
-      return res.status(200).json({
-        success: true,
-        source: 'mock',
-        data: currentSessionState,
-      });
-    }
-
-    // Resolve doctor's current hospital name
-    let hospitalName = doctor.hospitalName || (doctor.hospital && doctor.hospital.name);
-    if (!hospitalName) {
-      try {
-        const Staff = require('../models/Staff');
-        const cleanName = doctor.name.replace(/^Dr\.\s*/i, '').trim();
-        const staffMember = await Staff.findOne({
-          $or: [
-            { fullName: new RegExp(cleanName, 'i') },
-            ...(req.user?.email ? [{ email: req.user.email }] : []),
-          ],
-        }).populate('hospital').catch(() => null);
-        if (staffMember) {
-          hospitalName = staffMember.hospitalName || (staffMember.hospital && staffMember.hospital.name);
-        }
-      } catch (e) {
-        // Ignore staff lookup error
-      }
-    }
-    if (!hospitalName) {
-      hospitalName = 'Colombo Teaching Hospital 1';
+      return res.status(404).json({ success: false, message: 'Doctor record not found' });
     }
 
     // Doctor found in DB - calculate real metrics
@@ -381,26 +306,6 @@ const getDoctorDashboard = async (req, res) => {
       };
     }
 
-    // If DB has no active queue for today, synchronize with currentSessionState so doctor always has an interactive queue!
-    if (!currentPatient && formattedUpcoming.length === 0) {
-      currentSessionState.doctor = {
-        ...currentSessionState.doctor,
-        _id: doctor._id,
-        name: doctor.name || currentSessionState.doctor.name,
-        room: doctor.room || currentSessionState.doctor.room,
-        specialization: doctor.specialization || currentSessionState.doctor.specialization,
-        department: doctor.department || currentSessionState.doctor.department,
-        hospitalName: hospitalName || currentSessionState.doctor.hospitalName || 'Colombo Teaching Hospital 1',
-        hospital: doctor.hospital || null,
-      };
-
-      return res.status(200).json({
-        success: true,
-        source: 'session_sync',
-        data: currentSessionState,
-      });
-    }
-
     return res.status(200).json({
       success: true,
       source: 'database',
@@ -410,20 +315,18 @@ const getDoctorDashboard = async (req, res) => {
           name: doctor.name,
           specialization: doctor.specialization,
           department: doctor.department,
-          room: doctor.room || 'Room 01',
-          hospitalName: hospitalName || 'Colombo Teaching Hospital 1',
-          hospital: doctor.hospital || null,
+          room: doctor.room || '',
           status: doctor.status || 'active',
-          dailyCapacity: doctor.dailyCapacity || 30,
-          avgConsultMinutes: doctor.avgConsultMinutes || 10,
-          workingHours: doctor.workingHours || { start: '08:00', end: '16:00' },
+          dailyCapacity: doctor.dailyCapacity || 0,
+          avgConsultMinutes: doctor.avgConsultMinutes || 0,
+          workingHours: doctor.workingHours || { start: '', end: '' },
         },
         metrics: {
           currentCallingToken: currentPatient ? currentPatient.tokenNumber : (completedCount > 0 ? completedCount : 0),
           waitingCount,
           completedCount,
           totalToday,
-          avgWaitMinutes: doctor.avgConsultMinutes || 10,
+          avgWaitMinutes: doctor.avgConsultMinutes || 0,
         },
         currentPatient,
         upcomingQueue: formattedUpcoming,
@@ -431,12 +334,7 @@ const getDoctorDashboard = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in getDoctorDashboard:', error);
-    // Return mock on unexpected error so frontend never breaks
-    return res.status(200).json({
-      success: true,
-      source: 'fallback',
-      data: currentSessionState,
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -470,9 +368,90 @@ const updateDoctorStatus = async (req, res) => {
   }
 };
 
+const resolveDoctor = async (req, doctorId) => {
+  if (doctorId) return Doctor.findById(doctorId);
+  if (req.user && req.user._id) {
+    const byStaff = await Doctor.findOne({ staffId: req.user._id });
+    if (byStaff) return byStaff;
+    const byUser = await Doctor.findById(req.user._id).catch(() => null);
+    if (byUser) return byUser;
+  }
+  return Doctor.findOne();
+};
+
+const updateDoctorHospital = async (req, res) => {
+  try {
+    const { doctorId, hospitalId } = req.body;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: 'Hospital ID is required' });
+    }
+
+    const hospital = await Hospital.findOne({ _id: hospitalId, isDeleted: false }).lean();
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: 'Hospital not found' });
+    }
+
+    const doctor = await resolveDoctor(req, doctorId);
+    if (!doctor) {
+      return res.status(404).json({ success: false, message: 'Doctor not found' });
+    }
+
+    doctor.hospital = hospital._id;
+    doctor.hospitalName = hospital.name;
+    await doctor.save();
+
+    return res.json({
+      success: true,
+      doctor: {
+        id: String(doctor._id),
+        hospitalId: String(hospital._id),
+        hospitalName: hospital.name,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getDoctorHospitals = async (req, res) => {
+  try {
+    const hospitals = await Hospital.find({ isDeleted: false, status: 'Active' })
+      .select('name code type location departments')
+      .sort({ name: 1 })
+      .lean();
+    return res.json({ success: true, hospitals });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Call next patient in queue
 // @route   POST /api/v1/doctor/call-next
 // @access  Public / Protected
+const undoPatientConsultation = async (req, res) => {
+  try {
+    const doctor = await resolveDoctor(req, req.body.doctorId);
+    const filter = {
+      status: { $in: ['called', 'in_consultation'] },
+      ...(doctor ? { assignedDoctor: doctor._id } : {}),
+    };
+    const entry = await QueueEntry.findOne(filter).sort({ calledAt: -1 });
+
+    if (!entry) {
+      return res.status(404).json({ success: false, message: 'No active consultation found' });
+    }
+
+    entry.status = 'waiting';
+    entry.calledAt = undefined;
+    entry.completedAt = undefined;
+    await entry.save();
+
+    return res.json({ success: true, message: `Token #${entry.tokenNumber} returned to the queue` });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const callNextPatient = async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -514,12 +493,6 @@ const callNextPatient = async (req, res) => {
 
     // Fallback: update in-memory currentSessionState for dev
     if (currentSessionState.upcomingQueue.length > 0) {
-      if (currentSessionState.currentPatient) {
-        sessionHistoryStack.push({
-          currentPatient: { ...currentSessionState.currentPatient },
-          metrics: { ...currentSessionState.metrics },
-        });
-      }
       currentSessionState.metrics.completedCount += 1;
       const nextPat = currentSessionState.upcomingQueue.shift();
       currentSessionState.currentPatient = {
@@ -532,8 +505,34 @@ const callNextPatient = async (req, res) => {
         checkedInTime: nextPat.slotTime || '10:30 AM',
         calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
+
       currentSessionState.metrics.currentCallingToken = nextPat.tokenNumber;
-      currentSessionState.metrics.waitingCount = Math.max(0, currentSessionState.upcomingQueue.length);
+      currentSessionState.metrics.waitingCount = Math.max(0, currentSessionState.metrics.waitingCount - 1);
+
+      // Auto-replenish if queue gets low so the doctor queue never runs out during testing
+      if (currentSessionState.upcomingQueue.length <= 2) {
+        const lastNum = currentSessionState.upcomingQueue.length > 0
+          ? currentSessionState.upcomingQueue[currentSessionState.upcomingQueue.length - 1].tokenNumber
+          : nextPat.tokenNumber;
+        const newNum = lastNum + 1;
+        const extraNames = ['Nuwan Pradeep', 'Chamari Athapaththu', 'Kusal Mendis', 'Anusha Damayanthi', 'Dinesh Chandimal', 'Tharushi Dissanayake'];
+        const chosenName = extraNames[newNum % extraNames.length];
+        currentSessionState.upcomingQueue.push({
+          tokenNumber: newNum,
+          patientName: chosenName,
+          age: 26 + (newNum % 35),
+          gender: newNum % 2 === 0 ? 'Female' : 'Male',
+          priority: newNum % 3 === 0 ? 'elderly' : 'normal',
+          category: newNum % 3 === 0 ? 'priority' : 'all',
+          status: 'Waiting',
+          reason: 'Follow-up Consultation',
+          location: 'Waiting Area',
+          arrivedTime: '11:15 AM',
+          vitalsVerified: true,
+          slotTime: '01:00 PM',
+        });
+        currentSessionState.metrics.waitingCount += 1;
+      }
 
       return res.status(200).json({
         success: true,
@@ -543,135 +542,10 @@ const callNextPatient = async (req, res) => {
       });
     }
 
-    // Last patient completed when queue has no more waiting patients
-    if (currentSessionState.currentPatient) {
-      sessionHistoryStack.push({
-        currentPatient: { ...currentSessionState.currentPatient },
-        metrics: { ...currentSessionState.metrics },
-      });
-      currentSessionState.metrics.completedCount += 1;
-      currentSessionState.currentPatient = null;
-      currentSessionState.metrics.waitingCount = 0;
-      currentSessionState.metrics.currentCallingToken = 0;
-
-      return res.status(200).json({
-        success: true,
-        message: 'All patients completed today! Queue is empty.',
-        calledToken: null,
-        data: currentSessionState,
-      });
-    }
-
     return res.status(200).json({
       success: true,
       message: 'No more waiting patients in queue today!',
       calledToken: null,
-      data: currentSessionState,
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// @desc    Undo previous consultation and restore previous patient (all the way to Token #001)
-// @route   POST /api/v1/doctor/undo-patient
-// @access  Public / Protected
-const undoPatientConsultation = async (req, res) => {
-  try {
-    const today = new Date().toISOString().split('T')[0];
-
-    const currentToken = currentSessionState.currentPatient?.tokenNumber;
-    if (currentToken && currentToken <= 1) {
-      return res.status(400).json({
-        success: false,
-        message: 'Already at the 1st patient (Token #001). Cannot undo further.',
-        isFirstPatient: true,
-        data: currentSessionState,
-      });
-    }
-
-    if (!currentToken && sessionHistoryStack.length === 0 && (currentSessionState.metrics?.completedCount || 0) <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No completed consultations to undo.',
-        data: currentSessionState,
-      });
-    }
-
-    try {
-      const activeEntry = await QueueEntry.findOne({
-        queueDate: today,
-        status: { $in: ['called', 'in_consultation'] },
-      }).catch(() => null);
-
-      const prevCompleted = await QueueEntry.findOne({
-        queueDate: today,
-        status: 'completed',
-      })
-        .sort({ completedAt: -1, tokenNumber: -1 })
-        .populate({ path: 'appointment', populate: { path: 'patient' } })
-        .catch(() => null);
-
-      if (activeEntry) {
-        activeEntry.status = 'waiting';
-        await activeEntry.save().catch(() => null);
-      }
-      if (prevCompleted) {
-        prevCompleted.status = 'in_consultation';
-        prevCompleted.completedAt = null;
-        await prevCompleted.save().catch(() => null);
-      }
-    } catch (e) {
-      // Continue with in-memory sync
-    }
-
-    // Determine previous patient to restore
-    let prevPatient = null;
-    if (sessionHistoryStack.length > 0) {
-      const popped = sessionHistoryStack.pop();
-      prevPatient = popped.currentPatient;
-    } else {
-      const targetToken = currentToken ? currentToken - 1 : (currentSessionState.metrics.completedCount || 28);
-      prevPatient = getPatientForToken(Math.max(1, targetToken));
-    }
-
-    // Put current patient back at the beginning of upcomingQueue if there was one
-    if (currentSessionState.currentPatient) {
-      const currentAsQueueItem = {
-        tokenNumber: currentSessionState.currentPatient.tokenNumber,
-        patientName: currentSessionState.currentPatient.patientName,
-        age: currentSessionState.currentPatient.age,
-        gender: currentSessionState.currentPatient.gender,
-        priority: currentSessionState.currentPatient.priority || 'normal',
-        category: 'all',
-        status: 'next',
-        reason: currentSessionState.currentPatient.reason || 'OPD Consultation',
-        slotTime: currentSessionState.currentPatient.checkedInTime || '11:00 AM',
-      };
-
-      currentSessionState.upcomingQueue = [
-        currentAsQueueItem,
-        ...currentSessionState.upcomingQueue.filter(
-          (q) => q.tokenNumber !== currentAsQueueItem.tokenNumber
-        ),
-      ];
-    }
-
-    currentSessionState.currentPatient = {
-      ...prevPatient,
-      status: 'in_consultation',
-      calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    currentSessionState.metrics.currentCallingToken = prevPatient.tokenNumber;
-    currentSessionState.metrics.completedCount = Math.max(0, currentSessionState.metrics.completedCount - 1);
-    currentSessionState.metrics.waitingCount = currentSessionState.upcomingQueue.length;
-
-    return res.status(200).json({
-      success: true,
-      message: `Undone! Restored Token #${String(prevPatient.tokenNumber).padStart(3, '0')} (${prevPatient.patientName})`,
-      restoredToken: prevPatient.tokenNumber,
-      isFirstPatient: prevPatient.tokenNumber <= 1,
       data: currentSessionState,
     });
   } catch (error) {
@@ -967,74 +841,40 @@ const getDoctorSchedule = async (req, res) => {
   }
 };
 
-// @desc    Add Walk-in Slot to current queue and schedule
+// @desc    Add Walk-in Slot to current schedule
 // @route   POST /api/v1/doctor/walkin-slot
 // @access  Public / Protected
 const addWalkInSlot = async (req, res) => {
   try {
-    const { patientName, reason, priority = 'walkin', age = 35, gender = 'Male' } = req.body;
-    if (!patientName || !patientName.trim()) {
+    const { patientName, reason, priority = 'walkin', age = 35, gender = 'Other' } = req.body;
+    if (!patientName) {
       return res.status(400).json({ success: false, message: 'Patient name is required' });
     }
 
-    const trimmedName = patientName.trim();
-    const currentTokens = [
-      currentSessionState.currentPatient?.tokenNumber || 0,
-      ...currentSessionState.upcomingQueue.map((q) => q.tokenNumber || 0),
-    ];
-    const nextToken = Math.max(28, ...currentTokens) + 1;
-
-    const newQueueItem = {
+    const nextToken = (scheduleSessionState.shift.totalCapacity || 32) + 1;
+    const newSlot = {
+      id: `slot-walkin-${Date.now()}`,
+      time: '12:00 PM',
+      timeHour: '12:00',
+      timePeriod: 'PM',
+      patientName,
+      reason: `${reason || 'Emergency Walk-in'} • Token #${String(nextToken).padStart(3, '0')}`,
       tokenNumber: nextToken,
-      patientName: trimmedName,
-      age: Number(age) || 35,
-      gender: gender || 'Male',
-      priority: priority === 'urgent' ? 'urgent' : 'walkin',
-      category: 'walkin',
-      status: 'Waiting',
-      reason: reason || 'Walk-in Consultation',
-      location: 'Waiting Area',
-      arrivedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      vitalsVerified: true,
-      slotTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'waiting',
+      age,
+      gender,
     };
 
-    if (priority === 'urgent') {
-      currentSessionState.upcomingQueue.unshift(newQueueItem);
-    } else {
-      currentSessionState.upcomingQueue.push(newQueueItem);
-    }
-    currentSessionState.metrics.waitingCount = currentSessionState.upcomingQueue.length;
-
-    // Also sync to scheduleSessionState
-    if (typeof scheduleSessionState !== 'undefined' && scheduleSessionState?.timeline) {
-      const newSlot = {
-        id: `slot-walkin-${Date.now()}`,
-        time: newQueueItem.slotTime,
-        timeHour: '12:00',
-        timePeriod: 'PM',
-        patientName: trimmedName,
-        reason: `${reason || 'Walk-in Consultation'} • Token #${String(nextToken).padStart(3, '0')}`,
-        tokenNumber: nextToken,
-        status: 'waiting',
-        age: Number(age) || 35,
-        gender: gender || 'Male',
-      };
-
-      scheduleSessionState.timeline.push(newSlot);
-      if (scheduleSessionState.shift) {
-        scheduleSessionState.shift.totalCapacity = (scheduleSessionState.shift.totalCapacity || 32) + 1;
-        scheduleSessionState.shift.waitingCount = (scheduleSessionState.shift.waitingCount || 0) + 1;
-        scheduleSessionState.shift.remainingWalkinSlots = Math.max(0, (scheduleSessionState.shift.remainingWalkinSlots || 4) - 1);
-      }
-    }
+    scheduleSessionState.timeline.push(newSlot);
+    scheduleSessionState.shift.totalCapacity += 1;
+    scheduleSessionState.shift.waitingCount += 1;
+    scheduleSessionState.shift.remainingWalkinSlots = Math.max(0, scheduleSessionState.shift.remainingWalkinSlots - 1);
 
     return res.status(201).json({
       success: true,
-      message: `Walk-in patient ${trimmedName} registered as Token #${String(nextToken).padStart(3, '0')}`,
-      tokenNumber: nextToken,
-      patient: newQueueItem,
-      data: currentSessionState,
+      message: `Walk-in slot added successfully for ${patientName} (Token #${nextToken})`,
+      slot: newSlot,
+      data: scheduleSessionState,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -1414,45 +1254,6 @@ const getPatientRecords = async (req, res) => {
   }
 };
 
-// @desc    Update Doctor's currently assigned hospital
-// @route   PATCH /api/v1/doctor/hospital
-const updateDoctorHospital = async (req, res) => {
-  try {
-    const { hospitalName, hospitalId, doctorId } = req.body;
-    let query = doctorId ? { _id: doctorId } : {};
-    let doctor = await Doctor.findOne(query);
-    if (doctor) {
-      if (hospitalName) doctor.hospitalName = hospitalName;
-      if (hospitalId) doctor.hospital = hospitalId;
-      await doctor.save();
-    }
-    if (currentSessionState && currentSessionState.doctor) {
-      if (hospitalName) currentSessionState.doctor.hospitalName = hospitalName;
-      if (hospitalId) currentSessionState.doctor.hospital = hospitalId;
-    }
-    return res.status(200).json({
-      success: true,
-      message: 'Hospital updated successfully',
-      hospitalName: hospitalName || currentSessionState.doctor.hospitalName,
-      hospitalId,
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// @desc    Get all active hospitals for doctor
-// @route   GET /api/v1/doctor/hospitals
-const getDoctorHospitals = async (req, res) => {
-  try {
-    const Hospital = require('../models/Hospital');
-    const hospitals = await Hospital.find({ isDeleted: false }).select('name code type location departments');
-    return res.status(200).json({ success: true, data: hospitals });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
-
 module.exports = {
   getDoctors,
   listDoctors,
@@ -1475,4 +1276,3 @@ module.exports = {
   referPatient,
   getPatientRecords,
 };
-

@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { PatientTheme } from '../../../constants/PatientTheme';
 import { doctorApi } from '../../../services/doctorApi';
 import { bookingApi } from '../../../services/bookingApi';
@@ -55,6 +55,13 @@ export function DoctorDirectoryScreen() {
             scope: 'upcoming',
           }),
     [tab],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void doctors.reload();
+      void departments.reload();
+    }, [departments, doctors]),
   );
 
   const onRefresh = useCallback(async () => {

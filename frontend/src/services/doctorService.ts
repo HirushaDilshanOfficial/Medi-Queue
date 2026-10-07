@@ -22,8 +22,6 @@ export interface DoctorDashboardData {
     specialization: string;
     department: string;
     room: string;
-    hospitalName?: string;
-    hospitalId?: string;
     status: 'active' | 'on_break' | 'offline';
     dailyCapacity: number;
     avgConsultMinutes: number;
@@ -54,127 +52,26 @@ export interface DoctorDashboardData {
   upcomingQueue: PatientQueueItem[];
 }
 
-// Fallback data matching the Figma "Live Patient Queue & Next Call" design
-const fallbackDoctorData: DoctorDashboardData = {
+const emptyDoctorData: DoctorDashboardData = {
   doctor: {
-    name: 'Dr. Emilia Emelson',
-    specialization: 'Orthopedics Surgeon',
-    department: 'Orthopedics OPD',
-    room: 'Room 3B',
-    hospitalName: 'Colombo Teaching Hospital 1',
-    status: 'active',
-    dailyCapacity: 32,
-    avgConsultMinutes: 9,
-    workingHours: { start: '08:00', end: '16:00' },
+    name: '',
+    specialization: '',
+    department: '',
+    room: '',
+    status: 'offline',
+    dailyCapacity: 0,
+    avgConsultMinutes: 0,
+    workingHours: { start: '', end: '' },
   },
   metrics: {
-    currentCallingToken: 28,
-    waitingCount: 14,
-    completedCount: 18,
-    totalToday: 32,
-    avgWaitMinutes: 9,
-    estimatedWaitTime: '~42m',
+    currentCallingToken: 0,
+    waitingCount: 0,
+    completedCount: 0,
+    totalToday: 0,
+    avgWaitMinutes: 0,
   },
-  currentPatient: {
-    tokenNumber: 28,
-    patientName: 'Kamal Gunaratne',
-    age: 48,
-    gender: 'Male',
-    priority: 'normal',
-    status: 'in_consultation',
-    reason: 'Spine Checkup',
-    bloodPressure: '124/82',
-    heartRate: '76 bpm',
-    fileRecord: 'REC-841',
-    checkedInTime: '10:15 AM',
-    calledAtTime: '08:47',
-  },
-  upcomingQueue: [
-    {
-      tokenNumber: 29,
-      patientName: 'Aurelia Sisca',
-      age: 32,
-      gender: 'Female',
-      priority: 'normal',
-      category: 'all',
-      status: 'next',
-      reason: 'Post-op Inspection',
-      location: 'Ready at Lobby',
-      arrivedTime: '10:14',
-      vitalsVerified: true,
-      slotTime: '11:15 AM',
-    },
-    {
-      tokenNumber: 30,
-      patientName: 'Rohan Mendis',
-      age: 54,
-      gender: 'Male',
-      priority: 'elderly',
-      category: 'priority',
-      status: 'Checked In • Ready',
-      reason: 'Hypertension follow',
-      location: 'Waiting Area',
-      arrivedTime: '10:20',
-      vitalsVerified: true,
-      slotTime: '11:30 AM',
-    },
-    {
-      tokenNumber: 31,
-      patientName: 'Dilshan Madushanka',
-      age: 28,
-      gender: 'Male',
-      priority: 'walkin',
-      category: 'walkin',
-      status: 'X-Ray Ready',
-      reason: 'Acute knee sprain',
-      location: 'Radiology returned',
-      arrivedTime: '10:32',
-      vitalsVerified: true,
-      slotTime: '11:45 AM',
-    },
-    {
-      tokenNumber: 32,
-      patientName: 'Sanduni Perera',
-      age: 41,
-      gender: 'Female',
-      priority: 'normal',
-      category: 'all',
-      status: 'Waiting (18m)',
-      reason: 'Routine Ortho Revie',
-      location: 'Waiting Area',
-      arrivedTime: '10:40',
-      vitalsVerified: false,
-      slotTime: '12:00 PM',
-    },
-    {
-      tokenNumber: 33,
-      patientName: 'Piyadasa Samarasinghe',
-      age: 71,
-      gender: 'Male',
-      priority: 'elderly',
-      category: 'priority',
-      status: 'Checked In • Ready',
-      reason: 'Severe Osteoarthritis',
-      location: 'Waiting Area',
-      arrivedTime: '10:45',
-      vitalsVerified: true,
-      slotTime: '12:15 PM',
-    },
-    {
-      tokenNumber: 34,
-      patientName: 'Kavindi Fernando',
-      age: 24,
-      gender: 'Female',
-      priority: 'walkin',
-      category: 'walkin',
-      status: 'Waiting',
-      reason: 'Ankle Sprain Bandage',
-      location: 'Waiting Area',
-      arrivedTime: '10:50',
-      vitalsVerified: true,
-      slotTime: '12:30 PM',
-    },
-  ],
+  currentPatient: null,
+  upcomingQueue: [],
 };
 
 export const fetchDoctorDashboard = async (doctorId?: string): Promise<DoctorDashboardData> => {
@@ -195,14 +92,14 @@ export const fetchDoctorDashboard = async (doctorId?: string): Promise<DoctorDas
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      return fallbackDoctorData;
+      throw new Error(`Doctor dashboard request failed (${response.status})`);
     }
 
     const json = await response.json();
-    return json.data || fallbackDoctorData;
+    if (!json.data) throw new Error('Doctor dashboard returned no database data');
+    return json.data;
   } catch (error) {
-    console.log('Using local fallback doctor dashboard data:', error);
-    return fallbackDoctorData;
+    throw error instanceof Error ? error : new Error('Could not load doctor dashboard data');
   }
 };
 
@@ -223,87 +120,6 @@ export const updateDoctorStatusApi = async (
   }
 };
 
-export const updateDoctorHospitalApi = async (
-  hospitalName: string,
-  hospitalId?: string,
-  doctorId?: string
-): Promise<boolean> => {
-  try {
-    const response = await fetch(`${API_URL}/doctor/hospital`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hospitalName, hospitalId, doctorId }),
-    });
-    return response.ok;
-  } catch (error) {
-    console.log('Hospital update offline mode');
-    return true;
-  }
-};
-
-export const fetchDoctorHospitalsApi = async (): Promise<any[]> => {
-  try {
-    const response = await fetch(`${API_URL}/doctor/hospitals`);
-    if (response.ok) {
-      const json = await response.json();
-      return json.data || [];
-    }
-    return [];
-  } catch (error) {
-    return [];
-  }
-};
-
-export const PATIENT_CATALOG = [
-  { name: 'Sunil Shantha', age: 52, gender: 'Male', reason: 'Hypertension Follow-up', bp: '130/85', hr: '74 bpm' },
-  { name: 'Kanthi Rajapaksha', age: 46, gender: 'Female', reason: 'Diabetes Screening', bp: '122/80', hr: '76 bpm' },
-  { name: 'Nihal Jayawardena', age: 60, gender: 'Male', reason: 'Chest Discomfort Checkup', bp: '138/88', hr: '82 bpm' },
-  { name: 'Anoma Wickramasinghe', age: 39, gender: 'Female', reason: 'Migraine Consultation', bp: '118/76', hr: '70 bpm' },
-  { name: 'Bandula Gunasekara', age: 64, gender: 'Male', reason: 'Chronic Knee Pain', bp: '125/82', hr: '72 bpm' },
-  { name: 'Malkanthi Silva', age: 43, gender: 'Female', reason: 'Routine Physical Exam', bp: '115/75', hr: '68 bpm' },
-  { name: 'Dhammika Perera', age: 50, gender: 'Male', reason: 'Cholesterol Review', bp: '128/84', hr: '75 bpm' },
-  { name: 'Sujatha Alwis', age: 57, gender: 'Female', reason: 'Thyroid Medication Review', bp: '120/78', hr: '71 bpm' },
-  { name: 'Gamini Senanayake', age: 66, gender: 'Male', reason: 'Arthritis Follow-up', bp: '135/86', hr: '78 bpm' },
-  { name: 'Rohini Jayasuriya', age: 48, gender: 'Female', reason: 'Gastritis & Acid Reflux', bp: '122/80', hr: '74 bpm' },
-  { name: 'Prasanna Fernando', age: 35, gender: 'Male', reason: 'Lower Back Strain', bp: '120/80', hr: '72 bpm' },
-  { name: 'Chitra Samaranayake', age: 59, gender: 'Female', reason: 'Osteoporosis Consultation', bp: '126/82', hr: '75 bpm' },
-  { name: 'Mahinda Abeyrathne', age: 63, gender: 'Male', reason: 'Post-CABG Routine Check', bp: '130/80', hr: '70 bpm' },
-  { name: 'Kumari Weerasinghe', age: 41, gender: 'Female', reason: 'Allergy & Sinus Review', bp: '118/74', hr: '69 bpm' },
-  { name: 'Sarath Fonseka', age: 55, gender: 'Male', reason: 'Blood Sugar Monitoring', bp: '124/82', hr: '76 bpm' },
-  { name: 'Manel Rathnayake', age: 51, gender: 'Female', reason: 'General OPD Consultation', bp: '120/78', hr: '73 bpm' },
-  { name: 'Asoka Kulatunga', age: 47, gender: 'Male', reason: 'Skin Rash & Dermatology', bp: '118/78', hr: '72 bpm' },
-  { name: 'Priyani Samarasekera', age: 44, gender: 'Female', reason: 'Fatigue & Blood Work Review', bp: '116/76', hr: '70 bpm' },
-  { name: 'Lalith Jayatilleke', age: 58, gender: 'Male', reason: 'ECG Review & Follow-up', bp: '132/85', hr: '77 bpm' },
-  { name: 'Pushpa Dissanayake', age: 62, gender: 'Female', reason: 'Hypertension Follow-up', bp: '136/84', hr: '79 bpm' },
-  { name: 'Upul Tharanga', age: 38, gender: 'Male', reason: 'Ankle Sprain Bandage Check', bp: '120/80', hr: '71 bpm' },
-  { name: 'Shirani Nanayakkara', age: 53, gender: 'Female', reason: 'Insomnia & Anxiety Consultation', bp: '124/82', hr: '75 bpm' },
-  { name: 'Chandana Karunaratne', age: 49, gender: 'Male', reason: 'Urine Culture Follow-up', bp: '122/78', hr: '73 bpm' },
-  { name: 'Indrani Cooray', age: 65, gender: 'Female', reason: 'Joint Pain & Physiotherapy', bp: '130/84', hr: '76 bpm' },
-  { name: 'Ranil Wickramatunga', age: 56, gender: 'Male', reason: 'Cardiac Wellness Check', bp: '128/82', hr: '74 bpm' },
-  { name: 'Menaka Hettiarachchi', age: 34, gender: 'Female', reason: 'Vitamin D Deficiency Follow-up', bp: '114/74', hr: '68 bpm' },
-  { name: 'Sanath Jayasuriya', age: 54, gender: 'Male', reason: 'Shoulder Impingement', bp: '126/80', hr: '72 bpm' },
-  { name: 'Kamal Gunaratne', age: 48, gender: 'Male', reason: 'Spine Checkup', bp: '124/82', hr: '76 bpm' },
-];
-
-export const getCatalogPatient = (tokenNum: number) => {
-  const idx = Math.max(0, tokenNum - 1) % PATIENT_CATALOG.length;
-  const p = PATIENT_CATALOG[idx];
-  return {
-    tokenNumber: tokenNum,
-    patientName: p.name,
-    age: p.age,
-    gender: p.gender,
-    priority: (tokenNum % 3 === 0 ? 'urgent' : 'normal') as 'normal' | 'urgent',
-    status: 'in_consultation',
-    reason: p.reason,
-    bloodPressure: p.bp,
-    heartRate: p.hr,
-    fileRecord: `REC-${800 + tokenNum}`,
-    checkedInTime: '08:15 AM',
-    calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  };
-};
-
 export const callNextPatientApi = async (): Promise<any> => {
   try {
     const response = await fetch(`${API_URL}/doctor/call-next`, {
@@ -314,19 +130,6 @@ export const callNextPatientApi = async (): Promise<any> => {
   } catch (error) {
     console.log('Call next patient offline mode');
     return { success: true, message: 'Called next token (offline mode)' };
-  }
-};
-
-export const undoPatientApi = async (): Promise<any> => {
-  try {
-    const response = await fetch(`${API_URL}/doctor/undo-patient`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    return await response.json();
-  } catch (error) {
-    console.log('Undo patient offline mode');
-    return null;
   }
 };
 
@@ -627,14 +430,14 @@ export const fetchDoctorSchedule = async (dateKey?: string): Promise<DoctorSched
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      return fallbackScheduleData;
+      throw new Error(`Doctor schedule request failed (${response.status})`);
     }
 
     const json = await response.json();
-    return json.data || fallbackScheduleData;
+    if (!json.data) throw new Error('Doctor schedule returned no database data');
+    return json.data;
   } catch (error) {
-    console.log('Using local fallback doctor schedule data:', error);
-    return fallbackScheduleData;
+    throw error instanceof Error ? error : new Error('Could not load doctor schedule data');
   }
 };
 
@@ -677,4 +480,3 @@ export const toggleDoctorBreakApi = async (minutes: number = 15): Promise<any> =
     };
   }
 };
-
