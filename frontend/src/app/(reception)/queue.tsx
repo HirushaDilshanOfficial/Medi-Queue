@@ -1,66 +1,40 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/Colors';
+import { LiveQueueScreen } from '../../screens/Receptionist/LiveQueueScreen';
 
 export default function QueueScreen() {
   const router = useRouter();
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Queue</Text>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={18} color={Colors.primary} style={styles.backIcon} />
-          <Text style={styles.backButtonText}>Back to Home</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
-  );
-}
+  const handleNavigate = (route: string) => {
+    switch (route) {
+      case 'Home':
+      case 'home':
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.push('/(reception)/home');
+        }
+        break;
+      case 'RegisterTab':
+      case 'register':
+        router.push('/(reception)/register');
+        break;
+      case 'PatientsTab':
+      case 'patients':
+        router.push('/(reception)/patients');
+        break;
+      case 'ReportsTab':
+      case 'reports':
+        router.push('/(reception)/reports');
+        break;
+      default:
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.push('/(reception)/home');
+        }
+    }
+  };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  content: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.textDark,
-    marginBottom: 16,
-    letterSpacing: -0.5,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.white,
-    minHeight: 44,
-  },
-  backIcon: {
-    marginRight: 6,
-  },
-  backButtonText: {
-    color: Colors.primary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-});
+  return <LiveQueueScreen onNavigate={handleNavigate} />;
+}

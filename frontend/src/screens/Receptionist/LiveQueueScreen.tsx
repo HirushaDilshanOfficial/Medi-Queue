@@ -759,7 +759,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
       {/* Screen Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          {navigation?.canGoBack?.() ? (
+          {(navigation?.canGoBack?.() || onNavigate) ? (
             <TouchableOpacity
               style={styles.backButton}
               onPress={handleBack}
@@ -1085,18 +1085,6 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
             />
           </View>
         ) : null}
-
-        {/* ======================================================== */}
-        {/* 7. TIP BANNER                                             */}
-        {/* ======================================================== */}
-        <View style={styles.tipBanner}>
-          <View style={styles.tipIconWrap}>
-            <Ionicons name="information-circle" size={20} color={Colors.primary} />
-          </View>
-          <Text style={styles.tipText}>
-            Pressing Call Next alerts the patient display and doctor queue automatically.
-          </Text>
-        </View>
 
         {/* Bottom padding for tab bar / safe layout */}
         <View style={styles.bottomSpacer} />

@@ -363,9 +363,18 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             </View>
 
             {/* Card 2: In Waiting */}
-            <View style={styles.statCard}>
+            <TouchableOpacity
+              style={styles.statCard}
+              onPress={() => handleNav('Queue')}
+              activeOpacity={0.7}
+              accessibilityLabel="View In Waiting Queue"
+              accessibilityRole="button"
+            >
               <View style={styles.statCardTop}>
-                <Text style={styles.statCardTitle}>In Waiting</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={styles.statCardTitle}>In Waiting</Text>
+                  <Ionicons name="chevron-forward" size={13} color="#D97706" style={{ marginLeft: 2 }} />
+                </View>
                 <View style={[styles.statIconCircle, { backgroundColor: '#FEF3C7' }]}>
                   <Ionicons name="time" size={16} color="#D97706" />
                 </View>
@@ -374,7 +383,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <Text style={styles.statCardSubtext}>
                 Avg Wait: <Text style={{ fontWeight: '700', color: Colors.textDark }}>{avgWait} mins</Text>
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Bottom Row: Attended Done & Doctors Active */}
