@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -16,6 +17,7 @@ import { AppIcon } from '../../components/AppIcon';
 
 // RegisterScreen - නව patient account හදනවා
 export default function RegisterScreen({ navigation }: any) {
+  const { t } = useLanguage();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,15 +28,15 @@ export default function RegisterScreen({ navigation }: any) {
   const handleRegister = async () => {
     // Basic validations
     if (!fullName || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('Error'), t('Please fill in all fields'));
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert(t('Error'), t('Passwords do not match'));
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      Alert.alert(t('Error'), t('Password must be at least 6 characters'));
       return;
     }
 
@@ -43,7 +45,7 @@ export default function RegisterScreen({ navigation }: any) {
     // TODO: API call - authService.register(fullName, email, password)
     setTimeout(() => {
       setIsLoading(false);
-      Alert.alert('Success', 'Account created! Please login.', [
+      Alert.alert(t('Success'), t('Account created! Please login.'), [
         { text: 'OK', onPress: () => navigation.navigate('Login') },
       ]);
     }, 1500);
@@ -61,28 +63,28 @@ export default function RegisterScreen({ navigation }: any) {
           <View style={styles.circleBottomLeft} />
 
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>Back</Text></View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>{t("Back")}</Text></View>
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Create Account</Text>
-          <Text style={styles.headerSubtitle}>Register as a new patient</Text>
+          <Text style={styles.headerTitle}>{t("Create Account")}</Text>
+          <Text style={styles.headerSubtitle}>{t("Register as a new patient")}</Text>
         </View>
 
         {/* ---- FORM ---- */}
         <View style={styles.formContainer}>
-          <Text style={styles.sectionLabel}>Full Name</Text>
+          <Text style={styles.sectionLabel}>{t("Full Name")}</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your full name"
+            placeholder={t("Enter your full name")}
             placeholderTextColor={Colors.textLight}
             value={fullName}
             onChangeText={setFullName}
           />
 
-          <Text style={styles.sectionLabel}>Email Address</Text>
+          <Text style={styles.sectionLabel}>{t("Email Address")}</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your email"
+            placeholder={t("Enter your email")}
             placeholderTextColor={Colors.textLight}
             value={email}
             onChangeText={setEmail}
@@ -90,20 +92,20 @@ export default function RegisterScreen({ navigation }: any) {
             autoCapitalize="none"
           />
 
-          <Text style={styles.sectionLabel}>Password</Text>
+          <Text style={styles.sectionLabel}>{t("Password")}</Text>
           <TextInput
             style={styles.input}
-            placeholder="Min. 6 characters"
+            placeholder={t("Min. 6 characters")}
             placeholderTextColor={Colors.textLight}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
           />
 
-          <Text style={styles.sectionLabel}>Confirm Password</Text>
+          <Text style={styles.sectionLabel}>{t("Confirm Password")}</Text>
           <TextInput
             style={styles.input}
-            placeholder="Re-enter your password"
+            placeholder={t("Re-enter your password")}
             placeholderTextColor={Colors.textLight}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
@@ -114,8 +116,7 @@ export default function RegisterScreen({ navigation }: any) {
           <View style={[styles.infoBox, { flexDirection: 'row', alignItems: 'flex-start', gap: 8 }]} >
             <AppIcon name="medical" size={18} color={Colors.primaryDark} />
             <Text style={[styles.infoText, { flex: 1 }]}>
-              Your account will be linked to your NIC for identity verification at the hospital.
-            </Text>
+              {t("Your account will be linked to your NIC for identity verification at the hospital.")}</Text>
           </View>
 
           {/* Register Button */}
@@ -127,7 +128,7 @@ export default function RegisterScreen({ navigation }: any) {
             {isLoading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.registerButtonText}>Create Account</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.registerButtonText}>{t("Create Account")}</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
             )}
           </TouchableOpacity>
 
@@ -136,7 +137,7 @@ export default function RegisterScreen({ navigation }: any) {
             style={styles.loginLink}
             onPress={() => navigation.navigate('Login')}
           >
-            <Text style={styles.loginLinkText}>Already have an account? <Text style={styles.loginLinkBold}>Login</Text></Text>
+            <Text style={styles.loginLinkText}>{t("Already have an account?")}{' '}<Text style={styles.loginLinkBold}>{t("Login")}</Text></Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

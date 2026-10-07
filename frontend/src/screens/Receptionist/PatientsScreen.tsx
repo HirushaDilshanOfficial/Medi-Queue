@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -39,6 +40,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
   navigation,
   onNavigate,
 }) => {
+  const { t, locale } = useLanguage();
   const [query, setQuery] = useState<string>('');
   const [filter, setFilter] = useState<PatientListFilter>('all');
   const [verifyingNic, setVerifyingNic] = useState<boolean>(false);
@@ -84,20 +86,20 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
     if (!patientId || verifyingNic) return;
 
     if (!patient.nic || !patient.nic.trim()) {
-      showToast('Patient has no NIC on record to verify', 'warning');
+      showToast(t('Patient has no NIC on record to verify'), 'warning');
       return;
     }
 
     try {
       setVerifyingNic(true);
       const res = await verifyNic(patientId);
-      showToast(res.message || 'NIC verified successfully', 'success');
+      showToast(res.message || t('NIC verified successfully'), 'success');
       // Refresh selected profile and full list
       await selectPatient(patientId);
       await refresh();
     } catch (err: any) {
       const msg = getErrorMessage(err);
-      showToast(msg || 'Failed to verify patient NIC', 'error');
+      showToast(msg || t('Failed to verify patient NIC'), 'error');
     } finally {
       setVerifyingNic(false);
     }
@@ -115,7 +117,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
   };
 
   const handleEditSuccess = async (updated: Patient) => {
-    showToast('Patient details updated successfully', 'success');
+    showToast(t('Patient details updated successfully'), 'success');
     const patientId = updated._id || updated.id;
     if (patientId && selected && (selected._id === patientId || selected.id === patientId)) {
       await selectPatient(patientId);
@@ -131,7 +133,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
         ? String(selected.age)
         : '';
 
-    showToast(`Prefilling OPD registration for ${selected.fullName}...`, 'info');
+    showToast(t("Prefilling OPD registration for {value0}...", { value0: String(selected.fullName) }), 'info');
 
     const params = {
       existingPatientId: existingId,
@@ -170,7 +172,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
         const month = parseInt(parts[1], 10) - 1;
         const day = parseInt(parts[2], 10);
         const dateObj = new Date(year, month, day);
-        return dateObj.toLocaleDateString('en-GB', {
+        return dateObj.toLocaleDateString(locale, {
           day: '2-digit',
           month: 'short',
           year: 'numeric',
@@ -178,7 +180,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
       }
       const d = new Date(dateStr);
       if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString('en-GB', {
+        return d.toLocaleDateString(locale, {
           day: '2-digit',
           month: 'short',
           year: 'numeric',
@@ -228,10 +230,9 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
             <Ionicons name="people" size={20} color={Colors.white} />
           </View>
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerTitle}>Patient Directory</Text>
+            <Text style={styles.headerTitle}>{t("Patient Directory")}</Text>
             <Text style={styles.headerSubtitle}>
-              Government OPD Central Registry
-            </Text>
+              {t("Government OPD Central Registry")}</Text>
           </View>
         </View>
 
@@ -276,14 +277,14 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
             />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by NIC or Phone number..."
+              placeholder={t("Search by NIC or Phone number...")}
               placeholderTextColor={Colors.textLight}
               value={query}
               onChangeText={setQuery}
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="search"
-              accessibilityLabel="Search by NIC or Phone number"
+              accessibilityLabel={t("Search by NIC or Phone number")}
             />
             {query.length > 0 ? (
               <TouchableOpacity
@@ -291,7 +292,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                 onPress={handleClearQuery}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityLabel="Clear search text"
+                accessibilityLabel={t("Clear search text")}
               >
                 <Ionicons name="close-circle" size={19} color={Colors.textLight} />
               </TouchableOpacity>
@@ -321,7 +322,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
               onPress={() => setFilter('all')}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Filter all records"
+              accessibilityLabel={t("Filter all records")}
             >
               <Ionicons
                 name="folder-open"
@@ -335,8 +336,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   filter === 'all' && styles.filterChipTextActive,
                 ]}
               >
-                All Records
-              </Text>
+                {t("All Records")}</Text>
             </TouchableOpacity>
 
             {/* Filter: Visited Today */}
@@ -348,7 +348,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
               onPress={() => setFilter('visited_today')}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Filter visited today"
+              accessibilityLabel={t("Filter visited today")}
             >
               <Ionicons
                 name="today"
@@ -362,8 +362,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   filter === 'visited_today' && styles.filterChipTextActive,
                 ]}
               >
-                Visited Today
-              </Text>
+                {t("Visited Today")}</Text>
             </TouchableOpacity>
 
             {/* Filter: Recent */}
@@ -375,7 +374,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
               onPress={() => setFilter('recent')}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Filter recent patients"
+              accessibilityLabel={t("Filter recent patients")}
             >
               <Ionicons
                 name="time"
@@ -389,8 +388,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   filter === 'recent' && styles.filterChipTextActive,
                 ]}
               >
-                Recent
-              </Text>
+                {t("Recent")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -401,8 +399,8 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
         {selected ? (
           <View style={styles.selectedSection}>
             <SectionHeader
-              title="Selected Patient"
-              subtitle="Full profile & identity verification"
+              title={t("Selected Patient")}
+              subtitle={t("Full profile & identity verification")}
               rightElement={
                 <TouchableOpacity
                   style={styles.deselectButton}
@@ -410,7 +408,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   activeOpacity={0.7}
                 >
                   <Ionicons name="close" size={14} color={Colors.textMedium} style={{ marginRight: 3 }} />
-                  <Text style={styles.deselectButtonText}>Deselect</Text>
+                  <Text style={styles.deselectButtonText}>{t("Deselect")}</Text>
                 </TouchableOpacity>
               }
             />
@@ -418,12 +416,12 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
             {selectedLoading ? (
               <View style={styles.selectedLoadingCard}>
                 <ActivityIndicator size="small" color={Colors.primary} />
-                <Text style={styles.selectedLoadingText}>Updating patient profile...</Text>
+                <Text style={styles.selectedLoadingText}>{t("Updating patient profile...")}</Text>
               </View>
             ) : selectedError ? (
               <View style={styles.selectedErrorCard}>
                 <Ionicons name="alert-circle" size={18} color={Colors.danger} style={{ marginRight: 6 }} />
-                <Text style={styles.selectedErrorText}>{selectedError}</Text>
+                <Text style={styles.selectedErrorText}>{t(selectedError)}</Text>
               </View>
             ) : (
               <View style={styles.selectedCard}>
@@ -453,11 +451,11 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                     {/* Sub Row: Age, Gender, District */}
                     <View style={styles.selectedSubRow}>
                       {selected.age ? (
-                        <Text style={styles.selectedSubText}>{selected.age} yrs</Text>
+                        <Text style={styles.selectedSubText}>{selected.age} {t("yrs")}</Text>
                       ) : null}
                       {selected.gender ? (
                         <Text style={styles.selectedSubText}>
-                          • {selected.gender.charAt(0).toUpperCase() + selected.gender.slice(1)}
+                          • {t(selected.gender.charAt(0).toUpperCase() + selected.gender.slice(1))}
                         </Text>
                       ) : null}
                       {selected.district ? (
@@ -480,7 +478,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityRole="button"
-                    accessibilityLabel="Edit patient details"
+                    accessibilityLabel={t("Edit patient details")}
                   >
                     <Ionicons name="create-outline" size={18} color={Colors.primary} />
                   </TouchableOpacity>
@@ -497,8 +495,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       style={{ marginRight: 6 }}
                     />
                     <Text style={styles.verifiedRecordText}>
-                      Verified single record (NIC validated)
-                    </Text>
+                      {t("Verified single record (NIC validated)")}</Text>
                   </View>
                 ) : selected.nic && selected.nic.trim().length > 0 ? (
                   // Has NIC but unverified: "Verify NIC" Action Button
@@ -511,7 +508,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                     disabled={verifyingNic}
                     activeOpacity={0.8}
                     accessibilityRole="button"
-                    accessibilityLabel="Verify Patient NIC"
+                    accessibilityLabel={t("Verify Patient NIC")}
                   >
                     {verifyingNic ? (
                       <ActivityIndicator
@@ -528,7 +525,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       />
                     )}
                     <Text style={styles.verifyNicButtonText}>
-                      {verifyingNic ? 'Verifying NIC...' : 'Verify NIC'}
+                      {verifyingNic ? t('Verifying NIC...') : t('Verify NIC')}
                     </Text>
                   </TouchableOpacity>
                 ) : (
@@ -541,8 +538,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       style={{ marginRight: 6 }}
                     />
                     <Text style={styles.noNicNoticeText}>
-                      Patient has no NIC on record.
-                    </Text>
+                      {t("Patient has no NIC on record.")}</Text>
                   </View>
                 )}
 
@@ -550,32 +546,31 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                 <View style={styles.selectedDetailsGrid}>
                   <View style={styles.detailGridItem}>
                     <Ionicons name="card-outline" size={14} color={Colors.textMedium} style={{ marginRight: 5 }} />
-                    <Text style={styles.detailLabel}>NIC:</Text>
+                    <Text style={styles.detailLabel}>{t("NIC:")}</Text>
                     <Text style={styles.detailValue}>
-                      {selected.nic || 'Not registered'}
+                      {selected.nic || t('Not registered')}
                     </Text>
                   </View>
 
                   <View style={styles.detailGridItem}>
                     <Ionicons name="call-outline" size={14} color={Colors.textMedium} style={{ marginRight: 5 }} />
-                    <Text style={styles.detailLabel}>Phone:</Text>
+                    <Text style={styles.detailLabel}>{t("Phone:")}</Text>
                     <Text style={styles.detailValue}>{selected.phone}</Text>
                   </View>
 
                   <View style={styles.detailGridItem}>
                     <Ionicons name="location-outline" size={14} color={Colors.textMedium} style={{ marginRight: 5 }} />
-                    <Text style={styles.detailLabel}>District:</Text>
+                    <Text style={styles.detailLabel}>{t("District:")}</Text>
                     <Text style={styles.detailValue}>
-                      {selected.district || 'General / Colombo'}
+                      {selected.district || t('General / Colombo')}
                     </Text>
                   </View>
 
                   <View style={styles.detailGridItem}>
                     <Ionicons name="medical-outline" size={14} color={Colors.textMedium} style={{ marginRight: 5 }} />
-                    <Text style={styles.detailLabel}>Visits:</Text>
+                    <Text style={styles.detailLabel}>{t("Visits:")}</Text>
                     <Text style={styles.detailValue}>
-                      {selected.visitHistory?.length || 0} recorded
-                    </Text>
+                      {selected.visitHistory?.length || 0} {t("recorded")}</Text>
                   </View>
                 </View>
 
@@ -586,7 +581,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       <View style={styles.quickDeskIconWrap}>
                         <Ionicons name="flash" size={15} color={Colors.primary} />
                       </View>
-                      <Text style={styles.quickDeskTitle}>Quick Desk Actions</Text>
+                      <Text style={styles.quickDeskTitle}>{t("Quick Desk Actions")}</Text>
                     </View>
                   </View>
 
@@ -596,17 +591,17 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                     <View style={styles.quickDeskRow}>
                       <View style={styles.quickDeskLabelCol}>
                         <Ionicons name="call-outline" size={14} color={Colors.textMedium} style={{ marginRight: 6 }} />
-                        <Text style={styles.quickDeskLabel}>Emergency Contact:</Text>
+                        <Text style={styles.quickDeskLabel}>{t("Emergency Contact:")}</Text>
                       </View>
                       <View style={styles.quickDeskValueCol}>
                         {selected.emergencyContact?.name || selected.emergencyContact?.phone ? (
                           <Text style={styles.quickDeskValueText}>
-                            {selected.emergencyContact.name || 'Named Kin'}
+                            {selected.emergencyContact.name || t('Named Kin')}
                             {selected.emergencyContact.phone ? ` • ${selected.emergencyContact.phone}` : ''}
                             {selected.emergencyContact.relationship ? ` (${selected.emergencyContact.relationship})` : ''}
                           </Text>
                         ) : (
-                          <Text style={styles.notRecordedText}>Not recorded</Text>
+                          <Text style={styles.notRecordedText}>{t("Not recorded")}</Text>
                         )}
                       </View>
                     </View>
@@ -615,7 +610,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                     <View style={styles.quickDeskRow}>
                       <View style={styles.quickDeskLabelCol}>
                         <Ionicons name="water-outline" size={14} color="#DC2626" style={{ marginRight: 6 }} />
-                        <Text style={styles.quickDeskLabel}>Blood Group:</Text>
+                        <Text style={styles.quickDeskLabel}>{t("Blood Group:")}</Text>
                       </View>
                       <View style={styles.quickDeskValueCol}>
                         {selected.bloodGroup ? (
@@ -623,7 +618,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                             <Text style={styles.quickBloodText}>{selected.bloodGroup}</Text>
                           </View>
                         ) : (
-                          <Text style={styles.notRecordedText}>Not recorded</Text>
+                          <Text style={styles.notRecordedText}>{t("Not recorded")}</Text>
                         )}
                       </View>
                     </View>
@@ -632,7 +627,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                     <View style={styles.quickDeskRow}>
                       <View style={styles.quickDeskLabelCol}>
                         <Ionicons name="alert-circle-outline" size={14} color="#DC2626" style={{ marginRight: 6 }} />
-                        <Text style={styles.quickDeskLabel}>Allergies:</Text>
+                        <Text style={styles.quickDeskLabel}>{t("Allergies:")}</Text>
                       </View>
                       <View style={styles.quickDeskValueCol}>
                         {selected.allergies && selected.allergies.length > 0 ? (
@@ -641,14 +636,14 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                               <View key={`allergy-${i}`} style={styles.allergyBadge}>
                                 <Ionicons name="warning" size={11} color="#DC2626" style={{ marginRight: 4 }} />
                                 <Text style={styles.allergyText}>
-                                  {alg.name || 'Allergy'}
+                                  {alg.name || t('Allergy')}
                                   {alg.severity ? ` (${alg.severity})` : ''}
                                 </Text>
                               </View>
                             ))}
                           </View>
                         ) : (
-                          <Text style={styles.notRecordedText}>Not recorded</Text>
+                          <Text style={styles.notRecordedText}>{t("Not recorded")}</Text>
                         )}
                       </View>
                     </View>
@@ -661,10 +656,10 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       onPress={() => handleOpenEditModal(selected)}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel="Update Patient Details"
+                      accessibilityLabel={t("Update Patient Details")}
                     >
                       <Ionicons name="create-outline" size={16} color={Colors.white} style={{ marginRight: 6 }} />
-                      <Text style={styles.updateDetailsButtonText}>Update Patient Details</Text>
+                      <Text style={styles.updateDetailsButtonText}>{t("Update Patient Details")}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -672,10 +667,10 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       onPress={handleBookFutureSlot}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel="Book Future OPD Slot"
+                      accessibilityLabel={t("Book Future OPD Slot")}
                     >
                       <Ionicons name="calendar-outline" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
-                      <Text style={styles.bookFutureSlotButtonText}>Book Future OPD Slot</Text>
+                      <Text style={styles.bookFutureSlotButtonText}>{t("Book Future OPD Slot")}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -683,13 +678,13 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                 {/* ── VISIT & APPOINTMENT HISTORY TIMELINE SECTION ── */}
                 <View style={styles.historySection}>
                   <SectionHeader
-                    title="Visit & Appointment History"
-                    subtitle="Chronological consultations & queue encounters"
+                    title={t("Visit & Appointment History")}
+                    subtitle={t("Chronological consultations & queue encounters")}
                     rightElement={
                       <View style={styles.encounterCountChip}>
                         <Ionicons name="medical" size={12} color={Colors.primary} style={{ marginRight: 4 }} />
                         <Text style={styles.encounterCountText}>
-                          {visits.length} {visits.length === 1 ? 'Encounter' : 'Encounters'}
+                          {visits.length} {visits.length === 1 ? t('Encounter') : t('Encounters')}
                         </Text>
                       </View>
                     }
@@ -700,10 +695,9 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       <View style={styles.historyEmptyIconCircle}>
                         <Ionicons name="calendar-outline" size={26} color={Colors.textLight} />
                       </View>
-                      <Text style={styles.historyEmptyTitle}>No previous visits</Text>
+                      <Text style={styles.historyEmptyTitle}>{t("No previous visits")}</Text>
                       <Text style={styles.historyEmptySubtitle}>
-                        This patient does not have any recorded consultations or queue encounters yet.
-                      </Text>
+                        {t("This patient does not have any recorded consultations or queue encounters yet.")}</Text>
                     </View>
                   ) : (
                     <View style={styles.timelineContainer}>
@@ -733,14 +727,14 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                                 />
                                 <StatusChip
                                   status="waiting"
-                                  label="In Waiting Queue"
+                                  label={t("In Waiting Queue")}
                                   size="small"
                                   style={styles.inQueueChip}
                                 />
                               </View>
                               <View style={styles.todayDateBadge}>
                                 <Text style={styles.todayDateText}>
-                                  Today{activeTodayVisit.slotTime ? ` • ${activeTodayVisit.slotTime}` : ''}
+                                  {t("Today")}{activeTodayVisit.slotTime ? ` • ${activeTodayVisit.slotTime}` : ''}
                                 </Text>
                               </View>
                             </View>
@@ -749,13 +743,13 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                               <View style={styles.timelineDetailRow}>
                                 <Ionicons name="business" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
                                 <Text style={styles.timelineDepartmentText}>
-                                  {activeTodayVisit.department || 'General OPD'}
+                                  {activeTodayVisit.department || t('General OPD')}
                                 </Text>
                               </View>
                               <View style={styles.timelineDetailRow}>
                                 <Ionicons name="person" size={14} color={Colors.secondary} style={{ marginRight: 6 }} />
                                 <Text style={styles.timelineDoctorText}>
-                                  {activeTodayVisit.doctorName || activeTodayVisit.doctorDetails?.name || 'Doctor Pending Assignment'}
+                                  {activeTodayVisit.doctorName || activeTodayVisit.doctorDetails?.name || t('Doctor Pending Assignment')}
                                 </Text>
                                 {activeTodayVisit.doctorDetails?.room ? (
                                   <Text style={styles.timelineRoomText}>
@@ -769,7 +763,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                               <View style={styles.clinicalNotesBox}>
                                 <View style={styles.clinicalNotesHeader}>
                                   <Ionicons name="document-text" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
-                                  <Text style={styles.clinicalNotesTitle}>Clinical Note / Prescription</Text>
+                                  <Text style={styles.clinicalNotesTitle}>{t("Clinical Note / Prescription")}</Text>
                                 </View>
                                 <Text style={styles.clinicalNotesContent}>{activeTodayVisit.notes.trim()}</Text>
                               </View>
@@ -813,13 +807,13 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                                 <View style={styles.timelineDetailRow}>
                                   <Ionicons name="business-outline" size={14} color={Colors.textMedium} style={{ marginRight: 6 }} />
                                   <Text style={styles.pastDepartmentText}>
-                                    {visit.department || 'General OPD'}
+                                    {visit.department || t('General OPD')}
                                   </Text>
                                 </View>
                                 <View style={styles.timelineDetailRow}>
                                   <Ionicons name="person-outline" size={14} color={Colors.textMedium} style={{ marginRight: 6 }} />
                                   <Text style={styles.pastDoctorText}>
-                                    {visit.doctorName || visit.doctorDetails?.name || 'Assigned OPD Physician'}
+                                    {visit.doctorName || visit.doctorDetails?.name || t('Assigned OPD Physician')}
                                   </Text>
                                   {visit.doctorDetails?.room ? (
                                     <Text style={styles.timelineRoomText}>({visit.doctorDetails.room})</Text>
@@ -831,7 +825,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                                 <View style={styles.clinicalNotesBox}>
                                   <View style={styles.clinicalNotesHeader}>
                                     <Ionicons name="document-text-outline" size={13} color="#0D9488" style={{ marginRight: 4 }} />
-                                    <Text style={styles.clinicalNotesTitle}>Clinical Note / Prescription</Text>
+                                    <Text style={styles.clinicalNotesTitle}>{t("Clinical Note / Prescription")}</Text>
                                   </View>
                                   <Text style={styles.clinicalNotesContent}>{visit.notes.trim()}</Text>
                                 </View>
@@ -855,24 +849,24 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
           <SectionHeader
             title={
               query.trim().length >= 3
-                ? `Search Results (${list.length})`
-                : `Patient Records (${list.length})`
+                ? t("Search Results ({value0})", { value0: String(list.length) })
+                : t("Patient Records ({value0})", { value0: String(list.length) })
             }
             subtitle={
               query.trim().length >= 3
-                ? `Matching "${query.trim()}"`
+                ? t("Matching \"{value0}\"", { value0: String(query.trim()) })
                 : filter === 'visited_today'
-                ? 'Patients with consultations recorded today'
+                ? t('Patients with consultations recorded today')
                 : filter === 'recent'
-                ? 'Patients active in the past 30 days'
-                : 'All registered government OPD records'
+                ? t('Patients active in the past 30 days')
+                : t('All registered government OPD records')
             }
           />
 
           {loading && list.length === 0 ? (
             <View style={styles.stateCard}>
               <LoadingState
-                message="Loading patient directory records..."
+                message={t("Loading patient directory records...")}
                 size="large"
                 fullscreen={false}
               />
@@ -880,7 +874,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
           ) : error && list.length === 0 ? (
             <View style={styles.stateCard}>
               <ErrorState
-                title="Unable to load patients"
+                title={t("Unable to load patients")}
                 message={error}
                 onRetry={refresh}
                 retryLabel="Retry Patient Search"
@@ -930,13 +924,13 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
               </View>
               <Text style={styles.emptyTitle}>
                 {query.trim().length >= 3
-                  ? 'No matching patient records'
-                  : 'No patients found'}
+                  ? t('No matching patient records')
+                  : t('No patients found')}
               </Text>
               <Text style={styles.emptySubtitle}>
                 {query.trim().length >= 3
-                  ? `No registered patients match "${query.trim()}". Try searching with a different NIC or phone number.`
-                  : 'There are currently no patient records matching the selected filter.'}
+                  ? t("No registered patients match \"{value0}\". Try searching with a different NIC or phone number.", { value0: String(query.trim()) })
+                  : t('There are currently no patient records matching the selected filter.')}
               </Text>
               {query.length > 0 ? (
                 <TouchableOpacity
@@ -944,7 +938,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   onPress={handleClearQuery}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.emptyClearButtonText}>Clear Search</Text>
+                  <Text style={styles.emptyClearButtonText}>{t("Clear Search")}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>

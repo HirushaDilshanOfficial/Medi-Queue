@@ -1,6 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import { View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -12,10 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
-import { Ionicons } from '@expo/vector-icons';
-import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function ManagePatientsScreen() {
+  const { t } = useLanguage();
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -26,7 +26,6 @@ export default function ManagePatientsScreen() {
   }, []);
 
   const [activeFilter, setActiveFilter] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
@@ -90,21 +89,21 @@ export default function ManagePatientsScreen() {
         fetchPatients();
         setShowManageModal(false);
       } else {
-        Alert.alert('Notice', 'Endpoint might not be ready yet.');
+        Alert.alert(t('Notice'), t('Endpoint might not be ready yet.'));
         setShowManageModal(false);
       }
     } catch (error) {
       console.error('Error toggling status:', error);
-      Alert.alert('Error', 'Could not update status');
+      Alert.alert(t('Error'), t('Could not update status'));
     }
   };
 
   const handleDelete = (patient: any) => {
     Alert.alert(
-      'Delete Patient',
-      `Are you sure you want to remove ${patient.fullName}?`,
+      t('Delete Patient'),
+      t("Are you sure you want to remove {value0}?", { value0: String(patient.fullName) }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         { 
           text: 'Delete', 
           style: 'destructive',
@@ -117,12 +116,12 @@ export default function ManagePatientsScreen() {
                 fetchPatients();
                 setShowManageModal(false);
               } else {
-                Alert.alert('Notice', 'Endpoint might not be ready yet.');
+                Alert.alert(t('Notice'), t('Endpoint might not be ready yet.'));
                 setShowManageModal(false);
               }
             } catch (error) {
               console.error('Error deleting patient:', error);
-              Alert.alert('Error', 'Could not delete patient');
+              Alert.alert(t('Error'), t('Could not delete patient'));
             }
           }
         }
@@ -130,14 +129,9 @@ export default function ManagePatientsScreen() {
     );
   };
 
-  const filteredPatients = patients.filter(p => {
-    const matchesFilter = activeFilter === 'All' || p.gender === activeFilter;
-    const matchesSearch = searchQuery === '' || 
-      (p.fullName && p.fullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (p.nic && p.nic.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (p.patientNo && p.patientNo.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesFilter && matchesSearch;
-  });
+  const filteredPatients = activeFilter === 'All' 
+    ? patients 
+    : patients.filter(p => p.gender === activeFilter);
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -146,34 +140,26 @@ export default function ManagePatientsScreen() {
         
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/(moh)/dashboard');
-            }
-          }} style={styles.backButton}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Patient Management</Text>
+          <Text style={styles.headerTitle}>{t("Patient Management")}</Text>
           <View style={{ width: 40 }} />
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           
           <View style={styles.topSection}>
-            <Text style={styles.sectionTitle}>Registered Patients</Text>
-            <Text style={styles.sectionSubtitle}>View and manage all registered patients across the system.</Text>
+            <Text style={styles.sectionTitle}>{t("Registered Patients")}</Text>
+            <Text style={styles.sectionSubtitle}>{t("View and manage all registered patients across the system.")}</Text>
           </View>
 
           <View style={styles.searchContainer}>
-            <Ionicons name="search" size={18} color={Colors.textLight} style={styles.searchIcon} />
+            <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by name, NIC or Patient ID..."
+              placeholder={t("Search by name, NIC or Patient ID...")}
               placeholderTextColor={Colors.textLight}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
             />
           </View>
 
@@ -184,7 +170,7 @@ export default function ManagePatientsScreen() {
           >
             {filters.map((type, index) => {
               const count = type === 'All' ? patients.length : patients.filter(p => p.gender === type).length;
-              const label = type === 'All' ? `All Patients (${count})` : `${type} (${count})`;
+              const label = type === 'All' ? t('All Patients ({count})', { count }) : `${t(type)} (${count})`;
               const isActive = activeFilter === type;
 
               return (
@@ -194,7 +180,7 @@ export default function ManagePatientsScreen() {
                   onPress={() => setActiveFilter(type)}
                 >
                   <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
-                    {label}
+                    {t(label ?? '')}
                   </Text>
                 </TouchableOpacity>
               );
@@ -203,13 +189,13 @@ export default function ManagePatientsScreen() {
 
           <View style={styles.listContainer}>
             <Text style={styles.listHeader}>
-              Patient Directory ({filteredPatients.length})
+              {t("Patient Directory (")}{filteredPatients.length})
             </Text>
             
             {loading ? (
-              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>Loading patients...</Text>
+              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("Loading patients...")}</Text>
             ) : filteredPatients.length === 0 ? (
-              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>No patients found.</Text>
+              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("No patients found.")}</Text>
             ) : (
               filteredPatients.map((patient) => (
                 <TouchableOpacity 
@@ -222,11 +208,11 @@ export default function ManagePatientsScreen() {
                 >
                   <View style={styles.cardHeader}>
                     <View style={styles.patientIconContainer}>
-                      <Ionicons name={patient.gender === 'Female' ? 'woman' : 'man'} size={24} color={Colors.primary} />
+                      <Text style={styles.patientIcon}>{patient.gender === 'Female' ? '👩' : '👨'}</Text>
                     </View>
                     <View style={styles.patientInfo}>
                       <Text style={styles.patientName} numberOfLines={1}>{patient.fullName}</Text>
-                      <Text style={styles.patientDetails}>{patient.gender} • {patient.bloodGroup || 'Blood Group N/A'}</Text>
+                      <Text style={styles.patientDetails}>{t(patient.gender ?? '')} • {patient.bloodGroup || t('Blood Group N/A')}</Text>
                     </View>
                     <View style={[
                       styles.statusBadge, 
@@ -235,7 +221,7 @@ export default function ManagePatientsScreen() {
                       <Text style={[
                         styles.statusText,
                         patient.status === 'Active' ? styles.statusTextActive : styles.statusTextInactive
-                      ]}>{patient.status || 'Active'}</Text>
+                      ]}>{t(patient.status ?? '') || t('Active')}</Text>
                     </View>
                     <TouchableOpacity 
                       style={styles.moreOptionsBtn}
@@ -250,12 +236,12 @@ export default function ManagePatientsScreen() {
                   
                   <View style={styles.cardFooter}>
                     <View style={styles.codeContainer}>
-                      <Text style={styles.codeLabel}>Patient ID:</Text>
-                      <Text style={styles.codeValue}>{patient.patientNo || 'N/A'}</Text>
+                      <Text style={styles.codeLabel}>{t("Patient ID:")}</Text>
+                      <Text style={styles.codeValue}>{patient.patientNo || t('N/A')}</Text>
                     </View>
                     <View style={styles.contactBadge}>
                       <Text style={styles.contactBadgeText}>
-                        {patient.mobile || 'No Contact'}
+                        {patient.mobile || t('No Contact')}
                       </Text>
                     </View>
                   </View>
@@ -291,26 +277,23 @@ export default function ManagePatientsScreen() {
                   params: { editPatientData: JSON.stringify(selectedPatient) }
                 });
               }}>
-                <Ionicons name="pencil" size={18} color={Colors.textDark} style={{ marginRight: 12 }} />
-                <Text style={styles.actionOptionText}>Edit Details</Text>
+                <Text style={styles.actionOptionText}>{t("✏️ Edit Details")}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOption} onPress={() => handleToggleStatus(selectedPatient)}>
-                <Ionicons name={selectedPatient?.status === 'Active' ? 'pause-circle' : 'play-circle'} size={18} color={Colors.textDark} style={{ marginRight: 12 }} />
                 <Text style={styles.actionOptionText}>
-                  {selectedPatient?.status === 'Active' ? 'Deactivate' : 'Activate'}
+                  {selectedPatient?.status === 'Active' ? t('⏸ Deactivate') : t('▶️ Activate')}
                 </Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOptionDelete} onPress={() => handleDelete(selectedPatient)}>
-                <Ionicons name="trash" size={18} color={Colors.error} style={{ marginRight: 12 }} />
-                <Text style={styles.actionOptionTextDelete}>Delete Patient</Text>
+                <Text style={styles.actionOptionTextDelete}>{t("🗑 Delete Patient")}</Text>
               </TouchableOpacity>
               
               <View style={styles.actionSheetDivider} />
               
               <TouchableOpacity style={styles.actionOptionCancel} onPress={() => setShowManageModal(false)}>
-                <Text style={styles.actionOptionTextCancel}>Cancel</Text>
+                <Text style={styles.actionOptionTextCancel}>{t("Cancel")}</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -331,29 +314,28 @@ export default function ManagePatientsScreen() {
             <View style={[styles.actionSheetContent, { width: '85%' }]}>
               <View style={styles.actionSheetHeader}>
                 <Text style={styles.actionSheetTitle}>{selectedPatient?.fullName}</Text>
-                <Text style={styles.actionSheetSubtitle}>Patient ID: {selectedPatient?.patientNo}</Text>
+                <Text style={styles.actionSheetSubtitle}>{t("Patient ID:")}{' '}{selectedPatient?.patientNo}</Text>
               </View>
 
               <ScrollView style={{ padding: 20, maxHeight: 400 }}>
-                <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>Basic Information</Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>NIC: <Text style={{ color: Colors.textDark }}>{selectedPatient?.nic}</Text></Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Mobile: <Text style={{ color: Colors.textDark }}>{selectedPatient?.mobile}</Text></Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Gender: <Text style={{ color: Colors.textDark }}>{selectedPatient?.gender}</Text></Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>Blood Group: <Text style={{ color: Colors.textDark }}>{selectedPatient?.bloodGroup || 'N/A'}</Text></Text>
+                <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>{t("Basic Information")}</Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("NIC:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedPatient?.nic}</Text></Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Mobile:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedPatient?.mobile}</Text></Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Gender:")}{' '}<Text style={{ color: Colors.textDark }}>{t(selectedPatient?.gender ?? '')}</Text></Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>{t("Blood Group:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedPatient?.bloodGroup || t('N/A')}</Text></Text>
                 
-                <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>System Information</Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Status: <Text style={{ color: Colors.textDark }}>{selectedPatient?.status}</Text></Text>
+                <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>{t("System Information")}</Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Status:")}{' '}<Text style={{ color: Colors.textDark }}>{t(selectedPatient?.status ?? '')}</Text></Text>
               </ScrollView>
 
               <View style={styles.actionSheetDivider} />
               <TouchableOpacity style={styles.actionOptionCancel} onPress={() => setShowDetailsModal(false)}>
-                <Text style={styles.actionOptionTextCancel}>Close</Text>
+                <Text style={styles.actionOptionTextCancel}>{t("Close")}</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </Modal>
 
-        <MOHBottomNav activeTab="patients" />
       </SafeAreaView>
     </View>
   );
@@ -385,7 +367,7 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   topSection: {
     paddingHorizontal: 20,

@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { useLanguage } from '../i18n/LanguageContext';
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Colors } from '../constants/Colors';
 
 export interface StatusChipProps {
@@ -15,6 +17,7 @@ export const StatusChip: React.FC<StatusChipProps> = ({
   size = 'medium',
   style,
 }) => {
+  const { t } = useLanguage();
   const normalized = (status || '').toLowerCase().trim();
 
   const getStatusConfig = () => {
@@ -112,7 +115,7 @@ export const StatusChip: React.FC<StatusChipProps> = ({
           },
         ]}
       >
-        {displayText}
+        {t(displayText)}
       </Text>
     </View>
   );

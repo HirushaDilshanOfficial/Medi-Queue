@@ -1,6 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import { View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -12,6 +13,7 @@ import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
 export default function HospitalDashboardScreen() {
+  const { t } = useLanguage();
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -75,7 +77,7 @@ export default function HospitalDashboardScreen() {
               <View style={{flexDirection: 'row', alignItems: 'center'}}>
                 <Text style={styles.headerTitle} numberOfLines={1}>{hospitalName}</Text>
               </View>
-              <Text style={styles.headerSubtitle}>Real-time hospital dashboard</Text>
+              <Text style={styles.headerSubtitle}>{t("Real-time hospital dashboard")}</Text>
             </View>
           </View>
           <View style={styles.userIconContainer}>
@@ -91,75 +93,75 @@ export default function HospitalDashboardScreen() {
           <View style={styles.syncTopRow}>
             <View style={styles.syncLeft}>
               <View style={styles.syncDot} />
-              <Text style={styles.syncText}>Network Synced</Text>
+              <Text style={styles.syncText}>{t("Network Synced")}</Text>
             </View>
             <View style={styles.syncRight}>
-              <Text style={styles.syncTime}>Today 10:23 • Live Sync</Text>
+              <Text style={styles.syncTime}>{t("Today 10:23 • Live Sync")}</Text>
             </View>
           </View>
           
-          <Text style={styles.syncHospitalCount}>All 26 District General Hospitals Online</Text>
-          <Text style={styles.syncDesc}>Real-time telemetric feed across national outpatient departments</Text>
+          <Text style={styles.syncHospitalCount}>{t("All 26 District General Hospitals Online")}</Text>
+          <Text style={styles.syncDesc}>{t("Real-time telemetric feed across national outpatient departments")}</Text>
         </View>
 
         {/* 4 Grid Cards */}
         {loading ? (
           <View style={{ padding: 40, alignItems: 'center' }}>
             <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={{ marginTop: 10, color: '#666' }}>Loading dashboard data...</Text>
+            <Text style={{ marginTop: 10, color: '#666' }}>{t("Loading dashboard data...")}</Text>
           </View>
         ) : dashboardData && (
           <>
             <View style={styles.gridContainer}>
               <View style={styles.gridCard}>
-                <Text style={styles.cardTitle}>TODAY'S PATIENTS</Text>
+                <Text style={styles.cardTitle}>{t("TODAY'S PATIENTS")}</Text>
                 <Text style={styles.cardValue}>{dashboardData.todayPatients.total.toLocaleString()}</Text>
-                <Text style={styles.cardHighlight}>{dashboardData.todayPatients.growth} vs yesterday</Text>
-                <Text style={styles.cardSubText}>Walk-in {dashboardData.todayPatients.walkIn} • Booked {dashboardData.todayPatients.booked}</Text>
+                <Text style={styles.cardHighlight}>{dashboardData.todayPatients.growth} {t("vs yesterday")}</Text>
+                <Text style={styles.cardSubText}>{t("Walk-in")}{' '}{dashboardData.todayPatients.walkIn} {t("• Booked")}{' '}{dashboardData.todayPatients.booked}</Text>
               </View>
 
               <View style={styles.gridCard}>
-                <Text style={styles.cardTitle}>AVG WAIT TIME</Text>
-                <Text style={styles.cardValue}>{dashboardData.avgWaitTime.minutes}<Text style={styles.cardValueSmall}>mins</Text></Text>
+                <Text style={styles.cardTitle}>{t("AVG WAIT TIME")}</Text>
+                <Text style={styles.cardValue}>{dashboardData.avgWaitTime.minutes}<Text style={styles.cardValueSmall}>{t("mins")}</Text></Text>
                 <View style={dashboardData.avgWaitTime.status === 'Optimal' ? styles.badgeOptimal : styles.badgeNormal}>
                   <Text style={styles.badgeOptimalText}>
-                    {dashboardData.avgWaitTime.status === 'Optimal' ? 'Optimal (<30m)' : 'High (>30m)'}
+                    {dashboardData.avgWaitTime.status === 'Optimal' ? t('Optimal (<30m)') : t('High (>30m)')}
                   </Text>
                 </View>
                 <Text style={styles.cardSubText}>
-                  {dashboardData.avgWaitTime.status === 'Optimal' ? 'Target threshold met' : 'Above target threshold'}
+                  {dashboardData.avgWaitTime.status === 'Optimal' ? t('Target threshold met') : t('Above target threshold')}
                 </Text>
               </View>
 
               <View style={styles.gridCard}>
-                <Text style={styles.cardTitle}>STAFF ON DUTY</Text>
+                <Text style={styles.cardTitle}>{t("STAFF ON DUTY")}</Text>
                 <Text style={styles.cardValue}>{dashboardData.staffOnDuty.total}</Text>
-                <Text style={styles.cardHighlight}>{dashboardData.staffOnDuty.activePercent}% roster active</Text>
-                <Text style={styles.cardSubText}>Doctors: {dashboardData.staffOnDuty.doctors} • Nurses: {dashboardData.staffOnDuty.nurses}</Text>
+                <Text style={styles.cardHighlight}>{dashboardData.staffOnDuty.activePercent}{t("% roster active")}</Text>
+                <Text style={styles.cardSubText}>{t("Doctors:")}{' '}{dashboardData.staffOnDuty.doctors} {t("• Nurses:")}{' '}{dashboardData.staffOnDuty.nurses}</Text>
               </View>
 
               <View style={styles.gridCard}>
-                <Text style={styles.cardTitle}>ACTIVE QUEUES</Text>
+                <Text style={styles.cardTitle}>{t("ACTIVE QUEUES")}</Text>
                 <Text style={styles.cardValue}>{dashboardData.activeQueues.total}</Text>
                 <View style={styles.badgeNormal}>
-                  <Text style={styles.badgeNormalText}>{dashboardData.activeQueues.status}</Text>
+                  <Text style={styles.badgeNormalText}>{t(dashboardData.activeQueues.status ?? '')}</Text>
                 </View>
-                <Text style={styles.cardSubText}>{dashboardData.activeQueues.total} departments active</Text>
+                <Text style={styles.cardSubText}>{dashboardData.activeQueues.total} {t("departments active")}</Text>
               </View>
             </View>
 
             {/* Progress Bar Section */}
             <View style={styles.progressSection}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressTitle}>Consultation Progress</Text>
+                <Text style={styles.progressTitle}>{t("Consultation Progress")}</Text>
                 <Text style={styles.progressValue}>{dashboardData.consultationProgress.percentage}%</Text>
               </View>
               <View style={styles.progressBarBg}>
                 <View style={[styles.progressBarFill, { width: `${dashboardData.consultationProgress.percentage}%` }]} />
               </View>
               <View style={styles.progressFooter}>
-                <Text style={styles.progressFooterText}>{dashboardData.consultationProgress.completed} completed on schedule</Text>
-                <Text style={styles.progressFooterHighlight}>{dashboardData.consultationProgress.inSession} in session</Text>
+                <Text style={styles.progressFooterText}>{dashboardData.consultationProgress.completed} {t("completed on schedule")}</Text>
+                <Text style={styles.progressFooterHighlight}>{dashboardData.consultationProgress.inSession} {t("in session")}</Text>
               </View>
             </View>
           </>
@@ -169,8 +171,8 @@ export default function HospitalDashboardScreen() {
         <View style={styles.chartSection}>
           <View style={styles.chartHeader}>
             <View>
-              <Text style={styles.chartTitle}>Patient Volume</Text>
-              <Text style={styles.chartSubtitle}>Trend analysis</Text>
+              <Text style={styles.chartTitle}>{t("Patient Volume")}</Text>
+              <Text style={styles.chartSubtitle}>{t("Trend analysis")}</Text>
             </View>
             <View style={styles.chartTabs}>
               {['Weekly', 'Monthly', '6 Months'].map(tab => (
@@ -180,7 +182,7 @@ export default function HospitalDashboardScreen() {
                   style={[styles.chartTab, chartType === tab && styles.chartTabActive]}
                 >
                   <Text style={[styles.chartTabText, chartType === tab && styles.chartTabTextActive]}>
-                    {tab}
+                    {t(tab ?? '')}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -201,7 +203,7 @@ export default function HospitalDashboardScreen() {
                       { height: `${heightPercent}%` },
                       isMax ? styles.barHighlight : null
                     ]} />
-                    <Text style={styles.barLabel}>{data.label}</Text>
+                    <Text style={styles.barLabel}>{t(data.label ?? '')}</Text>
                   </View>
                 );
               })}
@@ -210,10 +212,10 @@ export default function HospitalDashboardScreen() {
           
           <View style={styles.chartFooter}>
             <View>
-              <Text style={styles.chartFooterTitle}>Peak Patient Flow</Text>
-              <Text style={styles.chartFooterSubtitle}>Max throughput recorded</Text>
+              <Text style={styles.chartFooterTitle}>{t("Peak Patient Flow")}</Text>
+              <Text style={styles.chartFooterSubtitle}>{t("Max throughput recorded")}</Text>
             </View>
-            <Text style={styles.chartFooterValue}>Highly Active</Text>
+            <Text style={styles.chartFooterValue}>{t("Highly Active")}</Text>
           </View>
         </View>
 

@@ -15,12 +15,12 @@ export default function MOHBottomNav({ activeTab }: Props) {
         <Ionicons name={activeTab === 'home' ? 'home' : 'home-outline'} size={24} color={activeTab === 'home' ? Colors.primaryDark : Colors.textLight} />
         <Text style={[styles.navLabel, activeTab === 'home' && styles.navLabelActive]}>Home</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/manage-hospitals')}>
         <Ionicons name={activeTab === 'hospitals' ? 'business' : 'business-outline'} size={24} color={activeTab === 'hospitals' ? Colors.primaryDark : Colors.textLight} />
         <Text style={[styles.navLabel, activeTab === 'hospitals' && styles.navLabelActive]}>Hospitals</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/manage-staff')}>
         <Ionicons name={activeTab === 'staff' ? 'id-card' : 'id-card-outline'} size={24} color={activeTab === 'staff' ? Colors.primaryDark : Colors.textLight} />
         <Text style={[styles.navLabel, activeTab === 'staff' && styles.navLabelActive]}>Staff</Text>
@@ -30,7 +30,7 @@ export default function MOHBottomNav({ activeTab }: Props) {
         <Ionicons name={activeTab === 'patients' ? 'people' : 'people-outline'} size={24} color={activeTab === 'patients' ? Colors.primaryDark : Colors.textLight} />
         <Text style={[styles.navLabel, activeTab === 'patients' && styles.navLabelActive]}>Patients</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/profile')}>
         <Ionicons name={activeTab === 'profile' ? 'person' : 'person-outline'} size={24} color={activeTab === 'profile' ? Colors.primaryDark : Colors.textLight} />
         <Text style={[styles.navLabel, activeTab === 'profile' && styles.navLabelActive]}>Profile</Text>

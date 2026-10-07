@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage } from './DesignImage';
@@ -28,12 +30,13 @@ export function QueueCard({
   onPress,
   hasPass = true,
 }: Props) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={
-        hasPass ? 'View your active queue pass' : 'Check in to get a queue number'
+        hasPass ? t('View your active queue pass') : t('Check in to get a queue number')
       }
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
@@ -46,12 +49,12 @@ export function QueueCard({
         <View style={styles.headerRow}>
           <DesignImage name="ticket" size={20} color={PatientTheme.accent} />
           <View style={styles.headerText}>
-            <Text style={styles.label}>{hasPass ? 'ACTIVE QUEUE' : 'LIVE QUEUE'}</Text>
+            <Text style={styles.label}>{hasPass ? t('ACTIVE QUEUE') : t('LIVE QUEUE')}</Text>
             <Text style={styles.clinic} numberOfLines={1}>
-              {hasPass ? clinicName : 'No active pass today'}
+              {hasPass ? clinicName : t('No active pass today')}
             </Text>
             <Text style={styles.clinicSubline} numberOfLines={1}>
-              {hasPass ? clinicSubline : 'Check in on the day of your appointment'}
+              {hasPass ? clinicSubline : t('Check in on the day of your appointment')}
             </Text>
           </View>
           {hasPass ? <View style={styles.liveDot} /> : null}
@@ -63,23 +66,23 @@ export function QueueCard({
           <>
             <View style={styles.numberRow}>
               <View>
-                <Text style={styles.numberLabel}>Queue</Text>
+                <Text style={styles.numberLabel}>{t("Queue")}</Text>
                 <Text style={styles.number}>{tokenNumber}</Text>
               </View>
               <View style={styles.roomBlock}>
                 <DesignImage name="badge" size={14} color={PatientTheme.accentSoft} />
-                <Text style={styles.room}>{room ?? 'Room assigned at the desk'}</Text>
+                <Text style={styles.room}>{room ?? t('Room assigned at the desk')}</Text>
               </View>
             </View>
 
             <View style={styles.etaRow}>
               <DesignImage name="clock" size={13} color={PatientTheme.accentSoft} />
-              <Text style={styles.eta}>{eta ?? 'We will update your turn shortly'}</Text>
+              <Text style={styles.eta}>{eta ?? t('We will update your turn shortly')}</Text>
             </View>
           </>
         ) : (
           <View style={styles.checkInRow}>
-            <Text style={styles.checkInLabel}>Open the queue to check in</Text>
+            <Text style={styles.checkInLabel}>{t("Open the queue to check in")}</Text>
             <DesignImage name="arrow" size={16} color={PatientTheme.accent} style={styles.checkInArrow} />
           </View>
         )}

@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -26,6 +27,7 @@ import {
 import { callSpecificTokenApi } from '../../services/doctorService';
 
 export default function PatientRecordsScreen() {
+  const { t } = useLanguage();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -71,7 +73,7 @@ export default function PatientRecordsScreen() {
   // Select patient to make current patient
   const handleSelectPatient = (patient: PatientRecord) => {
     setCurrentPatient(patient);
-    showToast(`Switched active record to ${patient.name}`);
+    showToast(t("Switched active record to {value0}", { value0: String(patient.name) }));
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
@@ -220,16 +222,16 @@ export default function PatientRecordsScreen() {
               </View>
 
               <View style={styles.doctorTextWrap}>
-                <Text style={[styles.doctorName, { color: theme.textMain }]}>Doctor</Text>
-                <Text style={[styles.doctorSubtitle, { color: theme.accent }]}>Database profile</Text>
+                <Text style={[styles.doctorName, { color: theme.textMain }]}>{t("Doctor")}</Text>
+                <Text style={[styles.doctorSubtitle, { color: theme.accent }]}>{t("Database profile")}</Text>
               </View>
             </View>
 
             <TouchableOpacity
               style={[styles.bellBtn, { backgroundColor: theme.cardBg, borderColor: theme.cardBorder }]}
-              onPress={() => showToast('No pending clinical alerts.')}
+              onPress={() => showToast(t('No pending clinical alerts.'))}
               activeOpacity={0.7}
-              accessibilityLabel="Notifications"
+              accessibilityLabel={t("Notifications")}
             >
               <Ionicons name="notifications-outline" size={20} color={theme.textMain} />
               <View style={styles.redBadgeDot} />
@@ -248,7 +250,7 @@ export default function PatientRecordsScreen() {
             <Ionicons name="search-outline" size={19} color={theme.textMuted} style={styles.searchIcon} />
             <TextInput
               style={[styles.searchInput, { color: theme.textMain }]}
-              placeholder="Search patient name, token or NIC..."
+              placeholder={t("Search patient name, token or NIC...")}
               placeholderTextColor={theme.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -267,10 +269,10 @@ export default function PatientRecordsScreen() {
           {/* 3. CURRENT PATIENT SECTION (TOP, ALWAYS VISIBLE)          */}
           {/* ========================================================= */}
           <View style={styles.sectionHeaderRow}>
-            <Text style={[styles.sectionMainHeading, { color: theme.textMain }]}>CURRENT PATIENT</Text>
+            <Text style={[styles.sectionMainHeading, { color: theme.textMain }]}>{t("CURRENT PATIENT")}</Text>
             <View style={[styles.activeStatusPill, { backgroundColor: theme.tint }]}>
               <View style={[styles.smallPulseDot, { backgroundColor: theme.accent }]} />
-              <Text style={[styles.activeStatusPillText, { color: theme.primary }]}>{currentPatient.status}</Text>
+              <Text style={[styles.activeStatusPillText, { color: theme.primary }]}>{t(currentPatient.status ?? '')}</Text>
             </View>
           </View>
 
@@ -293,19 +295,19 @@ export default function PatientRecordsScreen() {
                   {currentPatient.verified && (
                     <View style={styles.verifiedBadge}>
                       <Ionicons name="checkmark-circle" size={14} color="#059669" />
-                      <Text style={styles.verifiedText}>Verified</Text>
+                      <Text style={styles.verifiedText}>{t("Verified")}</Text>
                     </View>
                   )}
                 </View>
 
                 <Text style={[styles.patientMetaText, { color: theme.textMuted }]}>
-                  {currentPatient.age} yrs • {currentPatient.gender} • Blood: {currentPatient.bloodGroup}
+                  {currentPatient.age} {t("yrs •")}{' '}{t(currentPatient.gender ?? '')} {t("• Blood:")}{' '}{currentPatient.bloodGroup}
                 </Text>
               </View>
 
               {/* Prominent TOKEN box on the right */}
               <View style={styles.tokenBox}>
-                <Text style={styles.tokenBoxLabel}>TOKEN</Text>
+                <Text style={styles.tokenBoxLabel}>{t("TOKEN")}</Text>
                 <Text style={styles.tokenBoxValue}>{currentPatient.tokenFormatted}</Text>
               </View>
             </View>
@@ -317,14 +319,14 @@ export default function PatientRecordsScreen() {
               <View style={styles.metaRowItem}>
                 <MaterialCommunityIcons name="card-account-details-outline" size={15} color={theme.textMuted} />
                 <Text style={[styles.metaRowText, { color: theme.textMuted }]}>
-                  NIC: {String(currentPatient.nic || '')}
+                  {t("NIC:")}{' '}{String(currentPatient.nic || '')}
                 </Text>
               </View>
 
               <View style={styles.metaRowItem}>
                 <Ionicons name="time-outline" size={15} color={theme.textMuted} />
                 <Text style={[styles.metaRowText, { color: theme.textMuted }]}>
-                  Registered: {String(currentPatient.registeredTime || '')}
+                  {t("Registered:")}{' '}{String(currentPatient.registeredTime || '')}
                 </Text>
               </View>
             </View>
@@ -343,19 +345,19 @@ export default function PatientRecordsScreen() {
             <View style={[styles.allergyCardCalm, { borderColor: isDark ? '#1e382b' : '#bbf7d0' }]}>
               <View style={styles.allergyHeaderRow}>
                 <Ionicons name="checkmark-circle-outline" size={20} color="#15803d" />
-                <Text style={styles.allergyTitleCalm}>No known allergies</Text>
+                <Text style={styles.allergyTitleCalm}>{t("No known allergies")}</Text>
               </View>
               <Text style={styles.allergyDescCalm}>
-                {currentPatient.allergy?.description || 'No documented drug or food allergies on clinical record.'}
+                {currentPatient.allergy?.description || t('No documented drug or food allergies on clinical record.')}
               </Text>
             </View>
           )}
 
           {/* 3.3 Current Vitals Section (2x2 Grid) */}
           <View style={styles.subHeadingRow}>
-            <Text style={[styles.subSectionTitle, { color: theme.textMain }]}>Current vitals</Text>
+            <Text style={[styles.subSectionTitle, { color: theme.textMain }]}>{t("Current vitals")}</Text>
             <Text style={[styles.subSectionSubtitle, { color: theme.textMuted }]}>
-              {currentPatient.vitals?.triageTime || 'Triage: Recent'}
+              {currentPatient.vitals?.triageTime || t('Triage: Recent')}
             </Text>
           </View>
 
@@ -366,7 +368,7 @@ export default function PatientRecordsScreen() {
                 <View style={[styles.vitalIconCircle, { backgroundColor: '#fee2e2' }]}>
                   <MaterialCommunityIcons name="heart-pulse" size={17} color="#dc2626" />
                 </View>
-                <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Blood Pressure</Text>
+                <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>{t("Blood Pressure")}</Text>
               </View>
               <View style={styles.vitalValueRow}>
                 <Text style={[styles.vitalValue, { color: theme.textMain }]}>
@@ -384,7 +386,7 @@ export default function PatientRecordsScreen() {
                 <View style={[styles.vitalIconCircle, { backgroundColor: '#fef3c7' }]}>
                   <Ionicons name="fitness-outline" size={16} color="#d97706" />
                 </View>
-                <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Heart Rate</Text>
+                <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>{t("Heart Rate")}</Text>
               </View>
               <View style={styles.vitalValueRow}>
                 <Text style={[styles.vitalValue, { color: theme.textMain }]}>
@@ -402,7 +404,7 @@ export default function PatientRecordsScreen() {
                 <View style={[styles.vitalIconCircle, { backgroundColor: '#e0f2fe' }]}>
                   <MaterialCommunityIcons name="thermometer" size={17} color="#0284c7" />
                 </View>
-                <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Body Temp</Text>
+                <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>{t("Body Temp")}</Text>
               </View>
               <View style={styles.vitalValueRow}>
                 <Text style={[styles.vitalValue, { color: theme.textMain }]}>
@@ -420,14 +422,14 @@ export default function PatientRecordsScreen() {
                 <View style={[styles.vitalIconCircle, { backgroundColor: '#dcfce7' }]}>
                   <MaterialCommunityIcons name="lungs" size={17} color="#16a34a" />
                 </View>
-                <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>Oxygen Sat (SpO2)</Text>
+                <Text style={[styles.vitalLabel, { color: theme.textMuted }]}>{t("Oxygen Sat (SpO2)")}</Text>
               </View>
               <View style={styles.vitalValueRow}>
                 <Text style={[styles.vitalValue, { color: theme.textMain }]}>
                   {currentPatient.vitals?.spO2 || '99%'}
                 </Text>
                 <View style={styles.normalPillBadge}>
-                  <Text style={styles.normalPillText}>{currentPatient.vitals?.spO2Status || 'Normal'}</Text>
+                  <Text style={styles.normalPillText}>{currentPatient.vitals?.spO2Status || t('Normal')}</Text>
                 </View>
               </View>
             </View>
@@ -435,11 +437,11 @@ export default function PatientRecordsScreen() {
 
           {/* 3.4 Diagnostic Imaging Section */}
           <View style={styles.subHeadingRow}>
-            <Text style={[styles.subSectionTitle, { color: theme.textMain }]}>Diagnostic imaging</Text>
+            <Text style={[styles.subSectionTitle, { color: theme.textMain }]}>{t("Diagnostic imaging")}</Text>
             <Text style={[styles.subSectionSubtitle, { color: theme.textMuted }]}>
               {currentPatient.imaging?.hasImaging
-                ? currentPatient.imaging.subtitle || 'Recent'
-                : 'No imaging on file'}
+                ? currentPatient.imaging.subtitle || t('Recent')
+                : t('No imaging on file')}
             </Text>
           </View>
 
@@ -459,10 +461,10 @@ export default function PatientRecordsScreen() {
 
                 <View style={styles.imagingInfoCol}>
                   <Text style={[styles.imagingTitle, { color: theme.textMain }]}>
-                    {currentPatient.imaging.title || 'Diagnostic Imaging'}
+                    {currentPatient.imaging.title || t('Diagnostic Imaging')}
                   </Text>
                   <Text style={[styles.imagingDesc, { color: theme.textMuted }]}>
-                    {currentPatient.imaging.description || 'Radiology Suite'}
+                    {currentPatient.imaging.description || t('Radiology Suite')}
                   </Text>
                 </View>
 
@@ -471,7 +473,7 @@ export default function PatientRecordsScreen() {
                   onPress={() => setIsReportModalOpen(true)}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.viewReportBtnText}>View report</Text>
+                  <Text style={styles.viewReportBtnText}>{t("View report")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -479,18 +481,16 @@ export default function PatientRecordsScreen() {
             <View style={[styles.emptyImagingCard, { backgroundColor: theme.cardBg, borderColor: theme.cardBorder }]}>
               <MaterialCommunityIcons name="image-off-outline" size={24} color={theme.textMuted} style={{ marginBottom: 6 }} />
               <Text style={[styles.emptyImagingText, { color: theme.textMuted }]}>
-                No imaging records on file for this patient.
-              </Text>
+                {t("No imaging records on file for this patient.")}</Text>
             </View>
           )}
 
           {/* 3.5 Recent Visits & History Section */}
           <View style={styles.subHeadingRow}>
-            <Text style={[styles.subSectionTitle, { color: theme.textMain }]}>Recent visits & history</Text>
+            <Text style={[styles.subSectionTitle, { color: theme.textMain }]}>{t("Recent visits & history")}</Text>
             <TouchableOpacity onPress={() => setIsAllHistoryModalOpen(true)}>
               <Text style={[styles.subSectionSubtitleLink, { color: theme.accent }]}>
-                All {currentPatient.recentVisits?.length || 0} Records
-              </Text>
+                {t("All")}{' '}{currentPatient.recentVisits?.length || 0} {t("Records")}</Text>
             </TouchableOpacity>
           </View>
 
@@ -545,7 +545,7 @@ export default function PatientRecordsScreen() {
           >
             <MaterialCommunityIcons name="stethoscope" size={22} color="#ffffff" style={{ marginRight: 10 }} />
             <Text style={styles.startConsultationBtnText}>
-              Start consultation with {currentPatient.shortName || currentPatient.name.split(' ')[0]}
+              {t("Start consultation with")}{' '}{currentPatient.shortName || currentPatient.name.split(' ')[0]}
             </Text>
           </TouchableOpacity>
 
@@ -554,10 +554,9 @@ export default function PatientRecordsScreen() {
           {/* ========================================================= */}
           <View style={[styles.allPatientsHeaderRow, { borderTopColor: theme.cardBorder }]}>
             <View>
-              <Text style={[styles.sectionMainHeading, { color: theme.textMain }]}>All patients</Text>
+              <Text style={[styles.sectionMainHeading, { color: theme.textMain }]}>{t("All patients")}</Text>
               <Text style={[styles.patientCountSub, { color: theme.textMuted }]}>
-                {filteredPatients.length} of {ALL_DUMMY_PATIENTS.length} available
-              </Text>
+                {filteredPatients.length} {t("of")}{' '}{ALL_DUMMY_PATIENTS.length} {t("available")}</Text>
             </View>
           </View>
 
@@ -648,7 +647,7 @@ export default function PatientRecordsScreen() {
                     </View>
 
                     <Text style={[styles.listPatientMeta, { color: theme.textMuted }]}>
-                      {patient.age} yrs • {patient.gender}
+                      {patient.age} {t("yrs •")}{' '}{t(patient.gender ?? '')}
                     </Text>
                   </View>
 
@@ -659,7 +658,7 @@ export default function PatientRecordsScreen() {
                     </Text>
                     <View style={[styles.listStatusPill, { backgroundColor: statusBg }]}>
                       <Text style={[styles.listStatusPillText, { color: statusColor }]}>
-                        {patient.status}
+                        {t(patient.status ?? '')}
                       </Text>
                     </View>
                   </View>
@@ -671,10 +670,9 @@ export default function PatientRecordsScreen() {
             {filteredPatients.length === 0 && (
               <View style={[styles.emptySearchCard, { backgroundColor: theme.cardBg, borderColor: theme.cardBorder }]}>
                 <Ionicons name="search-outline" size={36} color={theme.textMuted} style={{ marginBottom: 10 }} />
-                <Text style={[styles.emptySearchTitle, { color: theme.textMain }]}>No patients found</Text>
+                <Text style={[styles.emptySearchTitle, { color: theme.textMain }]}>{t("No patients found")}</Text>
                 <Text style={[styles.emptySearchDesc, { color: theme.textMuted }]}>
-                  No patients match "{searchQuery}". Please check the patient's name, token number (#), or NIC.
-                </Text>
+                  {t("No patients match \"")}{searchQuery}{t("\". Please check the patient's name, token number (#), or NIC.")}</Text>
                 <TouchableOpacity
                   style={[styles.clearSearchBtn, { backgroundColor: theme.primary }]}
                   onPress={() => {
@@ -682,7 +680,7 @@ export default function PatientRecordsScreen() {
                     setStatusFilter('All');
                   }}
                 >
-                  <Text style={styles.clearSearchBtnText}>Reset Search & Filters</Text>
+                  <Text style={styles.clearSearchBtnText}>{t("Reset Search & Filters")}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -698,7 +696,7 @@ export default function PatientRecordsScreen() {
           {/* Home */}
           <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('home')}>
             <Ionicons name="home-outline" size={22} color={activeTab === 'home' ? '#0d6371' : '#64748b'} />
-            <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>Home</Text>
+            <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>{t("Home")}</Text>
           </TouchableOpacity>
 
           {/* Queue */}
@@ -708,7 +706,7 @@ export default function PatientRecordsScreen() {
               size={23}
               color={activeTab === 'queue' ? '#0d6371' : '#64748b'}
             />
-            <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>Queue</Text>
+            <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>{t("Queue")}</Text>
           </TouchableOpacity>
 
           {/* Records (ACTIVE) */}
@@ -718,7 +716,7 @@ export default function PatientRecordsScreen() {
               size={23}
               color={activeTab === 'records' ? '#0d6371' : '#64748b'}
             />
-            <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>Records</Text>
+            <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>{t("Records")}</Text>
           </TouchableOpacity>
 
           {/* Schedule */}
@@ -728,7 +726,7 @@ export default function PatientRecordsScreen() {
               size={22}
               color={activeTab === 'schedule' ? '#0d6371' : '#64748b'}
             />
-            <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>Schedule</Text>
+            <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>{t("Schedule")}</Text>
           </TouchableOpacity>
 
           {/* Prescription */}
@@ -742,8 +740,7 @@ export default function PatientRecordsScreen() {
               numberOfLines={1}
               style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}
             >
-              Prescription
-            </Text>
+              {t("Prescription")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -755,7 +752,7 @@ export default function PatientRecordsScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: theme.cardBg }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.textMain }]}>Diagnostic Imaging Report</Text>
+              <Text style={[styles.modalTitle, { color: theme.textMain }]}>{t("Diagnostic Imaging Report")}</Text>
               <TouchableOpacity onPress={() => setIsReportModalOpen(false)}>
                 <Ionicons name="close" size={24} color={theme.textMuted} />
               </TouchableOpacity>
@@ -766,21 +763,21 @@ export default function PatientRecordsScreen() {
             )}
 
             <Text style={[styles.modalImageTitle, { color: theme.textMain }]}>
-              {currentPatient.imaging?.title || 'Report'}
+              {currentPatient.imaging?.title || t('Report')}
             </Text>
             <Text style={[styles.modalImageSubtitle, { color: theme.textMuted }]}>
               {currentPatient.imaging?.description || ''}
             </Text>
 
             <View style={styles.reportFindingsBox}>
-              <Text style={styles.reportFindingsHeader}>Findings & Clinical Impression:</Text>
+              <Text style={styles.reportFindingsHeader}>{t("Findings & Clinical Impression:")}</Text>
               <Text style={styles.reportFindingsText}>
-                {currentPatient.imaging?.reportSummary || 'Examination completed. No active displacement noted.'}
+                {currentPatient.imaging?.reportSummary || t('Examination completed. No active displacement noted.')}
               </Text>
             </View>
 
             <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setIsReportModalOpen(false)}>
-              <Text style={styles.modalCloseBtnText}>Close Report</Text>
+              <Text style={styles.modalCloseBtnText}>{t("Close Report")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -793,14 +790,14 @@ export default function PatientRecordsScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: theme.cardBg }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.textMain }]}>Medical History Archive</Text>
+              <Text style={[styles.modalTitle, { color: theme.textMain }]}>{t("Medical History Archive")}</Text>
               <TouchableOpacity onPress={() => setIsAllHistoryModalOpen(false)}>
                 <Ionicons name="close" size={24} color={theme.textMuted} />
               </TouchableOpacity>
             </View>
 
             <Text style={[styles.modalSub, { color: theme.textMuted }]}>
-              Clinical episodes for {currentPatient.name} ({currentPatient.tokenFormatted}):
+              {t("Clinical episodes for")}{' '}{currentPatient.name} ({currentPatient.tokenFormatted}):
             </Text>
 
             <ScrollView style={{ maxHeight: 360 }}>
@@ -821,7 +818,7 @@ export default function PatientRecordsScreen() {
             </ScrollView>
 
             <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setIsAllHistoryModalOpen(false)}>
-              <Text style={styles.modalCloseBtnText}>Close Archive</Text>
+              <Text style={styles.modalCloseBtnText}>{t("Close Archive")}</Text>
             </TouchableOpacity>
           </View>
         </View>

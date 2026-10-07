@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
@@ -10,13 +12,14 @@ interface ReceptionistRoleGuardProps {
 }
 
 export const ReceptionistRoleGuard: React.FC<ReceptionistRoleGuardProps> = ({ children }) => {
+  const { t } = useLanguage();
   const { user, isAuthenticated, loading, logout } = useAuth();
 
   if (loading) {
     return (
       <SafeAreaView style={styles.centerContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Verifying authorization...</Text>
+        <Text style={styles.loadingText}>{t("Verifying authorization...")}</Text>
       </SafeAreaView>
     );
   }
@@ -31,13 +34,12 @@ export const ReceptionistRoleGuard: React.FC<ReceptionistRoleGuardProps> = ({ ch
           <View style={styles.iconCircle}>
             <Ionicons name="shield-outline" size={36} color={Colors.danger} />
           </View>
-          <Text style={styles.title}>Access Restricted</Text>
+          <Text style={styles.title}>{t("Access Restricted")}</Text>
           <Text style={styles.message}>
-            This module is reserved for Receptionist staff only.
-          </Text>
+            {t("This module is reserved for Receptionist staff only.")}</Text>
           {user?.role ? (
             <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>Current Role: {user.role}</Text>
+              <Text style={styles.roleBadgeText}>{t("Current Role:")}{' '}{t(user.role ?? '')}</Text>
             </View>
           ) : null}
 
@@ -49,10 +51,10 @@ export const ReceptionistRoleGuard: React.FC<ReceptionistRoleGuardProps> = ({ ch
             }}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Sign in with Receptionist Account"
+            accessibilityLabel={t("Sign in with Receptionist Account")}
           >
             <Ionicons name="log-in-outline" size={18} color={Colors.white} style={{ marginRight: 8 }} />
-            <Text style={styles.actionBtnText}>Sign In as Receptionist</Text>
+            <Text style={styles.actionBtnText}>{t("Sign In as Receptionist")}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ViewStyle } from 'react-native';
+import { View, StyleSheet, Pressable, ViewStyle } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 
 type QuickActionProps = {
@@ -19,6 +21,7 @@ export function QuickAction({
   style,
   width = 82,
 }: QuickActionProps) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
@@ -33,11 +36,11 @@ export function QuickAction({
     >
       <View style={styles.iconWrap}>{icon}</View>
       <Text style={styles.label} numberOfLines={2}>
-        {label}
+        {t(label ?? '')}
       </Text>
       {caption ? (
         <Text style={styles.caption} numberOfLines={2}>
-          {caption}
+          {t(caption ?? '')}
         </Text>
       ) : null}
     </Pressable>

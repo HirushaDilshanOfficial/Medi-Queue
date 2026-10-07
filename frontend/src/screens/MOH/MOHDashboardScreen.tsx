@@ -1,6 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useCallback } from 'react';
 import { View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -11,11 +12,11 @@ import { View,
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import MOHBottomNav from '../../components/MOHBottomNav';
 import { fetchMohDashboard } from '../../services/mohService';
 
 // MOH Dashboard - Expo Router version matching the premium UI design
 export default function MOHDashboardScreen() {
+  const { t } = useLanguage();
   const [refreshing, setRefreshing] = useState(false);
   const [totalQueues, setTotalQueues] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -79,8 +80,8 @@ export default function MOHDashboardScreen() {
                 <View style={styles.onlineDot} />
               </TouchableOpacity>
               <View>
-                <Text style={styles.greetingText}>Good Morning,</Text>
-                <Text style={styles.userNameText}>Ministry of Health</Text>
+                <Text style={styles.greetingText}>{t("Good Morning,")}</Text>
+                <Text style={styles.userNameText}>{t("Ministry of Health")}</Text>
               </View>
             </View>
             <View style={styles.headerIcons}>
@@ -96,7 +97,7 @@ export default function MOHDashboardScreen() {
           {/* Status Text */}
           <View style={styles.statusRow}>
             <View style={styles.statusDot} />
-            <Text style={styles.statusText}>National OPD Central Health Portal • Online</Text>
+            <Text style={styles.statusText}>{t("National OPD Central Health Portal • Online")}</Text>
           </View>
 
           {/* Active Live Queue Card (Adapted for MOH) */}
@@ -106,8 +107,8 @@ export default function MOHDashboardScreen() {
                 <Ionicons name="business" size={20} color={Colors.white} />
               </View>
               <View style={styles.queueTitleContainer}>
-                <Text style={styles.queueTitleLabel}>SYSTEM STATUS</Text>
-                <Text style={styles.queueTitle}>National Health Grid</Text>
+                <Text style={styles.queueTitleLabel}>{t("SYSTEM STATUS")}</Text>
+                <Text style={styles.queueTitle}>{t("National Health Grid")}</Text>
               </View>
               <TouchableOpacity style={styles.queueArrowBtn}>
                 <Text style={styles.queueArrowText}>❯</Text>
@@ -116,17 +117,17 @@ export default function MOHDashboardScreen() {
 
             <View style={styles.queueCardBody}>
               <View>
-                <Text style={styles.queueNumberLabel}>TOTAL QUEUES</Text>
+                <Text style={styles.queueNumberLabel}>{t("TOTAL QUEUES")}</Text>
                 <Text style={styles.queueNumber}>
                   {loading ? <ActivityIndicator size="small" color={Colors.primaryDark} /> : totalQueues.toLocaleString()}
                 </Text>
                 <View style={styles.queueTimeRow}>
                   <Ionicons name="time-outline" size={14} color={Colors.textMedium} style={{ marginRight: 4 }} />
-                  <Text style={styles.queueTimeText}>Updated: Just now</Text>
+                  <Text style={styles.queueTimeText}>{t("Updated: Just now")}</Text>
                 </View>
               </View>
               <View style={styles.servingBadge}>
-                <Text style={styles.servingBadgeText}>All Systems Nominal</Text>
+                <Text style={styles.servingBadgeText}>{t("All Systems Nominal")}</Text>
               </View>
             </View>
             
@@ -144,15 +145,15 @@ export default function MOHDashboardScreen() {
           {/* Main Action Banner (Add Staff / Register) */}
           <View style={styles.actionBanner}>
             <View style={styles.actionBannerTextContainer}>
-              <Text style={styles.actionBannerTag}>STAFF MANAGEMENT</Text>
-              <Text style={styles.actionBannerTitle}>Add Doctors &{'\n'}Hospital Staff</Text>
-              <Text style={styles.actionBannerDesc}>Instant credential generation</Text>
+              <Text style={styles.actionBannerTag}>{t("STAFF MANAGEMENT")}</Text>
+              <Text style={styles.actionBannerTitle}>{t("Add Doctors &")}{'\n'}{t("Hospital Staff")}</Text>
+              <Text style={styles.actionBannerDesc}>{t("Instant credential generation")}</Text>
             </View>
             <TouchableOpacity 
               style={styles.actionBannerButton}
               onPress={() => router.push('/(moh)/add-staff')}
             >
-              <Text style={styles.actionBannerButtonText}>Add Staff  →</Text>
+              <Text style={styles.actionBannerButtonText}>{t("Add Staff →")}</Text>
             </TouchableOpacity>
           </View>
 
@@ -161,7 +162,7 @@ export default function MOHDashboardScreen() {
             <Ionicons name="search" size={20} color={Colors.textLight} style={{ marginRight: 10 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search hospitals, doctors or clinics..."
+              placeholder={t("Search hospitals, doctors or clinics...")}
               placeholderTextColor={Colors.textLight}
             />
           </View>
@@ -171,8 +172,8 @@ export default function MOHDashboardScreen() {
             <View style={styles.noticeIconContainer}>
               <Ionicons name="megaphone" size={16} color={Colors.white} />
             </View>
-            <Text style={styles.noticeText}>Next update: <Text style={styles.noticeTextBold}>System Maintenance</Text></Text>
-            <Text style={styles.noticeTime}>Tonight</Text>
+            <Text style={styles.noticeText}>{t("Next update:")}{' '}<Text style={styles.noticeTextBold}>{t("System Maintenance")}</Text></Text>
+            <Text style={styles.noticeTime}>{t("Tonight")}</Text>
           </View>
 
           {/* Quick Actions Grid */}
@@ -186,16 +187,16 @@ export default function MOHDashboardScreen() {
                 <View style={styles.quickActionIconBg}>
                   {action.icon}
                 </View>
-                <Text style={styles.quickActionLabel}>{action.label}</Text>
+                <Text style={styles.quickActionLabel}>{t(action.label ?? '')}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
           {/* Hospital Clinics Section */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Hospital Clinics</Text>
+            <Text style={styles.sectionTitle}>{t("Hospital Clinics")}</Text>
             <TouchableOpacity>
-              <Text style={styles.sectionLink}>See All</Text>
+              <Text style={styles.sectionLink}>{t("See All")}</Text>
             </TouchableOpacity>
           </View>
 
@@ -205,7 +206,7 @@ export default function MOHDashboardScreen() {
                 <View style={styles.clinicIconContainer}>
                   {clinic.icon}
                 </View>
-                <Text style={styles.clinicName}>{clinic.name}</Text>
+                <Text style={styles.clinicName}>{t(clinic.name)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -214,7 +215,24 @@ export default function MOHDashboardScreen() {
       </ScrollView>
 
       {/* ---- BOTTOM NAVIGATION BAR ---- */}
-      <MOHBottomNav activeTab="home" />
+      <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/dashboard')}>
+          <Ionicons name="home" size={24} color={Colors.primaryDark} />
+          <Text style={[styles.navLabel, styles.navLabelActive]}>{t("Home")}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/manage-hospitals')}>
+          <Ionicons name="business-outline" size={24} color={Colors.textLight} />
+          <Text style={styles.navLabel}>{t("Hospitals")}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/manage-staff')}>
+          <Ionicons name="id-card-outline" size={24} color={Colors.textLight} />
+          <Text style={styles.navLabel}>{t("Staff")}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/profile')}>
+          <Ionicons name="person-outline" size={24} color={Colors.textLight} />
+          <Text style={styles.navLabel}>{t("Profile")}</Text>
+        </TouchableOpacity>
+      </View>
 
         </View>
       </View>

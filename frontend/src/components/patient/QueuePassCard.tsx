@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PatientTheme } from '../../constants/PatientTheme';
 import type { QueuePass } from '../../types/patient';
@@ -16,6 +18,7 @@ type Props = {
 // The physical pass. The token number is the largest element because that is what
 // gets called out across a clinic, and it has to be readable from arm's length.
 export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
+  const { t, language } = useLanguage();
   const live = pass.live;
   const called = pass.status === 'called' || pass.status === 'in_consultation';
   const finished = pass.status === 'completed' || pass.status === 'cancelled' || pass.status === 'no_show';
@@ -51,13 +54,13 @@ export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
           <View style={styles.liveBadge}>
             <View style={[styles.dot, called && styles.dotActive, finished && styles.dotMuted]} />
             <Text style={styles.liveLabel}>
-              {called ? 'CALLED' : finished ? 'CLOSED' : 'LIVE'}
+              {called ? t('CALLED') : finished ? t('CLOSED') : t('LIVE')}
             </Text>
           </View>
         </View>
 
-        <Text style={styles.tokenLabel}>YOUR QUEUE NUMBER</Text>
-        <Text style={styles.token} accessibilityLabel={`Queue number ${pass.tokenLabel}`}>
+        <Text style={styles.tokenLabel}>{t("YOUR QUEUE NUMBER")}</Text>
+        <Text style={styles.token} accessibilityLabel={t("Queue number {value0}", { value0: String(pass.tokenLabel) })}>
           {pass.tokenLabel}
         </Text>
 
@@ -69,7 +72,7 @@ export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
 
         {!finished ? (
           <Text style={styles.wait}>
-            {live ? `Estimated wait ${waitLabel(live.waitMinutes)}` : 'Checking the queue...'}
+            {live ? t("Estimated wait {value0}", { value0: String(waitLabel(live.waitMinutes, language)) }) : t('Checking the queue...')}
           </Text>
         ) : null}
       </LinearGradient>
@@ -78,20 +81,20 @@ export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
         <PassQr value={pass.qrValue} />
 
         <View style={styles.details}>
-          <Detail icon="profile" label="Doctor" value={pass.doctorName ?? 'To be confirmed'} />
-          <Detail icon="badge" label="Room" value={pass.room ?? 'Assigned at the desk'} />
-          <Detail icon="calendar" label="Date" value={`${pass.dateLabel} · ${pass.dateLong}`} />
+          <Detail icon="profile" label={t("Doctor")} value={pass.doctorName ?? 'To be confirmed'} />
+          <Detail icon="badge" label={t("Room")} value={pass.room ?? 'Assigned at the desk'} />
+          <Detail icon="calendar" label={t("Date")} value={`${pass.dateLabel} · ${pass.dateLong}`} />
           {live?.servingNow ? (
             <Detail
               icon="ticket"
-              label="Now serving"
+              label={t("Now serving")}
               value={`${live.servingNow.doctorName ?? 'Doctor'} · A-${String(live.servingNow.tokenNumber).padStart(3, '0')}`}
             />
           ) : null}
         </View>
 
         <View style={styles.codeRow}>
-          <Text style={styles.codeHint}>Pass code</Text>
+          <Text style={styles.codeHint}>{t("Pass code")}</Text>
           <Text style={styles.code} selectable>
             {pass.passCode}
           </Text>
@@ -104,7 +107,7 @@ export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
             accessibilityRole="button"
             style={({ pressed }) => [styles.leave, pressed && styles.pressed]}
           >
-            <Text style={styles.leaveLabel}>Leave the queue</Text>
+            <Text style={styles.leaveLabel}>{t("Leave the queue")}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -121,11 +124,12 @@ function Detail({
   label: string;
   value: string;
 }) {
+  const { t, language } = useLanguage();
   return (
     <View style={styles.detail}>
       <DesignImage name={icon} size={14} color={PatientTheme.brandMid} />
       <View style={styles.detailText}>
-        <Text style={styles.detailLabel}>{label}</Text>
+        <Text style={styles.detailLabel}>{t(label ?? '')}</Text>
         <Text style={styles.detailValue} numberOfLines={1}>
           {value}
         </Text>

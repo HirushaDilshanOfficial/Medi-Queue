@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 
 type PlaceholderProps = {
@@ -10,10 +12,11 @@ type PlaceholderProps = {
 // Temporary shell for the screens delivered in Parts 2-4. The tab bar and
 // navigation are live in Part 1 so the routes can be exercised end to end.
 export function PlaceholderScreen({ title, description }: PlaceholderProps) {
+  const { t } = useLanguage();
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.description}>{description}</Text>
+      <Text style={styles.title}>{t(title ?? '')}</Text>
+      <Text style={styles.description}>{t(description ?? '')}</Text>
     </View>
   );
 }

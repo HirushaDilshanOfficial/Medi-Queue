@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../../i18n/LocalizedText';
+import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   TextInput,
@@ -29,6 +30,7 @@ import { AppIcon } from '../../../components/AppIcon';
 type Tab = 'directory' | 'bookings';
 
 export function DoctorDirectoryScreen() {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ department?: string; hospitalId?: string }>();
@@ -98,12 +100,12 @@ export function DoctorDirectoryScreen() {
   const confirmCancel = useCallback(
     (appointment: Appointment) => {
       Alert.alert(
-        'Cancel this booking?',
-        `${appointment.doctorName} · ${appointment.dateLabel ?? appointment.date} at ${appointment.slotTime}\n\nYou can book another time from the doctor list.`,
+        t('Cancel this booking?'),
+        t("{value0} · {value1} at {value2}\n\nYou can book another time from the doctor list.", { value0: String(appointment.doctorName), value1: String(appointment.dateLabel ?? appointment.date), value2: String(appointment.slotTime) }),
         [
-          { text: 'Keep booking', style: 'cancel' },
+          { text: t('Keep booking'), style: 'cancel' },
           {
-            text: 'Cancel booking',
+            text: t('Cancel booking'),
             style: 'destructive',
             onPress: async () => {
               setWorking(appointment.id);
@@ -111,7 +113,7 @@ export function DoctorDirectoryScreen() {
                 await bookingApi.cancel(appointment.id, 'Cancelled by patient');
                 await bookings.reload();
               } catch (error) {
-                Alert.alert('Could not cancel', error instanceof Error ? error.message : 'Please try again.');
+                Alert.alert(t('Could not cancel'), error instanceof Error ? error.message : t('Please try again.'));
               } finally {
                 setWorking(null);
               }
@@ -120,13 +122,13 @@ export function DoctorDirectoryScreen() {
         ],
       );
     },
-    [bookings],
+    [bookings, t],
   );
 
   const startReschedule = useCallback(
     (appointment: Appointment) => {
       if (!appointment.doctorId) {
-        Alert.alert('Booking unavailable', 'This booking is no longer linked to a doctor.');
+        Alert.alert(t('Booking unavailable'), t('This booking is no longer linked to a doctor.'));
         return;
       }
       router.push({
@@ -134,15 +136,15 @@ export function DoctorDirectoryScreen() {
         params: { id: appointment.doctorId, rescheduleId: appointment.id },
       });
     },
-    [router],
+    [router, t],
   );
 
   const checkIn = useCallback(
     (appointment: Appointment) => {
-      Alert.alert('Check in now?', `Collect your queue number for ${appointment.department}.`, [
-        { text: 'Not yet', style: 'cancel' },
+      Alert.alert(t('Check in now?'), t("Collect your queue number for {value0}.", { value0: String(appointment.department) }), [
+        { text: t('Not yet'), style: 'cancel' },
         {
-          text: 'Check in',
+          text: t('Check in'),
           onPress: async () => {
             setWorking(appointment.id);
             try {
@@ -150,8 +152,8 @@ export function DoctorDirectoryScreen() {
               router.push('/(patient)/queue');
             } catch (error) {
               Alert.alert(
-                'Could not check in',
-                error instanceof Error ? error.message : 'Please try again.',
+                t('Could not check in'),
+                error instanceof Error ? error.message : t('Please try again.'),
               );
             } finally {
               setWorking(null);
@@ -160,7 +162,7 @@ export function DoctorDirectoryScreen() {
         },
       ]);
     },
-    [router],
+    [router, t],
   );
 
   const listHeader = useMemo(
@@ -174,15 +176,15 @@ export function DoctorDirectoryScreen() {
                 <TextInput
                   value={search}
                   onChangeText={setSearch}
-                  placeholder="Search by name or speciality"
+                  placeholder={t("Search by name or speciality")}
                   placeholderTextColor={PatientTheme.textMuted}
                   style={styles.searchInput}
                   autoCorrect={false}
                   returnKeyType="search"
-                  accessibilityLabel="Search doctors"
+                  accessibilityLabel={t("Search doctors")}
                 />
                 {search ? (
-                  <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear search">
+                  <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel={t("Clear search")}>
                     <AppIcon name="close" size={16} color={PatientTheme.textSecondary} />
                   </Pressable>
                 ) : null}
@@ -194,7 +196,7 @@ export function DoctorDirectoryScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.chips}
             >
-              <Chip label="All" active={!department} onPress={() => setDepartment(null)} />
+              <Chip label={t("All")} active={!department} onPress={() => setDepartment(null)} />
               {(showAllClinics ? clinics.data?.clinics ?? [] : (clinics.data?.clinics ?? []).slice(0, 16)).map((clinic: Clinic) => (
                 <Chip
                   key={clinic._id}
@@ -208,7 +210,7 @@ export function DoctorDirectoryScreen() {
               ))}
               {(clinics.data?.clinics?.length ?? 0) > 16 ? (
                 <Chip
-                  label={showAllClinics ? 'Featured clinics' : 'View all clinics'}
+                  label={showAllClinics ? t('Featured clinics') : t('View all clinics')}
                   active={false}
                   onPress={() => setShowAllClinics((value) => !value)}
                 />
@@ -218,7 +220,7 @@ export function DoctorDirectoryScreen() {
         ) : null}
       </View>
     ),
-    [clinics.data, department, search, showAllClinics, tab],
+    [clinics.data, department, search, showAllClinics, tab, t],
   );
 
   const doctorList = (
@@ -239,25 +241,25 @@ export function DoctorDirectoryScreen() {
       }
       ListEmptyComponent={
         doctors.loading ? (
-          <ScreenLoader label="Loading doctors" />
+          <ScreenLoader label={t("Loading doctors")} />
         ) : doctors.error ? (
           <MessageState
             icon="help"
-            title="Could not load doctors"
+            title={t("Could not load doctors")}
             description={doctors.error}
-            actionLabel="Try again"
+            actionLabel={t("Try again")}
             onAction={doctors.reload}
           />
         ) : (
           <MessageState
             icon="stethoscope"
-            title="No doctors found"
+            title={t("No doctors found")}
             description={
               search || department
-                ? 'Try a different name or speciality.'
-                : 'The clinic has not published its doctor list yet.'
+                ? t('Try a different name or speciality.')
+                : t('The clinic has not published its doctor list yet.')
             }
-            actionLabel={search || department ? 'Clear filters' : undefined}
+            actionLabel={search || department ? t('Clear filters') : undefined}
             onAction={search || department ? () => { setSearch(''); setDepartment(null); } : undefined}
           />
         )
@@ -284,21 +286,21 @@ export function DoctorDirectoryScreen() {
       }
       ListEmptyComponent={
         bookings.loading ? (
-          <ScreenLoader label="Loading your bookings" />
+          <ScreenLoader label={t("Loading your bookings")} />
         ) : bookings.error ? (
           <MessageState
             icon="help"
-            title="Could not load your bookings"
+            title={t("Could not load your bookings")}
             description={bookings.error}
-            actionLabel="Try again"
+            actionLabel={t("Try again")}
             onAction={bookings.reload}
           />
         ) : (
           <MessageState
             icon="calendar"
-            title="No upcoming bookings"
-            description="Find a doctor and pick a time that suits you."
-            actionLabel="Find a doctor"
+            title={t("No upcoming bookings")}
+            description={t("Find a doctor and pick a time that suits you.")}
+            actionLabel={t("Find a doctor")}
             onAction={() => setTab('directory')}
           />
         )
@@ -309,24 +311,24 @@ export function DoctorDirectoryScreen() {
   return (
     <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
       <ScreenHeader
-        title={tab === 'directory' ? 'Find a doctor' : 'My bookings'}
+        title={tab === 'directory' ? t('Find a doctor') : t('My bookings')}
         subtitle={
           tab === 'directory'
-            ? 'Book a clinic time with a specialist'
-            : 'Reschedule or cancel an appointment'
+            ? t('Book a clinic time with a specialist')
+            : t('Reschedule or cancel an appointment')
         }
       />
 
       <View style={styles.tabs}>
         <TabButton
-          label="Directory"
+          label={t("Directory")}
           active={tab === 'directory'}
           onPress={() => setTab('directory')}
         />
-        <TabButton label="My bookings" active={tab === 'bookings'} onPress={() => setTab('bookings')} />
+        <TabButton label={t("My bookings")} active={tab === 'bookings'} onPress={() => setTab('bookings')} />
       </View>
 
-      {working ? <Text style={styles.working}>Working on it...</Text> : null}
+      {working ? <Text style={styles.working}>{t("Working on it...")}</Text> : null}
 
       {tab === 'directory' ? doctorList : appointmentList}
     </View>
@@ -334,6 +336,7 @@ export function DoctorDirectoryScreen() {
 }
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
@@ -341,7 +344,7 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
       accessibilityState={{ selected: active }}
       style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}
     >
-      <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
+      <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{t(label ?? '')}</Text>
     </Pressable>
   );
 }
@@ -355,6 +358,7 @@ function TabButton({
   active: boolean;
   onPress: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
@@ -362,7 +366,7 @@ function TabButton({
       accessibilityState={{ selected: active }}
       style={({ pressed }) => [styles.tabButton, active && styles.tabButtonActive, pressed && styles.pressed]}
     >
-      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
+      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{t(label ?? '')}</Text>
     </Pressable>
   );
 }

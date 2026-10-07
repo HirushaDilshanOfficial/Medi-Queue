@@ -1,6 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React, { useEffect, useRef } from 'react';
 import {
-  Text,
+
   StyleSheet,
   TouchableOpacity,
   Animated,
@@ -30,6 +32,7 @@ export const Toast: React.FC<ToastProps> = ({
   onDismiss,
   style,
 }) => {
+  const { t } = useLanguage();
   const translateY = useRef(new Animated.Value(-100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -140,7 +143,7 @@ export const Toast: React.FC<ToastProps> = ({
         style={styles.icon}
       />
       <Text style={styles.message} numberOfLines={2}>
-        {message}
+        {t(message ?? '')}
       </Text>
       <TouchableOpacity
         onPress={() => hideToast(true)}

@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   StyleProp,
@@ -31,6 +32,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   onPress,
   style,
 }) => {
+  const { t } = useLanguage();
   const getVariantStyles = () => {
     switch (variant) {
       case 'primary':
@@ -87,7 +89,7 @@ export const StatCard: React.FC<StatCardProps> = ({
     >
       <View style={styles.headerRow}>
         <Text style={styles.title} numberOfLines={1}>
-          {title}
+          {t(title ?? '')}
         </Text>
         {iconName && (
           <View style={styles.iconWrap}>
@@ -102,7 +104,7 @@ export const StatCard: React.FC<StatCardProps> = ({
 
       {subtitle ? (
         <Text style={styles.subtitle} numberOfLines={1}>
-          {subtitle}
+          {t(subtitle ?? '')}
         </Text>
       ) : null}
     </View>

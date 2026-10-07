@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   StyleProp,
@@ -27,6 +28,7 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   fullscreen = false,
   style,
 }) => {
+  const { t } = useLanguage();
   return (
     <View
       style={[
@@ -39,8 +41,8 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
         <Ionicons name="alert-circle" size={32} color={Colors.danger} />
       </View>
 
-      <Text style={styles.title}>{title}</Text>
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      <Text style={styles.title}>{t(title ?? '')}</Text>
+      {message ? <Text style={styles.message}>{t(message ?? '')}</Text> : null}
 
       {onRetry ? (
         <TouchableOpacity

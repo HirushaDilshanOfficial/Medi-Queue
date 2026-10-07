@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -22,6 +23,7 @@ import { setAuthToken as setApiAuthToken } from '../../services/api';
 
 // Actual Login Form - Email & Password
 export default function LoginScreen() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -29,7 +31,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Email ත් Password ත් fill කරන්න!');
+      Alert.alert(t('Error'), t('Email ත් Password ත් fill කරන්න!'));
       return;
     }
 
@@ -45,7 +47,7 @@ export default function LoginScreen() {
       setApiAuthToken(userData.token);
 
       // Successfully logged in
-      Alert.alert('Success', `Welcome back, ${userData.fullName}!`);
+      Alert.alert(t('Success'), t("Welcome back, {value0}!", { value0: String(userData.fullName) }));
 
       // Navigate based on role
       if (userData.role === 'MOH') {
@@ -57,10 +59,10 @@ export default function LoginScreen() {
       } else if (String(userData.role || '').toLowerCase() === 'doctor') {
         router.replace('/(doctor)/dashboard' as any);
       } else {
-        Alert.alert('Notice', `Logged in as ${userData.role}, but dashboard is not created yet.`);
+        Alert.alert(t('Notice'), t("Logged in as {value0}, but dashboard is not created yet.", { value0: String(userData.role) }));
       }
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message);
+      Alert.alert(t('Login Failed'), error.message);
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +95,7 @@ export default function LoginScreen() {
               }
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>Back</Text></View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>{t("Back")}</Text></View>
           </TouchableOpacity>
 
           {/* Small Logo */}
@@ -101,15 +103,15 @@ export default function LoginScreen() {
             <AppIcon name="medical" size={28} color={Colors.primaryDark} />
           </View>
 
-          <Text style={styles.headerTitle}>Welcome Back</Text>
-          <Text style={styles.headerSubtitle}>Sign in to your account</Text>
+          <Text style={styles.headerTitle}>{t("Welcome Back")}</Text>
+          <Text style={styles.headerSubtitle}>{t("Sign in to your account")}</Text>
         </View>
 
         {/* ---- LOGIN FORM CARD ---- */}
         <View style={styles.formCard}>
 
           {/* Email Field */}
-          <Text style={styles.fieldLabel}>Email Address</Text>
+          <Text style={styles.fieldLabel}>{t("Email Address")}</Text>
           <View style={styles.inputWrapper}>
             <AppIcon name="mail" size={20} color={Colors.textMedium} style={{ marginRight: 10 }} />
             <TextInput
@@ -125,12 +127,12 @@ export default function LoginScreen() {
           </View>
 
           {/* Password Field */}
-          <Text style={styles.fieldLabel}>Password</Text>
+          <Text style={styles.fieldLabel}>{t("Password")}</Text>
           <View style={styles.inputWrapper}>
             <AppIcon name="lock" size={20} color={Colors.textMedium} style={{ marginRight: 10 }} />
             <TextInput
               style={styles.input}
-              placeholder="Enter your password"
+              placeholder={t("Enter your password")}
               placeholderTextColor={Colors.textLight}
               value={password}
               onChangeText={setPassword}
@@ -140,7 +142,7 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={styles.eyeButton}
               accessibilityRole="button"
-              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              accessibilityLabel={showPassword ? t('Hide password') : t('Show password')}
               onPress={() => setShowPassword(!showPassword)}
             >
               <AppIcon name={showPassword ? 'eyeOff' : 'eye'} size={20} color={Colors.textMedium} />
@@ -152,7 +154,7 @@ export default function LoginScreen() {
             style={styles.forgotButton}
             onPress={() => router.push('/(auth)/forgot-password')}
           >
-            <Text style={styles.forgotText}>Forgot Password?</Text>
+            <Text style={styles.forgotText}>{t("Forgot Password?")}</Text>
           </TouchableOpacity>
 
           {/* Login Button */}
@@ -164,17 +166,17 @@ export default function LoginScreen() {
             {isLoading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={Colors.white} size="small" />
-                <Text style={styles.loginButtonText}>  Signing in...</Text>
+                <Text style={styles.loginButtonText}>  {t("Signing in...")}</Text>
               </View>
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.loginButtonText}>Sign In</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.loginButtonText}>{t("Sign In")}</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
             )}
           </TouchableOpacity>
 
           {/* Divider */}
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
+            <Text style={styles.dividerText}>{t("or")}</Text>
             <View style={styles.dividerLine} />
           </View>
 
@@ -184,7 +186,7 @@ export default function LoginScreen() {
             onPress={() => router.push('/(auth)/register')}
           >
             <Text style={styles.registerButtonText}>
-              New patient? <Text style={styles.registerBold}>Create Account</Text>
+              {t("New patient?")}{' '}<Text style={styles.registerBold}>{t("Create Account")}</Text>
             </Text>
           </TouchableOpacity>
 
@@ -195,7 +197,7 @@ export default function LoginScreen() {
         {/* Footer */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 24, marginBottom: 40 }}>
           <AppIcon name="flag" size={14} color={Colors.textLight} />
-          <Text style={[styles.footer, { marginTop: 0, marginBottom: 0 }]}>Ministry of Health · Sri Lanka</Text>
+          <Text style={[styles.footer, { marginTop: 0, marginBottom: 0 }]}>{t("Ministry of Health · Sri Lanka")}</Text>
         </View>
 
       </ScrollView>

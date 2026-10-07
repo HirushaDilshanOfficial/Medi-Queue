@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLanguage } from '../../i18n/LanguageContext';
 import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +20,7 @@ const QueueIcon = tabIcon('ticket');
 const ProfileIcon = tabIcon('profile');
 
 export default function PatientTabsLayout() {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   return (
     <Tabs
@@ -43,28 +45,28 @@ export default function PatientTabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: t('Home'),
           tabBarIcon: HomeIcon,
         }}
       />
       <Tabs.Screen
         name="doctors"
         options={{
-          title: 'Doctors',
+          title: t('Doctors'),
           tabBarIcon: DoctorsIcon,
         }}
       />
       <Tabs.Screen
         name="queue"
         options={{
-          title: 'Queue',
+          title: t('Queue'),
           tabBarIcon: QueueIcon,
         }}
       />
       <Tabs.Screen
         name="profile/index"
         options={{
-          title: 'Profile',
+          title: t('Profile'),
           tabBarIcon: ProfileIcon,
           tabBarStyle: {
             backgroundColor: '#ffffff',
@@ -90,7 +92,7 @@ export default function PatientTabsLayout() {
       <Tabs.Screen
         name="doctor/[id]"
         options={{
-          title: 'Book',
+          title: t('Book'),
           href: null,
           tabBarStyle: { display: 'none' },
         }}
@@ -103,35 +105,35 @@ export default function PatientTabsLayout() {
       <Tabs.Screen
         name="profile/edit"
         options={{
-          title: 'Edit profile',
+          title: t('Edit profile'),
           href: null,
         }}
       />
       <Tabs.Screen
         name="profile/history"
         options={{
-          title: 'Visit history',
+          title: t('Visit history'),
           href: null,
         }}
       />
       <Tabs.Screen
         name="profile/reports"
         options={{
-          title: 'Medical reports',
+          title: t('Medical reports'),
           href: null,
         }}
       />
       <Tabs.Screen
         name="profile/report/new"
         options={{
-          title: 'Lodge a report',
+          title: t('Lodge a report'),
           href: null,
         }}
       />
       <Tabs.Screen
         name="profile/report/[id]"
         options={{
-          title: 'Edit report',
+          title: t('Edit report'),
           href: null,
           tabBarStyle: { display: 'none' },
         }}

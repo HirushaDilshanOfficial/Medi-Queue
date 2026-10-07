@@ -1,23 +1,26 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 
 export default function QueueScreen() {
+  const { t } = useLanguage();
   const router = useRouter();
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Queue</Text>
+        <Text style={styles.title}>{t("Queue")}</Text>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={18} color={Colors.primary} style={styles.backIcon} />
-          <Text style={styles.backButtonText}>Back to Home</Text>
+          <Text style={styles.backButtonText}>{t("Back to Home")}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

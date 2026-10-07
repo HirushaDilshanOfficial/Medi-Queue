@@ -1,6 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
 import { View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -12,10 +13,9 @@ import { View,
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
-import { Ionicons } from '@expo/vector-icons';
-import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function ManageHospitalsScreen() {
+  const { t } = useLanguage();
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -26,7 +26,6 @@ export default function ManageHospitalsScreen() {
   }, []);
 
   const [activeFilter, setActiveFilter] = React.useState('All');
-  const [searchQuery, setSearchQuery] = React.useState('');
   const [hospitals, setHospitals] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [selectedHospital, setSelectedHospital] = React.useState<any>(null);
@@ -64,16 +63,16 @@ export default function ManageHospitalsScreen() {
       }
     } catch (error) {
       console.error('Error toggling status:', error);
-      Alert.alert('Error', 'Could not update status');
+      Alert.alert(t('Error'), t('Could not update status'));
     }
   };
 
   const handleDelete = (hospital: any) => {
     Alert.alert(
-      'Delete Hospital',
-      `Are you sure you want to delete ${hospital.name}?`,
+      t('Delete Hospital'),
+      t("Are you sure you want to delete {value0}?", { value0: String(hospital.name) }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         { 
           text: 'Delete', 
           style: 'destructive',
@@ -88,7 +87,7 @@ export default function ManageHospitalsScreen() {
               }
             } catch (error) {
               console.error('Error deleting hospital:', error);
-              Alert.alert('Error', 'Could not delete hospital');
+              Alert.alert(t('Error'), t('Could not delete hospital'));
             }
           }
         }
@@ -96,56 +95,39 @@ export default function ManageHospitalsScreen() {
     );
   };
 
-  const filteredHospitals = hospitals.filter(h => {
-    const matchesFilter = activeFilter === 'All' || h.type === activeFilter;
-    const matchesSearch = searchQuery === '' || 
-      (h.name && h.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (h.code && h.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (h.location && h.location.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesFilter && matchesSearch;
-  });
-
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/(moh)/dashboard');
-            }
-          }} style={styles.backButton}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Manage Hospitals</Text>
+          <Text style={styles.headerTitle}>{t("Manage Hospitals")}</Text>
           <View style={{ width: 40 }} />
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           
           <View style={styles.topSection}>
-            <Text style={styles.sectionTitle}>Hospital Network</Text>
-            <Text style={styles.sectionSubtitle}>View and manage all registered healthcare facilities.</Text>
+            <Text style={styles.sectionTitle}>{t("Hospital Network")}</Text>
+            <Text style={styles.sectionSubtitle}>{t("View and manage all registered healthcare facilities.")}</Text>
 
             <TouchableOpacity 
               style={styles.addButton}
               onPress={() => router.push('/(moh)/add-hospital')}
             >
               <Text style={styles.addButtonIcon}>+</Text>
-              <Text style={styles.addButtonText}>Add New Hospital</Text>
+              <Text style={styles.addButtonText}>{t("Add New Hospital")}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.searchContainer}>
-            <Ionicons name="search" size={18} color={Colors.textLight} style={styles.searchIcon} />
+            <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by name, code or district..."
+              placeholder={t("Search by name, code or district...")}
               placeholderTextColor={Colors.textLight}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
             />
           </View>
 
@@ -164,7 +146,7 @@ export default function ManageHospitalsScreen() {
               'Divisional Hospital'
             ].map((type, index) => {
               const count = type === 'All' ? hospitals.length : hospitals.filter(h => h.type === type).length;
-              const label = type === 'All' ? `All Hospitals (${count})` : `${type} (${count})`;
+              const label = type === 'All' ? t('All Hospitals ({count})', { count }) : `${t(type)} (${count})`;
               const isActive = activeFilter === type;
 
               return (
@@ -174,7 +156,7 @@ export default function ManageHospitalsScreen() {
                   onPress={() => setActiveFilter(type)}
                 >
                   <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
-                    {label}
+                    {t(label ?? '')}
                   </Text>
                 </TouchableOpacity>
               );
@@ -183,15 +165,15 @@ export default function ManageHospitalsScreen() {
 
           <View style={styles.listContainer}>
             <Text style={styles.listHeader}>
-              Registered Facilities ({filteredHospitals.length})
+              {t("Registered Facilities (")}{activeFilter === 'All' ? hospitals.length : hospitals.filter(h => h.type === activeFilter).length})
             </Text>
             
             {loading ? (
-              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>Loading hospitals...</Text>
-            ) : filteredHospitals.length === 0 ? (
-              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>No hospitals registered yet.</Text>
+              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("Loading hospitals...")}</Text>
+            ) : hospitals.length === 0 ? (
+              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("No hospitals registered yet.")}</Text>
             ) : (
-              filteredHospitals.map((hospital) => (
+              (activeFilter === 'All' ? hospitals : hospitals.filter(h => h.type === activeFilter)).map((hospital) => (
                 <TouchableOpacity 
                   key={hospital._id} 
                   style={styles.hospitalCard}
@@ -200,17 +182,17 @@ export default function ManageHospitalsScreen() {
                 >
                   <View style={styles.cardHeader}>
                     <View style={styles.hospitalIconContainer}>
-                      <Ionicons name="business" size={24} color={Colors.primary} />
+                      <Text style={styles.hospitalIcon}>🏥</Text>
                     </View>
                     <TouchableOpacity
                       style={styles.clinicButton}
                       onPress={() => router.push(`/(moh)/manage-clinics?hospitalId=${hospital._id}&hospitalName=${encodeURIComponent(hospital.name)}`)}
                     >
-                      <Text style={styles.clinicButtonText}>Configure clinics</Text>
+                      <Text style={styles.clinicButtonText}>{t("Configure clinics")}</Text>
                     </TouchableOpacity>
                     <View style={styles.hospitalInfo}>
                       <Text style={styles.hospitalName} numberOfLines={1}>{hospital.name}</Text>
-                      <Text style={styles.hospitalDetails}>{hospital.type} • {hospital.location}</Text>
+                      <Text style={styles.hospitalDetails}>{t(hospital.type)} • {hospital.location}</Text>
                     </View>
                     <View style={[
                       styles.statusBadge, 
@@ -219,7 +201,7 @@ export default function ManageHospitalsScreen() {
                       <Text style={[
                         styles.statusText,
                         hospital.status === 'Active' ? styles.statusTextActive : styles.statusTextMaintenance
-                      ]}>{hospital.status}</Text>
+                      ]}>{t(hospital.status ?? '')}</Text>
                     </View>
                     <TouchableOpacity 
                       style={styles.moreOptionsBtn}
@@ -234,13 +216,12 @@ export default function ManageHospitalsScreen() {
                   
                   <View style={styles.cardFooter}>
                     <View style={styles.codeContainer}>
-                      <Text style={styles.codeLabel}>Code:</Text>
+                      <Text style={styles.codeLabel}>{t("Code:")}</Text>
                       <Text style={styles.codeValue}>{hospital.code}</Text>
                     </View>
                     <View style={styles.deptBadge}>
                       <Text style={styles.deptBadgeText}>
-                        {hospital.departments?.length || 0} Departments
-                      </Text>
+                        {hospital.departments?.length || 0} {t("Departments")}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -276,32 +257,28 @@ export default function ManageHospitalsScreen() {
                   params: { editHospitalData: JSON.stringify(selectedHospital) }
                 });
               }}>
-                <Ionicons name="pencil" size={18} color={Colors.textDark} style={{ marginRight: 12 }} />
-                <Text style={styles.actionOptionText}>Edit Hospital Details</Text>
+                <Text style={styles.actionOptionText}>{t("✏️ Edit Hospital Details")}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOption} onPress={() => handleToggleStatus(selectedHospital)}>
-                <Ionicons name={selectedHospital?.status === 'Active' ? 'pause-circle' : 'play-circle'} size={18} color={Colors.textDark} style={{ marginRight: 12 }} />
                 <Text style={styles.actionOptionText}>
-                  {selectedHospital?.status === 'Active' ? 'Deactivate Hospital' : 'Activate Hospital'}
+                  {selectedHospital?.status === 'Active' ? t('⏸ Deactivate Hospital') : t('▶️ Activate Hospital')}
                 </Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOptionDelete} onPress={() => handleDelete(selectedHospital)}>
-                <Ionicons name="trash" size={18} color={Colors.error} style={{ marginRight: 12 }} />
-                <Text style={styles.actionOptionTextDelete}>Delete Hospital</Text>
+                <Text style={styles.actionOptionTextDelete}>{t("🗑 Delete Hospital")}</Text>
               </TouchableOpacity>
               
               <View style={styles.actionSheetDivider} />
               
               <TouchableOpacity style={styles.actionOptionCancel} onPress={() => setShowManageModal(false)}>
-                <Text style={styles.actionOptionTextCancel}>Cancel</Text>
+                <Text style={styles.actionOptionTextCancel}>{t("Cancel")}</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </Modal>
 
-        <MOHBottomNav activeTab="hospitals" />
       </SafeAreaView>
     </View>
   );
@@ -337,7 +314,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   topSection: {
     marginBottom: 20,
