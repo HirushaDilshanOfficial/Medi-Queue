@@ -15,6 +15,7 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  useColorScheme,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -43,6 +44,8 @@ import { downloadPrescription } from '../../utils/prescriptionPdfGenerator';
 
 export default function PatientPrescriptionScreen() {
   const { t } = useLanguage();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string }>();
   const initialToken = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
   const isAurelia = !params?.tokenNumber || initialToken === 29 || (params?.patientName ? String(params.patientName).includes('Aurelia') : true);
@@ -60,9 +63,8 @@ export default function PatientPrescriptionScreen() {
   const [selectedDuration, setSelectedDuration] = useState<number>(5);
   const [mealTiming, setMealTiming] = useState<'After meal' | 'Before meal'>('After meal');
   const [takeMorning, setTakeMorning] = useState(true);
-  const [takeLunch, setTakeLunch] = useState(false);
-  const [takeDinner, setTakeDinner] = useState(true);
-  const [takeNight, setTakeNight] = useState(false);
+  const [takeAfternoon, setTakeAfternoon] = useState(false);
+  const [takeNight, setTakeNight] = useState(true);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [clinicalNotes, setClinicalNotes] = useState(
     isAurelia ? aureliaPrescriptionData.clinicalNotes : fallbackPrescriptionData.clinicalNotes
@@ -348,24 +350,29 @@ export default function PatientPrescriptionScreen() {
   const formatInstructions = (
     timing: 'After meal' | 'Before meal',
     morning: boolean,
-    lunch: boolean,
-    dinner: boolean,
+    slot2: boolean,
+    slot3: boolean,
     nightOrNote?: boolean | string,
     extraNote?: string
   ): string => {
-    let night = false;
-    let note = extraNote;
-    if (typeof nightOrNote === 'boolean') {
-      night = nightOrNote;
-    } else if (typeof nightOrNote === 'string') {
-      note = nightOrNote;
-    }
-
+    let note: string | undefined = undefined;
     const times: string[] = [];
     if (morning) times.push('Morning');
-    if (lunch) times.push('Lunch');
-    if (dinner) times.push('Dinner');
-    if (night) times.push('Night');
+
+    if (typeof nightOrNote === 'boolean') {
+      // Legacy call: morning, lunch/afternoon, dinner, night
+      if (slot2) times.push('Afternoon');
+      if (slot3) times.push('Dinner');
+      if (nightOrNote) times.push('Night');
+      note = extraNote;
+    } else {
+      // 3-time-of-day slots: morning, afternoon (slot2), night (slot3)
+      if (slot2) times.push('Afternoon');
+      if (slot3) times.push('Night');
+      if (typeof nightOrNote === 'string') {
+        note = nightOrNote;
+      }
+    }
 
     let res = timing;
     if (times.length > 0) {
@@ -385,23 +392,19 @@ export default function PatientPrescriptionScreen() {
     setSelectedFrequency(freq);
     if (freq === 'OD') {
       setTakeMorning(true);
-      setTakeLunch(false);
-      setTakeDinner(false);
+      setTakeAfternoon(false);
       setTakeNight(false);
     } else if (freq === 'BD') {
       setTakeMorning(true);
-      setTakeLunch(false);
-      setTakeDinner(true);
-      setTakeNight(false);
+      setTakeAfternoon(false);
+      setTakeNight(true);
     } else if (freq === 'TDS') {
       setTakeMorning(true);
-      setTakeLunch(true);
-      setTakeDinner(true);
-      setTakeNight(false);
+      setTakeAfternoon(true);
+      setTakeNight(true);
     } else if (freq === 'QDS') {
       setTakeMorning(true);
-      setTakeLunch(true);
-      setTakeDinner(true);
+      setTakeAfternoon(true);
       setTakeNight(true);
     }
   };
@@ -584,7 +587,7 @@ export default function PatientPrescriptionScreen() {
     }
     setAddMedError(null);
 
-    const selectedSlotsCount = [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length;
+    const selectedSlotsCount = [takeMorning, takeAfternoon, takeNight].filter(Boolean).length;
     if (selectedSlotsCount === 0) {
       setAddMedError('Please select at least one time of day');
       return;
@@ -611,7 +614,7 @@ export default function PatientPrescriptionScreen() {
       ? ('INHALER' as any)
       : 'TABLET';
     const dosage = matchedCatalog ? matchedCatalog.defaultDosage : '1 dose';
-    const instructions = formatInstructions(mealTiming, takeMorning, takeLunch, takeDinner, takeNight);
+    const instructions = formatInstructions(mealTiming, takeMorning, takeAfternoon, takeNight);
     const tagType = 'food';
 
     const newItem: MedicineItem = {
@@ -1213,120 +1216,178 @@ export default function PatientPrescriptionScreen() {
               </View>
             </View>
 
-            {/* 4. Time of Day: 4 Icon Tiles (Multi-Select) */}
+            {/* 4. Time of Day: 3 Standalone Cards (Multi-Select, No Icons) */}
             <View style={styles.fieldBlock}>
-              <View style={styles.fieldHeaderRow}>
-                <Text style={styles.fieldLabel}>{t("TIME OF DAY")}</Text>
-                {[takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ? (
-                  <View style={styles.slotWarningRow}>
-                    <Ionicons name="alert-circle" size={13} color="#d97706" style={{ marginRight: 3 }} />
-                    <Text style={styles.slotWarningText}>{t("Pick at least one")}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.slotCountBadge}>
-                    <Text style={styles.slotCountBadgeText}>
-                      {[takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length} {t("selected")}
-                    </Text>
-                  </View>
-                )}
+              {/* Header Row */}
+              <View style={styles.todHeaderRow}>
+                <Text style={[styles.todHeaderLabel, isDark && styles.todHeaderLabelDark]}>
+                  {t("TIME OF DAY")}
+                </Text>
+                <View style={[styles.todCountPill, isDark && styles.todCountPillDark]}>
+                  <Text style={[styles.todCountPillText, isDark && styles.todCountPillTextDark]}>
+                    {[takeMorning, takeAfternoon, takeNight].filter(Boolean).length} {t("selected")}
+                  </Text>
+                </View>
               </View>
 
-              <View style={styles.timeTilesGrid}>
-                {/* Morning */}
+              {/* 3 Standalone Cards Row (equal-width 3-column, 10px gap) */}
+              <View style={styles.todCardsRow}>
+                {/* 1. Morning */}
                 <TouchableOpacity
-                  style={[styles.timeTile, takeMorning && styles.timeTileSelected]}
+                  style={[
+                    styles.todCard,
+                    isDark && styles.todCardDark,
+                    takeMorning && (isDark ? styles.todCardSelectedDark : styles.todCardSelected),
+                  ]}
                   onPress={() => setTakeMorning(!takeMorning)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.75}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: takeMorning }}
+                  accessibilityLabel={`${t("Morning")}, 8:00 AM`}
                 >
-                  <View style={styles.timeTileTopRow}>
-                    <View style={[styles.timeTileIconWrap, takeMorning && styles.timeTileIconWrapSelected]}>
-                      <MaterialCommunityIcons
-                        name="weather-sunset-up"
-                        size={17}
-                        color={takeMorning ? '#ffffff' : '#475569'}
-                      />
-                    </View>
+                  <View
+                    style={[
+                      styles.todRadioDot,
+                      isDark && styles.todRadioDotDark,
+                      takeMorning && (isDark ? styles.todRadioDotSelectedDark : styles.todRadioDotSelected),
+                    ]}
+                  >
                     {takeMorning && (
-                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
+                      <View style={[styles.todRadioInnerDot, isDark && styles.todRadioInnerDotDark]} />
                     )}
                   </View>
-                  <Text style={[styles.timeTileTitle, takeMorning && styles.timeTileTitleSelected]}>{t("Morning")}</Text>
-                  <Text style={[styles.timeTileSub, takeMorning && styles.timeTileSubSelected]}>8:00 AM</Text>
+                  <Text
+                    style={[
+                      styles.todCardTitle,
+                      isDark && styles.todCardTitleDark,
+                      takeMorning && (isDark ? styles.todCardTitleSelectedDark : styles.todCardTitleSelected),
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {t("Morning")}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.todCardTime,
+                      isDark && styles.todCardTimeDark,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    8:00 AM
+                  </Text>
                 </TouchableOpacity>
 
-                {/* Lunch */}
+                {/* 2. Afternoon */}
                 <TouchableOpacity
-                  style={[styles.timeTile, takeLunch && styles.timeTileSelected]}
-                  onPress={() => setTakeLunch(!takeLunch)}
-                  activeOpacity={0.8}
+                  style={[
+                    styles.todCard,
+                    isDark && styles.todCardDark,
+                    takeAfternoon && (isDark ? styles.todCardSelectedDark : styles.todCardSelected),
+                  ]}
+                  onPress={() => setTakeAfternoon(!takeAfternoon)}
+                  activeOpacity={0.75}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: takeLunch }}
+                  accessibilityState={{ checked: takeAfternoon }}
+                  accessibilityLabel={`${t("Afternoon")}, 1:00 PM`}
                 >
-                  <View style={styles.timeTileTopRow}>
-                    <View style={[styles.timeTileIconWrap, takeLunch && styles.timeTileIconWrapSelected]}>
-                      <MaterialCommunityIcons
-                        name="weather-sunny"
-                        size={17}
-                        color={takeLunch ? '#ffffff' : '#475569'}
-                      />
-                    </View>
-                    {takeLunch && (
-                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
+                  <View
+                    style={[
+                      styles.todRadioDot,
+                      isDark && styles.todRadioDotDark,
+                      takeAfternoon && (isDark ? styles.todRadioDotSelectedDark : styles.todRadioDotSelected),
+                    ]}
+                  >
+                    {takeAfternoon && (
+                      <View style={[styles.todRadioInnerDot, isDark && styles.todRadioInnerDotDark]} />
                     )}
                   </View>
-                  <Text style={[styles.timeTileTitle, takeLunch && styles.timeTileTitleSelected]}>{t("Lunch")}</Text>
-                  <Text style={[styles.timeTileSub, takeLunch && styles.timeTileSubSelected]}>1:00 PM</Text>
+                  <Text
+                    style={[
+                      styles.todCardTitle,
+                      isDark && styles.todCardTitleDark,
+                      takeAfternoon && (isDark ? styles.todCardTitleSelectedDark : styles.todCardTitleSelected),
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {t("Afternoon")}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.todCardTime,
+                      isDark && styles.todCardTimeDark,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    1:00 PM
+                  </Text>
                 </TouchableOpacity>
 
-                {/* Dinner */}
+                {/* 3. Night */}
                 <TouchableOpacity
-                  style={[styles.timeTile, takeDinner && styles.timeTileSelected]}
-                  onPress={() => setTakeDinner(!takeDinner)}
-                  activeOpacity={0.8}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: takeDinner }}
-                >
-                  <View style={styles.timeTileTopRow}>
-                    <View style={[styles.timeTileIconWrap, takeDinner && styles.timeTileIconWrapSelected]}>
-                      <MaterialCommunityIcons
-                        name="weather-sunset-down"
-                        size={17}
-                        color={takeDinner ? '#ffffff' : '#475569'}
-                      />
-                    </View>
-                    {takeDinner && (
-                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
-                    )}
-                  </View>
-                  <Text style={[styles.timeTileTitle, takeDinner && styles.timeTileTitleSelected]}>{t("Dinner")}</Text>
-                  <Text style={[styles.timeTileSub, takeDinner && styles.timeTileSubSelected]}>8:00 PM</Text>
-                </TouchableOpacity>
-
-                {/* Night */}
-                <TouchableOpacity
-                  style={[styles.timeTile, takeNight && styles.timeTileSelected]}
+                  style={[
+                    styles.todCard,
+                    isDark && styles.todCardDark,
+                    takeNight && (isDark ? styles.todCardSelectedDark : styles.todCardSelected),
+                  ]}
                   onPress={() => setTakeNight(!takeNight)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.75}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: takeNight }}
+                  accessibilityLabel={`${t("Night")}, 9:00 PM`}
                 >
-                  <View style={styles.timeTileTopRow}>
-                    <View style={[styles.timeTileIconWrap, takeNight && styles.timeTileIconWrapSelected]}>
-                      <MaterialCommunityIcons
-                        name="weather-night"
-                        size={17}
-                        color={takeNight ? '#ffffff' : '#475569'}
-                      />
-                    </View>
+                  <View
+                    style={[
+                      styles.todRadioDot,
+                      isDark && styles.todRadioDotDark,
+                      takeNight && (isDark ? styles.todRadioDotSelectedDark : styles.todRadioDotSelected),
+                    ]}
+                  >
                     {takeNight && (
-                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
+                      <View style={[styles.todRadioInnerDot, isDark && styles.todRadioInnerDotDark]} />
                     )}
                   </View>
-                  <Text style={[styles.timeTileTitle, takeNight && styles.timeTileTitleSelected]}>{t("Night")}</Text>
-                  <Text style={[styles.timeTileSub, takeNight && styles.timeTileSubSelected]}>10:30 PM</Text>
+                  <Text
+                    style={[
+                      styles.todCardTitle,
+                      isDark && styles.todCardTitleDark,
+                      takeNight && (isDark ? styles.todCardTitleSelectedDark : styles.todCardTitleSelected),
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {t("Night")}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.todCardTime,
+                      isDark && styles.todCardTimeDark,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    9:00 PM
+                  </Text>
                 </TouchableOpacity>
+              </View>
+
+              {/* Summary Line */}
+              <View style={styles.todSummaryRow}>
+                {[takeMorning, takeAfternoon, takeNight].some(Boolean) ? (
+                  <Text style={[styles.todSummaryText, isDark && styles.todSummaryTextDark]}>
+                    {t("Take at")}{' '}
+                    <Text style={[styles.todSummaryBold, isDark && styles.todSummaryBoldDark]}>
+                      {[
+                        takeMorning && '8:00 AM',
+                        takeAfternoon && '1:00 PM',
+                        takeNight && '9:00 PM',
+                      ]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </Text>
+                  </Text>
+                ) : (
+                  <Text style={[styles.todSummaryText, styles.todSummaryEmpty, isDark && styles.todSummaryEmptyDark]}>
+                    {t("Pick at least one time")}
+                  </Text>
+                )}
               </View>
             </View>
 
@@ -1390,16 +1451,14 @@ export default function PatientPrescriptionScreen() {
                   {searchQuery.trim()
                     ? `${searchQuery.trim()} – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
                         takeMorning && 'Morning',
-                        takeLunch && 'Lunch',
-                        takeDinner && 'Dinner',
+                        takeAfternoon && 'Afternoon',
                         takeNight && 'Night',
                       ]
                         .filter(Boolean)
                         .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`
                     : `Paracetamol 500mg – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
                         takeMorning && 'Morning',
-                        takeLunch && 'Lunch',
-                        takeDinner && 'Dinner',
+                        takeAfternoon && 'Afternoon',
                         takeNight && 'Night',
                       ]
                         .filter(Boolean)
@@ -1420,7 +1479,7 @@ export default function PatientPrescriptionScreen() {
               style={[
                 styles.addToPrescriptionBtnRedesigned,
                 (!searchQuery.trim() ||
-                  [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                  [takeMorning, takeAfternoon, takeNight].filter(Boolean).length === 0 ||
                   selectedDuration <= 0) &&
                   styles.addToPrescriptionBtnDisabled,
               ]}
@@ -1428,7 +1487,7 @@ export default function PatientPrescriptionScreen() {
               activeOpacity={0.85}
               disabled={
                 !searchQuery.trim() ||
-                [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                [takeMorning, takeAfternoon, takeNight].filter(Boolean).length === 0 ||
                 selectedDuration <= 0
               }
             >
@@ -1437,7 +1496,7 @@ export default function PatientPrescriptionScreen() {
                 size={21}
                 color={
                   !searchQuery.trim() ||
-                  [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                  [takeMorning, takeAfternoon, takeNight].filter(Boolean).length === 0 ||
                   selectedDuration <= 0
                     ? '#94a3b8'
                     : '#ffffff'
@@ -1448,7 +1507,7 @@ export default function PatientPrescriptionScreen() {
                 style={[
                   styles.addToPrescriptionBtnTextRedesigned,
                   (!searchQuery.trim() ||
-                    [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                    [takeMorning, takeAfternoon, takeNight].filter(Boolean).length === 0 ||
                     selectedDuration <= 0) &&
                     styles.addToPrescriptionBtnTextDisabled,
                 ]}
@@ -2686,62 +2745,153 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0e7490',
   },
-  timeTilesGrid: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  timeTile: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    padding: 10,
-    minHeight: 88,
-    justifyContent: 'space-between',
-  },
-  timeTileSelected: {
-    borderColor: '#064e59',
-    backgroundColor: '#f0fdfa',
-    shadowColor: 'rgba(6, 78, 89, 0.1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  timeTileTopRow: {
+  // TIME OF DAY SECTION
+  todHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 10,
   },
-  timeTileIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+  todHeaderLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: '#5B7078',
+    textTransform: 'uppercase',
+  },
+  todHeaderLabelDark: {
+    color: '#9DB2B8',
+  },
+  todCountPill: {
+    backgroundColor: '#E6F6F5',
+    borderWidth: 1,
+    borderColor: '#0E8F9A',
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  todCountPillDark: {
+    backgroundColor: '#1B3A40',
+    borderColor: '#0E8F9A',
+  },
+  todCountPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0E8F9A',
+  },
+  todCountPillTextDark: {
+    color: '#2AA8B4',
+  },
+  todCardsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  todCard: {
+    flex: 1,
+    minHeight: 76,
+    paddingTop: 16,
+    paddingBottom: 14,
+    paddingHorizontal: 6,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#D5E0E3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  todCardDark: {
+    backgroundColor: '#13262B',
+    borderColor: '#2B474D',
+  },
+  todCardSelected: {
+    backgroundColor: '#E6F6F5',
+    borderColor: '#0E8F9A',
+  },
+  todCardSelectedDark: {
+    backgroundColor: '#1B3A40',
+    borderColor: '#0E8F9A',
+  },
+  todRadioDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#D5E0E3',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timeTileIconWrapSelected: {
-    backgroundColor: '#064e59',
+  todRadioDotDark: {
+    borderColor: '#2B474D',
   },
-  timeTileTitle: {
-    fontSize: 11,
+  todRadioDotSelected: {
+    backgroundColor: '#0B4F59',
+    borderColor: '#0B4F59',
+  },
+  todRadioDotSelectedDark: {
+    backgroundColor: '#2AA8B4',
+    borderColor: '#2AA8B4',
+  },
+  todRadioInnerDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E6F6F5',
+  },
+  todRadioInnerDotDark: {
+    backgroundColor: '#1B3A40',
+  },
+  todCardTitle: {
+    fontSize: 14,
     fontWeight: '800',
-    color: '#334155',
+    color: '#0F1F24',
+    textAlign: 'center',
   },
-  timeTileTitleSelected: {
-    color: '#064e59',
+  todCardTitleDark: {
+    color: '#EAF4F6',
   },
-  timeTileSub: {
-    fontSize: 9,
+  todCardTitleSelected: {
+    color: '#0B4F59',
+  },
+  todCardTitleSelectedDark: {
+    color: '#2AA8B4',
+  },
+  todCardTime: {
+    fontSize: 11,
     fontWeight: '600',
-    color: '#94a3b8',
-    marginTop: 1,
+    color: '#5B6B73',
+    marginTop: 4,
+    textAlign: 'center',
   },
-  timeTileSubSelected: {
-    color: '#0d9488',
+  todCardTimeDark: {
+    color: '#9DB2B8',
+  },
+  todSummaryRow: {
+    marginTop: 10,
+  },
+  todSummaryText: {
+    fontSize: 12.5,
+    color: '#5B6B73',
+  },
+  todSummaryTextDark: {
+    color: '#9DB2B8',
+  },
+  todSummaryBold: {
+    fontWeight: '700',
+    color: '#0F1F24',
+  },
+  todSummaryBoldDark: {
+    color: '#EAF4F6',
+  },
+  todSummaryEmpty: {
+    color: '#5B6B73',
+  },
+  todSummaryEmptyDark: {
+    color: '#9DB2B8',
   },
   durationControlRow: {
     flexDirection: 'row',
