@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
+import { Ionicons } from '@expo/vector-icons';
 import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function ManageStaffScreen() {
@@ -145,7 +146,7 @@ export default function ManageStaffScreen() {
           </View>
 
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons name="search" size={18} color={Colors.textLight} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search by name, role or employee ID..."
@@ -200,7 +201,7 @@ export default function ManageStaffScreen() {
                 >
                   <View style={styles.cardHeader}>
                     <View style={styles.staffIconContainer}>
-                      <Text style={styles.staffIcon}>{member.role === 'Doctor' ? '👨‍⚕️' : '👩‍💼'}</Text>
+                      <Ionicons name={member.role === 'Doctor' ? 'medkit' : 'briefcase'} size={24} color={Colors.primary} />
                     </View>
                     <View style={styles.staffInfo}>
                       <Text style={styles.staffName} numberOfLines={1}>{member.fullName}</Text>
@@ -269,17 +270,20 @@ export default function ManageStaffScreen() {
                   params: { editStaffData: JSON.stringify(selectedStaff) }
                 });
               }}>
-                <Text style={styles.actionOptionText}>✏️ Edit Details</Text>
+                <Ionicons name="pencil" size={18} color={Colors.textDark} style={{ marginRight: 12 }} />
+                <Text style={styles.actionOptionText}>Edit Details</Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOption} onPress={() => handleToggleStatus(selectedStaff)}>
+                <Ionicons name={selectedStaff?.status === 'Active' ? 'pause-circle' : 'play-circle'} size={18} color={Colors.textDark} style={{ marginRight: 12 }} />
                 <Text style={styles.actionOptionText}>
-                  {selectedStaff?.status === 'Active' ? '⏸ Deactivate' : '▶️ Activate'}
+                  {selectedStaff?.status === 'Active' ? 'Deactivate' : 'Activate'}
                 </Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOptionDelete} onPress={() => handleDelete(selectedStaff)}>
-                <Text style={styles.actionOptionTextDelete}>🗑 Delete Staff</Text>
+                <Ionicons name="trash" size={18} color={Colors.error} style={{ marginRight: 12 }} />
+                <Text style={styles.actionOptionTextDelete}>Delete Staff</Text>
               </TouchableOpacity>
               
               <View style={styles.actionSheetDivider} />

@@ -12,6 +12,7 @@ import { View,
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
+import { Ionicons } from '@expo/vector-icons';
 import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function ManageHospitalsScreen() {
@@ -138,7 +139,7 @@ export default function ManageHospitalsScreen() {
           </View>
 
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons name="search" size={18} color={Colors.textLight} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search by name, code or district..."
@@ -199,7 +200,7 @@ export default function ManageHospitalsScreen() {
                 >
                   <View style={styles.cardHeader}>
                     <View style={styles.hospitalIconContainer}>
-                      <Text style={styles.hospitalIcon}>🏥</Text>
+                      <Ionicons name="business" size={24} color={Colors.primary} />
                     </View>
                     <TouchableOpacity
                       style={styles.clinicButton}
@@ -275,17 +276,20 @@ export default function ManageHospitalsScreen() {
                   params: { editHospitalData: JSON.stringify(selectedHospital) }
                 });
               }}>
-                <Text style={styles.actionOptionText}>✏️ Edit Hospital Details</Text>
+                <Ionicons name="pencil" size={18} color={Colors.textDark} style={{ marginRight: 12 }} />
+                <Text style={styles.actionOptionText}>Edit Hospital Details</Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOption} onPress={() => handleToggleStatus(selectedHospital)}>
+                <Ionicons name={selectedHospital?.status === 'Active' ? 'pause-circle' : 'play-circle'} size={18} color={Colors.textDark} style={{ marginRight: 12 }} />
                 <Text style={styles.actionOptionText}>
-                  {selectedHospital?.status === 'Active' ? '⏸ Deactivate Hospital' : '▶️ Activate Hospital'}
+                  {selectedHospital?.status === 'Active' ? 'Deactivate Hospital' : 'Activate Hospital'}
                 </Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOptionDelete} onPress={() => handleDelete(selectedHospital)}>
-                <Text style={styles.actionOptionTextDelete}>🗑 Delete Hospital</Text>
+                <Ionicons name="trash" size={18} color={Colors.error} style={{ marginRight: 12 }} />
+                <Text style={styles.actionOptionTextDelete}>Delete Hospital</Text>
               </TouchableOpacity>
               
               <View style={styles.actionSheetDivider} />

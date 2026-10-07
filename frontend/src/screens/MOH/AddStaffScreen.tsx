@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/Colors';
@@ -328,7 +329,7 @@ export default function AddStaffScreen() {
               <Text style={formData.dob ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
                 {formData.dob || 'YYYY-MM-DD'}
               </Text>
-              <Text style={styles.dropdownIcon}>📅</Text>
+              <Ionicons name="calendar" size={16} color={Colors.textMedium} style={styles.dropdownIcon} />
             </TouchableOpacity>
           </View>
         </View>
@@ -340,7 +341,7 @@ export default function AddStaffScreen() {
               <Text style={formData.gender ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
                 {formData.gender || 'Select Gender'}
               </Text>
-              <Text style={styles.dropdownIcon}>▼</Text>
+              <Ionicons name="chevron-down" size={16} color={Colors.textMedium} style={styles.dropdownIcon} />
             </TouchableOpacity>
           </View>
           <View style={[styles.inputGroup, { flex: 1 }]}>
@@ -438,7 +439,7 @@ export default function AddStaffScreen() {
             <Text style={formData.hospitalName ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
               {formData.hospitalName || 'Select Hospital'}
             </Text>
-            <Text style={styles.dropdownIcon}>▼</Text>
+            <Ionicons name="chevron-down" size={16} color={Colors.textMedium} style={styles.dropdownIcon} />
           </TouchableOpacity>
         </View>
 

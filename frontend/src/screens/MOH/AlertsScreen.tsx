@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function AlertsScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
@@ -91,7 +92,7 @@ export default function AlertsScreen() {
         </TouchableOpacity>
         <View style={styles.headerProfile}>
           <View style={styles.profileIcon}>
-            <Text style={styles.profileIconText}>🏥</Text>
+            <Ionicons name="business" size={24} color={Colors.primary} />
           </View>
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -106,10 +107,10 @@ export default function AlertsScreen() {
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.actionIcon}>
-            <Text>🔔</Text>
+            <Ionicons name="notifications" size={24} color={Colors.white} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.profileImagePlaceholder}>
-            <Text style={{ color: Colors.white, fontSize: 12 }}>👤</Text>
+            <Ionicons name="person" size={20} color={Colors.white} />
           </TouchableOpacity>
         </View>
       </View>
@@ -127,7 +128,7 @@ export default function AlertsScreen() {
           </View>
           <Text style={styles.bannerTitle}>National Queue Early Warning</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-            <Text style={{ marginRight: 8, fontSize: 16 }}>⏱️</Text>
+            <Ionicons name="time" size={18} color={Colors.textDark} style={{ marginRight: 8 }} />
             <Text style={styles.bannerSubtitle}>
               {alerts.length} active bottlenecks requiring executive action
             </Text>
@@ -163,16 +164,16 @@ export default function AlertsScreen() {
               // Determine styles based on priority
               let priorityColor = Colors.primary;
               let bgColor = '#E6F4F1';
-              let icon = '📈';
+              let icon = 'trending-up';
               
               if (alert.priority === 'HIGH PRIORITY') {
                 priorityColor = '#FF3B30';
                 bgColor = '#FFEBEB';
-                icon = '🏥';
+                icon = 'business';
               } else if (alert.priority === 'STAFFING NOTICE') {
                 priorityColor = '#34C759';
                 bgColor = '#E8F5E9';
-                icon = '👨‍⚕️';
+                icon = 'medkit';
               }
 
               return (
@@ -185,7 +186,7 @@ export default function AlertsScreen() {
                       <Text style={styles.cardLocation}>{alert.location}</Text>
                     </View>
                     <View style={[styles.cardIconBox, { backgroundColor: bgColor }]}>
-                      <Text style={styles.cardIcon}>{icon}</Text>
+                      <Ionicons name={icon as any} size={24} color={priorityColor} />
                     </View>
                   </View>
                   
@@ -202,7 +203,7 @@ export default function AlertsScreen() {
                         <View key={index} style={alert.priority === 'HIGH PRIORITY' ? styles.metricBox : { flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                           {alert.priority === 'HIGH PRIORITY' ? (
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Text style={{ marginRight: 6 }}>{index === 0 ? '👥' : '🩺'}</Text>
+                              <Ionicons name={index === 0 ? 'people' : 'medical'} size={18} color={Colors.textDark} style={{ marginRight: 6 }} />
                               <View>
                                 <Text style={styles.metricLabel}>{key}</Text>
                                 <Text style={styles.metricValue}>{alert.metrics[key]}</Text>
@@ -210,7 +211,7 @@ export default function AlertsScreen() {
                             </View>
                           ) : (
                             <>
-                              <Text style={{ marginRight: 8 }}>⏳</Text>
+                              <Ionicons name="hourglass-outline" size={16} color={Colors.textMedium} style={{ marginRight: 8 }} />
                               <Text style={{ color: Colors.textMedium, fontSize: 13, flex: 1 }}>{key}</Text>
                               <Text style={{ color: Colors.primaryDark, fontWeight: 'bold', fontSize: 15 }}>{alert.metrics[key]}</Text>
                             </>
@@ -223,7 +224,7 @@ export default function AlertsScreen() {
                   {alert.aiRecommendation && (
                     <View style={styles.aiRecommendationBox}>
                       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                        <Text style={{ marginRight: 8, marginTop: 2 }}>✨</Text>
+                        <Ionicons name="sparkles" size={18} color={Colors.primary} style={{ marginRight: 8, marginTop: 2 }} />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.aiLabel}>AI RECOMMENDED INTERVENTION</Text>
                           <Text style={styles.aiText}>{alert.aiRecommendation}</Text>
@@ -241,19 +242,19 @@ export default function AlertsScreen() {
                       }}
                     >
                       <Text style={[styles.secondaryButtonText, { color: Colors.primaryDark }]}>
-                        👀 Review Live Queue
+                        <Ionicons name="eye" size={16} color={Colors.primaryDark} style={{ marginRight: 4 }} /> Review Live Queue
                       </Text>
                     </TouchableOpacity>
                   </View>
 
                   <View style={[styles.cardActionsRow, { marginTop: 10 }]}>
                     <TouchableOpacity style={styles.secondaryButton} onPress={() => handleAcknowledge(alert._id)}>
-                      <Text style={styles.secondaryButtonText}>✓ Acknowledge</Text>
+                      <Text style={styles.secondaryButtonText}><Ionicons name="checkmark" size={16} color={Colors.textDark} /> Acknowledge</Text>
                     </TouchableOpacity>
                     
                     {alert.priority === 'HIGH PRIORITY' && (
                       <TouchableOpacity style={styles.primaryButton} onPress={() => handleDispatch(alert.hospitalName)}>
-                        <Text style={styles.primaryButtonText}>🚀 Dispatch Alert</Text>
+                        <Text style={styles.primaryButtonText}><Ionicons name="send" size={16} color={Colors.white} /> Dispatch Alert</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -265,7 +266,7 @@ export default function AlertsScreen() {
           {/* Settings / Threshold Engine Link */}
           <TouchableOpacity style={styles.settingsBox}>
             <View style={styles.settingsIconBox}>
-              <Text>⚙️</Text>
+              <Ionicons name="settings" size={24} color={Colors.textDark} />
             </View>
             <View style={{ flex: 1, paddingHorizontal: 12 }}>
               <Text style={styles.settingsTitle}>Sensor Threshold Engine</Text>
