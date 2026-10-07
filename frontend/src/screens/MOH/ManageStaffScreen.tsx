@@ -1,6 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import { View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -14,6 +15,7 @@ import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
 export default function ManageStaffScreen() {
+  const { t } = useLanguage();
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -65,16 +67,16 @@ export default function ManageStaffScreen() {
       }
     } catch (error) {
       console.error('Error toggling status:', error);
-      Alert.alert('Error', 'Could not update status');
+      Alert.alert(t('Error'), t('Could not update status'));
     }
   };
 
   const handleDelete = (member: any) => {
     Alert.alert(
-      'Delete Staff',
-      `Are you sure you want to remove ${member.fullName}?`,
+      t('Delete Staff'),
+      t("Are you sure you want to remove {value0}?", { value0: String(member.fullName) }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         { 
           text: 'Delete', 
           style: 'destructive',
@@ -89,7 +91,7 @@ export default function ManageStaffScreen() {
               }
             } catch (error) {
               console.error('Error deleting staff:', error);
-              Alert.alert('Error', 'Could not delete staff');
+              Alert.alert(t('Error'), t('Could not delete staff'));
             }
           }
         }
@@ -111,22 +113,22 @@ export default function ManageStaffScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Staff Management</Text>
+          <Text style={styles.headerTitle}>{t("Staff Management")}</Text>
           <View style={{ width: 40 }} />
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           
           <View style={styles.topSection}>
-            <Text style={styles.sectionTitle}>Hospital Staff</Text>
-            <Text style={styles.sectionSubtitle}>View and manage all registered employees.</Text>
+            <Text style={styles.sectionTitle}>{t("Hospital Staff")}</Text>
+            <Text style={styles.sectionSubtitle}>{t("View and manage all registered employees.")}</Text>
 
             <TouchableOpacity 
               style={styles.addButton}
               onPress={() => router.push('/(moh)/add-staff')}
             >
               <Text style={styles.addButtonIcon}>+</Text>
-              <Text style={styles.addButtonText}>Register New Staff</Text>
+              <Text style={styles.addButtonText}>{t("Register New Staff")}</Text>
             </TouchableOpacity>
           </View>
 
@@ -134,7 +136,7 @@ export default function ManageStaffScreen() {
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by name, role or employee ID..."
+              placeholder={t("Search by name, role or employee ID...")}
               placeholderTextColor={Colors.textLight}
             />
           </View>
@@ -146,7 +148,7 @@ export default function ManageStaffScreen() {
           >
             {roles.map((type, index) => {
               const count = type === 'All' ? staff.length : staff.filter(s => s.role === type).length;
-              const label = type === 'All' ? `All Staff (${count})` : `${type} (${count})`;
+              const label = type === 'All' ? t('All Staff ({count})', { count }) : `${t(type)} (${count})`;
               const isActive = activeFilter === type;
 
               return (
@@ -156,7 +158,7 @@ export default function ManageStaffScreen() {
                   onPress={() => setActiveFilter(type)}
                 >
                   <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
-                    {label}
+                    {t(label ?? '')}
                   </Text>
                 </TouchableOpacity>
               );
@@ -165,13 +167,13 @@ export default function ManageStaffScreen() {
 
           <View style={styles.listContainer}>
             <Text style={styles.listHeader}>
-              Registered Staff ({filteredStaff.length})
+              {t("Registered Staff (")}{filteredStaff.length})
             </Text>
             
             {loading ? (
-              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>Loading staff...</Text>
+              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("Loading staff...")}</Text>
             ) : filteredStaff.length === 0 ? (
-              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>No staff registered yet.</Text>
+              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("No staff registered yet.")}</Text>
             ) : (
               filteredStaff.map((member) => (
                 <TouchableOpacity 
@@ -188,7 +190,7 @@ export default function ManageStaffScreen() {
                     </View>
                     <View style={styles.staffInfo}>
                       <Text style={styles.staffName} numberOfLines={1}>{member.fullName}</Text>
-                      <Text style={styles.staffDetails}>{member.role} • {member.hospitalName || 'No Hospital'}</Text>
+                      <Text style={styles.staffDetails}>{t(member.role ?? '')} • {member.hospitalName || t('No Hospital')}</Text>
                     </View>
                     <View style={[
                       styles.statusBadge, 
@@ -197,7 +199,7 @@ export default function ManageStaffScreen() {
                       <Text style={[
                         styles.statusText,
                         member.status === 'Active' ? styles.statusTextActive : styles.statusTextMaintenance
-                      ]}>{member.status || 'Active'}</Text>
+                      ]}>{t(member.status ?? '') || t('Active')}</Text>
                     </View>
                     <TouchableOpacity 
                       style={styles.moreOptionsBtn}
@@ -212,12 +214,12 @@ export default function ManageStaffScreen() {
                   
                   <View style={styles.cardFooter}>
                     <View style={styles.codeContainer}>
-                      <Text style={styles.codeLabel}>Emp ID:</Text>
+                      <Text style={styles.codeLabel}>{t("Emp ID:")}</Text>
                       <Text style={styles.codeValue}>{member.employeeNo}</Text>
                     </View>
                     <View style={styles.deptBadge}>
                       <Text style={styles.deptBadgeText}>
-                        {member.department || 'N/A'}
+                        {member.department || t('N/A')}
                       </Text>
                     </View>
                   </View>
@@ -243,7 +245,7 @@ export default function ManageStaffScreen() {
             <View style={styles.actionSheetContent}>
               <View style={styles.actionSheetHeader}>
                 <Text style={styles.actionSheetTitle}>{selectedStaff?.fullName}</Text>
-                <Text style={styles.actionSheetSubtitle}>{selectedStaff?.employeeNo} • {selectedStaff?.role}</Text>
+                <Text style={styles.actionSheetSubtitle}>{selectedStaff?.employeeNo} • {t(selectedStaff?.role ?? '')}</Text>
               </View>
               
               <TouchableOpacity style={styles.actionOption} onPress={() => {
@@ -253,23 +255,23 @@ export default function ManageStaffScreen() {
                   params: { editStaffData: JSON.stringify(selectedStaff) }
                 });
               }}>
-                <Text style={styles.actionOptionText}>✏️ Edit Details</Text>
+                <Text style={styles.actionOptionText}>{t("✏️ Edit Details")}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOption} onPress={() => handleToggleStatus(selectedStaff)}>
                 <Text style={styles.actionOptionText}>
-                  {selectedStaff?.status === 'Active' ? '⏸ Deactivate' : '▶️ Activate'}
+                  {selectedStaff?.status === 'Active' ? t('⏸ Deactivate') : t('▶️ Activate')}
                 </Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOptionDelete} onPress={() => handleDelete(selectedStaff)}>
-                <Text style={styles.actionOptionTextDelete}>🗑 Delete Staff</Text>
+                <Text style={styles.actionOptionTextDelete}>{t("🗑 Delete Staff")}</Text>
               </TouchableOpacity>
               
               <View style={styles.actionSheetDivider} />
               
               <TouchableOpacity style={styles.actionOptionCancel} onPress={() => setShowManageModal(false)}>
-                <Text style={styles.actionOptionTextCancel}>Cancel</Text>
+                <Text style={styles.actionOptionTextCancel}>{t("Cancel")}</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -290,43 +292,43 @@ export default function ManageStaffScreen() {
             <View style={[styles.actionSheetContent, { width: '85%' }]}>
               <View style={styles.actionSheetHeader}>
                 <Text style={styles.actionSheetTitle}>{selectedStaff?.fullName}</Text>
-                <Text style={styles.actionSheetSubtitle}>{selectedStaff?.role} • {selectedStaff?.hospitalName}</Text>
+                <Text style={styles.actionSheetSubtitle}>{t(selectedStaff?.role ?? '')} • {selectedStaff?.hospitalName}</Text>
               </View>
 
               <ScrollView style={{ padding: 20, maxHeight: 400 }}>
-                <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>Basic Information</Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>NIC: <Text style={{ color: Colors.textDark }}>{selectedStaff?.nic}</Text></Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Email: <Text style={{ color: Colors.textDark }}>{selectedStaff?.email}</Text></Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Mobile: <Text style={{ color: Colors.textDark }}>{selectedStaff?.mobile}</Text></Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>Gender: <Text style={{ color: Colors.textDark }}>{selectedStaff?.gender}</Text></Text>
+                <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>{t("Basic Information")}</Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("NIC:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.nic}</Text></Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Email:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.email}</Text></Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Mobile:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.mobile}</Text></Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>{t("Gender:")}{' '}<Text style={{ color: Colors.textDark }}>{t(selectedStaff?.gender ?? '')}</Text></Text>
                 
-                <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>Employment Information</Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Employee ID: <Text style={{ color: Colors.textDark }}>{selectedStaff?.employeeNo}</Text></Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Department: <Text style={{ color: Colors.textDark }}>{selectedStaff?.department || 'N/A'}</Text></Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>Status: <Text style={{ color: Colors.textDark }}>{selectedStaff?.status}</Text></Text>
+                <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>{t("Employment Information")}</Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Employee ID:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.employeeNo}</Text></Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Department:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.department || t('N/A')}</Text></Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>{t("Status:")}{' '}<Text style={{ color: Colors.textDark }}>{t(selectedStaff?.status ?? '')}</Text></Text>
 
                 {selectedStaff?.role === 'Doctor' && (
                   <View>
-                    <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>Doctor Information</Text>
-                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Med Reg No: <Text style={{ color: Colors.textDark }}>{selectedStaff?.medRegNo}</Text></Text>
-                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Specialization: <Text style={{ color: Colors.textDark }}>{selectedStaff?.specialization}</Text></Text>
-                    <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>Qualification: <Text style={{ color: Colors.textDark }}>{selectedStaff?.doctorQualification}</Text></Text>
+                    <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>{t("Doctor Information")}</Text>
+                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Med Reg No:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.medRegNo}</Text></Text>
+                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Specialization:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.specialization}</Text></Text>
+                    <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>{t("Qualification:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.doctorQualification}</Text></Text>
                   </View>
                 )}
 
                 {selectedStaff?.role === 'Nurse' && (
                   <View>
-                    <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>Nurse Information</Text>
-                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Nurse Reg No: <Text style={{ color: Colors.textDark }}>{selectedStaff?.nurseRegNo}</Text></Text>
-                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>Qualification: <Text style={{ color: Colors.textDark }}>{selectedStaff?.nurseQualification}</Text></Text>
-                    <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>Ward: <Text style={{ color: Colors.textDark }}>{selectedStaff?.ward}</Text></Text>
+                    <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>{t("Nurse Information")}</Text>
+                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Nurse Reg No:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.nurseRegNo}</Text></Text>
+                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Qualification:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.nurseQualification}</Text></Text>
+                    <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>{t("Ward:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.ward}</Text></Text>
                   </View>
                 )}
               </ScrollView>
 
               <View style={styles.actionSheetDivider} />
               <TouchableOpacity style={styles.actionOptionCancel} onPress={() => setShowDetailsModal(false)}>
-                <Text style={styles.actionOptionTextCancel}>Close</Text>
+                <Text style={styles.actionOptionTextCancel}>{t("Close")}</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>

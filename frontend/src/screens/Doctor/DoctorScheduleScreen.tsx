@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -33,6 +34,7 @@ interface DoctorScheduleScreenProps {
 }
 
 export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScreenProps) {
+  const { t } = useLanguage();
   const [data, setData] = useState<DoctorScheduleData>(fallbackScheduleData);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -158,7 +160,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     }));
     await toggleDoctorBreakApi(minutes);
     setIsBreakModalOpen(false);
-    Alert.alert('Break Started', `Enjoy your ${minutes}-minute rest. Shift status set to "On Break".`);
+    Alert.alert(t('Break Started'), t("Enjoy your {value0}-minute rest. Shift status set to \"On Break\".", { value0: String(minutes) }));
   };
 
   const resumeShift = async () => {
@@ -172,12 +174,12 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
       },
     }));
     await toggleDoctorBreakApi(0);
-    Alert.alert('Shift Resumed', 'Doctor is back online in Room 3B.');
+    Alert.alert(t('Shift Resumed'), t('Doctor is back online in Room 3B.'));
   };
 
   const handleAddWalkinSlot = async () => {
     if (!walkinName.trim()) {
-      Alert.alert('Validation Error', 'Please enter the patient name.');
+      Alert.alert(t('Validation Error'), t('Please enter the patient name.'));
       return;
     }
 
@@ -225,8 +227,8 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     setWalkinAge('');
 
     Alert.alert(
-      'Walk-in Added',
-      `Walk-in slot assigned for ${newSlot.patientName} with Token #${String(nextTokenNum).padStart(3, '0')}`
+      t('Walk-in Added'),
+      t("Walk-in slot assigned for {value0} with Token #{value1}", { value0: String(newSlot.patientName), value1: String(String(nextTokenNum).padStart(3, '0')) })
     );
   };
 
@@ -334,17 +336,17 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               <View style={styles.onlineGreenDot} />
             </View>
             <View style={styles.profileTextWrap}>
-              <Text style={styles.profileName}>{doctor.name || 'Doctor'}</Text>
+              <Text style={styles.profileName}>{doctor.name || t('Doctor')}</Text>
               <View style={styles.roomStatusRow}>
                 <Text style={styles.roomStatusDot}>•</Text>
-                <Text style={styles.roomStatusText}>{doctor.room || 'Room 3B Online'}</Text>
+                <Text style={styles.roomStatusText}>{doctor.room || t('Room 3B Online')}</Text>
               </View>
             </View>
           </View>
 
           <TouchableOpacity
             style={styles.bellBtn}
-            onPress={() => Alert.alert('Notifications', '1 high priority walk-in request pending approval.')}
+            onPress={() => Alert.alert(t('Notifications'), t('1 high priority walk-in request pending approval.'))}
           >
             <Ionicons name="notifications" size={22} color="#334155" />
             <View style={styles.redBadgeDot} />
@@ -361,7 +363,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
           </View>
 
           <View style={styles.titleWithFilterRow}>
-            <Text style={styles.screenHeading}>My Schedule</Text>
+            <Text style={styles.screenHeading}>{t("My Schedule")}</Text>
             <TouchableOpacity
               style={styles.filterBtn}
               onPress={() => setIsFilterModalOpen(true)}
@@ -408,11 +410,11 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 <MaterialCommunityIcons name="briefcase-plus-outline" size={19} color="#0d6371" />
               </View>
               <View>
-                <Text style={styles.shiftTitleText}>{shift.title || 'Morning OPD Shift'}</Text>
+                <Text style={styles.shiftTitleText}>{shift.title || t('Morning OPD Shift')}</Text>
                 <View style={styles.shiftSubRow}>
                   <Text style={styles.shiftSubTime}>{shift.timeRange || '08:30 AM – 01:00 PM'}</Text>
                   <Text style={styles.shiftSubBullet}>•</Text>
-                  <Text style={styles.shiftSubRoom}>{shift.room || 'Room 3B Ortho'}</Text>
+                  <Text style={styles.shiftSubRoom}>{shift.room || t('Room 3B Ortho')}</Text>
                 </View>
               </View>
             </View>
@@ -436,7 +438,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   shift.isOnBreak && { color: '#b45309' },
                 ]}
               >
-                {shift.status || 'In Progress'}
+                {t(shift.status ?? '') || t('In Progress')}
               </Text>
             </View>
           </View>
@@ -444,8 +446,8 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
           {/* Counts & Progress Bar */}
           <View style={styles.progressSection}>
             <View style={styles.progressCountsRow}>
-              <Text style={styles.consultedCountText}>{consultedCount} Consulted</Text>
-              <Text style={styles.waitingCountText}>{waitingCount} Waiting</Text>
+              <Text style={styles.consultedCountText}>{consultedCount} {t("Consulted")}</Text>
+              <Text style={styles.waitingCountText}>{waitingCount} {t("Waiting")}</Text>
             </View>
             <View style={styles.progressBarTrack}>
               <View style={[styles.progressBarFill, { width: `${progressRatio * 100}%` }]} />
@@ -456,7 +458,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
           <View style={styles.shiftFooterRow}>
             <View style={styles.avgTimeWrap}>
               <Ionicons name="time-outline" size={16} color="#526b78" style={{ marginRight: 5 }} />
-              <Text style={styles.avgTimeText}>Avg. {shift.avgMinutesPerPatient || 9}m / patient</Text>
+              <Text style={styles.avgTimeText}>{t("Avg.")}{' '}{shift.avgMinutesPerPatient || 9}{t("m / patient")}</Text>
             </View>
 
             {shift.isOnBreak ? (
@@ -466,7 +468,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 activeOpacity={0.8}
               >
                 <Ionicons name="play" size={15} color="#047857" style={{ marginRight: 5 }} />
-                <Text style={[styles.breakBtnText, { color: '#047857' }]}>Resume Shift</Text>
+                <Text style={[styles.breakBtnText, { color: '#047857' }]}>{t("Resume Shift")}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -475,7 +477,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 activeOpacity={0.8}
               >
                 <MaterialCommunityIcons name="coffee-outline" size={16} color="#0d6371" style={{ marginRight: 5 }} />
-                <Text style={styles.breakBtnText}>Take 15m Break</Text>
+                <Text style={styles.breakBtnText}>{t("Take 15m Break")}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -486,12 +488,12 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
         {/* ========================================================= */}
         <View style={styles.timelineHeaderRow}>
           <View style={styles.timelineTitleWrap}>
-            <Text style={styles.timelineTitle}>Today's Timeline</Text>
+            <Text style={styles.timelineTitle}>{t("Today's Timeline")}</Text>
             <View style={styles.patientsCountBadge}>
-              <Text style={styles.patientsCountText}>{totalCapacity} Patients</Text>
+              <Text style={styles.patientsCountText}>{totalCapacity} {t("Patients")}</Text>
             </View>
           </View>
-          <Text style={styles.currentSlotText}>Current: {liveClock}</Text>
+          <Text style={styles.currentSlotText}>{t("Current:")}{' '}{liveClock}</Text>
         </View>
 
         {/* ========================================================= */}
@@ -513,10 +515,10 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     {/* Middle patient details */}
                     <View style={styles.attendingDetailsWrap}>
                       <View style={styles.nowAttendingBadgeRow}>
-                        <Text style={styles.nowAttendingLabel}>NOW ATTENDING •</Text>
+                        <Text style={styles.nowAttendingLabel}>{t("NOW ATTENDING •")}</Text>
                         <View style={styles.inRoomPill}>
                           <Ionicons name="enter-outline" size={13} color="#ffffff" style={{ marginRight: 4 }} />
-                          <Text style={styles.inRoomPillText}>In Room</Text>
+                          <Text style={styles.inRoomPillText}>{t("In Room")}</Text>
                         </View>
                       </View>
                       <Text style={styles.attendingPatientName}>{item.patientName}</Text>
@@ -529,8 +531,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     <View style={styles.elapsedCounterWrap}>
                       <Ionicons name="time-outline" size={15} color="#526b78" style={{ marginRight: 5 }} />
                       <Text style={styles.elapsedCounterText}>
-                        Consultation elapsed: {elapsedMinutes} min
-                      </Text>
+                        {t("Consultation elapsed:")}{' '}{elapsedMinutes} {t("min")}</Text>
                     </View>
 
                     <TouchableOpacity
@@ -538,7 +539,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       onPress={() => setIsEhrModalOpen(true)}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.openEhrBtnText}>Open EHR</Text>
+                      <Text style={styles.openEhrBtnText}>{t("Open EHR")}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -552,8 +553,8 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 style={styles.standardSlotRow}
                 onPress={() => {
                   Alert.alert(
-                    `Token #${item.tokenNumber} - ${item.patientName}`,
-                    `Reason: ${item.reason}\nStatus: ${item.status.toUpperCase()}\nTime: ${item.time}`
+                    t("Token #{value0} - {value1}", { value0: String(item.tokenNumber), value1: String(item.patientName) }),
+                    t("Reason: {value0}\nStatus: {value1}\nTime: {value2}", { value0: String(item.reason), value1: t(item.status.toUpperCase()), value2: String(item.time) })
                   );
                 }}
                 activeOpacity={0.7}
@@ -575,20 +576,20 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   {item.status === 'done' && (
                     <View style={styles.badgeDone}>
                       <Ionicons name="checkmark" size={13} color="#526b78" style={{ marginRight: 3 }} />
-                      <Text style={styles.badgeDoneText}>Done</Text>
+                      <Text style={styles.badgeDoneText}>{t("Done")}</Text>
                     </View>
                   )}
 
                   {item.status === 'waiting' && (
                     <View style={styles.badgeWaiting}>
                       <Text style={styles.hourglassEmoji}>⏳</Text>
-                      <Text style={styles.badgeWaitingText}>Waiting</Text>
+                      <Text style={styles.badgeWaitingText}>{t("Waiting")}</Text>
                     </View>
                   )}
 
                   {item.status === 'scheduled' && (
                     <View style={styles.badgeScheduled}>
-                      <Text style={styles.badgeScheduledText}>Scheduled</Text>
+                      <Text style={styles.badgeScheduledText}>{t("Scheduled")}</Text>
                     </View>
                   )}
                 </View>
@@ -607,12 +608,11 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             activeOpacity={0.88}
           >
             <Ionicons name="person-add" size={18} color="#ffffff" style={{ marginRight: 8 }} />
-            <Text style={styles.addWalkinBtnText}>+ Add Walk-in Slot</Text>
+            <Text style={styles.addWalkinBtnText}>{t("+ Add Walk-in Slot")}</Text>
           </TouchableOpacity>
 
           <Text style={styles.walkinRemainingSubtext}>
-            Room 3B capacity: {shift.remainingWalkinSlots || 4} walk-in allocations remaining for today
-          </Text>
+            {t("Room 3B capacity:")}{' '}{shift.remainingWalkinSlots || 4} {t("walk-in allocations remaining for today")}</Text>
         </View>
       </ScrollView>
 
@@ -623,7 +623,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
         {/* Home */}
         <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('home')}>
           <Ionicons name="home-outline" size={22} color={activeTab === 'home' ? '#0d6371' : '#64748b'} />
-          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>Home</Text>
+          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>{t("Home")}</Text>
         </TouchableOpacity>
 
         {/* Queue */}
@@ -633,7 +633,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             size={23}
             color={activeTab === 'queue' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>Queue</Text>
+          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>{t("Queue")}</Text>
         </TouchableOpacity>
 
         {/* Records */}
@@ -643,7 +643,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             size={22}
             color={activeTab === 'records' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>Records</Text>
+          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>{t("Records")}</Text>
         </TouchableOpacity>
 
         {/* Schedule */}
@@ -653,7 +653,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             size={22}
             color={activeTab === 'schedule' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>Schedule</Text>
+          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>{t("Schedule")}</Text>
         </TouchableOpacity>
 
         {/* Prescription */}
@@ -667,8 +667,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             numberOfLines={1}
             style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}
           >
-            Prescription
-          </Text>
+            {t("Prescription")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -681,7 +680,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <MaterialCommunityIcons name="account-plus-outline" size={24} color="#0d6371" style={{ marginRight: 8 }} />
-                <Text style={styles.modalTitle}>Add Walk-in Slot</Text>
+                <Text style={styles.modalTitle}>{t("Add Walk-in Slot")}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsWalkinModalOpen(false)}>
                 <Ionicons name="close" size={22} color="#64748b" />
@@ -689,7 +688,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             </View>
 
             <ScrollView style={{ maxHeight: 420 }}>
-              <Text style={styles.inputLabel}>Patient Full Name *</Text>
+              <Text style={styles.inputLabel}>{t("Patient Full Name *")}</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="e.g. Ruwan Wickramasinghe"
@@ -700,7 +699,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Age</Text>
+                  <Text style={styles.inputLabel}>{t("Age")}</Text>
                   <TextInput
                     style={styles.textInput}
                     placeholder="e.g. 35"
@@ -711,7 +710,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Gender</Text>
+                  <Text style={styles.inputLabel}>{t("Gender")}</Text>
                   <View style={styles.genderRow}>
                     {['Male', 'Female'].map((g) => (
                       <TouchableOpacity
@@ -720,7 +719,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         onPress={() => setWalkinGender(g)}
                       >
                         <Text style={[styles.genderChipText, walkinGender === g && styles.genderChipTextActive]}>
-                          {g}
+                          {t(g)}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -728,10 +727,10 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 </View>
               </View>
 
-              <Text style={styles.inputLabel}>Chief Complaint / Reason</Text>
+              <Text style={styles.inputLabel}>{t("Chief Complaint / Reason")}</Text>
               <TextInput
                 style={[styles.textInput, { height: 70, textAlignVertical: 'top' }]}
-                placeholder="e.g. Severe acute knee twist, dressing renewal"
+                placeholder={t("e.g. Severe acute knee twist, dressing renewal")}
                 placeholderTextColor="#94a3b8"
                 multiline
                 value={walkinReason}
@@ -741,8 +740,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               <View style={styles.tokenNoticeBox}>
                 <Ionicons name="information-circle-outline" size={18} color="#0d6371" style={{ marginRight: 6 }} />
                 <Text style={styles.tokenNoticeText}>
-                  Allocating next Token #{String(totalCapacity + 1).padStart(3, '0')} for Room 3B today.
-                </Text>
+                  {t("Allocating next Token #")}{String(totalCapacity + 1).padStart(3, '0')} {t("for Room 3B today.")}</Text>
               </View>
             </ScrollView>
 
@@ -751,7 +749,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 style={styles.modalCancelBtn}
                 onPress={() => setIsWalkinModalOpen(false)}
               >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                <Text style={styles.modalCancelBtnText}>{t("Cancel")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -762,7 +760,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 {isSubmittingWalkin ? (
                   <ActivityIndicator color="#ffffff" size="small" />
                 ) : (
-                  <Text style={styles.modalSubmitBtnText}>Confirm & Add Slot</Text>
+                  <Text style={styles.modalSubmitBtnText}>{t("Confirm & Add Slot")}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -780,11 +778,11 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text style={styles.ehrModalToken}>
-                    {data.currentPatient ? `Token #${data.currentPatient.tokenNumber}` : 'No active token'}
+                    {data.currentPatient ? t("Token #{value0}", { value0: String(data.currentPatient.tokenNumber) }) : t('No active token')}
                   </Text>
-                  <Text style={styles.modalTitle}>{data.currentPatient?.patientName || 'No active patient'}</Text>
+                  <Text style={styles.modalTitle}>{data.currentPatient?.patientName || t('No active patient')}</Text>
                 </View>
-                <Text style={styles.ehrSub}>Male, 48 Years • File REC-841 • Room 3B</Text>
+                <Text style={styles.ehrSub}>{t("Male, 48 Years • File REC-841 • Room 3B")}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsEhrModalOpen(false)}>
                 <Ionicons name="close" size={24} color="#64748b" />
@@ -793,40 +791,39 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Vitals summary cards */}
-              <Text style={styles.sectionHeaderSmall}>RECORDED VITALS (10:15 AM)</Text>
+              <Text style={styles.sectionHeaderSmall}>{t("RECORDED VITALS (10:15 AM)")}</Text>
               <View style={styles.vitalsGrid}>
                 <View style={styles.vitalCard}>
-                  <Text style={styles.vitalLabel}>Blood Pressure</Text>
+                  <Text style={styles.vitalLabel}>{t("Blood Pressure")}</Text>
                   <Text style={styles.vitalValue}>124/82</Text>
-                  <Text style={styles.vitalUnit}>mmHg (Normal)</Text>
+                  <Text style={styles.vitalUnit}>{t("mmHg (Normal)")}</Text>
                 </View>
                 <View style={styles.vitalCard}>
-                  <Text style={styles.vitalLabel}>Heart Rate</Text>
+                  <Text style={styles.vitalLabel}>{t("Heart Rate")}</Text>
                   <Text style={styles.vitalValue}>76</Text>
                   <Text style={styles.vitalUnit}>bpm</Text>
                 </View>
                 <View style={styles.vitalCard}>
-                  <Text style={styles.vitalLabel}>Body Temp</Text>
+                  <Text style={styles.vitalLabel}>{t("Body Temp")}</Text>
                   <Text style={styles.vitalValue}>98.6</Text>
                   <Text style={styles.vitalUnit}>°F</Text>
                 </View>
                 <View style={styles.vitalCard}>
                   <Text style={styles.vitalLabel}>SpO2</Text>
                   <Text style={styles.vitalValue}>98%</Text>
-                  <Text style={styles.vitalUnit}>Room Air</Text>
+                  <Text style={styles.vitalUnit}>{t("Room Air")}</Text>
                 </View>
               </View>
 
               {/* Diagnosis / Complaint */}
-              <Text style={styles.sectionHeaderSmall}>REASON FOR VISIT</Text>
+              <Text style={styles.sectionHeaderSmall}>{t("REASON FOR VISIT")}</Text>
               <View style={styles.complaintBox}>
                 <Text style={styles.complaintText}>
-                  Spine checkup & lumbar mobility assessment. Follow-up after 4 weeks of physiotherapy.
-                </Text>
+                  {t("Spine checkup & lumbar mobility assessment. Follow-up after 4 weeks of physiotherapy.")}</Text>
               </View>
 
               {/* Doctor's Clinical Consultation Notes */}
-              <Text style={styles.sectionHeaderSmall}>DOCTOR CLINICAL NOTES</Text>
+              <Text style={styles.sectionHeaderSmall}>{t("DOCTOR CLINICAL NOTES")}</Text>
               <TextInput
                 style={styles.ehrNotesInput}
                 multiline
@@ -840,17 +837,17 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 style={styles.modalCancelBtn}
                 onPress={() => setIsEhrModalOpen(false)}
               >
-                <Text style={styles.modalCancelBtnText}>Close</Text>
+                <Text style={styles.modalCancelBtnText}>{t("Close")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.modalSubmitBtn}
                 onPress={() => {
                   setIsEhrModalOpen(false);
-                  Alert.alert('Notes Saved', 'Clinical observation recorded. Ready for prescription.');
+                  Alert.alert(t('Notes Saved'), t('Clinical observation recorded. Ready for prescription.'));
                 }}
               >
-                <Text style={styles.modalSubmitBtnText}>Save Consultation</Text>
+                <Text style={styles.modalSubmitBtnText}>{t("Save Consultation")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -866,7 +863,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <MaterialCommunityIcons name="coffee" size={24} color="#0d6371" style={{ marginRight: 8 }} />
-                <Text style={styles.modalTitle}>Doctor Break</Text>
+                <Text style={styles.modalTitle}>{t("Doctor Break")}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsBreakModalOpen(false)}>
                 <Ionicons name="close" size={22} color="#64748b" />
@@ -874,8 +871,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             </View>
 
             <Text style={{ fontSize: 13, color: '#475569', marginBottom: 16 }}>
-              Pausing consultations notifies the queue display and waiting patients in Room 3B.
-            </Text>
+              {t("Pausing consultations notifies the queue display and waiting patients in Room 3B.")}</Text>
 
             <TouchableOpacity
               style={styles.breakOptionCard}
@@ -883,8 +879,8 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             >
               <MaterialCommunityIcons name="clock-fast" size={22} color="#0d6371" style={{ marginRight: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.breakOptionTitle}>Take 15-Minute Tea Break</Text>
-                <Text style={styles.breakOptionDesc}>Recommended for standard rest intermission</Text>
+                <Text style={styles.breakOptionTitle}>{t("Take 15-Minute Tea Break")}</Text>
+                <Text style={styles.breakOptionDesc}>{t("Recommended for standard rest intermission")}</Text>
               </View>
             </TouchableOpacity>
 
@@ -894,8 +890,8 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             >
               <MaterialCommunityIcons name="silverware-fork-knife" size={22} color="#0d6371" style={{ marginRight: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.breakOptionTitle}>Take 30-Minute Meal Break</Text>
-                <Text style={styles.breakOptionDesc}>Lunch and prayer intermission</Text>
+                <Text style={styles.breakOptionTitle}>{t("Take 30-Minute Meal Break")}</Text>
+                <Text style={styles.breakOptionDesc}>{t("Lunch and prayer intermission")}</Text>
               </View>
             </TouchableOpacity>
 
@@ -903,7 +899,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               style={[styles.modalCancelBtn, { width: '100%', marginTop: 8 }]}
               onPress={() => setIsBreakModalOpen(false)}
             >
-              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              <Text style={styles.modalCancelBtnText}>{t("Cancel")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -918,7 +914,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <MaterialCommunityIcons name="filter-variant" size={24} color="#0d6371" style={{ marginRight: 8 }} />
-                <Text style={styles.modalTitle}>Filter Timeline</Text>
+                <Text style={styles.modalTitle}>{t("Filter Timeline")}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsFilterModalOpen(false)}>
                 <Ionicons name="close" size={22} color="#64748b" />
@@ -950,7 +946,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       activeFilter === f.key && styles.filterOptionTextActive,
                     ]}
                   >
-                    {f.label}
+                    {t(f.label ?? '')}
                   </Text>
                   {activeFilter === f.key && (
                     <Ionicons name="checkmark-circle" size={18} color="#0d6371" />

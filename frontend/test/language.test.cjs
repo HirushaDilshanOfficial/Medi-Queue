@@ -5,11 +5,14 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-const source = fs.readFileSync(path.join(__dirname, '../src/i18n/translations.ts'), 'utf8');
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
-const context = { exports: {} };
-vm.runInNewContext(compiled, context);
-const { translate, translations } = context.exports;
+function loadCopy(file) {
+  const source = fs.readFileSync(file, 'utf8');
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+  const context = { exports: {}, require: relative => loadCopy(path.resolve(path.dirname(file), relative + '.ts')) };
+  vm.runInNewContext(compiled, context);
+  return context.exports;
+}
+const { translate, translations } = loadCopy(path.join(__dirname, '../src/i18n/translations.ts'));
 
 test('English copy and unknown text stay intact in all languages', () => {
   assert.equal(translate('en', 'Language'), 'Language');
@@ -41,4 +44,44 @@ test('Dynamic queue copy keeps room names and numbers in the translated sentence
 
 test('Missing interpolation values remain visible rather than becoming undefined', () => {
   assert.equal(translate('en', 'Please go to {room}', {}), 'Please go to {room}');
+});
+
+test('Authentication and each role have Sinhala and Tamil interface copy', () => {
+  for (const text of ['Sign In', 'Call Next', 'National Health Grid', 'Patient Registration', 'Central Health Records']) {
+    for (const language of ['si', 'ta']) {
+      assert.notEqual(translate(language, text), text, `${language}: ${text}`);
+    }
+  }
+});
+
+test('Displayed backend enums translate without changing English API values', () => {
+  for (const value of ['male', 'female', 'URGENT', 'walk_in', 'pre_booked', 'in_consultation', 'on_break', 'no_show']) {
+    assert.equal(translate('en', value), value);
+    for (const language of ['si', 'ta']) assert.notEqual(translate(language, value), value);
+  }
+});
+
+test('Multiline confirmations preserve entered names, punctuation and line breaks', () => {
+  const key = 'Reason: {value0}\nStatus: {value1}\nTime: {value2}';
+  for (const language of ['en', 'si', 'ta']) {
+    const text = translate(language, key, { value0: 'Patient note $& {room}', value1: 'Waiting', value2: '10:30' });
+    assert.equal(text.split('\n').length, 3);
+    assert.ok(text.includes('Patient note $& {room}'));
+    assert.ok(text.includes('10:30'));
+  }
+});
+
+test('Localized dates and waits preserve hospital calendar keys and numbers', () => {
+  const dates = loadCopy(path.join(__dirname, '../src/utils/opdDates.ts'));
+  const instant = new Date('2026-10-06T20:00:00Z');
+  assert.equal(dates.toDateKey(instant), '2026-10-07');
+  for (const [language, locale] of [['en', 'en-GB'], ['si', 'si-LK'], ['ta', 'ta-LK']]) {
+    assert.equal(dates.dayLabel('2026-10-07', '2026-10-07', locale), translate(language, 'Today'));
+    assert.equal(dates.addDaysKey('2026-10-07', 1), '2026-10-08');
+    assert.ok(dates.longDayLabel('2026-10-07', locale).includes('2026'));
+    assert.equal(dates.shortDayParts('2026-10-07', locale).day, '7');
+    assert.ok(dates.waitLabel(75, language).includes('1'));
+    assert.ok(dates.waitLabel(75, language).includes('15'));
+    if (language !== 'en') assert.notEqual(dates.waitLabel(75, language), dates.waitLabel(75, 'en'));
+  }
 });

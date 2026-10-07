@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
@@ -50,17 +52,18 @@ export type RootStackParamList = {
 // ─────────────────────────────────────────────────────────
 
 export function HomePlaceholderScreen({ navigation }: any) {
+  const { t } = useLanguage();
   return (
     <SafeAreaView style={styles.placeholderContainer}>
       <View style={styles.contentWrap}>
-        <Text style={styles.placeholderTitle}>Home</Text>
+        <Text style={styles.placeholderTitle}>{t("Home")}</Text>
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => navigation.navigate('Queue')}
           activeOpacity={0.7}
         >
           <Ionicons name="list" size={20} color={Colors.white} style={styles.buttonIcon} />
-          <Text style={styles.actionButtonText}>Open Queue</Text>
+          <Text style={styles.actionButtonText}>{t("Open Queue")}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -68,10 +71,11 @@ export function HomePlaceholderScreen({ navigation }: any) {
 }
 
 export function QueuePlaceholderScreen({ navigation }: any) {
+  const { t } = useLanguage();
   return (
     <SafeAreaView style={styles.placeholderContainer}>
       <View style={styles.contentWrap}>
-        <Text style={styles.placeholderTitle}>Queue</Text>
+        <Text style={styles.placeholderTitle}>{t("Queue")}</Text>
         {navigation?.canGoBack?.() ? (
           <TouchableOpacity
             style={styles.backButton}
@@ -79,7 +83,7 @@ export function QueuePlaceholderScreen({ navigation }: any) {
             activeOpacity={0.7}
           >
             <Ionicons name="arrow-back" size={18} color={Colors.primary} style={styles.backIcon} />
-            <Text style={styles.backButtonText}>Back</Text>
+            <Text style={styles.backButtonText}>{t("Back")}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -88,30 +92,33 @@ export function QueuePlaceholderScreen({ navigation }: any) {
 }
 
 export function RegisterPlaceholderScreen() {
+  const { t } = useLanguage();
   return (
     <SafeAreaView style={styles.placeholderContainer}>
       <View style={styles.contentWrap}>
-        <Text style={styles.placeholderTitle}>Register</Text>
+        <Text style={styles.placeholderTitle}>{t("Register")}</Text>
       </View>
     </SafeAreaView>
   );
 }
 
 export function PatientsPlaceholderScreen() {
+  const { t } = useLanguage();
   return (
     <SafeAreaView style={styles.placeholderContainer}>
       <View style={styles.contentWrap}>
-        <Text style={styles.placeholderTitle}>Patients</Text>
+        <Text style={styles.placeholderTitle}>{t("Patients")}</Text>
       </View>
     </SafeAreaView>
   );
 }
 
 export function ReportsPlaceholderScreen() {
+  const { t } = useLanguage();
   return (
     <SafeAreaView style={styles.placeholderContainer}>
       <View style={styles.contentWrap}>
-        <Text style={styles.placeholderTitle}>Reports</Text>
+        <Text style={styles.placeholderTitle}>{t("Reports")}</Text>
       </View>
     </SafeAreaView>
   );
@@ -141,6 +148,7 @@ import { ReceptionistRoleGuard } from '../components/ReceptionistRoleGuard';
 const Tab = createBottomTabNavigator<ReceptionistTabParamList>();
 
 export function ReceptionistTabNavigator() {
+  const { t } = useLanguage();
   return (
     <ReceptionistRoleGuard>
       <Tab.Navigator
@@ -180,22 +188,22 @@ export function ReceptionistTabNavigator() {
         <Tab.Screen
           name="HomeTab"
           component={ReceptionistHomeStackNavigator}
-          options={{ tabBarLabel: 'Home' }}
+          options={{ tabBarLabel: t('Home') }}
         />
         <Tab.Screen
           name="RegisterTab"
           component={RegisterPatientScreen}
-          options={{ tabBarLabel: 'Register' }}
+          options={{ tabBarLabel: t('Register') }}
         />
         <Tab.Screen
           name="PatientsTab"
           component={PatientsScreen}
-          options={{ tabBarLabel: 'Patients' }}
+          options={{ tabBarLabel: t('Patients') }}
         />
         <Tab.Screen
           name="ReportsTab"
           component={ReportsScreen}
-          options={{ tabBarLabel: 'Reports' }}
+          options={{ tabBarLabel: t('Reports') }}
         />
       </Tab.Navigator>
     </ReceptionistRoleGuard>

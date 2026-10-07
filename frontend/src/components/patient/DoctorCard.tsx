@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import type { Doctor } from '../../types/patient';
 import { DesignImage } from './DesignImage';
@@ -19,13 +21,14 @@ function toneFor(id: string) {
 }
 
 export function DoctorCard({ doctor, onPress }: Props) {
+  const { t } = useLanguage();
   const initials = doctor.initials || doctor.firstName.slice(0, 2).toUpperCase();
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`View ${doctor.name}, ${doctor.specialization}`}
+      accessibilityLabel={t("View {value0}, {value1}", { value0: String(doctor.name), value1: String(doctor.specialization) })}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <View style={[styles.avatar, { backgroundColor: toneFor(doctor.id) }]}>

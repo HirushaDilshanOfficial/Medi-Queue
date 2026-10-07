@@ -35,7 +35,7 @@ const CATEGORIES = [
 ];
 
 export function AddReportScreen() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -81,21 +81,21 @@ export function AddReportScreen() {
   const onSubmit = useCallback(async () => {
   const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      setError('Give the report a title so your doctor can find it.');
+      setError(t('Give the report a title so your doctor can find it.'));
       return;
     }
 
     if (reportDate.trim()) {
       const parsed = new Date(`${reportDate.trim()}T00:00:00.000Z`);
       if (Number.isNaN(parsed.getTime())) {
-        setError('Check the report date. Use the format YYYY-MM-DD.');
+        setError(t('Check the report date. Use the format YYYY-MM-DD.'));
         return;
       }
       // A report cannot describe a test that has not happened yet, but a future
       // date is a plausible typo rather than an attempt to cheat, so it is a
       // form error rather than a rejection.
       if (parsed.getTime() > Date.now()) {
-        setError('The report date cannot be in the future.');
+        setError(t('The report date cannot be in the future.'));
         return;
       }
     }
@@ -114,7 +114,7 @@ export function AddReportScreen() {
     setSaving(true);
     try {
       if (selectedFile && (selectedFile.size ?? 0) > 10 * 1024 * 1024) {
-        setError('The report file must be 10 MB or smaller.');
+        setError(t('The report file must be 10 MB or smaller.'));
         return;
       }
       if (selectedFile || reportId) {
@@ -139,12 +139,12 @@ export function AddReportScreen() {
       router.back();
     } catch (submitError) {
       setError(
-        submitError instanceof Error ? submitError.message : 'Could not save your report.',
+        submitError instanceof Error ? submitError.message : t('Could not save your report.'),
       );
     } finally {
       setSaving(false);
     }
-  }, [appointmentId, category, fileName, notes, reportDate, reportId, router, selectedFile, title]);
+  }, [appointmentId, category, fileName, notes, reportDate, reportId, router, selectedFile, title, t]);
 
   const chooseFile = useCallback(async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -155,13 +155,13 @@ export function AddReportScreen() {
     if (result.canceled) return;
     const file = result.assets[0];
     if ((file.size ?? 0) > 10 * 1024 * 1024) {
-      setError('The report file must be 10 MB or smaller.');
+      setError(t('The report file must be 10 MB or smaller.'));
       return;
     }
     setError(null);
     setSelectedFile(file);
     setFileName(file.name);
-  }, []);
+  }, [t]);
 
   const openDatePicker = useCallback(() => {
     if (reportDate) setPickerDate(new Date(`${reportDate}T12:00:00`));
@@ -184,17 +184,17 @@ export function AddReportScreen() {
     try {
       await patientApi.openReportFile(report);
     } catch (fileError) {
-      setError(fileError instanceof Error ? fileError.message : 'Could not open the attached file.');
+      setError(fileError instanceof Error ? fileError.message : t('Could not open the attached file.'));
     } finally {
       setOpeningFile(false);
     }
-  }, [existing.data]);
+  }, [existing.data, t]);
 
   if ((history.loading && !history.data) || (reportId && existing.loading && !existing.data)) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
         <ScreenHeader title={reportId ? t('Edit report') : t('Lodge a report')} showBack />
-        <ScreenLoader label={reportId ? 'Loading your report' : t('Loading your visits')} />
+        <ScreenLoader label={reportId ? t('Loading your report') : t('Loading your visits')} />
       </View>
     );
   }
@@ -226,7 +226,7 @@ export function AddReportScreen() {
       <View style={{ paddingTop: insets.top + PatientTheme.spaceSm }}>
         <ScreenHeader
           title={reportId ? t('Edit report') : t('Lodge a report')}
-          subtitle={reportId ? 'Update the details for your doctor' : 'Tell your doctor what to look for'}
+          subtitle={reportId ? t('Update the details for your doctor') : t('Tell your doctor what to look for')}
           showBack
         />
       </View>
@@ -242,7 +242,7 @@ export function AddReportScreen() {
             label={t("Title")}
             value={title}
             onChangeText={setTitle}
-            placeholder="Full blood count"
+            placeholder={t("Full blood count")}
             hint={t("How your doctor will recognise it")}
             maxLength={120}
           />
@@ -271,7 +271,7 @@ export function AddReportScreen() {
           ) : (
             <Pressable onPress={openDatePicker} style={styles.dateButton} accessibilityRole="button">
               <Text style={reportDate ? styles.dateValue : styles.datePlaceholder}>
-                {calendarDateLabel(reportDate) || 'Choose report date'}
+                {calendarDateLabel(reportDate, locale) || t('Choose report date')}
               </Text>
             </Pressable>
           )}
@@ -286,12 +286,12 @@ export function AddReportScreen() {
             maxLength={160}
           />
           <Pressable onPress={chooseFile} style={styles.fileButton} accessibilityRole="button">
-            <Text style={styles.fileButtonLabel}>{selectedFile ? 'Change attached file' : 'Attach PDF or image'}</Text>
-            <Text style={styles.fileButtonHint}>{selectedFile?.name ?? 'Maximum 10 MB'}</Text>
+            <Text style={styles.fileButtonLabel}>{selectedFile ? t('Change attached file') : t('Attach PDF or image')}</Text>
+            <Text style={styles.fileButtonHint}>{selectedFile?.name ?? t('Maximum 10 MB')}</Text>
           </Pressable>
           {reportId && existing.data?.report.fileUrl && !selectedFile ? (
             <Pressable onPress={openExistingFile} style={styles.openFileButton} accessibilityRole="button" disabled={openingFile}>
-              <Text style={styles.openFileLabel}>{openingFile ? 'Opening attached file...' : 'Open current attached file'}</Text>
+              <Text style={styles.openFileLabel}>{openingFile ? t('Opening attached file...') : t('Open current attached file')}</Text>
               <Text style={styles.fileButtonHint}>{fileName}</Text>
             </Pressable>
           ) : null}
@@ -348,7 +348,7 @@ export function AddReportScreen() {
                     {visit.doctorName}
                   </Text>
                   <Text style={styles.visitMeta} numberOfLines={1}>
-                    {[visit.department, dayLabel(visit.date, todayKey())]
+                    {[visit.department, dayLabel(visit.date, todayKey(), locale)]
                       .filter(Boolean)
                       .join(' · ')}
                   </Text>
@@ -363,7 +363,7 @@ export function AddReportScreen() {
             {t("Could not load your visits, so the report will not be linked to one.")}</Text>
         ) : null}
 
-        {error ? <Text style={styles.inlineError}>{error}</Text> : null}
+        {error ? <Text style={styles.inlineError}>{t(error ?? '')}</Text> : null}
       </ScrollView>
 
       <Modal visible={Platform.OS !== 'web' && datePickerOpen} transparent animationType="slide" onRequestClose={() => setDatePickerOpen(false)}>

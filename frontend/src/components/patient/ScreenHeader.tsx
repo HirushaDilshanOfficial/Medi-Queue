@@ -35,11 +35,11 @@ export function ScreenHeader({ title, subtitle, showBack = false, action }: Prop
 
       <View style={styles.text}>
         <Text style={styles.title} numberOfLines={1}>
-          {title}
+          {t(title ?? '')}
         </Text>
         {subtitle ? (
           <Text style={styles.subtitle} numberOfLines={1}>
-            {subtitle}
+            {t(subtitle ?? '')}
           </Text>
         ) : null}
       </View>

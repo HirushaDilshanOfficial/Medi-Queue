@@ -1,13 +1,33 @@
 // UI copy only: patient names, clinical notes and server-provided records stay intact.
+import { commonCopy } from './commonCopy';
+import { doctorCopy } from './doctorCopy';
+import { mohCopy } from './mohCopy';
+import { receptionCopy } from './receptionCopy';
+import { templateCopy } from './templateCopy';
 export type Language = 'en' | 'si' | 'ta';
 export type TranslationValues = Record<string, string | number>;
 
+// Backend enums keep their original value; only their displayed label changes.
+const displayLabels: Record<string, string> = {
+  male: 'Male', female: 'Female', other: 'Other', normal: 'Normal', urgent: 'Urgent', senior: 'Senior',
+  waiting: 'Waiting', called: 'Called', booked: 'Booked', scheduled: 'Scheduled',
+  checked_in: 'Checked in', in_consultation: 'In Progress', completed: 'Completed', done: 'Completed',
+  no_show: 'No Show', cancelled: 'Cancelled', on_break: 'On Break',
+  walk_in: 'Walk-In', pre_booked: 'Pre-Booked', active: 'Active', inactive: 'Inactive',
+};
+
 export function translate(language: Language, text: string, values?: TranslationValues): string {
-  const translated = language === 'en' ? text : translations[text]?.[language === 'si' ? 0 : 1] ?? text;
+  const canonical = displayLabels[text.toLowerCase().replace(/ /g, '_')];
+  const translated = language === 'en' ? text : (translations[text] ?? translations[canonical])?.[language === 'si' ? 0 : 1] ?? text;
   return values ? translated.replace(/\{(\w+)\}/g, (match, key: string) => String(values[key] ?? match)) : translated;
 }
 
 export const translations: Record<string, readonly [string, string]> = {
+  ...templateCopy,
+  ...commonCopy,
+  ...doctorCopy,
+  ...mohCopy,
+  ...receptionCopy,
   'Confirmed': ['තහවුරු කර ඇත', 'உறுதிசெய்யப்பட்டது'],
   'Checked in': ['පැමිණීම ලියාපදිංචි කර ඇත', 'வருகை பதிவு செய்யப்பட்டது'],
   'In consultation': ['වෛද්‍ය හමුවීමේදී', 'ஆலோசனையில் உள்ளார்'],

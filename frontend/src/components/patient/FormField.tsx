@@ -39,7 +39,7 @@ export function FormField({
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
-        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.label}>{t(label ?? '')}</Text>
         {optional ? <Text style={styles.optional}>{t("Optional")}</Text> : null}
       </View>
       <TextInput
@@ -95,7 +95,7 @@ export function ChipGroup<T extends string>({
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
-        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.label}>{t(label ?? '')}</Text>
         {optional ? <Text style={styles.optional}>{t("Optional")}</Text> : null}
       </View>
       <View style={styles.chipRow}>
@@ -132,11 +132,12 @@ type SwitchRowProps = {
 };
 
 export function SwitchRow({ label, description, value, onValueChange }: SwitchRowProps) {
+  const { t } = useLanguage();
   return (
     <View style={styles.switchRow}>
       <View style={styles.switchText}>
-        <Text style={styles.label}>{label}</Text>
-        {description ? <Text style={styles.hint}>{description}</Text> : null}
+        <Text style={styles.label}>{t(label ?? '')}</Text>
+        {description ? <Text style={styles.hint}>{t(description ?? '')}</Text> : null}
       </View>
       <Switch
         value={value}

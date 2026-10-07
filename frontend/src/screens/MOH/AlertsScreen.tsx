@@ -1,6 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import { View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -14,6 +15,7 @@ import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
 export default function AlertsScreen() {
+  const { t, locale } = useLanguage();
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -57,7 +59,7 @@ export default function AlertsScreen() {
         body: JSON.stringify({ status: 'Acknowledged' })
       });
       if (response.ok) {
-        Alert.alert('Success', 'Alert acknowledged.');
+        Alert.alert(t('Success'), t('Alert acknowledged.'));
         fetchAlerts(); // refresh
       }
     } catch (error) {
@@ -66,7 +68,7 @@ export default function AlertsScreen() {
   };
 
   const handleDispatch = (hospitalName: string) => {
-    Alert.alert('Alert Dispatched 🚀', `Instructions successfully sent to the Receptionist at ${hospitalName}.`);
+    Alert.alert(t('Alert Dispatched 🚀'), t("Instructions successfully sent to the Receptionist at {value0}.", { value0: String(hospitalName) }));
   };
 
   const filteredAlerts = alerts.filter(alert => 
@@ -95,13 +97,13 @@ export default function AlertsScreen() {
           </View>
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.headerTitle}>MOH Executive</Text>
+              <Text style={styles.headerTitle}>{t("MOH Executive")}</Text>
               <View style={styles.liveBadge}>
                 <View style={styles.liveDot} />
-                <Text style={styles.liveText}>Live</Text>
+                <Text style={styles.liveText}>{t("Live")}</Text>
               </View>
             </View>
-            <Text style={styles.headerSubtitle}>National OPD Network • Alerts</Text>
+            <Text style={styles.headerSubtitle}>{t("National OPD Network • Alerts")}</Text>
           </View>
         </View>
         <View style={styles.headerActions}>
@@ -121,16 +123,15 @@ export default function AlertsScreen() {
           <View style={styles.bannerHeader}>
             <View style={styles.bannerBadge}>
               <View style={styles.bannerBadgeDot} />
-              <Text style={styles.bannerBadgeText}>Automated Sensor Grid</Text>
+              <Text style={styles.bannerBadgeText}>{t("Automated Sensor Grid")}</Text>
             </View>
-            <Text style={styles.bannerTime}>Refreshed: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+            <Text style={styles.bannerTime}>{t("Refreshed:")}{' '}{new Date().toLocaleTimeString(locale, {hour: '2-digit', minute:'2-digit'})}</Text>
           </View>
-          <Text style={styles.bannerTitle}>National Queue Early Warning</Text>
+          <Text style={styles.bannerTitle}>{t("National Queue Early Warning")}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
             <Text style={{ marginRight: 8, fontSize: 16 }}>⏱️</Text>
             <Text style={styles.bannerSubtitle}>
-              {alerts.length} active bottlenecks requiring executive action
-            </Text>
+              {alerts.length} {t("active bottlenecks requiring executive action")}</Text>
           </View>
         </View>
 
@@ -145,7 +146,7 @@ export default function AlertsScreen() {
                 onPress={() => setActiveFilter(filter.label)}
               >
                 <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
-                  {filter.label} {filter.count > 0 && <Text style={styles.filterCount}>{filter.count}</Text>}
+                  {t(filter.label ?? '')} {filter.count > 0 && <Text style={styles.filterCount}>{filter.count}</Text>}
                 </Text>
               </TouchableOpacity>
             );
@@ -157,7 +158,7 @@ export default function AlertsScreen() {
           {loading ? (
             <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
           ) : filteredAlerts.length === 0 ? (
-            <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>No active alerts right now.</Text>
+            <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("No active alerts right now.")}</Text>
           ) : (
             filteredAlerts.map(alert => {
               // Determine styles based on priority
@@ -180,7 +181,7 @@ export default function AlertsScreen() {
                   <View style={styles.cardHeader}>
                     <View style={styles.cardPriorityRow}>
                       <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
-                      <Text style={[styles.priorityText, { color: priorityColor }]}>{alert.priority}</Text>
+                      <Text style={[styles.priorityText, { color: priorityColor }]}>{t(alert.priority ?? '')}</Text>
                       <Text style={styles.prioritySeparator}>•</Text>
                       <Text style={styles.cardLocation}>{alert.location}</Text>
                     </View>
@@ -225,7 +226,7 @@ export default function AlertsScreen() {
                       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
                         <Text style={{ marginRight: 8, marginTop: 2 }}>✨</Text>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.aiLabel}>AI RECOMMENDED INTERVENTION</Text>
+                          <Text style={styles.aiLabel}>{t("AI RECOMMENDED INTERVENTION")}</Text>
                           <Text style={styles.aiText}>{alert.aiRecommendation}</Text>
                         </View>
                       </View>
@@ -241,19 +242,18 @@ export default function AlertsScreen() {
                       }}
                     >
                       <Text style={[styles.secondaryButtonText, { color: Colors.primaryDark }]}>
-                        👀 Review Live Queue
-                      </Text>
+                        {t("👀 Review Live Queue")}</Text>
                     </TouchableOpacity>
                   </View>
 
                   <View style={[styles.cardActionsRow, { marginTop: 10 }]}>
                     <TouchableOpacity style={styles.secondaryButton} onPress={() => handleAcknowledge(alert._id)}>
-                      <Text style={styles.secondaryButtonText}>✓ Acknowledge</Text>
+                      <Text style={styles.secondaryButtonText}>{t("✓ Acknowledge")}</Text>
                     </TouchableOpacity>
                     
                     {alert.priority === 'HIGH PRIORITY' && (
                       <TouchableOpacity style={styles.primaryButton} onPress={() => handleDispatch(alert.hospitalName)}>
-                        <Text style={styles.primaryButtonText}>🚀 Dispatch Alert</Text>
+                        <Text style={styles.primaryButtonText}>{t("🚀 Dispatch Alert")}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -268,8 +268,8 @@ export default function AlertsScreen() {
               <Text>⚙️</Text>
             </View>
             <View style={{ flex: 1, paddingHorizontal: 12 }}>
-              <Text style={styles.settingsTitle}>Sensor Threshold Engine</Text>
-              <Text style={styles.settingsDesc}>Alert triggers at &gt;35 min wait or &gt;25 patient</Text>
+              <Text style={styles.settingsTitle}>{t("Sensor Threshold Engine")}</Text>
+              <Text style={styles.settingsDesc}>{t("Alert triggers at >35 min wait or >25 patient")}</Text>
             </View>
             <Text style={{ color: Colors.textLight }}>›</Text>
           </TouchableOpacity>
@@ -292,40 +292,39 @@ export default function AlertsScreen() {
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Live Queue Details</Text>
+              <Text style={styles.modalTitle}>{t("Live Queue Details")}</Text>
               <Text style={styles.modalSubtitle}>{selectedAlert?.hospitalName}</Text>
             </View>
             
             <View style={{ padding: 20 }}>
               <View style={styles.queueInfoCard}>
-                <Text style={styles.queueInfoLabel}>Current Total Patients in Queue</Text>
+                <Text style={styles.queueInfoLabel}>{t("Current Total Patients in Queue")}</Text>
                 <Text style={styles.queueInfoValue}>
-                  {selectedAlert?.metrics?.['Active Queue'] || 'N/A'}
+                  {selectedAlert?.metrics?.['Active Queue'] || t('N/A')}
                 </Text>
               </View>
               
               <View style={styles.queueInfoCard}>
-                <Text style={styles.queueInfoLabel}>Available Doctors</Text>
+                <Text style={styles.queueInfoLabel}>{t("Available Doctors")}</Text>
                 <Text style={styles.queueInfoValue}>
-                  {selectedAlert?.metrics?.['Physician Ratio'] ? selectedAlert.metrics['Physician Ratio'].split('(')[1].replace(')', '') : 'N/A'}
+                  {selectedAlert?.metrics?.['Physician Ratio'] ? selectedAlert.metrics['Physician Ratio'].split('(')[1].replace(')', '') : t('N/A')}
                 </Text>
               </View>
 
               <View style={styles.queueInfoCard}>
-                <Text style={styles.queueInfoLabel}>Estimated Wait Time (Last Patient)</Text>
+                <Text style={styles.queueInfoLabel}>{t("Estimated Wait Time (Last Patient)")}</Text>
                 <Text style={[styles.queueInfoValue, { color: '#FF3B30' }]}>
-                  {selectedAlert?.title.includes('Orthopedic') ? '54 mins' : '22 mins'}
+                  {selectedAlert?.title.includes('Orthopedic') ? t('54 mins') : t('22 mins')}
                 </Text>
               </View>
               
               <Text style={{ fontSize: 13, color: Colors.textMedium, marginTop: 10, textAlign: 'center' }}>
-                (Live data fetched directly from the hospital sensor grid)
-              </Text>
+                {t("(Live data fetched directly from the hospital sensor grid)")}</Text>
             </View>
 
             <View style={styles.modalDivider} />
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowQueueModal(false)}>
-              <Text style={styles.modalCloseText}>Close</Text>
+              <Text style={styles.modalCloseText}>{t("Close")}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

@@ -36,7 +36,7 @@ export function QueueCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={
-        hasPass ? 'View your active queue pass' : 'Check in to get a queue number'
+        hasPass ? t('View your active queue pass') : t('Check in to get a queue number')
       }
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
@@ -49,12 +49,12 @@ export function QueueCard({
         <View style={styles.headerRow}>
           <DesignImage name="ticket" size={20} color={PatientTheme.accent} />
           <View style={styles.headerText}>
-            <Text style={styles.label}>{hasPass ? 'ACTIVE QUEUE' : t('LIVE QUEUE')}</Text>
+            <Text style={styles.label}>{hasPass ? t('ACTIVE QUEUE') : t('LIVE QUEUE')}</Text>
             <Text style={styles.clinic} numberOfLines={1}>
-              {hasPass ? clinicName : 'No active pass today'}
+              {hasPass ? clinicName : t('No active pass today')}
             </Text>
             <Text style={styles.clinicSubline} numberOfLines={1}>
-              {hasPass ? clinicSubline : 'Check in on the day of your appointment'}
+              {hasPass ? clinicSubline : t('Check in on the day of your appointment')}
             </Text>
           </View>
           {hasPass ? <View style={styles.liveDot} /> : null}
@@ -71,13 +71,13 @@ export function QueueCard({
               </View>
               <View style={styles.roomBlock}>
                 <DesignImage name="badge" size={14} color={PatientTheme.accentSoft} />
-                <Text style={styles.room}>{room ?? 'Room assigned at the desk'}</Text>
+                <Text style={styles.room}>{room ?? t('Room assigned at the desk')}</Text>
               </View>
             </View>
 
             <View style={styles.etaRow}>
               <DesignImage name="clock" size={13} color={PatientTheme.accentSoft} />
-              <Text style={styles.eta}>{eta ?? 'We will update your turn shortly'}</Text>
+              <Text style={styles.eta}>{eta ?? t('We will update your turn shortly')}</Text>
             </View>
           </>
         ) : (

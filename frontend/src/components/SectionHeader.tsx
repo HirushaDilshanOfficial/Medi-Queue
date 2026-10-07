@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   StyleProp,
@@ -29,11 +30,12 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
   rightElement,
   style,
 }) => {
+  const { t } = useLanguage();
   return (
     <View style={[styles.container, style]}>
       <View style={styles.titleWrap}>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        <Text style={styles.title}>{t(title ?? '')}</Text>
+        {subtitle ? <Text style={styles.subtitle}>{t(subtitle ?? '')}</Text> : null}
       </View>
 
       {rightElement ? (

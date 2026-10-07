@@ -24,7 +24,7 @@ const STATUS_STYLES: Record<string, { label: string; color: string; background: 
 };
 
 export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const status = STATUS_STYLES[appointment.status] ?? STATUS_STYLES.booked;
   const live = appointment.live;
 
@@ -53,14 +53,14 @@ export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn
           <DesignImage name="ticket" size={13} color={PatientTheme.brandMid} />
           <Text style={styles.liveText}>
             {t("Queue")}{' '}{appointment.tokenNumber ? `A-${String(appointment.tokenNumber).padStart(3, '0')}` : ''} ·{' '}
-            {live.position <= 1 ? t('You are next') : `${live.peopleAhead} ahead`}
+            {live.position <= 1 ? t('You are next') : t("{value0} ahead", { value0: String(live.peopleAhead) })}
             {live.estimatedTurnAt ? ` · ~${live.estimatedTurnAt}` : ''}
           </Text>
         </View>
       ) : null}
 
       {live && live.position > 1 && appointment.status === 'checked_in' ? (
-        <Text style={styles.waitHint}>{t("Estimated wait")}{' '}{waitLabel(live.waitMinutes)}</Text>
+        <Text style={styles.waitHint}>{t("Estimated wait")}{' '}{waitLabel(live.waitMinutes, language)}</Text>
       ) : null}
 
       {appointment.reason ? <Text style={styles.reason}>“{appointment.reason}”</Text> : null}

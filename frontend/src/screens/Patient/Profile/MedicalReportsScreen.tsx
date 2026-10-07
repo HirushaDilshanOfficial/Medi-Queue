@@ -30,10 +30,10 @@ export function MedicalReportsScreen() {
   const remove = useCallback(
     (report: MedicalReport) => {
       Alert.alert(
-        'Remove this report?',
-        `“${report.title}” will be taken off your list. The clinic's own copy of your record is not affected.`,
+        t('Remove this report?'),
+        t("“{value0}” will be taken off your list. The clinic's own copy of your record is not affected.", { value0: String(report.title) }),
         [
-          { text: 'Keep it', style: 'cancel' },
+          { text: t('Keep it'), style: 'cancel' },
           {
             text: t('Remove'),
             style: 'destructive',
@@ -44,7 +44,7 @@ export function MedicalReportsScreen() {
                 await reports.reload();
               } catch (error) {
                 Alert.alert(
-                  'Could not remove',
+                  t('Could not remove'),
                   error instanceof Error ? error.message : t('Please try again.'),
                 );
               } finally {

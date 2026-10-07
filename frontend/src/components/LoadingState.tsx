@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React from 'react';
 import {
   View,
-  Text,
   ActivityIndicator,
   StyleSheet,
   StyleProp,
@@ -24,6 +25,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
   fullscreen = false,
   style,
 }) => {
+  const { t } = useLanguage();
   return (
     <View
       style={[
@@ -33,7 +35,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
       ]}
     >
       <ActivityIndicator size={size} color={color} />
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      {message ? <Text style={styles.message}>{t(message ?? '')}</Text> : null}
     </View>
   );
 };

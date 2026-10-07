@@ -122,10 +122,11 @@ export function VisitHistoryScreen() {
 }
 
 function SummaryTile({ value, label }: { value: number; label: string }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.summaryTile}>
       <Text style={styles.summaryValue}>{String(value)}</Text>
-      <Text style={styles.summaryLabel}>{label}</Text>
+      <Text style={styles.summaryLabel}>{t(label ?? '')}</Text>
     </View>
   );
 }
@@ -168,8 +169,7 @@ function VisitCard({ visit }: { visit: VisitRecord }) {
         <View style={styles.reportLink}>
           <DesignImage name="clipboard" size={12} color={PatientTheme.brandMid} />
           <Text style={styles.reportLinkText}>
-            {visit.reportCount} {visit.reportCount === 1 ? 'report' : 'reports'} filed
-          </Text>
+            {visit.reportCount} {visit.reportCount === 1 ? t('report') : t('reports')} {t("filed")}</Text>
         </View>
       ) : null}
     </View>

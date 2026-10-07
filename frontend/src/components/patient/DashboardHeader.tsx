@@ -30,7 +30,7 @@ export function DashboardHeader({
       <View style={styles.actions}>
         <View style={styles.onlinePill}>
           <View style={styles.onlineDot} />
-          <Text style={styles.onlineText}>{activeDoctors} online</Text>
+          <Text style={styles.onlineText}>{activeDoctors} {t("online")}</Text>
         </View>
 
         <Pressable

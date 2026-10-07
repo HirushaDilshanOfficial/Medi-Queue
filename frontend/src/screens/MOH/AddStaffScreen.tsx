@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -18,6 +19,7 @@ import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
 export default function AddStaffScreen() {
+  const { t } = useLanguage();
   const params = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -120,14 +122,14 @@ export default function AddStaffScreen() {
 
     if (formData.role === 'Doctor') {
       if (!formData.medRegNo || !formData.specialization || !formData.doctorQualification) {
-        Alert.alert('Missing Fields', 'Please fill out all doctor details (*).');
+        Alert.alert(t('Missing Fields'), t('Please fill out all doctor details (*).'));
         return;
       }
     }
     
     if (formData.role === 'Nurse') {
       if (!formData.nurseRegNo || !formData.nurseQualification || !formData.ward) {
-        Alert.alert('Missing Fields', 'Please fill out all nurse details (*).');
+        Alert.alert(t('Missing Fields'), t('Please fill out all nurse details (*).'));
         return;
       }
     }
@@ -188,7 +190,7 @@ export default function AddStaffScreen() {
 
   const handleNextStep1 = () => {
     if (!validateStep1()) {
-      Alert.alert('Missing Fields', 'Please fill out all basic information.');
+      Alert.alert(t('Missing Fields'), t('Please fill out all basic information.'));
       return;
     }
     setCurrentStep(2);
@@ -196,7 +198,7 @@ export default function AddStaffScreen() {
 
   const handleNextStep2 = () => {
     if (!validateStep2()) {
-      Alert.alert('Missing Fields', 'Please fill out all employment information.');
+      Alert.alert(t('Missing Fields'), t('Please fill out all employment information.'));
       return;
     }
     setCurrentStep(3);
@@ -221,7 +223,7 @@ export default function AddStaffScreen() {
     <Modal visible={visible} transparent={true} animationType="fade">
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>{title}</Text>
+          <Text style={styles.modalTitle}>{t(title ?? '')}</Text>
           <ScrollView style={{ maxHeight: 300 }}>
             {items.map((item, index) => (
               <TouchableOpacity
@@ -236,7 +238,7 @@ export default function AddStaffScreen() {
                   setVisible(false);
                 }}
               >
-                <Text style={styles.modalItemText}>{isHospital ? item.name : item}</Text>
+                <Text style={styles.modalItemText}>{isHospital ? item.name : t(item)}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -262,7 +264,7 @@ export default function AddStaffScreen() {
         >
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isEditMode ? 'Edit Staff Member' : 'Add Staff Member'}</Text>
+        <Text style={styles.headerTitle}>{isEditMode ? t('Edit Staff Member') : t('Add Staff Member')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -272,7 +274,7 @@ export default function AddStaffScreen() {
           <View style={[styles.stepCircle, currentStep >= 1 ? styles.stepCircleActive : null]}>
             <Text style={[styles.stepCircleText, currentStep >= 1 ? styles.stepCircleTextActive : null]}>1</Text>
           </View>
-          <Text style={[styles.stepLabel, currentStep >= 1 ? styles.stepLabelActive : null]}>Basic</Text>
+          <Text style={[styles.stepLabel, currentStep >= 1 ? styles.stepLabelActive : null]}>{t("Basic")}</Text>
         </View>
         <View style={[styles.stepLine, currentStep >= 2 ? styles.stepLineActive : null]} />
         
@@ -280,7 +282,7 @@ export default function AddStaffScreen() {
           <View style={[styles.stepCircle, currentStep >= 2 ? styles.stepCircleActive : null]}>
             <Text style={[styles.stepCircleText, currentStep >= 2 ? styles.stepCircleTextActive : null]}>2</Text>
           </View>
-          <Text style={[styles.stepLabel, currentStep >= 2 ? styles.stepLabelActive : null]}>Employment</Text>
+          <Text style={[styles.stepLabel, currentStep >= 2 ? styles.stepLabelActive : null]}>{t("Employment")}</Text>
         </View>
         <View style={[styles.stepLine, currentStep >= 3 ? styles.stepLineActive : null]} />
 
@@ -288,7 +290,7 @@ export default function AddStaffScreen() {
           <View style={[styles.stepCircle, currentStep >= 3 ? styles.stepCircleActive : null]}>
             <Text style={[styles.stepCircleText, currentStep >= 3 ? styles.stepCircleTextActive : null]}>3</Text>
           </View>
-          <Text style={[styles.stepLabel, currentStep >= 3 ? styles.stepLabelActive : null]}>Role Details</Text>
+          <Text style={[styles.stepLabel, currentStep >= 3 ? styles.stepLabelActive : null]}>{t("Role Details")}</Text>
         </View>
       </View>
 
@@ -297,10 +299,10 @@ export default function AddStaffScreen() {
         {/* STEP 1: Basic Information */}
         {currentStep === 1 && (
           <View style={styles.stepContent}>
-            <Text style={styles.sectionTitle}>Basic Information</Text>
+            <Text style={styles.sectionTitle}>{t("Basic Information")}</Text>
         
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Full Name*</Text>
+          <Text style={styles.label}>{t("Full Name*")}</Text>
           <TextInput
             style={styles.input}
             placeholder="John Doe"
@@ -311,7 +313,7 @@ export default function AddStaffScreen() {
 
         <View style={styles.row}>
           <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-            <Text style={styles.label}>NIC*</Text>
+            <Text style={styles.label}>{t("NIC*")}</Text>
             <TextInput
               style={styles.input}
               placeholder="98xxxxxxxV"
@@ -320,7 +322,7 @@ export default function AddStaffScreen() {
             />
           </View>
           <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>Date of Birth*</Text>
+            <Text style={styles.label}>{t("Date of Birth*")}</Text>
             <TouchableOpacity 
               style={styles.dropdownButton} 
               onPress={() => setShowDatePicker(true)}
@@ -335,16 +337,16 @@ export default function AddStaffScreen() {
 
         <View style={styles.row}>
           <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-            <Text style={styles.label}>Gender*</Text>
+            <Text style={styles.label}>{t("Gender*")}</Text>
             <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowGenderDropdown(true)}>
               <Text style={formData.gender ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
-                {formData.gender || 'Select Gender'}
+                {t(formData.gender ?? '') || t('Select Gender')}
               </Text>
               <Text style={styles.dropdownIcon}>▼</Text>
             </TouchableOpacity>
           </View>
           <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>Mobile Number*</Text>
+            <Text style={styles.label}>{t("Mobile Number*")}</Text>
             <TextInput
               style={styles.input}
               placeholder="07x xxxxxxx"
@@ -356,7 +358,7 @@ export default function AddStaffScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email Address* (For Login)</Text>
+          <Text style={styles.label}>{t("Email Address* (For Login)")}</Text>
           <TextInput
             style={styles.input}
             placeholder="example@mail.com"
@@ -369,10 +371,10 @@ export default function AddStaffScreen() {
 
         {!isEditMode && (
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password*</Text>
+            <Text style={styles.label}>{t("Password*")}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter secure password"
+              placeholder={t("Enter secure password")}
               secureTextEntry
               value={formData.password}
               onChangeText={(text) => setFormData({ ...formData, password: text })}
@@ -381,10 +383,10 @@ export default function AddStaffScreen() {
         )}
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Address*</Text>
+            <Text style={styles.label}>{t("Address*")}</Text>
             <TextInput
               style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-              placeholder="Residential address"
+              placeholder={t("Residential address")}
               multiline
               value={formData.address}
               onChangeText={(text) => setFormData({ ...formData, address: text })}
@@ -392,7 +394,7 @@ export default function AddStaffScreen() {
           </View>
           
           <TouchableOpacity style={styles.nextButton} onPress={handleNextStep1}>
-            <Text style={styles.nextButtonText}>Next: Employment Info →</Text>
+            <Text style={styles.nextButtonText}>{t("Next: Employment Info →")}</Text>
           </TouchableOpacity>
         </View>
         )}
@@ -400,13 +402,13 @@ export default function AddStaffScreen() {
         {/* STEP 2: Employment Information */}
         {currentStep === 2 && (
           <View style={styles.stepContent}>
-            <Text style={styles.sectionTitle}>Employment Information</Text>
+            <Text style={styles.sectionTitle}>{t("Employment Information")}</Text>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Role*</Text>
+          <Text style={styles.label}>{t("Role*")}</Text>
           <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowRoleDropdown(true)}>
             <Text style={formData.role ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
-              {formData.role || 'Select Role'}
+              {t(formData.role ?? '') || t('Select Role')}
             </Text>
             <Text style={styles.dropdownIcon}>▼</Text>
           </TouchableOpacity>
@@ -414,16 +416,16 @@ export default function AddStaffScreen() {
 
         <View style={styles.row}>
           <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-            <Text style={styles.label}>Employee No</Text>
+            <Text style={styles.label}>{t("Employee No")}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: '#f5f5f5', color: Colors.textMedium }]}
-              placeholder="Auto-generated"
+              placeholder={t("Auto-generated")}
               value={formData.employeeNo}
               editable={false}
             />
           </View>
           <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>Date Joined</Text>
+            <Text style={styles.label}>{t("Date Joined")}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: '#f5f5f5', color: Colors.textMedium }]}
               value={new Date().toISOString().split('T')[0]}
@@ -433,27 +435,27 @@ export default function AddStaffScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Hospital*</Text>
+          <Text style={styles.label}>{t("Hospital*")}</Text>
           <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowHospitalDropdown(true)}>
             <Text style={formData.hospitalName ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
-              {formData.hospitalName || 'Select Hospital'}
+              {formData.hospitalName || t('Select Hospital')}
             </Text>
             <Text style={styles.dropdownIcon}>▼</Text>
           </TouchableOpacity>
         </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Department*</Text>
+            <Text style={styles.label}>{t("Department*")}</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Cardiology, OPD"
+              placeholder={t("e.g. Cardiology, OPD")}
               value={formData.department}
               onChangeText={(text) => setFormData({ ...formData, department: text })}
             />
           </View>
 
           <TouchableOpacity style={styles.nextButton} onPress={handleNextStep2}>
-            <Text style={styles.nextButtonText}>Next: Role Details →</Text>
+            <Text style={styles.nextButtonText}>{t("Next: Role Details →")}</Text>
           </TouchableOpacity>
         </View>
         )}
@@ -463,30 +465,30 @@ export default function AddStaffScreen() {
           <View style={styles.stepContent}>
             {formData.role === 'Doctor' ? (
               <View style={styles.conditionalSection}>
-                <Text style={styles.sectionTitle}>Doctor Details</Text>
+                <Text style={styles.sectionTitle}>{t("Doctor Details")}</Text>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Medical Registration Number*</Text>
+              <Text style={styles.label}>{t("Medical Registration Number*")}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Reg No"
+                placeholder={t("Reg No")}
                 value={formData.medRegNo}
                 onChangeText={(text) => setFormData({ ...formData, medRegNo: text })}
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Specialization*</Text>
+              <Text style={styles.label}>{t("Specialization*")}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Cardiologist"
+                placeholder={t("e.g. Cardiologist")}
                 value={formData.specialization}
                 onChangeText={(text) => setFormData({ ...formData, specialization: text })}
               />
             </View>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Qualification*</Text>
+                  <Text style={styles.label}>{t("Qualification*")}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. MBBS, MD"
+                    placeholder={t("e.g. MBBS, MD")}
                     value={formData.doctorQualification}
                     onChangeText={(text) => setFormData({ ...formData, doctorQualification: text })}
                   />
@@ -494,30 +496,30 @@ export default function AddStaffScreen() {
               </View>
             ) : formData.role === 'Nurse' ? (
               <View style={styles.conditionalSection}>
-                <Text style={styles.sectionTitle}>Nurse Details</Text>
+                <Text style={styles.sectionTitle}>{t("Nurse Details")}</Text>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Nursing Registration No*</Text>
+                  <Text style={styles.label}>{t("Nursing Registration No*")}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Reg No"
+                    placeholder={t("Reg No")}
                     value={formData.nurseRegNo}
                     onChangeText={(text) => setFormData({ ...formData, nurseRegNo: text })}
                   />
                 </View>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Qualification*</Text>
+                  <Text style={styles.label}>{t("Qualification*")}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. BSc Nursing"
+                    placeholder={t("e.g. BSc Nursing")}
                     value={formData.nurseQualification}
                     onChangeText={(text) => setFormData({ ...formData, nurseQualification: text })}
                   />
                 </View>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Ward*</Text>
+                  <Text style={styles.label}>{t("Ward*")}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. Ward 4"
+                    placeholder={t("e.g. Ward 4")}
                     value={formData.ward}
                     onChangeText={(text) => setFormData({ ...formData, ward: text })}
                   />
@@ -525,9 +527,9 @@ export default function AddStaffScreen() {
               </View>
             ) : (
               <View style={styles.conditionalSection}>
-                <Text style={styles.sectionTitle}>No Additional Details</Text>
+                <Text style={styles.sectionTitle}>{t("No Additional Details")}</Text>
                 <Text style={{ color: Colors.textMedium, fontSize: 14 }}>
-                  No extra role-specific details are required for a {formData.role || 'Staff Member'}.
+                  {t("No extra role-specific details are required for a")}{' '}{t(formData.role ?? '') || t('Staff Member')}.
                 </Text>
               </View>
             )}
@@ -536,8 +538,8 @@ export default function AddStaffScreen() {
             <TouchableOpacity style={styles.submitButton} onPress={handleSave} disabled={loading}>
               <Text style={styles.submitButtonText}>
                 {loading 
-                  ? (isEditMode ? 'Updating...' : 'Registering...') 
-                  : (isEditMode ? 'Update Staff Member' : 'Complete Registration')}
+                  ? (isEditMode ? t('Updating...') : t('Registering...'))
+                  : (isEditMode ? t('Update Staff Member') : t('Complete Registration'))}
               </Text>
             </TouchableOpacity>
           </View>
@@ -566,14 +568,14 @@ export default function AddStaffScreen() {
             <View style={{ backgroundColor: Colors.white, padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 40 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
                 <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                  <Text style={{ color: Colors.primary, fontSize: 16 }}>Cancel</Text>
+                  <Text style={{ color: Colors.primary, fontSize: 16 }}>{t("Cancel")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => {
                   setShowDatePicker(false);
                   const formattedDate = date.toISOString().split('T')[0];
                   setFormData({ ...formData, dob: formattedDate });
                 }}>
-                  <Text style={{ color: Colors.primary, fontWeight: 'bold', fontSize: 16 }}>Done</Text>
+                  <Text style={{ color: Colors.primary, fontWeight: 'bold', fontSize: 16 }}>{t("Done")}</Text>
                 </TouchableOpacity>
               </View>
               {Platform.OS === 'web' ? (

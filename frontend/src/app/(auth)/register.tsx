@@ -1,6 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  View, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -11,6 +13,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 // Register Screen - Expo Router version
 export default function RegisterScreen() {
+  const { t } = useLanguage();
   const [fullName, setFullName] = useState('');
   const [nic, setNic] = useState('');
   const [birthday, setBirthday] = useState('');
@@ -42,15 +45,15 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!fullName || !nic || !birthday || !phone || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('Error'), t('Please fill in all fields'));
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert(t('Error'), t('Passwords do not match'));
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      Alert.alert(t('Error'), t('Password must be at least 6 characters'));
       return;
     }
 
@@ -60,11 +63,11 @@ export default function RegisterScreen() {
       const patientData = { fullName, nic, birthday, gender, phone, email, password, bloodGroup };
       await registerPatient(patientData);
       
-      Alert.alert('Success', 'Account created! Please login.', [
+      Alert.alert(t('Success'), t('Account created! Please login.'), [
         { text: 'OK', onPress: () => router.replace('/(auth)/login') },
       ]);
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.message);
+      Alert.alert(t('Registration Failed'), error.message);
     } finally {
       setIsLoading(false);
     }
@@ -80,7 +83,7 @@ export default function RegisterScreen() {
     <Modal visible={visible} transparent={true} animationType="fade">
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>{title}</Text>
+          <Text style={styles.modalTitle}>{t(title ?? '')}</Text>
           <ScrollView style={{ maxHeight: 300 }}>
             {items.map((item, index) => (
               <TouchableOpacity
@@ -91,7 +94,7 @@ export default function RegisterScreen() {
                   setVisible(false);
                 }}
               >
-                <Text style={styles.modalItemText}>{item}</Text>
+                <Text style={styles.modalItemText}>{t(item)}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -111,23 +114,23 @@ export default function RegisterScreen() {
           <View style={styles.circleTopRight} />
           <View style={styles.circleBottomLeft} />
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>Back</Text></View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>{t("Back")}</Text></View>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Account</Text>
-          <Text style={styles.headerSubtitle}>Register as a new patient</Text>
+          <Text style={styles.headerTitle}>{t("Create Account")}</Text>
+          <Text style={styles.headerSubtitle}>{t("Register as a new patient")}</Text>
         </View>
 
         {/* ---- FORM ---- */}
         <View style={styles.formContainer}>
-          <Text style={styles.sectionLabel}>Full Name</Text>
-          <TextInput style={styles.input} placeholder="Enter your full name"
+          <Text style={styles.sectionLabel}>{t("Full Name")}</Text>
+          <TextInput style={styles.input} placeholder={t("Enter your full name")}
             placeholderTextColor={Colors.textLight} value={fullName} onChangeText={setFullName} />
 
-          <Text style={styles.sectionLabel}>NIC Number</Text>
+          <Text style={styles.sectionLabel}>{t("NIC Number")}</Text>
           <TextInput style={styles.input} placeholder="e.g. 199912345678"
             placeholderTextColor={Colors.textLight} value={nic} onChangeText={setNic} />
 
-          <Text style={styles.sectionLabel}>Birthday</Text>
+          <Text style={styles.sectionLabel}>{t("Birthday")}</Text>
           <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowDatePicker(true)}>
             <Text style={birthday ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
               {birthday || 'YYYY-MM-DD'}
@@ -135,62 +138,61 @@ export default function RegisterScreen() {
             <Text style={styles.dropdownIcon}>📅</Text>
           </TouchableOpacity>
 
-          <Text style={styles.sectionLabel}>Gender</Text>
+          <Text style={styles.sectionLabel}>{t("Gender")}</Text>
           <View style={styles.genderContainer}>
             <TouchableOpacity 
               style={[styles.genderButton, gender === 'Male' && styles.genderActive]} 
               onPress={() => setGender('Male')}
             >
-              <Text style={[styles.genderText, gender === 'Male' && styles.genderTextActive]}>Male</Text>
+              <Text style={[styles.genderText, gender === 'Male' && styles.genderTextActive]}>{t("Male")}</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.genderButton, gender === 'Female' && styles.genderActive]} 
               onPress={() => setGender('Female')}
             >
-              <Text style={[styles.genderText, gender === 'Female' && styles.genderTextActive]}>Female</Text>
+              <Text style={[styles.genderText, gender === 'Female' && styles.genderTextActive]}>{t("Female")}</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.sectionLabel}>Telephone Number</Text>
+          <Text style={styles.sectionLabel}>{t("Telephone Number")}</Text>
           <TextInput style={styles.input} placeholder="e.g. 0712345678" keyboardType="phone-pad"
             placeholderTextColor={Colors.textLight} value={phone} onChangeText={setPhone} />
 
-          <Text style={styles.sectionLabel}>Blood Group (Optional)</Text>
+          <Text style={styles.sectionLabel}>{t("Blood Group (Optional)")}</Text>
           <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowBloodGroupDropdown(true)}>
             <Text style={bloodGroup ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
-              {bloodGroup || 'Select Blood Group'}
+              {bloodGroup || t('Select Blood Group')}
             </Text>
             <Text style={styles.dropdownIcon}>▼</Text>
           </TouchableOpacity>
 
-          <Text style={styles.sectionLabel}>Email Address</Text>
-          <TextInput style={styles.input} placeholder="Enter your email"
+          <Text style={styles.sectionLabel}>{t("Email Address")}</Text>
+          <TextInput style={styles.input} placeholder={t("Enter your email")}
             placeholderTextColor={Colors.textLight} value={email} onChangeText={setEmail}
             keyboardType="email-address" autoCapitalize="none" />
 
-          <Text style={styles.sectionLabel}>Password</Text>
-          <TextInput style={styles.input} placeholder="Min. 6 characters"
+          <Text style={styles.sectionLabel}>{t("Password")}</Text>
+          <TextInput style={styles.input} placeholder={t("Min. 6 characters")}
             placeholderTextColor={Colors.textLight} value={password} onChangeText={setPassword} secureTextEntry />
 
-          <Text style={styles.sectionLabel}>Confirm Password</Text>
-          <TextInput style={styles.input} placeholder="Re-enter your password"
+          <Text style={styles.sectionLabel}>{t("Confirm Password")}</Text>
+          <TextInput style={styles.input} placeholder={t("Re-enter your password")}
             placeholderTextColor={Colors.textLight} value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
 
           <View style={[styles.infoBox, { flexDirection: 'row', alignItems: 'flex-start', gap: 8 }]} >
             <AppIcon name="medical" size={18} color={Colors.primaryDark} />
             <Text style={[styles.infoText, { flex: 1 }]}>
-              Your account will be linked to your NIC for identity verification at the hospital.
-            </Text>
+              {t("Your account will be linked to your NIC for identity verification at the hospital.")}</Text>
           </View>
 
           <TouchableOpacity style={styles.registerButton} onPress={handleRegister} disabled={isLoading}>
             {isLoading ? <ActivityIndicator color={Colors.white} /> :
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.registerButtonText}>Create Account</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.registerButtonText}>{t("Create Account")}</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>}
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.loginLink} onPress={() => router.replace('/(auth)/login')}>
             <Text style={styles.loginLinkText}>
-              Already have an account? <Text style={styles.loginLinkBold}>Login</Text>
+              {t("Already have an account?")}{' '}<Text style={styles.loginLinkBold}>{t("Login")}</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -206,14 +208,14 @@ export default function RegisterScreen() {
             <View style={{ backgroundColor: Colors.white, padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 40 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
                 <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                  <Text style={{ color: Colors.primary, fontSize: 16 }}>Cancel</Text>
+                  <Text style={{ color: Colors.primary, fontSize: 16 }}>{t("Cancel")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => {
                   setShowDatePicker(false);
                   const formattedDate = date.toISOString().split('T')[0];
                   setBirthday(formattedDate);
                 }}>
-                  <Text style={{ color: Colors.primary, fontWeight: 'bold', fontSize: 16 }}>Done</Text>
+                  <Text style={{ color: Colors.primary, fontWeight: 'bold', fontSize: 16 }}>{t("Done")}</Text>
                 </TouchableOpacity>
               </View>
               {Platform.OS === 'web' ? (

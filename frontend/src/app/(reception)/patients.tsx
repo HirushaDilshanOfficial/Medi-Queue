@@ -1,12 +1,15 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { View, StyleSheet, SafeAreaView } from 'react-native';
 import { Colors } from '../../constants/Colors';
 
 export default function PatientsScreen() {
+  const { t } = useLanguage();
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Patients</Text>
+        <Text style={styles.title}>{t("Patients")}</Text>
       </View>
     </SafeAreaView>
   );

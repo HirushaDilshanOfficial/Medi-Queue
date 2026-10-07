@@ -21,7 +21,7 @@ export function EmergencyBanner({ helpline }: Props) {
     <Pressable
       onPress={call}
       accessibilityRole="button"
-      accessibilityLabel={`Call emergency helpline ${helpline}`}
+      accessibilityLabel={t("Call emergency helpline {value0}", { value0: String(helpline) })}
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
       <View style={styles.iconWrap}>

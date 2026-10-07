@@ -1,6 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import { View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -12,6 +13,7 @@ import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
 export default function ReportsScreen() {
+  const { t } = useLanguage();
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -69,7 +71,7 @@ export default function ReportsScreen() {
   if (stats && stats.hospitalStats && stats.categoryStats && stats.hospitalStats.length > 0 && stats.categoryStats.length > 0) {
     const topHospital = stats.hospitalStats[0]._id;
     const topCategory = stats.categoryStats[0]._id;
-    insightText = `Data suggests a consistent spike in "${topCategory}" bottlenecks at ${topHospital}. Recommend reviewing resource allocation and transferring support staff to ${topHospital} to balance the load over the next period.`;
+    insightText = t('Data suggests a consistent spike in "{category}" bottlenecks at {hospital}. Recommend reviewing resource allocation and transferring support staff to {hospital} to balance the load over the next period.', { category: t(topCategory), hospital: topHospital });
   }
 
   return (
@@ -83,8 +85,8 @@ export default function ReportsScreen() {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Monthly Analytics</Text>
-          <Text style={styles.headerSubtitle}>System-wide Bottleneck Report</Text>
+          <Text style={styles.headerTitle}>{t("Monthly Analytics")}</Text>
+          <Text style={styles.headerSubtitle}>{t("System-wide Bottleneck Report")}</Text>
         </View>
       </View>
 
@@ -94,17 +96,17 @@ export default function ReportsScreen() {
         <View style={styles.kpiRow}>
           <View style={[styles.kpiCard, { backgroundColor: Colors.primary }]}>
             <Text style={styles.kpiValue}>{totalAlerts}</Text>
-            <Text style={styles.kpiLabel}>Total Alerts (Month)</Text>
+            <Text style={styles.kpiLabel}>{t("Total Alerts (Month)")}</Text>
           </View>
           <View style={[styles.kpiCard, { backgroundColor: '#34C759' }]}>
             <Text style={styles.kpiValue}>{resolvedAlerts}</Text>
-            <Text style={styles.kpiLabel}>Issues Resolved</Text>
+            <Text style={styles.kpiLabel}>{t("Issues Resolved")}</Text>
           </View>
         </View>
 
         {/* Bottleneck Types */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Alert Breakdown by Category</Text>
+          <Text style={styles.sectionTitle}>{t("Alert Breakdown by Category")}</Text>
           <View style={styles.card}>
             {stats?.categoryStats?.map((cat: any, index: number) => {
               const colors = ['#FF3B30', '#FF9500', '#5AC8FA'];
@@ -112,22 +114,22 @@ export default function ReportsScreen() {
                 <View key={cat._id} style={styles.statRow}>
                   <View style={styles.statLabelRow}>
                     <Text style={styles.statLabel}>{cat._id}</Text>
-                    <Text style={styles.statCount}>{cat.count} Incidents</Text>
+                    <Text style={styles.statCount}>{cat.count} {t("Incidents")}</Text>
                   </View>
                   {renderProgressBar(cat.count, totalAlerts, colors[index % colors.length])}
                 </View>
               );
             })}
             {(!stats?.categoryStats || stats.categoryStats.length === 0) && (
-              <Text style={styles.emptyText}>No data available yet.</Text>
+              <Text style={styles.emptyText}>{t("No data available yet.")}</Text>
             )}
           </View>
         </View>
 
         {/* Top Hospitals Heatmap (Bar list) */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Top Overcrowded Hospitals (Heatmap)</Text>
-          <Text style={styles.sectionDesc}>Hospitals needing immediate resource redistribution</Text>
+          <Text style={styles.sectionTitle}>{t("Top Overcrowded Hospitals (Heatmap)")}</Text>
+          <Text style={styles.sectionDesc}>{t("Hospitals needing immediate resource redistribution")}</Text>
           
           <View style={styles.card}>
             {stats?.hospitalStats?.map((hosp: any, index: number) => {
@@ -137,28 +139,28 @@ export default function ReportsScreen() {
                 <View key={hosp._id} style={styles.statRow}>
                   <View style={styles.statLabelRow}>
                     <Text style={styles.statLabel}>{index + 1}. {hosp._id}</Text>
-                    <Text style={[styles.statCount, { color: '#FF3B30', fontWeight: 'bold' }]}>{hosp.count} Alerts</Text>
+                    <Text style={[styles.statCount, { color: '#FF3B30', fontWeight: 'bold' }]}>{hosp.count} {t("Alerts")}</Text>
                   </View>
                   {renderProgressBar(hosp.count, maxCount, '#FF3B30')}
                 </View>
               );
             })}
             {(!stats?.hospitalStats || stats.hospitalStats.length === 0) && (
-              <Text style={styles.emptyText}>No hospital data available yet.</Text>
+              <Text style={styles.emptyText}>{t("No hospital data available yet.")}</Text>
             )}
           </View>
         </View>
 
         {/* AI Actionable Insights */}
         <View style={[styles.section, { marginBottom: 40 }]}>
-          <Text style={styles.sectionTitle}>AI System Insights</Text>
+          <Text style={styles.sectionTitle}>{t("AI System Insights")}</Text>
           <View style={[styles.card, { backgroundColor: '#E0F7FA', borderColor: Colors.primary, borderWidth: 1 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
               <Text style={{ marginRight: 10, fontSize: 18 }}>💡</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.insightTitle}>Resource Allocation Strategy</Text>
+                <Text style={styles.insightTitle}>{t("Resource Allocation Strategy")}</Text>
                 <Text style={styles.insightText}>
-                  {insightText}
+                  {t(insightText)}
                 </Text>
               </View>
             </View>

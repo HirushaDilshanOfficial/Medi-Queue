@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TextInput,
@@ -17,6 +18,7 @@ import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
 export default function AddHospitalScreen() {
+  const { t } = useLanguage();
   const params = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -104,7 +106,7 @@ export default function AddHospitalScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isEditMode ? 'Edit Hospital' : 'Add New Hospital'}</Text>
+          <Text style={styles.headerTitle}>{isEditMode ? t('Edit Hospital') : t('Add New Hospital')}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -115,14 +117,14 @@ export default function AddHospitalScreen() {
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             
             <View style={styles.formContainer}>
-              <Text style={styles.sectionTitle}>Hospital Details</Text>
-              <Text style={styles.sectionSubtitle}>Enter the official information of the facility.</Text>
+              <Text style={styles.sectionTitle}>{t("Hospital Details")}</Text>
+              <Text style={styles.sectionSubtitle}>{t("Enter the official information of the facility.")}</Text>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Hospital Name</Text>
+                <Text style={styles.label}>{t("Hospital Name")}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. Colombo National Hospital"
+                  placeholder={t("e.g. Colombo National Hospital")}
                   placeholderTextColor={Colors.textLight}
                   value={formData.name}
                   onChangeText={(text) => setFormData({ ...formData, name: text })}
@@ -131,10 +133,10 @@ export default function AddHospitalScreen() {
 
               <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                  <Text style={styles.label}>Hospital Code</Text>
+                  <Text style={styles.label}>{t("Hospital Code")}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. CNH-001"
+                    placeholder={t("e.g. CNH-001")}
                     placeholderTextColor={Colors.textLight}
                     value={formData.code}
                     onChangeText={(text) => setFormData({ ...formData, code: text })}
@@ -142,26 +144,26 @@ export default function AddHospitalScreen() {
                 </View>
 
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Hospital Type</Text>
+                  <Text style={styles.label}>{t("Hospital Type")}</Text>
                   <TouchableOpacity 
                     style={styles.dropdownButton}
                     onPress={() => setShowTypeDropdown(true)}
                   >
                     <Text style={{ color: formData.type ? Colors.textDark : Colors.textLight }}>
-                      {formData.type || 'Select Type'}
+                      {t(formData.type) || t('Select Type')}
                     </Text>
                     <Text style={{ color: Colors.textMedium, fontSize: 12 }}>▼</Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
-              <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Location & Contact</Text>
+              <Text style={[styles.sectionTitle, { marginTop: 10 }]}>{t("Location & Contact")}</Text>
               
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Address / Location</Text>
+                <Text style={styles.label}>{t("Address / Location")}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter full address"
+                  placeholder={t("Enter full address")}
                   placeholderTextColor={Colors.textLight}
                   value={formData.location}
                   onChangeText={(text) => setFormData({ ...formData, location: text })}
@@ -169,10 +171,10 @@ export default function AddHospitalScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Contact Information</Text>
+                <Text style={styles.label}>{t("Contact Information")}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Phone or Email"
+                  placeholder={t("Phone or Email")}
                   placeholderTextColor={Colors.textLight}
                   keyboardType="phone-pad"
                   value={formData.contact}
@@ -180,12 +182,12 @@ export default function AddHospitalScreen() {
                 />
               </View>
 
-              <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Medical Departments</Text>
+              <Text style={[styles.sectionTitle, { marginTop: 10 }]}>{t("Medical Departments")}</Text>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Departments (Comma separated)</Text>
+                <Text style={styles.label}>{t("Departments (Comma separated)")}</Text>
                 <TextInput
                   style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-                  placeholder="e.g. OPD, Cardiology, Neurology"
+                  placeholder={t("e.g. OPD, Cardiology, Neurology")}
                   placeholderTextColor={Colors.textLight}
                   multiline
                   value={formData.departments}
@@ -202,8 +204,8 @@ export default function AddHospitalScreen() {
           <TouchableOpacity style={styles.submitButton} onPress={handleSave} disabled={loading}>
             <Text style={styles.submitButtonText}>
               {loading 
-                ? (isEditMode ? 'Updating...' : 'Registering...') 
-                : (isEditMode ? 'Update Hospital' : 'Register Hospital')}
+                ? (isEditMode ? t('Updating...') : t('Registering...'))
+                : (isEditMode ? t('Update Hospital') : t('Register Hospital'))}
             </Text>
           </TouchableOpacity>
         </View>
@@ -220,7 +222,7 @@ export default function AddHospitalScreen() {
             onPress={() => setShowTypeDropdown(false)}
           >
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Select Hospital Type</Text>
+              <Text style={styles.modalTitle}>{t("Select Hospital Type")}</Text>
               {hospitalTypes.map((type, index) => (
                 <TouchableOpacity 
                   key={index} 
@@ -233,7 +235,7 @@ export default function AddHospitalScreen() {
                   <Text style={[
                     styles.modalOptionText,
                     formData.type === type && styles.modalOptionTextActive
-                  ]}>{type}</Text>
+                  ]}>{t(type)}</Text>
                   {formData.type === type && <Text style={styles.modalOptionCheck}>✓</Text>}
                 </TouchableOpacity>
               ))}

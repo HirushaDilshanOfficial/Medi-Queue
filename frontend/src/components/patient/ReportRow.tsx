@@ -21,8 +21,8 @@ const STATUS_TEXT: Record<ReportStatus, string> = {
 };
 
 export function ReportRow({ report, onPress, onDelete }: Props) {
-  const { t } = useLanguage();
-  const dated = timestampLabel(report.reportDate ?? report.createdAt);
+  const { t, locale } = useLanguage();
+  const dated = timestampLabel(report.reportDate ?? report.createdAt, locale);
 
   return (
     <View style={styles.root}>
@@ -71,7 +71,7 @@ export function ReportRow({ report, onPress, onDelete }: Props) {
         <Pressable
           onPress={onDelete}
           accessibilityRole="button"
-          accessibilityLabel={`Remove ${report.title}`}
+          accessibilityLabel={t("Remove {value0}", { value0: String(report.title) })}
           hitSlop={8}
           style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
         >
@@ -92,6 +92,7 @@ export function ReportActivityRow({
   meta: string | null;
   icon?: DesignImageName;
 }) {
+  const { t, locale } = useLanguage();
   return (
     <View style={styles.activityRow}>
       <View style={styles.activityIcon}>
@@ -99,7 +100,7 @@ export function ReportActivityRow({
       </View>
       <View style={styles.activityText}>
         <Text style={styles.activityTitle} numberOfLines={1}>
-          {title}
+          {t(title ?? '')}
         </Text>
         {meta ? (
           <Text style={styles.activityMeta} numberOfLines={1}>

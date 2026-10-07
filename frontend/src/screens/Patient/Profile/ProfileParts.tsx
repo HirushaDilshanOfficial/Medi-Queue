@@ -27,21 +27,23 @@ export function Avatar({ patient, small = false }: { patient?: PatientProfile; s
 }
 
 export function Metric({ value, label, active = false }: { value: string; label: string; active?: boolean }) {
-  return <View style={styles.metric}><View style={styles.metricValueRow}><Text style={[styles.metricValue, active && { color: C.secondary }]}>{value}</Text>{active ? <View style={styles.activeDot} /> : null}</View><Text style={styles.metricLabel}>{label}</Text></View>;
+  const { t } = useLanguage();
+  return <View style={styles.metric}><View style={styles.metricValueRow}><Text style={[styles.metricValue, active && { color: C.secondary }]}>{value}</Text>{active ? <View style={styles.activeDot} /> : null}</View><Text style={styles.metricLabel}>{t(label ?? '')}</Text></View>;
 }
 
 export function AccountRow({ icon, title, caption, onPress, iconColor }: {
   icon: ProfileIconName; title: string; caption: string; onPress: () => void; iconColor?: string;
 }) {
+  const { t } = useLanguage();
   return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.accountRow, pressed && styles.pressed]}>
     <View style={styles.roundIcon}><ProfileIcon name={icon} color={iconColor} /></View>
-    <View style={styles.grow}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.caption}>{caption}</Text></View><ProfileIcon name="arrow" size={16} color={C.muted} />
+    <View style={styles.grow}><Text style={styles.rowTitle}>{t(title ?? '')}</Text><Text style={styles.caption}>{t(caption ?? '')}</Text></View><ProfileIcon name="arrow" size={16} color={C.muted} />
   </Pressable>;
 }
 
 export function EmptyState({ title, body, onRetry }: { title: string; body: string; onRetry?: () => void }) {
   const { t } = useLanguage();
-  return <View style={styles.empty}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.caption}>{body}</Text>{onRetry ? <Pressable accessibilityRole="button" onPress={onRetry} style={styles.moreButton}><Text style={styles.link}>{t("Try again")}</Text></Pressable> : null}</View>;
+  return <View style={styles.empty}><Text style={styles.rowTitle}>{t(title ?? '')}</Text><Text style={styles.caption}>{body}</Text>{onRetry ? <Pressable accessibilityRole="button" onPress={onRetry} style={styles.moreButton}><Text style={styles.link}>{t("Try again")}</Text></Pressable> : null}</View>;
 }
 
 export function PersonalInfo({ patient, onEdit }: { patient?: PatientProfile; onEdit: () => void }) {
@@ -78,7 +80,7 @@ export function VisitCard({ visit, reports, onExport, onNotes, onReports }: {
       <Pressable accessibilityRole="button" onPress={onNotes} style={styles.actionChip}><ProfileIcon name="notes" size={15} /><Text style={styles.actionLabel}>{t("Visit Details")}</Text></Pressable>
       {reports.length ? <Pressable accessibilityRole="button" onPress={onReports} style={styles.actionChip}><ProfileIcon name={prescription ? 'pill' : 'clipboard'} size={15} /><Text style={styles.actionLabel}>{prescription ? t('Prescription (Rx)') : t('Lab Reports')}</Text></Pressable> : null}
       <View style={styles.grow} />
-      <Pressable accessibilityRole="button" accessibilityLabel={`Export ${visit.department} visit summary`} onPress={onExport} style={styles.downloadButton}><ProfileIcon name="download" size={16} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("Export {value0} visit summary", { value0: String(visit.department) })} onPress={onExport} style={styles.downloadButton}><ProfileIcon name="download" size={16} /></Pressable>
     </View>
   </View>;
 }

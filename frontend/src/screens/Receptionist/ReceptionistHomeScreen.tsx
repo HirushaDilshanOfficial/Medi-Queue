@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -43,6 +44,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   navigation,
   onNavigate,
 }) => {
+  const { t, locale } = useLanguage();
   const { user } = useAuth();
   const { isShiftClosed } = useShiftContext();
   const { data, loading, error, refreshing, refresh } = useDashboard();
@@ -108,11 +110,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     try {
       setActionLoading(true);
       await callNext();
-      showToast('Patient display updated automatically', 'success');
+      showToast(t('Patient display updated automatically'), 'success');
       await refresh(false);
     } catch (err: any) {
       const msg = getErrorMessage(err);
-      showToast(msg || 'Failed to call next patient. Queue may be empty.', 'error');
+      showToast(msg || t('Failed to call next patient. Queue may be empty.'), 'error');
     } finally {
       if (isMounted.current) {
         setActionLoading(false);
@@ -126,11 +128,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     try {
       setActionLoading(true);
       await recallToken(tokenLabel);
-      showToast(`Token ${tokenLabel} recalled to consultation room`, 'info');
+      showToast(t("Token {value0} recalled to consultation room", { value0: String(tokenLabel) }), 'info');
       await refresh(false);
     } catch (err: any) {
       const msg = getErrorMessage(err);
-      showToast(msg || 'Unable to recall this token.', 'error');
+      showToast(msg || t('Unable to recall this token.'), 'error');
     } finally {
       if (isMounted.current) {
         setActionLoading(false);
@@ -142,22 +144,22 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   const handleNoShow = (tokenLabel: string) => {
     if (!tokenLabel || actionLoading) return;
     Alert.alert(
-      'Mark as No-Show',
-      `Are you sure you want to mark token ${tokenLabel} as No-Show? This patient will be removed from active queue.`,
+      t('Mark as No-Show'),
+      t("Are you sure you want to mark token {value0} as No-Show? This patient will be removed from active queue.", { value0: String(tokenLabel) }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         {
-          text: 'Confirm No-Show',
+          text: t('Confirm No-Show'),
           style: 'destructive',
           onPress: async () => {
             try {
               setActionLoading(true);
               await markNoShow(tokenLabel);
-              showToast(`Token ${tokenLabel} marked as No-Show`, 'warning');
+              showToast(t("Token {value0} marked as No-Show", { value0: String(tokenLabel) }), 'warning');
               await refresh(false);
             } catch (err: any) {
               const msg = getErrorMessage(err);
-              showToast(msg || 'Unable to mark token as no-show.', 'error');
+              showToast(msg || t('Unable to mark token as no-show.'), 'error');
             } finally {
               if (isMounted.current) {
                 setActionLoading(false);
@@ -170,21 +172,21 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   };
 
   // Format today's date
-  const formattedToday = new Date().toLocaleDateString('en-US', {
+  const formattedToday = new Date().toLocaleDateString(locale, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
   });
 
   if (loading && !data) {
-    return <LoadingState fullscreen message="Loading Counter Dashboard..." />;
+    return <LoadingState fullscreen message={t("Loading Counter Dashboard...")} />;
   }
 
   if (error && !data) {
     return (
       <ErrorState
         fullscreen
-        title="Dashboard Error"
+        title={t("Dashboard Error")}
         message={error}
         onRetry={() => refresh(false)}
       />
@@ -212,11 +214,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.headerTopRow}>
-            <Text style={styles.headerTitle}>OPD Counter 01</Text>
+            <Text style={styles.headerTitle}>{t("OPD Counter 01")}</Text>
             {/* LIVE Badge */}
             <View style={styles.livePill}>
               <Animated.View style={[styles.liveDot, { opacity: pulseAnim }]} />
-              <Text style={styles.liveText}>LIVE</Text>
+              <Text style={styles.liveText}>{t("LIVE")}</Text>
             </View>
           </View>
 
@@ -242,7 +244,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             style={styles.bellButton}
             activeOpacity={0.8}
             onPress={() => {
-              Alert.alert('Notifications', 'All counter channels operating normally.');
+              Alert.alert(t('Notifications'), t('All counter channels operating normally.'));
             }}
           >
             <Ionicons name="notifications" size={20} color={Colors.white} />
@@ -268,7 +270,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         {isShiftClosed && (
           <View style={styles.shiftClosedNoticeBanner}>
             <Ionicons name="lock-closed" size={16} color="#92400E" style={{ marginRight: 8 }} />
-            <Text style={styles.shiftClosedNoticeText}>Shift closed. Intake is disabled.</Text>
+            <Text style={styles.shiftClosedNoticeText}>{t("Shift closed. Intake is disabled.")}</Text>
           </View>
         )}
 
@@ -276,17 +278,17 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         <View style={styles.statGrid}>
           <View style={styles.statRow}>
             <StatCard
-              title="Total Intake Today"
+              title={t("Total Intake Today")}
               value={data?.intake?.total ?? 0}
-              subtitle={`${data?.intake?.walkIn ?? 0} Walk-In · ${data?.intake?.preBooked ?? 0} Pre-Booked`}
+              subtitle={t("{value0} Walk-In · {value1} Pre-Booked", { value0: String(data?.intake?.walkIn ?? 0), value1: String(data?.intake?.preBooked ?? 0) })}
               iconName="people"
               variant="primary"
               style={styles.gridCard}
             />
             <StatCard
-              title="In Waiting"
+              title={t("In Waiting")}
               value={data?.inWaiting ?? 0}
-              subtitle={`~${data?.avgWaitMinutes ?? 0} min avg wait`}
+              subtitle={t("~{value0} min avg wait", { value0: String(data?.avgWaitMinutes ?? 0) })}
               iconName="time"
               variant="warning"
               style={styles.gridCard}
@@ -295,17 +297,17 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
 
           <View style={styles.statRow}>
             <StatCard
-              title="Attended Done"
+              title={t("Attended Done")}
               value={data?.attendedDone ?? 0}
-              subtitle="Completed visits"
+              subtitle={t("Completed visits")}
               iconName="checkmark-circle"
               variant="success"
               style={styles.gridCard}
             />
             <StatCard
-              title="Doctors Active"
+              title={t("Doctors Active")}
               value={data?.doctorsActive ?? 0}
-              subtitle={`${rooms.filter((r) => r.status === 'Consulting').length} in consultation`}
+              subtitle={t("{value0} in consultation", { value0: String(rooms.filter((r) => r.status === 'Consulting').length) })}
               iconName="medkit"
               variant="default"
               style={styles.gridCard}
@@ -319,12 +321,12 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             <View style={styles.servingHeader}>
               <View style={styles.servingTag}>
                 <Ionicons name="radio" size={14} color={Colors.white} style={{ marginRight: 5 }} />
-                <Text style={styles.servingTagText}>NOW SERVING</Text>
+                <Text style={styles.servingTagText}>{t("NOW SERVING")}</Text>
               </View>
 
               {serving?.room ? (
                 <View style={styles.roomPill}>
-                  <Text style={styles.roomPillText}>Room {serving.room}</Text>
+                  <Text style={styles.roomPillText}>{t("Room")}{' '}{serving.room}</Text>
                 </View>
               ) : null}
             </View>
@@ -339,15 +341,15 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                   />
                   <View style={styles.patientDetails}>
                     <Text style={styles.servingPatientName} numberOfLines={1}>
-                      {serving.patient?.name || 'Walk-In Patient'}
+                      {serving.patient?.name || t('Walk-In Patient')}
                     </Text>
                     <Text style={styles.servingPatientMeta}>
-                      {serving.patient?.age ? `${serving.patient.age} yrs` : 'Age: —'} •{' '}
-                      {serving.patient?.gender ? serving.patient.gender : 'Gender: —'}
+                      {serving.patient?.age ? t("{value0} yrs", { value0: String(serving.patient.age) }) : t('Age: —')} •{' '}
+                      {serving.patient?.gender ? t(serving.patient.gender ?? '') : t('Gender: —')}
                     </Text>
                     {serving.patient?.nic ? (
                       <Text style={styles.servingPatientNic}>
-                        NIC: {serving.patient.nic}
+                        {t("NIC:")}{' '}{serving.patient.nic}
                       </Text>
                     ) : null}
                   </View>
@@ -361,8 +363,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                       ? `${serving.doctor.name} (${serving.doctor.department || 'OPD'})`
                       : typeof serving.doctor === 'string'
                       ? serving.doctor
-                      : 'General OPD Consultation'}
-                    {serving.room ? ` · Room ${serving.room}` : ''}
+                      : t('General OPD Consultation')}
+                    {serving.room ? t(" · Room {value0}", { value0: String(serving.room) }) : ''}
                   </Text>
                 </View>
 
@@ -379,7 +381,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                     activeOpacity={0.8}
                   >
                     <Ionicons name="play-forward" size={16} color={Colors.primary} />
-                    <Text style={styles.callNextBtnText}>Call Next Patient</Text>
+                    <Text style={styles.callNextBtnText}>{t("Call Next Patient")}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -393,7 +395,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                     activeOpacity={0.8}
                   >
                     <Ionicons name="notifications" size={15} color={Colors.white} />
-                    <Text style={styles.recallBtnText}>Chime / Recall</Text>
+                    <Text style={styles.recallBtnText}>{t("Chime / Recall")}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -407,18 +409,18 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                     activeOpacity={0.8}
                   >
                     <Ionicons name="close-circle-outline" size={15} color="#FECACA" />
-                    <Text style={styles.noShowBtnText}>Mark No-Show</Text>
+                    <Text style={styles.noShowBtnText}>{t("Mark No-Show")}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             ) : (
               <View style={styles.emptyServingBody}>
                 <Ionicons name="person-outline" size={38} color="rgba(255, 255, 255, 0.5)" />
-                <Text style={styles.emptyServingTitle}>No Active Patient Being Served</Text>
+                <Text style={styles.emptyServingTitle}>{t("No Active Patient Being Served")}</Text>
                 <Text style={styles.emptyServingSub}>
                   {data?.inWaiting && data.inWaiting > 0
-                    ? `${data.inWaiting} patients waiting in queue.`
-                    : 'The waiting queue is currently empty.'}
+                    ? t("{value0} patients waiting in queue.", { value0: String(data.inWaiting) })
+                    : t('The waiting queue is currently empty.')}
                 </Text>
 
                 <TouchableOpacity
@@ -432,7 +434,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                   activeOpacity={0.8}
                 >
                   <Ionicons name="play-forward" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
-                  <Text style={styles.callNextBtnEmptyText}>Call Next Patient</Text>
+                  <Text style={styles.callNextBtnEmptyText}>{t("Call Next Patient")}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -441,15 +443,14 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             <View style={styles.helperNoticeRow}>
               <Ionicons name="sync-outline" size={13} color="rgba(255, 255, 255, 0.7)" style={{ marginRight: 5 }} />
               <Text style={styles.helperNoticeText}>
-                Patient display and doctor queue update automatically.
-              </Text>
+                {t("Patient display and doctor queue update automatically.")}</Text>
             </View>
           </View>
         </View>
 
         {/* ── DESK QUICK ACTIONS ── */}
         <View style={styles.quickActionsSection}>
-          <SectionHeader title="Desk Quick Actions" subtitle="Fast registration and desk navigation" />
+          <SectionHeader title={t("Desk Quick Actions")} subtitle={t("Fast registration and desk navigation")} />
           <View style={styles.quickActionsGrid}>
             <TouchableOpacity
               style={[
@@ -459,52 +460,52 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               onPress={() => !isShiftClosed && handleNav('RegisterTab')}
               disabled={isShiftClosed}
               activeOpacity={0.7}
-              accessibilityLabel="New Intake"
+              accessibilityLabel={t("New Intake")}
               accessibilityRole="button"
             >
               <View style={[styles.quickActionIconWrap, { backgroundColor: isShiftClosed ? '#F3F4F6' : '#E0F2FE' }]}>
                 <Ionicons name="person-add" size={22} color={isShiftClosed ? Colors.textLight : Colors.primary} />
               </View>
-              <Text style={[styles.quickActionLabel, isShiftClosed && { color: Colors.textLight }]}>+ New Intake</Text>
+              <Text style={[styles.quickActionLabel, isShiftClosed && { color: Colors.textLight }]}>{t("+ New Intake")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.quickActionItem}
               onPress={() => handleNav('PatientsTab')}
               activeOpacity={0.7}
-              accessibilityLabel="Verify NIC"
+              accessibilityLabel={t("Verify NIC")}
               accessibilityRole="button"
             >
               <View style={[styles.quickActionIconWrap, { backgroundColor: '#ECFDF5' }]}>
                 <Ionicons name="shield-checkmark" size={22} color={Colors.success} />
               </View>
-              <Text style={styles.quickActionLabel}>Verify NIC</Text>
+              <Text style={styles.quickActionLabel}>{t("Verify NIC")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.quickActionItem}
-              onPress={() => showToast('Reprint Slip coming soon', 'info')}
+              onPress={() => showToast(t('Reprint Slip coming soon'), 'info')}
               activeOpacity={0.7}
-              accessibilityLabel="Reprint Slip"
+              accessibilityLabel={t("Reprint Slip")}
               accessibilityRole="button"
             >
               <View style={[styles.quickActionIconWrap, { backgroundColor: '#FEF3C7' }]}>
                 <Ionicons name="print" size={22} color="#D97706" />
               </View>
-              <Text style={styles.quickActionLabel}>Reprint Slip</Text>
+              <Text style={styles.quickActionLabel}>{t("Reprint Slip")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.quickActionItem}
-              onPress={() => showToast('Doc Roster coming soon', 'info')}
+              onPress={() => showToast(t('Doc Roster coming soon'), 'info')}
               activeOpacity={0.7}
-              accessibilityLabel="Doc Roster"
+              accessibilityLabel={t("Doc Roster")}
               accessibilityRole="button"
             >
               <View style={[styles.quickActionIconWrap, { backgroundColor: '#F3E8FF' }]}>
                 <Ionicons name="calendar" size={22} color="#7E22CE" />
               </View>
-              <Text style={styles.quickActionLabel}>Doc Roster</Text>
+              <Text style={styles.quickActionLabel}>{t("Doc Roster")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -512,8 +513,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         {/* ── CONSULTATION ROOMS (LIVE) ── */}
         <View style={styles.roomsSection}>
           <SectionHeader
-            title="Consultation Rooms (Live)"
-            subtitle="Active doctor room status"
+            title={t("Consultation Rooms (Live)")}
+            subtitle={t("Active doctor room status")}
           />
 
           {rooms.length > 0 ? (
@@ -526,7 +527,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <View key={idx} style={styles.roomCard}>
                   <View style={styles.roomCardHeader}>
                     <View style={styles.roomBadge}>
-                      <Text style={styles.roomBadgeText}>{room.room || `Room ${idx + 1}`}</Text>
+                      <Text style={styles.roomBadgeText}>{room.room || t("Room {value0}", { value0: String(idx + 1) })}</Text>
                     </View>
                     <StatusChip status={room.status} size="small" />
                   </View>
@@ -536,11 +537,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                   </Text>
 
                   <View style={styles.roomNextWrap}>
-                    <Text style={styles.roomNextLabel}>Next:</Text>
+                    <Text style={styles.roomNextLabel}>{t("Next:")}</Text>
                     {room.nextToken ? (
                       <TokenBadge tokenLabel={room.nextToken} size="small" />
                     ) : (
-                      <Text style={styles.roomNoneText}>None waiting</Text>
+                      <Text style={styles.roomNoneText}>{t("None waiting")}</Text>
                     )}
                   </View>
                 </View>
@@ -549,8 +550,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
           ) : (
             <View style={styles.emptyCard}>
               <Ionicons name="medical-outline" size={28} color={Colors.textLight} />
-              <Text style={styles.emptyTitle}>No Rooms Active</Text>
-              <Text style={styles.emptyText}>No consultation rooms currently scheduled.</Text>
+              <Text style={styles.emptyTitle}>{t("No Rooms Active")}</Text>
+              <Text style={styles.emptyText}>{t("No consultation rooms currently scheduled.")}</Text>
             </View>
           )}
         </View>
@@ -558,8 +559,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         {/* ── NEXT IN QUEUE ── */}
         <View style={styles.queueSection}>
           <SectionHeader
-            title="Next in Queue"
-            subtitle="First 3 tokens in waiting queue"
+            title={t("Next in Queue")}
+            subtitle={t("First 3 tokens in waiting queue")}
             actionText="View All"
             actionIcon="chevron-forward"
             onActionPress={() => handleNav('Queue')}
@@ -605,8 +606,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
           ) : (
             <View style={styles.emptyCard}>
               <Ionicons name="checkmark-circle-outline" size={32} color={Colors.success} />
-              <Text style={styles.emptyTitle}>Queue is Clear</Text>
-              <Text style={styles.emptyText}>No patients currently waiting in queue.</Text>
+              <Text style={styles.emptyTitle}>{t("Queue is Clear")}</Text>
+              <Text style={styles.emptyText}>{t("No patients currently waiting in queue.")}</Text>
             </View>
           )}
         </View>

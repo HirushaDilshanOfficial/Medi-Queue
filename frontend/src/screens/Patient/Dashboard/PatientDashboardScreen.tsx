@@ -17,14 +17,16 @@ import { getAuthToken } from '../../../services/http';
 import { BASE_URL } from '../../../config';
 
 function StatCard({ value, label, icon, onPress }: { value: number | null | undefined; label: string; icon: DesignImageName; onPress: () => void }) {
+  const { t } = useLanguage();
   return <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value ?? 'unavailable'}`} onPress={onPress} style={({ pressed }) => [styles.stat, pressed && styles.pressed]}>
     <View style={styles.statIcon}><DesignImage name={icon} size={18} color={C.secondary} /></View>
-    <View><Text style={styles.statValue}>{value ?? '—'}</Text><Text style={styles.statLabel}>{label}</Text></View>
+    <View><Text style={styles.statValue}>{value ?? '—'}</Text><Text style={styles.statLabel}>{t(label ?? '')}</Text></View>
   </Pressable>;
 }
 
 function SectionHeading({ title, action, onPress }: { title: string; action?: string; onPress?: () => void }) {
-  return <View style={styles.sectionHeading}><Text accessibilityRole="header" style={styles.sectionTitle}>{title}</Text>{action && onPress ?
+  const { t } = useLanguage();
+  return <View style={styles.sectionHeading}><Text accessibilityRole="header" style={styles.sectionTitle}>{t(title ?? '')}</Text>{action && onPress ?
     <Pressable accessibilityRole="button" accessibilityLabel={`${action}: ${title}`} onPress={onPress} style={styles.textButton}><Text style={styles.link}>{action}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable> : null}</View>;
 }
 

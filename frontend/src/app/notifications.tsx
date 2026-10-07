@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   ActivityIndicator,
@@ -18,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function NotificationsScreen() {
+  const { t } = useLanguage();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -88,7 +90,7 @@ export default function NotificationsScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Colors.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notifications</Text>
+        <Text style={styles.headerTitle}>{t("Notifications")}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -100,7 +102,7 @@ export default function NotificationsScreen() {
       ) : notifications.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="notifications-off-outline" size={64} color={Colors.textLight} />
-          <Text style={styles.emptyText}>No notifications yet</Text>
+          <Text style={styles.emptyText}>{t("No notifications yet")}</Text>
         </View>
       ) : (
         <FlatList

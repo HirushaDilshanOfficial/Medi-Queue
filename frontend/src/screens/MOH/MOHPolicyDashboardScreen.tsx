@@ -1,6 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import { View,
-  Text,
   StyleSheet,
   ScrollView,
   SafeAreaView,
@@ -14,6 +15,7 @@ import { router } from 'expo-router';
 import { getPolicies, updatePolicy } from '../../services/policyService';
 
 export default function MOHPolicyDashboardScreen() {
+  const { t } = useLanguage();
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -94,8 +96,8 @@ export default function MOHPolicyDashboardScreen() {
                   <Ionicons name="shield-checkmark" size={24} color={Colors.primaryDark} />
                 </View>
               <View>
-                <Text style={styles.headerRole}>MOH Executive</Text>
-                <Text style={styles.headerSub}>National OPD Network • Policy</Text>
+                <Text style={styles.headerRole}>{t("MOH Executive")}</Text>
+                <Text style={styles.headerSub}>{t("National OPD Network • Policy")}</Text>
               </View>
             </View>
             </View>
@@ -107,27 +109,27 @@ export default function MOHPolicyDashboardScreen() {
           <View style={styles.headerTitleContainer}>
             <View style={styles.tag}>
               <MaterialIcons name="verified-user" size={14} color={Colors.white} />
-              <Text style={styles.tagText}>Regulatory Compliance Active</Text>
+              <Text style={styles.tagText}>{t("Regulatory Compliance Active")}</Text>
             </View>
-            <Text style={styles.headerTitle}>National Policy, Governance & Settings</Text>
-            <Text style={styles.headerSubtitle}>Ministry of Health OPD Standards & Privacy Regulation</Text>
+            <Text style={styles.headerTitle}>{t("National Policy, Governance & Settings")}</Text>
+            <Text style={styles.headerSubtitle}>{t("Ministry of Health OPD Standards & Privacy Regulation")}</Text>
           </View>
 
           {/* Key Metrics */}
           <View style={styles.metricsContainer}>
             <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>Target Wait</Text>
-              <Text style={styles.metricValue}>{targetWaitTime} min</Text>
+              <Text style={styles.metricLabel}>{t("Target Wait")}</Text>
+              <Text style={styles.metricValue}>{targetWaitTime} {t("min")}</Text>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>PII Masking</Text>
-              <Text style={styles.metricValue}>{dataMasking ? '100%' : 'Off'}</Text>
+              <Text style={styles.metricLabel}>{t("PII Masking")}</Text>
+              <Text style={styles.metricValue}>{dataMasking ? '100%' : t('Off')}</Text>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>Audit Engine</Text>
-              <Text style={styles.metricValue}>Active</Text>
+              <Text style={styles.metricLabel}>{t("Audit Engine")}</Text>
+              <Text style={styles.metricValue}>{t("Active")}</Text>
             </View>
           </View>
         </View>
@@ -136,15 +138,15 @@ export default function MOHPolicyDashboardScreen() {
         <View style={styles.content}>
           
           {/* 1. Live Hospital Traffic */}
-          <Text style={styles.sectionTitle}>Live Regional Status</Text>
+          <Text style={styles.sectionTitle}>{t("Live Regional Status")}</Text>
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardIconBox}>
                 <MaterialIcons name="map" size={20} color={Colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>High Traffic Hospitals</Text>
-                <Text style={styles.cardSubtitle}>Real-time patient load alerts</Text>
+                <Text style={styles.cardTitle}>{t("High Traffic Hospitals")}</Text>
+                <Text style={styles.cardSubtitle}>{t("Real-time patient load alerts")}</Text>
               </View>
             </View>
             {trafficAlerts.length > 0 ? (
@@ -158,11 +160,11 @@ export default function MOHPolicyDashboardScreen() {
               <>
                 <View style={styles.alertItem}>
                   <View style={[styles.statusDot, { backgroundColor: Colors.error }]} />
-                  <Text style={styles.alertText}>{'Colombo General - Wait > 45 mins'}</Text>
+                  <Text style={styles.alertText}>{t('Colombo General - Wait > 45 mins')}</Text>
                 </View>
                 <View style={styles.alertItem}>
                   <View style={[styles.statusDot, { backgroundColor: Colors.warning }]} />
-                  <Text style={styles.alertText}>Gampaha Base - Wait 35 mins</Text>
+                  <Text style={styles.alertText}>{t("Gampaha Base - Wait 35 mins")}</Text>
                 </View>
               </>
             )}
@@ -175,8 +177,8 @@ export default function MOHPolicyDashboardScreen() {
                 <Ionicons name="warning" size={20} color={Colors.warning} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Epidemic Early Warning</Text>
-                <Text style={styles.cardSubtitle}>AI driven symptom spike detection</Text>
+                <Text style={styles.cardTitle}>{t("Epidemic Early Warning")}</Text>
+                <Text style={styles.cardSubtitle}>{t("AI driven symptom spike detection")}</Text>
               </View>
             </View>
             {epidemicAlerts.length > 0 ? (
@@ -186,25 +188,25 @@ export default function MOHPolicyDashboardScreen() {
                 </View>
               ))
             ) : (
-              <Text style={{ fontSize: 13, color: Colors.textMedium, fontStyle: 'italic' }}>No epidemic warnings at this time.</Text>
+              <Text style={{ fontSize: 13, color: Colors.textMedium, fontStyle: 'italic' }}>{t("No epidemic warnings at this time.")}</Text>
             )}
           </View>
 
           {/* 3. OPD Queue Policies */}
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>OPD Queue Policies</Text>
-            <View style={styles.badge}><Text style={styles.badgeText}>Req 9</Text></View>
+            <Text style={styles.sectionTitle}>{t("OPD Queue Policies")}</Text>
+            <View style={styles.badge}><Text style={styles.badgeText}>{t("Req 9")}</Text></View>
           </View>
           
           <View style={styles.policyCard}>
             <View style={styles.policyRow}>
               <View style={styles.policyTextContent}>
-                <Text style={styles.policyTitle}>National Target Max Wait Time</Text>
-                <Text style={styles.policySubtitle}>Triggers hospital executive surge alert</Text>
+                <Text style={styles.policyTitle}>{t("National Target Max Wait Time")}</Text>
+                <Text style={styles.policySubtitle}>{t("Triggers hospital executive surge alert")}</Text>
               </View>
               <View style={styles.stepperControl}>
                 <TouchableOpacity onPress={() => adjustWaitTime(-5)} style={styles.stepperBtn}><Text style={styles.stepperText}>-</Text></TouchableOpacity>
-                <Text style={styles.stepperValue}>{targetWaitTime} min</Text>
+                <Text style={styles.stepperValue}>{targetWaitTime} {t("min")}</Text>
                 <TouchableOpacity onPress={() => adjustWaitTime(5)} style={styles.stepperBtn}><Text style={styles.stepperText}>+</Text></TouchableOpacity>
               </View>
             </View>
@@ -213,8 +215,8 @@ export default function MOHPolicyDashboardScreen() {
             
             <View style={styles.policyRow}>
               <View style={styles.policyTextContent}>
-                <Text style={styles.policyTitle}>Senior & Child Priority Queue</Text>
-                <Text style={styles.policySubtitle}>Active (Enabled nationally across all tiers)</Text>
+                <Text style={styles.policyTitle}>{t("Senior & Child Priority Queue")}</Text>
+                <Text style={styles.policySubtitle}>{t("Active (Enabled nationally across all tiers)")}</Text>
               </View>
               <Switch
                 trackColor={{ false: '#d1d1d1', true: Colors.primaryDark }}
@@ -229,8 +231,8 @@ export default function MOHPolicyDashboardScreen() {
             
             <View style={styles.policyRow}>
               <View style={styles.policyTextContent}>
-                <Text style={styles.policyTitle}>Digital Token Auto-Expiry</Text>
-                <Text style={styles.policySubtitle}>60 mins after missed triage chime</Text>
+                <Text style={styles.policyTitle}>{t("Digital Token Auto-Expiry")}</Text>
+                <Text style={styles.policySubtitle}>{t("60 mins after missed triage chime")}</Text>
               </View>
               <Switch
                 trackColor={{ false: '#d1d1d1', true: Colors.primaryDark }}
@@ -244,15 +246,15 @@ export default function MOHPolicyDashboardScreen() {
 
           {/* 4. Data Privacy & Access Security */}
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Data Privacy & Access Security</Text>
-            <View style={styles.badge}><Text style={styles.badgeText}>Req 11</Text></View>
+            <Text style={styles.sectionTitle}>{t("Data Privacy & Access Security")}</Text>
+            <View style={styles.badge}><Text style={styles.badgeText}>{t("Req 11")}</Text></View>
           </View>
 
           <View style={styles.policyCard}>
             <View style={styles.policyRow}>
               <View style={styles.policyTextContent}>
-                <Text style={styles.policyTitle}>Patient NIC & PII Data Masking <Ionicons name="lock-closed" size={12} color={Colors.primary} /></Text>
-                <Text style={styles.policySubtitle}>End-to-end encrypted. Views full unmasked NIC upon active consultation verification.</Text>
+                <Text style={styles.policyTitle}>{t("Patient NIC & PII Data Masking")}{' '}<Ionicons name="lock-closed" size={12} color={Colors.primary} /></Text>
+                <Text style={styles.policySubtitle}>{t("End-to-end encrypted. Views full unmasked NIC upon active consultation verification.")}</Text>
               </View>
               <Switch
                 trackColor={{ false: '#d1d1d1', true: Colors.primaryDark }}
@@ -266,13 +268,13 @@ export default function MOHPolicyDashboardScreen() {
             <View style={styles.divider} />
 
             <View style={styles.rbacContainer}>
-              <Text style={styles.policyTitle}>Role-Based Access Control (RBAC)</Text>
-              <Text style={styles.policySubtitle}>Strict capability bounds mapped per digital credential.</Text>
+              <Text style={styles.policyTitle}>{t("Role-Based Access Control (RBAC)")}</Text>
+              <Text style={styles.policySubtitle}>{t("Strict capability bounds mapped per digital credential.")}</Text>
               <View style={styles.roleTagsRow}>
-                <View style={styles.roleTag}><Text style={styles.roleTagText}>Receptionist</Text></View>
-                <View style={styles.roleTag}><Text style={styles.roleTagText}>Doctor</Text></View>
-                <View style={styles.roleTag}><Text style={styles.roleTagText}>Medical Supt.</Text></View>
-                <View style={[styles.roleTag, styles.roleTagActive]}><Text style={styles.roleTagTextActive}>MOH Executive</Text></View>
+                <View style={styles.roleTag}><Text style={styles.roleTagText}>{t("Receptionist")}</Text></View>
+                <View style={styles.roleTag}><Text style={styles.roleTagText}>{t("Doctor")}</Text></View>
+                <View style={styles.roleTag}><Text style={styles.roleTagText}>{t("Medical Supt.")}</Text></View>
+                <View style={[styles.roleTag, styles.roleTagActive]}><Text style={styles.roleTagTextActive}>{t("MOH Executive")}</Text></View>
               </View>
             </View>
 
@@ -280,7 +282,7 @@ export default function MOHPolicyDashboardScreen() {
 
             <TouchableOpacity style={styles.btnPrimary}>
               <Ionicons name="shield-checkmark" size={18} color={Colors.white} />
-              <Text style={styles.btnPrimaryText}>View Security Audit Log</Text>
+              <Text style={styles.btnPrimaryText}>{t("View Security Audit Log")}</Text>
             </TouchableOpacity>
           </View>
 

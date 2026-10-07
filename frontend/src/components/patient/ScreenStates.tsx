@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage, type DesignImageName } from './DesignImage';
 
@@ -7,10 +9,11 @@ import { DesignImage, type DesignImageName } from './DesignImage';
 // feature rather than three different ones.
 
 export function ScreenLoader({ label = 'Loading' }: { label?: string }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.centered} accessibilityRole="progressbar" accessibilityLabel={label}>
       <ActivityIndicator color={PatientTheme.brand} />
-      <Text style={styles.centeredTitle}>{label}</Text>
+      <Text style={styles.centeredTitle}>{t(label ?? '')}</Text>
     </View>
   );
 }
@@ -24,11 +27,12 @@ type MessageProps = {
 };
 
 export function MessageState({ icon = 'stethoscope', title, description, actionLabel, onAction }: MessageProps) {
+  const { t } = useLanguage();
   return (
     <View style={styles.centered}>
       <DesignImage name={icon} size={44} color={PatientTheme.brandMid} />
-      <Text style={styles.centeredTitle}>{title}</Text>
-      <Text style={styles.centeredBody}>{description}</Text>
+      <Text style={styles.centeredTitle}>{t(title ?? '')}</Text>
+      <Text style={styles.centeredBody}>{t(description ?? '')}</Text>
       {actionLabel && onAction ? (
         <Pressable
           onPress={onAction}

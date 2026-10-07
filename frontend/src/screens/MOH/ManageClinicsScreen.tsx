@@ -1,11 +1,14 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { clinicApi, type Clinic } from '../../services/clinicApi';
 import { http } from '../../services/http';
 import { Colors } from '../../constants/Colors';
 
 export default function ManageClinicsScreen() {
+  const { t } = useLanguage();
   const router = useRouter();
   const { hospitalId, hospitalName } = useLocalSearchParams<{ hospitalId?: string; hospitalName?: string }>();
   const id = Array.isArray(hospitalId) ? hospitalId[0] : hospitalId;
@@ -20,11 +23,11 @@ export default function ManageClinicsScreen() {
       const result = await http.get<{ clinics: Clinic[] }>(`/clinics/hospital/${id}`);
       setClinics(result.clinics);
     } catch (error) {
-      Alert.alert('Could not load clinics', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(t('Could not load clinics'), error instanceof Error ? error.message : t('Please try again.'));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -33,7 +36,7 @@ export default function ManageClinicsScreen() {
       await http.patch(`/clinics/${clinic._id}`, { status: clinic.status === 'active' ? 'inactive' : 'active' });
       await load();
     } catch (error) {
-      Alert.alert('Could not update clinic', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(t('Could not update clinic'), error instanceof Error ? error.message : t('Please try again.'));
     }
   };
 
@@ -41,7 +44,7 @@ export default function ManageClinicsScreen() {
     <View style={styles.root}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()}><Text style={styles.back}>‹</Text></Pressable>
-        <View><Text style={styles.title}>Manage clinics</Text><Text style={styles.subtitle}>{name || 'Hospital'}</Text></View>
+        <View><Text style={styles.title}>{t("Manage clinics")}</Text><Text style={styles.subtitle}>{name || t('Hospital')}</Text></View>
       </View>
       {loading ? <ActivityIndicator color={Colors.primary} style={styles.loader} /> : (
         <FlatList
@@ -53,11 +56,11 @@ export default function ManageClinicsScreen() {
               <View style={styles.copy}>
                 <Text style={styles.name}>{item.name}</Text>
                 <Text style={styles.description}>{item.description}</Text>
-                <Text style={styles.details}>{item.startTime}–{item.endTime} · Capacity {item.maxPatients}</Text>
+                <Text style={styles.details}>{item.startTime}–{item.endTime} {t("· Capacity")}{' '}{item.maxPatients}</Text>
               </View>
               <Pressable onPress={() => toggle(item)} style={[styles.toggle, item.status === 'active' && styles.toggleActive]}>
                 <Text style={[styles.toggleText, item.status === 'active' && styles.toggleTextActive]}>
-                  {item.status === 'active' ? 'Enabled' : 'Enable'}
+                  {item.status === 'active' ? t('Enabled') : t('Enable')}
                 </Text>
               </Pressable>
             </View>

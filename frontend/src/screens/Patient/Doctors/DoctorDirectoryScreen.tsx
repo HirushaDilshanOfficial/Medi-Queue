@@ -101,7 +101,7 @@ export function DoctorDirectoryScreen() {
     (appointment: Appointment) => {
       Alert.alert(
         t('Cancel this booking?'),
-        `${appointment.doctorName} · ${appointment.dateLabel ?? appointment.date} at ${appointment.slotTime}\n\nYou can book another time from the doctor list.`,
+        t("{value0} · {value1} at {value2}\n\nYou can book another time from the doctor list.", { value0: String(appointment.doctorName), value1: String(appointment.dateLabel ?? appointment.date), value2: String(appointment.slotTime) }),
         [
           { text: t('Keep booking'), style: 'cancel' },
           {
@@ -141,7 +141,7 @@ export function DoctorDirectoryScreen() {
 
   const checkIn = useCallback(
     (appointment: Appointment) => {
-      Alert.alert(t('Check in now?'), `Collect your queue number for ${appointment.department}.`, [
+      Alert.alert(t('Check in now?'), t("Collect your queue number for {value0}.", { value0: String(appointment.department) }), [
         { text: t('Not yet'), style: 'cancel' },
         {
           text: t('Check in'),
@@ -336,6 +336,7 @@ export function DoctorDirectoryScreen() {
 }
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
@@ -343,7 +344,7 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
       accessibilityState={{ selected: active }}
       style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}
     >
-      <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
+      <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{t(label ?? '')}</Text>
     </Pressable>
   );
 }
@@ -357,6 +358,7 @@ function TabButton({
   active: boolean;
   onPress: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
@@ -364,7 +366,7 @@ function TabButton({
       accessibilityState={{ selected: active }}
       style={({ pressed }) => [styles.tabButton, active && styles.tabButtonActive, pressed && styles.pressed]}
     >
-      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
+      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{t(label ?? '')}</Text>
     </Pressable>
   );
 }

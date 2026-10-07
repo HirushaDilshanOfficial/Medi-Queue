@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage, type DesignImageName } from './DesignImage';
 
@@ -11,18 +13,19 @@ type Props = {
 };
 
 export function SpecialtyCard({ label, icon, onPress, width = 82 }: Props) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={t(label)}
       style={({ pressed }) => [styles.root, { width }, pressed && styles.pressed]}
     >
       <View style={styles.iconBubble}>
           <DesignImage name={icon} size={26} color={PatientTheme.brand} />
       </View>
       <Text style={styles.label} numberOfLines={2}>
-        {label}
+        {t(label ?? '')}
       </Text>
     </Pressable>
   );

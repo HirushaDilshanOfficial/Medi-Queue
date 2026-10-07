@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -34,6 +35,7 @@ import { ALL_DUMMY_PATIENTS } from '../../services/patientRecordsService';
 import { downloadPrescription } from '../../utils/prescriptionPdfGenerator';
 
 export default function PatientPrescriptionScreen() {
+  const { t } = useLanguage();
   const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string }>();
   const initialToken = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
   const isAurelia = !params?.tokenNumber || initialToken === 29 || (params?.patientName ? String(params.patientName).includes('Aurelia') : true);
@@ -266,12 +268,12 @@ export default function PatientPrescriptionScreen() {
       return;
     }
     Alert.alert(
-      'Remove Diagnosis',
-      `Remove "${name || 'this diagnosis'}"?`,
+      t('Remove Diagnosis'),
+      t("Remove \"{value0}\"?", { value0: String(name || 'this diagnosis') }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         {
-          text: 'Remove',
+          text: t('Remove'),
           style: 'destructive',
           onPress: doRemove,
         },
@@ -320,12 +322,12 @@ export default function PatientPrescriptionScreen() {
       return;
     }
     Alert.alert(
-      'Remove Medicine',
-      `Are you sure you want to remove ${name} from this prescription?`,
+      t('Remove Medicine'),
+      t("Are you sure you want to remove {value0} from this prescription?", { value0: String(name) }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         {
-          text: 'Remove',
+          text: t('Remove'),
           style: 'destructive',
           onPress: doRemove,
         },
@@ -483,7 +485,7 @@ export default function PatientPrescriptionScreen() {
       if (Platform.OS === 'web') {
         window.alert('Please enter or select a medicine name & strength.');
       } else {
-        Alert.alert('Medicine Required', 'Please enter or select a medicine name & strength.');
+        Alert.alert(t('Medicine Required'), t('Please enter or select a medicine name & strength.'));
       }
       return;
     }
@@ -540,7 +542,7 @@ export default function PatientPrescriptionScreen() {
       downloadPrescription(nextData, clinicalNotes);
       setIsSaveSuccessModalOpen(true);
     } catch (err) {
-      Alert.alert('Saved Offline', 'Prescription details saved locally and queued for dispatch.');
+      Alert.alert(t('Saved Offline'), t('Prescription details saved locally and queued for dispatch.'));
     } finally {
       setIsSaving(false);
     }
@@ -553,7 +555,7 @@ export default function PatientPrescriptionScreen() {
       await referPatientApi(referralType, referralNotes);
       setIsReferralModalOpen(false);
       setReferralNotes('');
-      Alert.alert('Referral Dispatched', `Referral request for ${referralType} recorded for patient.`);
+      Alert.alert(t('Referral Dispatched'), t("Referral request for {value0} recorded for patient.", { value0: String(referralType) }));
     } catch (e) {
       setIsReferralModalOpen(false);
     } finally {
@@ -606,14 +608,14 @@ export default function PatientPrescriptionScreen() {
                 <Text style={styles.profileName}>{doctor.name}</Text>
                 <View style={styles.onlineBadgeRow}>
                   <View style={styles.onlineGreenDot} />
-                  <Text style={styles.onlineBadgeText}>{doctor.room} Online</Text>
+                  <Text style={styles.onlineBadgeText}>{doctor.room} {t("Online")}</Text>
                 </View>
               </View>
             </View>
 
             <TouchableOpacity
               style={styles.bellBtn}
-              onPress={() => Alert.alert('Notifications', 'No pending clinical alerts.')}
+              onPress={() => Alert.alert(t('Notifications'), t('No pending clinical alerts.'))}
               activeOpacity={0.7}
             >
               <Ionicons name="notifications-outline" size={21} color="#334155" />
@@ -625,9 +627,9 @@ export default function PatientPrescriptionScreen() {
           {/* 2. PAGE TITLE & OUTPATIENT CONSULTATION HEADER             */}
           {/* ========================================================= */}
           <View style={styles.headerTitleSection}>
-            <Text style={styles.kickerText}>OUTPATIENT CONSULTATION</Text>
+            <Text style={styles.kickerText}>{t("OUTPATIENT CONSULTATION")}</Text>
             <View style={styles.titleRow}>
-              <Text style={styles.mainTitle}>Prescription & Details</Text>
+              <Text style={styles.mainTitle}>{t("Prescription & Details")}</Text>
               <View style={styles.roomPillBadge}>
                 <View style={styles.roomPillDot} />
                 <Text style={styles.roomPillText}>{doctor.room}</Text>
@@ -648,12 +650,12 @@ export default function PatientPrescriptionScreen() {
               <View style={styles.patientInfoCol}>
                 <Text style={styles.patientName}>{patient.name}</Text>
                 <Text style={styles.patientMeta}>
-                  {patient.gender}, {patient.age} yrs • {patient.opdId}
+                  {t(patient.gender ?? '')}, {patient.age} {t("yrs •")}{' '}{patient.opdId}
                 </Text>
               </View>
 
               <View style={styles.tokenBadge}>
-                <Text style={styles.tokenBadgeText}>{patient.tokenFormatted || 'Token #028'}</Text>
+                <Text style={styles.tokenBadgeText}>{patient.tokenFormatted || t('Token #028')}</Text>
               </View>
             </View>
 
@@ -661,19 +663,19 @@ export default function PatientPrescriptionScreen() {
             <View style={styles.vitalsRow}>
               {/* Blood Pressure */}
               <View style={styles.vitalBox}>
-                <Text style={styles.vitalLabel}>Blood Pressure</Text>
+                <Text style={styles.vitalLabel}>{t("Blood Pressure")}</Text>
                 <Text style={styles.vitalValue}>{patient.vitals.bloodPressure}</Text>
               </View>
 
               {/* Pulse Rate */}
               <View style={styles.vitalBox}>
-                <Text style={styles.vitalLabel}>Pulse Rate</Text>
+                <Text style={styles.vitalLabel}>{t("Pulse Rate")}</Text>
                 <Text style={styles.vitalValue}>{patient.vitals.pulseRate}</Text>
               </View>
 
               {/* Weight */}
               <View style={styles.vitalBox}>
-                <Text style={styles.vitalLabel}>Weight</Text>
+                <Text style={styles.vitalLabel}>{t("Weight")}</Text>
                 <Text style={styles.vitalValue}>{patient.vitals.weight}</Text>
               </View>
             </View>
@@ -686,7 +688,7 @@ export default function PatientPrescriptionScreen() {
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardHeaderLeft}>
                 <MaterialCommunityIcons name="stethoscope" size={20} color="#0d6371" style={{ marginRight: 8 }} />
-                <Text style={styles.cardSectionTitle}>Primary Diagnosis (ICD-10)</Text>
+                <Text style={styles.cardSectionTitle}>{t("Primary Diagnosis (ICD-10)")}</Text>
               </View>
 
               <TouchableOpacity
@@ -695,7 +697,7 @@ export default function PatientPrescriptionScreen() {
                 activeOpacity={0.7}
               >
                 <Ionicons name="add" size={17} color="#0d6371" style={{ marginRight: 2 }} />
-                <Text style={styles.addDiagnosisBtnText}>Add Diagnosis</Text>
+                <Text style={styles.addDiagnosisBtnText}>{t("Add Diagnosis")}</Text>
               </TouchableOpacity>
             </View>
 
@@ -736,7 +738,7 @@ export default function PatientPrescriptionScreen() {
               })}
 
               {data.diagnoses.length === 0 && (
-                <Text style={styles.emptyNote}>No diagnosis recorded. Tap "+ Add Diagnosis".</Text>
+                <Text style={styles.emptyNote}>{t("No diagnosis recorded. Tap \"+ Add Diagnosis\".")}</Text>
               )}
             </View>
           </View>
@@ -753,9 +755,9 @@ export default function PatientPrescriptionScreen() {
                   color="#0d6371"
                   style={{ marginRight: 8 }}
                 />
-                <Text style={styles.cardSectionTitle}>Clinical Notes & Symptoms</Text>
+                <Text style={styles.cardSectionTitle}>{t("Clinical Notes & Symptoms")}</Text>
               </View>
-              <Text style={styles.confidentialBadge}>Confidential</Text>
+              <Text style={styles.confidentialBadge}>{t("Confidential")}</Text>
             </View>
 
             {/* Editable Notes Textbox */}
@@ -767,10 +769,10 @@ export default function PatientPrescriptionScreen() {
                 value={clinicalNotes}
                 onChangeText={setClinicalNotes}
                 onBlur={() => persistPrescription({ ...data, clinicalNotes })}
-                placeholder="Enter clinical notes, examination findings, and symptoms..."
+                placeholder={t("Enter clinical notes, examination findings, and symptoms...")}
                 placeholderTextColor="#94a3b8"
               />
-              <Text style={styles.autoSavedText}>Auto-saved</Text>
+              <Text style={styles.autoSavedText}>{t("Auto-saved")}</Text>
             </View>
           </View>
 
@@ -786,12 +788,12 @@ export default function PatientPrescriptionScreen() {
                   color="#0d6371"
                   style={{ marginRight: 8 }}
                 />
-                <Text style={styles.cardSectionTitle}>Prescription List (Rx)</Text>
+                <Text style={styles.cardSectionTitle}>{t("Prescription List (Rx)")}</Text>
               </View>
 
               <View style={styles.itemsCountBadge}>
                 <Text style={styles.itemsCountText}>
-                  {data.prescriptions.length} {data.prescriptions.length === 1 ? 'item' : 'items'}
+                  {data.prescriptions.length} {data.prescriptions.length === 1 ? t('item') : t('items')}
                 </Text>
               </View>
             </View>
@@ -871,10 +873,9 @@ export default function PatientPrescriptionScreen() {
 
               {data.prescriptions.length === 0 && (
                 <View style={styles.emptyPrescriptionBox}>
-                  <Text style={styles.emptyPrescriptionText}>No medicines added yet.</Text>
+                  <Text style={styles.emptyPrescriptionText}>{t("No medicines added yet.")}</Text>
                   <Text style={styles.emptyPrescriptionSub}>
-                    Use the form below to search and add medications.
-                  </Text>
+                    {t("Use the form below to search and add medications.")}</Text>
                 </View>
               )}
             </View>
@@ -886,17 +887,17 @@ export default function PatientPrescriptionScreen() {
           <View style={styles.card}>
             <View style={styles.addMedHeaderRow}>
               <Ionicons name="add-circle" size={24} color="#064e59" style={{ marginRight: 8 }} />
-              <Text style={styles.addMedHeaderTitle}>Add Medicine</Text>
+              <Text style={styles.addMedHeaderTitle}>{t("Add Medicine")}</Text>
             </View>
 
             {/* Medicine Name & Strength */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Medicine Name & Strength</Text>
+              <Text style={styles.fieldLabel}>{t("Medicine Name & Strength")}</Text>
               <View style={styles.searchInputWrap}>
                 <Ionicons name="search-outline" size={19} color="#64748b" style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search e.g., Amoxicillin, Ibuprofen..."
+                  placeholder={t("Search e.g., Amoxicillin, Ibuprofen...")}
                   placeholderTextColor="#94a3b8"
                   value={searchQuery}
                   onChangeText={(text) => {
@@ -954,7 +955,7 @@ export default function PatientPrescriptionScreen() {
 
             {/* Dosage Frequency */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Dosage Frequency</Text>
+              <Text style={styles.fieldLabel}>{t("Dosage Frequency")}</Text>
               <View style={styles.segmentedRow}>
                 {(['OD', 'BD', 'TDS', 'QDS'] as const).map((freq) => {
                   const labelMap = {
@@ -984,7 +985,7 @@ export default function PatientPrescriptionScreen() {
 
             {/* Meal Timing (After meal / Before meal) */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Meal Timing</Text>
+              <Text style={styles.fieldLabel}>{t("Meal Timing")}</Text>
               <View style={styles.timingRow}>
                 <TouchableOpacity
                   style={[styles.timingChip, mealTiming === 'After meal' && styles.timingChipSelected]}
@@ -1000,8 +1001,7 @@ export default function PatientPrescriptionScreen() {
                   <Text
                     style={[styles.timingChipText, mealTiming === 'After meal' && styles.timingChipTextSelected]}
                   >
-                    After meal
-                  </Text>
+                    {t("After meal")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1018,15 +1018,14 @@ export default function PatientPrescriptionScreen() {
                   <Text
                     style={[styles.timingChipText, mealTiming === 'Before meal' && styles.timingChipTextSelected]}
                   >
-                    Before meal
-                  </Text>
+                    {t("Before meal")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* Schedule / Time of Day (Morning, Lunch, Dinner) */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Take Medicine</Text>
+              <Text style={styles.fieldLabel}>{t("Take Medicine")}</Text>
               <View style={styles.timeScheduleRow}>
                 <TouchableOpacity
                   style={[styles.timeScheduleChip, takeMorning && styles.timeScheduleChipSelected]}
@@ -1045,8 +1044,7 @@ export default function PatientPrescriptionScreen() {
                       takeMorning && styles.timeScheduleChipTextSelected,
                     ]}
                   >
-                    Morning
-                  </Text>
+                    {t("Morning")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1066,8 +1064,7 @@ export default function PatientPrescriptionScreen() {
                       takeLunch && styles.timeScheduleChipTextSelected,
                     ]}
                   >
-                    Lunch
-                  </Text>
+                    {t("Lunch")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1087,15 +1084,14 @@ export default function PatientPrescriptionScreen() {
                       takeDinner && styles.timeScheduleChipTextSelected,
                     ]}
                   >
-                    Dinner
-                  </Text>
+                    {t("Dinner")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* Duration */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Duration</Text>
+              <Text style={styles.fieldLabel}>{t("Duration")}</Text>
               <View style={styles.durationRow}>
                 {[3, 5, 7].map((days) => {
                   const isSelected = selectedDuration === days;
@@ -1112,8 +1108,7 @@ export default function PatientPrescriptionScreen() {
                           isSelected && styles.durationChipTextSelected,
                         ]}
                       >
-                        {days} days
-                      </Text>
+                        {days} {t("days")}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -1134,7 +1129,7 @@ export default function PatientPrescriptionScreen() {
               activeOpacity={0.85}
             >
               <Ionicons name="add-circle" size={20} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.addToPrescriptionBtnText}>+ Add Medicine to Prescription</Text>
+              <Text style={styles.addToPrescriptionBtnText}>{t("+ Add Medicine to Prescription")}</Text>
             </TouchableOpacity>
           </View>
 
@@ -1160,8 +1155,7 @@ export default function PatientPrescriptionScreen() {
                     style={{ marginRight: 8 }}
                   />
                   <Text style={styles.saveDigitalRxBtnText}>
-                    Save Prescription and Download
-                  </Text>
+                    {t("Save Prescription and Download")}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -1178,7 +1172,7 @@ export default function PatientPrescriptionScreen() {
                 color="#064e59"
                 style={{ marginRight: 8 }}
               />
-              <Text style={styles.referralBtnText}>Refer to Physiotherapy / Lab</Text>
+              <Text style={styles.referralBtnText}>{t("Refer to Physiotherapy / Lab")}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -1191,7 +1185,7 @@ export default function PatientPrescriptionScreen() {
         {/* Home */}
         <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('home')}>
           <Ionicons name="home-outline" size={22} color={activeTab === 'home' ? '#0d6371' : '#64748b'} />
-          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>Home</Text>
+          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>{t("Home")}</Text>
         </TouchableOpacity>
 
         {/* Queue */}
@@ -1201,7 +1195,7 @@ export default function PatientPrescriptionScreen() {
             size={23}
             color={activeTab === 'queue' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>Queue</Text>
+          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>{t("Queue")}</Text>
         </TouchableOpacity>
 
         {/* Records */}
@@ -1211,7 +1205,7 @@ export default function PatientPrescriptionScreen() {
             size={22}
             color={activeTab === 'records' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>Records</Text>
+          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>{t("Records")}</Text>
         </TouchableOpacity>
 
         {/* Schedule */}
@@ -1221,7 +1215,7 @@ export default function PatientPrescriptionScreen() {
             size={22}
             color={activeTab === 'schedule' ? '#0d6371' : '#64748b'}
           />
-          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>Schedule</Text>
+          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>{t("Schedule")}</Text>
         </TouchableOpacity>
 
         {/* Prescription (ACTIVE) */}
@@ -1235,8 +1229,7 @@ export default function PatientPrescriptionScreen() {
             numberOfLines={1}
             style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}
           >
-            Prescription
-          </Text>
+            {t("Prescription")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -1247,13 +1240,13 @@ export default function PatientPrescriptionScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add ICD-10 Diagnosis</Text>
+              <Text style={styles.modalTitle}>{t("Add ICD-10 Diagnosis")}</Text>
               <TouchableOpacity onPress={() => setIsAddDiagnosisModalOpen(false)}>
                 <Ionicons name="close" size={24} color="#64748b" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalSub}>Select from quick suggestions or type custom:</Text>
+            <Text style={styles.modalSub}>{t("Select from quick suggestions or type custom:")}</Text>
 
             {/* Quick suggestions */}
             <View style={styles.modalQuickChips}>
@@ -1271,16 +1264,16 @@ export default function PatientPrescriptionScreen() {
             </View>
 
             <View style={{ marginTop: 16 }}>
-              <Text style={styles.fieldLabel}>Custom Diagnosis Name</Text>
+              <Text style={styles.fieldLabel}>{t("Custom Diagnosis Name")}</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. Cervical Disc Herniation"
+                placeholder={t("e.g. Cervical Disc Herniation")}
                 placeholderTextColor="#94a3b8"
                 value={newDiagName}
                 onChangeText={setNewDiagName}
               />
 
-              <Text style={[styles.fieldLabel, { marginTop: 10 }]}>ICD-10 Code (Optional)</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 10 }]}>{t("ICD-10 Code (Optional)")}</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="e.g. M50.2"
@@ -1295,13 +1288,13 @@ export default function PatientPrescriptionScreen() {
                 style={styles.modalCancelBtn}
                 onPress={() => setIsAddDiagnosisModalOpen(false)}
               >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                <Text style={styles.modalCancelBtnText}>{t("Cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalSubmitBtn}
                 onPress={() => handleAddDiagnosis(newDiagName, newDiagCode)}
               >
-                <Text style={styles.modalSubmitBtnText}>Add Diagnosis</Text>
+                <Text style={styles.modalSubmitBtnText}>{t("Add Diagnosis")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1317,14 +1310,14 @@ export default function PatientPrescriptionScreen() {
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <MaterialCommunityIcons name="pill" size={22} color="#0d6371" style={{ marginRight: 8 }} />
-                <Text style={styles.modalTitle}>Edit Prescription Medicine</Text>
+                <Text style={styles.modalTitle}>{t("Edit Prescription Medicine")}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsEditMedModalOpen(false)}>
                 <Ionicons name="close" size={24} color="#64748b" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalSub}>Update medicine dosage, frequency, and instructions:</Text>
+            <Text style={styles.modalSub}>{t("Update medicine dosage, frequency, and instructions:")}</Text>
 
             <ScrollView
               style={{ maxHeight: 450 }}
@@ -1334,27 +1327,27 @@ export default function PatientPrescriptionScreen() {
             >
               <View style={{ marginTop: 6 }}>
                 {/* Medicine Name */}
-                <Text style={styles.fieldLabel}>Medicine Name & Strength</Text>
+                <Text style={styles.fieldLabel}>{t("Medicine Name & Strength")}</Text>
                 <TextInput
                   style={styles.modalInput}
-                  placeholder="e.g. Paracetamol 500mg"
+                  placeholder={t("e.g. Paracetamol 500mg")}
                   placeholderTextColor="#94a3b8"
                   value={editMedName}
                   onChangeText={setEditMedName}
                 />
 
                 {/* Dosage */}
-                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Dosage</Text>
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>{t("Dosage")}</Text>
                 <TextInput
                   style={styles.modalInput}
-                  placeholder="e.g. 500 mg, 1 tablet, 2 puffs"
+                  placeholder={t("e.g. 500 mg, 1 tablet, 2 puffs")}
                   placeholderTextColor="#94a3b8"
                   value={editMedDosage}
                   onChangeText={setEditMedDosage}
                 />
 
                 {/* Frequency */}
-                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Dosage Frequency</Text>
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>{t("Dosage Frequency")}</Text>
                 <View style={styles.segmentedRow}>
                   {(['OD', 'BD', 'TDS', 'QDS'] as const).map((freq) => {
                     const labelMap = { OD: 'OD (1x)', BD: 'BD (2x)', TDS: 'TDS (3x)', QDS: 'QDS (4x)' };
@@ -1375,7 +1368,7 @@ export default function PatientPrescriptionScreen() {
                 </View>
 
                 {/* Meal Timing (After meal / Before meal) */}
-                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Meal Timing</Text>
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>{t("Meal Timing")}</Text>
                 <View style={styles.timingRow}>
                   <TouchableOpacity
                     style={[styles.timingChip, editMealTiming === 'After meal' && styles.timingChipSelected]}
@@ -1391,8 +1384,7 @@ export default function PatientPrescriptionScreen() {
                     <Text
                       style={[styles.timingChipText, editMealTiming === 'After meal' && styles.timingChipTextSelected]}
                     >
-                      After meal
-                    </Text>
+                      {t("After meal")}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1409,13 +1401,12 @@ export default function PatientPrescriptionScreen() {
                     <Text
                       style={[styles.timingChipText, editMealTiming === 'Before meal' && styles.timingChipTextSelected]}
                     >
-                      Before meal
-                    </Text>
+                      {t("Before meal")}</Text>
                   </TouchableOpacity>
                 </View>
 
                 {/* Schedule / Time of Day (Morning, Lunch, Dinner) */}
-                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Take Medicine</Text>
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>{t("Take Medicine")}</Text>
                 <View style={styles.timeScheduleRow}>
                   <TouchableOpacity
                     style={[styles.timeScheduleChip, editTakeMorning && styles.timeScheduleChipSelected]}
@@ -1434,8 +1425,7 @@ export default function PatientPrescriptionScreen() {
                         editTakeMorning && styles.timeScheduleChipTextSelected,
                       ]}
                     >
-                      Morning
-                    </Text>
+                      {t("Morning")}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1455,8 +1445,7 @@ export default function PatientPrescriptionScreen() {
                         editTakeLunch && styles.timeScheduleChipTextSelected,
                       ]}
                     >
-                      Lunch
-                    </Text>
+                      {t("Lunch")}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1476,13 +1465,12 @@ export default function PatientPrescriptionScreen() {
                         editTakeDinner && styles.timeScheduleChipTextSelected,
                       ]}
                     >
-                      Dinner
-                    </Text>
+                      {t("Dinner")}</Text>
                   </TouchableOpacity>
                 </View>
 
                 {/* Duration */}
-                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Duration (days)</Text>
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>{t("Duration (days)")}</Text>
                 <View style={styles.durationRow}>
                   {[3, 5, 7, 14, 30].map((days) => {
                     const isSelected = editMedDuration === days;
@@ -1494,18 +1482,17 @@ export default function PatientPrescriptionScreen() {
                         activeOpacity={0.8}
                       >
                         <Text style={[styles.durationChipText, isSelected && styles.durationChipTextSelected]}>
-                          {days} days
-                        </Text>
+                          {days} {t("days")}</Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
 
                 {/* Additional Note */}
-                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>Additional Notes / Indication (Optional)</Text>
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>{t("Additional Notes / Indication (Optional)")}</Text>
                 <TextInput
                   style={styles.modalInput}
-                  placeholder="e.g. As needed for pain, 2 puffs for wheeze"
+                  placeholder={t("e.g. As needed for pain, 2 puffs for wheeze")}
                   placeholderTextColor="#94a3b8"
                   value={editCustomNotes}
                   onChangeText={setEditCustomNotes}
@@ -1518,13 +1505,13 @@ export default function PatientPrescriptionScreen() {
                 style={styles.modalCancelBtn}
                 onPress={() => setIsEditMedModalOpen(false)}
               >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                <Text style={styles.modalCancelBtnText}>{t("Cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalSubmitBtn}
                 onPress={handleUpdateMedicine}
               >
-                <Text style={styles.modalSubmitBtnText}>Update Medicine</Text>
+                <Text style={styles.modalSubmitBtnText}>{t("Update Medicine")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1538,15 +1525,14 @@ export default function PatientPrescriptionScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Patient Referral</Text>
+              <Text style={styles.modalTitle}>{t("Patient Referral")}</Text>
               <TouchableOpacity onPress={() => setIsReferralModalOpen(false)}>
                 <Ionicons name="close" size={24} color="#64748b" />
               </TouchableOpacity>
             </View>
 
             <Text style={styles.modalSub}>
-              Refer {patient.name} ({patient.tokenFormatted}) to specialized hospital unit:
-            </Text>
+              {t("Refer")}{' '}{patient.name} ({patient.tokenFormatted}{t(") to specialized hospital unit:")}</Text>
 
             <View style={styles.referralOptionsRow}>
               {['Physiotherapy', 'Radiology (X-Ray/MRI)', 'Laboratory / Blood'].map((type) => {
@@ -1563,18 +1549,18 @@ export default function PatientPrescriptionScreen() {
                         isSelected && styles.referralTypeChipTextSelected,
                       ]}
                     >
-                      {type}
+                      {t(type)}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Referral Clinical Notes / Reason</Text>
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>{t("Referral Clinical Notes / Reason")}</Text>
             <TextInput
               style={[styles.modalInput, { height: 70, textAlignVertical: 'top' }]}
               multiline
-              placeholder="e.g. Lumbar spine mobilization and heat therapy recommended."
+              placeholder={t("e.g. Lumbar spine mobilization and heat therapy recommended.")}
               placeholderTextColor="#94a3b8"
               value={referralNotes}
               onChangeText={setReferralNotes}
@@ -1585,13 +1571,13 @@ export default function PatientPrescriptionScreen() {
                 style={styles.modalCancelBtn}
                 onPress={() => setIsReferralModalOpen(false)}
               >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                <Text style={styles.modalCancelBtnText}>{t("Cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalSubmitBtn}
                 onPress={handleSubmitReferral}
               >
-                <Text style={styles.modalSubmitBtnText}>Send Referral</Text>
+                <Text style={styles.modalSubmitBtnText}>{t("Send Referral")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1607,11 +1593,9 @@ export default function PatientPrescriptionScreen() {
             <View style={styles.successIconCircle}>
               <Ionicons name="checkmark-done" size={32} color="#0d6371" />
             </View>
-            <Text style={styles.successModalTitle}>Prescription Saved!</Text>
+            <Text style={styles.successModalTitle}>{t("Prescription Saved!")}</Text>
             <Text style={styles.successModalDesc}>
-              Prescription for {patient.name} ({patient.tokenFormatted}) has been saved and the Digital
-              Rx has been dispatched to the hospital pharmacy and patient portal.
-            </Text>
+              {t("Prescription for")}{' '}{patient.name} ({patient.tokenFormatted}{t(") has been saved and the Digital Rx has been dispatched to the hospital pharmacy and patient portal.")}</Text>
 
             <TouchableOpacity
               style={styles.downloadRxModalBtn}
@@ -1625,15 +1609,14 @@ export default function PatientPrescriptionScreen() {
                 style={{ marginRight: 8 }}
               />
               <Text style={styles.downloadRxModalBtnText}>
-                Download Prescription (PDF)
-              </Text>
+                {t("Download Prescription (PDF)")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.successDoneBtn}
               onPress={() => setIsSaveSuccessModalOpen(false)}
             >
-              <Text style={styles.successDoneBtnText}>Done</Text>
+              <Text style={styles.successDoneBtnText}>{t("Done")}</Text>
             </TouchableOpacity>
           </View>
         </View>

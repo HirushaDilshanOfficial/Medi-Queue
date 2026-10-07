@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage, type DesignImageName } from './DesignImage';
 
@@ -11,6 +13,7 @@ type Props = {
 };
 
 export function CheckupRow({ title, badge, icon = 'calendar', onPress }: Props) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
@@ -22,7 +25,7 @@ export function CheckupRow({ title, badge, icon = 'calendar', onPress }: Props) 
           <DesignImage name={icon} size={16} color={PatientTheme.brand} />
       </View>
       <Text style={styles.title} numberOfLines={1}>
-        {title}
+        {t(title ?? '')}
       </Text>
       {badge ? (
         <View style={styles.badge}>

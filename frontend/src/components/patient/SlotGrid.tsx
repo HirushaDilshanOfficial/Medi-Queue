@@ -46,7 +46,7 @@ export function SlotGrid({ slots, selected, onSelect, loading }: Props) {
             accessibilityRole="button"
             accessibilityState={{ selected: active, disabled: soldOut }}
             accessibilityLabel={
-              soldOut ? `${slot.time}, fully booked` : `${slot.time}, ${slot.remaining} left`
+              soldOut ? t("{value0}, fully booked", { value0: String(slot.time) }) : t("{value0}, {value1} left", { value0: String(slot.time), value1: String(slot.remaining) })
             }
             style={({ pressed }) => [
               styles.slot,
@@ -63,8 +63,7 @@ export function SlotGrid({ slots, selected, onSelect, loading }: Props) {
             ) : (
               slot.remaining <= 3 && (
                 <Text style={[styles.remaining, active && styles.textActive]}>
-                  {slot.remaining} left
-                </Text>
+                  {slot.remaining} {t("left")}</Text>
               )
             )}
           </Pressable>

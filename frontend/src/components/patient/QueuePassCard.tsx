@@ -18,7 +18,7 @@ type Props = {
 // The physical pass. The token number is the largest element because that is what
 // gets called out across a clinic, and it has to be readable from arm's length.
 export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const live = pass.live;
   const called = pass.status === 'called' || pass.status === 'in_consultation';
   const finished = pass.status === 'completed' || pass.status === 'cancelled' || pass.status === 'no_show';
@@ -54,13 +54,13 @@ export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
           <View style={styles.liveBadge}>
             <View style={[styles.dot, called && styles.dotActive, finished && styles.dotMuted]} />
             <Text style={styles.liveLabel}>
-              {called ? 'CALLED' : finished ? 'CLOSED' : 'LIVE'}
+              {called ? t('CALLED') : finished ? t('CLOSED') : t('LIVE')}
             </Text>
           </View>
         </View>
 
         <Text style={styles.tokenLabel}>{t("YOUR QUEUE NUMBER")}</Text>
-        <Text style={styles.token} accessibilityLabel={`Queue number ${pass.tokenLabel}`}>
+        <Text style={styles.token} accessibilityLabel={t("Queue number {value0}", { value0: String(pass.tokenLabel) })}>
           {pass.tokenLabel}
         </Text>
 
@@ -72,7 +72,7 @@ export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
 
         {!finished ? (
           <Text style={styles.wait}>
-            {live ? `Estimated wait ${waitLabel(live.waitMinutes)}` : 'Checking the queue...'}
+            {live ? t("Estimated wait {value0}", { value0: String(waitLabel(live.waitMinutes, language)) }) : t('Checking the queue...')}
           </Text>
         ) : null}
       </LinearGradient>
@@ -124,11 +124,12 @@ function Detail({
   label: string;
   value: string;
 }) {
+  const { t, language } = useLanguage();
   return (
     <View style={styles.detail}>
       <DesignImage name={icon} size={14} color={PatientTheme.brandMid} />
       <View style={styles.detailText}>
-        <Text style={styles.detailLabel}>{label}</Text>
+        <Text style={styles.detailLabel}>{t(label ?? '')}</Text>
         <Text style={styles.detailValue} numberOfLines={1}>
           {value}
         </Text>
