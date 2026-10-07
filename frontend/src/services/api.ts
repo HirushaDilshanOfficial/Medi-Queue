@@ -509,7 +509,7 @@ export const getDashboard = async (
  * List patients filtered by visited_today, recent (last 30 days), or all.
  */
 export const getPatients = async (
-  filter?: 'visited_today' | 'recent' | 'all',
+  filter?: 'visited_today' | 'recent' | 'all' | 'walk_in' | 'pre_booked',
   token?: string
 ): Promise<Patient[]> => {
   const qs = filter ? `?filter=${encodeURIComponent(filter)}` : '';

@@ -1,33 +1,32 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
-import { Colors } from '../../constants/Colors';
+import { useRouter } from 'expo-router';
+import { ReportsScreen } from '../../screens/Receptionist/ReportsScreen';
 
-export default function ReportsScreen() {
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Reports</Text>
-      </View>
-    </SafeAreaView>
-  );
+export default function ReceptionReportsScreen() {
+  const router = useRouter();
+
+  const handleNavigate = (route: string) => {
+    switch (route) {
+      case 'Home':
+      case 'home':
+        router.push('/(reception)/home');
+        break;
+      case 'Queue':
+      case 'queue':
+        router.push('/(reception)/queue');
+        break;
+      case 'RegisterTab':
+      case 'register':
+        router.push('/(reception)/register');
+        break;
+      case 'PatientsTab':
+      case 'patients':
+        router.push('/(reception)/patients');
+        break;
+      default:
+        router.push('/(reception)/home');
+    }
+  };
+
+  return <ReportsScreen onNavigate={handleNavigate} />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  content: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.textDark,
-    letterSpacing: -0.5,
-  },
-});

@@ -12,6 +12,8 @@ import {
   Animated,
   Platform,
   Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
@@ -23,6 +25,7 @@ import {
   recallToken,
   markNoShow,
   getErrorMessage,
+  searchPatients,
 } from '../../services/api';
 import {
   LoadingState,
@@ -40,15 +43,21 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   navigation,
   onNavigate,
 }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { isShiftClosed } = useShiftContext();
   const { data, loading, error, refreshing, refresh } = useDashboard();
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
   // Modals state
+  const [profileModalVisible, setProfileModalVisible] = useState<boolean>(false);
+  const [activeCounter, setActiveCounter] = useState<string>('OPD Counter 01');
   const [reprintModalVisible, setReprintModalVisible] = useState<boolean>(false);
   const [rosterModalVisible, setRosterModalVisible] = useState<boolean>(false);
   const [notificationModalVisible, setNotificationModalVisible] = useState<boolean>(false);
+  const [verifyNicModalVisible, setVerifyNicModalVisible] = useState<boolean>(false);
+  const [verifyNicQuery, setVerifyNicQuery] = useState<string>('');
+  const [verifyNicLoading, setVerifyNicLoading] = useState<boolean>(false);
+  const [verifyNicResult, setVerifyNicResult] = useState<any>(null);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -76,14 +85,41 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Derive staff display initials & name
-  const staffName = user?.fullName || user?.name || 'Sarah Jenkins, Senior Nurse Intake';
+  // Derive staff display initials, name, and role
+  const staffName = user?.fullName || user?.name || 'Dinusha Shashini';
+  const staffRole = user?.role ? (user.role.charAt(0).toUpperCase() + user.role.slice(1)) : 'Receptionist';
+  const staffEmail = user?.email || 'dinusha.reception@mediqueue.lk';
   const staffInitials = staffName
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map((w) => w[0].toUpperCase())
-    .join('') || 'SJ';
+    .join('') || 'DS';
+
+  // Action: Logout
+  const handleLogout = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out of your receptionist account?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            setProfileModalVisible(false);
+            try {
+              if (logout) {
+                await logout();
+              }
+            } catch (err) {
+              console.error('Logout error:', err);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Helper to handle navigation whether in React Navigation stack or Expo Router
   const handleNav = (target: string) => {
@@ -197,8 +233,38 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     );
   };
 
+  // Action: Verify NIC Quick Lookup
+  const handleVerifyNicSearch = async () => {
+    const trimmed = verifyNicQuery.trim();
+    if (!trimmed) {
+      showToast('Please enter an NIC number', 'warning');
+      return;
+    }
+    try {
+      setVerifyNicLoading(true);
+      setVerifyNicResult(null);
+      const res = await searchPatients(trimmed);
+      const patients = res?.patients || (Array.isArray(res) ? res : []);
+      const matched = patients.find((p: any) =>
+        (p.nic && p.nic.toLowerCase() === trimmed.toLowerCase()) ||
+        (p.fullName && p.fullName.toLowerCase().includes(trimmed.toLowerCase()))
+      );
+      if (matched) {
+        setVerifyNicResult({ found: true, patient: matched });
+      } else {
+        setVerifyNicResult({ found: false });
+      }
+    } catch {
+      showToast('Error verifying NIC. Please try again.', 'error');
+    } finally {
+      if (isMounted.current) {
+        setVerifyNicLoading(false);
+      }
+    }
+  };
+
   if (loading && !data) {
-    return <LoadingState fullscreen message="Loading OPD Counter 01..." />;
+    return <LoadingState fullscreen message={`Loading ${activeCounter}...`} />;
   }
 
   if (error && !data) {
@@ -292,23 +358,36 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
 
         {/* Row 3: Staff Profile & Notification Bell */}
         <View style={styles.staffHeaderRow}>
-          <View style={styles.avatarWrap}>
-            <Text style={styles.avatarText}>{staffInitials}</Text>
-            <View style={styles.avatarStatusDot} />
-          </View>
+          <TouchableOpacity
+            style={styles.staffProfileTouchable}
+            activeOpacity={0.7}
+            onPress={() => setProfileModalVisible(true)}
+            accessibilityLabel="Staff profile and desk details"
+            accessibilityRole="button"
+          >
+            <View style={styles.avatarWrap}>
+              <Text style={styles.avatarText}>{staffInitials}</Text>
+              <View style={styles.avatarStatusDot} />
+            </View>
 
-          <View style={styles.staffInfo}>
-            <View style={styles.counterTitleRow}>
-              <Text style={styles.counterTitle}>OPD Counter 01</Text>
-              <View style={styles.livePill}>
-                <Animated.View style={[styles.liveDot, { opacity: pulseAnim }]} />
-                <Text style={styles.liveText}>LIVE</Text>
+            <View style={styles.staffInfo}>
+              <View style={styles.staffNameRow}>
+                <Text style={styles.staffMainName} numberOfLines={1}>
+                  {staffName}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="rgba(255, 255, 255, 0.75)" style={{ marginLeft: 4 }} />
+              </View>
+              <View style={styles.staffMetaRow}>
+                <Text style={styles.staffMetaText}>
+                  {staffRole} • {activeCounter}
+                </Text>
+                <View style={styles.livePill}>
+                  <Animated.View style={[styles.liveDot, { opacity: pulseAnim }]} />
+                  <Text style={styles.liveText}>LIVE</Text>
+                </View>
               </View>
             </View>
-            <Text style={styles.staffSubtitle} numberOfLines={1}>
-              {staffName}
-            </Text>
-          </View>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.bellButton}
@@ -416,12 +495,12 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
           </View>
         </View>
 
-        {/* ── NOW SERVING AT COUNTER 01 (HERO CARD) ── */}
+        {/* ── NOW SERVING AT COUNTER (HERO CARD) ── */}
         <View style={styles.heroServingCard}>
           {/* Top Tag Row */}
           <View style={styles.heroServingHeader}>
             <View style={styles.nowServingBadge}>
-              <Text style={styles.nowServingBadgeText}>NOW SERVING AT COUNTER 01</Text>
+              <Text style={styles.nowServingBadgeText}>NOW SERVING AT {activeCounter.toUpperCase()}</Text>
             </View>
             <Text style={styles.tokenCallCountText}>Token Call #1</Text>
           </View>
@@ -556,7 +635,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             {/* 2. Verify NIC */}
             <TouchableOpacity
               style={styles.quickActionCard}
-              onPress={() => handleNav('PatientsTab')}
+              onPress={() => {
+                setVerifyNicQuery('');
+                setVerifyNicResult(null);
+                setVerifyNicModalVisible(true);
+              }}
               activeOpacity={0.7}
               accessibilityLabel="Verify NIC"
               accessibilityRole="button"
@@ -750,11 +833,21 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalIconWrap}>
-                <Ionicons name="print" size={24} color={Colors.primary} />
+            {/* Header with Close (X) */}
+            <View style={styles.modalHeaderWithClose}>
+              <View style={styles.modalHeaderTitleWrap}>
+                <View style={[styles.modalIconWrapSmall, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="print" size={18} color="#D97706" />
+                </View>
+                <Text style={styles.modalTitleText}>Reprint Patient Token</Text>
               </View>
-              <Text style={styles.modalTitle}>Reprint Patient Token Slip</Text>
+              <TouchableOpacity
+                onPress={() => setReprintModalVisible(false)}
+                style={styles.modalCloseIconBtn}
+                accessibilityLabel="Close Reprint Modal"
+              >
+                <Ionicons name="close" size={20} color={Colors.textMedium} />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.slipCardPreview}>
@@ -797,11 +890,21 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalIconWrap}>
-                <Ionicons name="calendar" size={24} color="#7C3AED" />
+            {/* Header with Close (X) */}
+            <View style={styles.modalHeaderWithClose}>
+              <View style={styles.modalHeaderTitleWrap}>
+                <View style={[styles.modalIconWrapSmall, { backgroundColor: '#F5F3FF' }]}>
+                  <Ionicons name="calendar" size={18} color="#7C3AED" />
+                </View>
+                <Text style={styles.modalTitleText}>Today's Doctor Roster</Text>
               </View>
-              <Text style={styles.modalTitle}>Today's Doctor Roster</Text>
+              <TouchableOpacity
+                onPress={() => setRosterModalVisible(false)}
+                style={styles.modalCloseIconBtn}
+                accessibilityLabel="Close Doctor Roster"
+              >
+                <Ionicons name="close" size={20} color={Colors.textMedium} />
+              </TouchableOpacity>
             </View>
 
             <ScrollView style={{ maxHeight: 320, width: '100%' }}>
@@ -837,11 +940,21 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={[styles.modalIconWrap, { backgroundColor: '#E0F2FE' }]}>
-                <Ionicons name="notifications" size={24} color={Colors.primary} />
+            {/* Header with Close (X) */}
+            <View style={styles.modalHeaderWithClose}>
+              <View style={styles.modalHeaderTitleWrap}>
+                <View style={[styles.modalIconWrapSmall, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons name="notifications" size={18} color={Colors.primary} />
+                </View>
+                <Text style={styles.modalTitleText}>Counter Notifications</Text>
               </View>
-              <Text style={styles.modalTitle}>Counter Notifications</Text>
+              <TouchableOpacity
+                onPress={() => setNotificationModalVisible(false)}
+                style={styles.modalCloseIconBtn}
+                accessibilityLabel="Close Notifications"
+              >
+                <Ionicons name="close" size={20} color={Colors.textMedium} />
+              </TouchableOpacity>
             </View>
 
             <View style={{ width: '100%', paddingVertical: 10 }}>
@@ -861,6 +974,251 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             >
               <Text style={styles.modalConfirmBtnText}>Close</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── VERIFY NIC QUICK MODAL ── */}
+      <Modal
+        visible={verifyNicModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setVerifyNicModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.verifyNicModalContent}>
+            {/* Header with Close (X) */}
+            <View style={styles.modalHeaderWithClose}>
+              <View style={styles.modalHeaderTitleWrap}>
+                <View style={[styles.modalIconWrapSmall, { backgroundColor: '#F0F9FF' }]}>
+                  <Ionicons name="id-card" size={18} color="#0284C7" />
+                </View>
+                <Text style={styles.modalTitleText}>Verify Patient NIC</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setVerifyNicModalVisible(false)}
+                style={styles.modalCloseIconBtn}
+                accessibilityLabel="Close Verify NIC"
+              >
+                <Ionicons name="close" size={20} color={Colors.textMedium} />
+              </TouchableOpacity>
+            </View>
+
+            {/* NIC Input Row */}
+            <View style={styles.verifyNicInputRow}>
+              <TextInput
+                style={styles.verifyNicInput}
+                placeholder="Enter NIC (e.g. 199012345678 or 951234567V)"
+                placeholderTextColor={Colors.textLight}
+                value={verifyNicQuery}
+                onChangeText={setVerifyNicQuery}
+                autoCapitalize="characters"
+                returnKeyType="search"
+                onSubmitEditing={handleVerifyNicSearch}
+              />
+              <TouchableOpacity
+                style={styles.verifyNicSearchBtn}
+                onPress={handleVerifyNicSearch}
+                disabled={verifyNicLoading}
+              >
+                {verifyNicLoading ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.verifyNicSearchBtnText}>Verify</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Results Display */}
+            {verifyNicResult?.found && (
+              <View style={styles.verifyNicFoundBox}>
+                <View style={styles.verifyNicBadgeRow}>
+                  <View style={styles.verifiedBadge}>
+                    <Ionicons name="checkmark-circle" size={14} color="#059669" style={{ marginRight: 4 }} />
+                    <Text style={styles.verifiedBadgeText}>VERIFIED CITIZEN RECORD</Text>
+                  </View>
+                </View>
+                <Text style={styles.verifyNicPatientName}>
+                  {verifyNicResult.patient.fullName}
+                </Text>
+                <Text style={styles.verifyNicPatientMeta}>
+                  NIC: {verifyNicResult.patient.nic} • Age: {verifyNicResult.patient.age || 'N/A'} • {verifyNicResult.patient.gender || ''}
+                </Text>
+                <Text style={styles.verifyNicPatientPhone}>
+                  📞 {verifyNicResult.patient.phone || 'No phone recorded'}
+                </Text>
+
+                <View style={styles.verifyNicActionsRow}>
+                  <TouchableOpacity
+                    style={styles.verifyNicDirectoryBtn}
+                    onPress={() => {
+                      setVerifyNicModalVisible(false);
+                      handleNav('PatientsTab');
+                    }}
+                  >
+                    <Text style={styles.verifyNicDirectoryBtnText}>Full Profile</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.verifyNicIntakeBtn}
+                    onPress={() => {
+                      setVerifyNicModalVisible(false);
+                      handleNav('RegisterTab');
+                    }}
+                  >
+                    <Text style={styles.verifyNicIntakeBtnText}>New Intake</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {verifyNicResult && !verifyNicResult.found && (
+              <View style={styles.verifyNicNotFoundBox}>
+                <Ionicons name="alert-circle-outline" size={30} color="#D97706" style={{ marginBottom: 6 }} />
+                <Text style={styles.verifyNicNotFoundTitle}>No Record Found</Text>
+                <Text style={styles.verifyNicNotFoundSub}>
+                  No patient registered under NIC "{verifyNicQuery}".
+                </Text>
+                <TouchableOpacity
+                  style={styles.verifyNicCreateNewBtn}
+                  onPress={() => {
+                    setVerifyNicModalVisible(false);
+                    handleNav('RegisterTab');
+                  }}
+                >
+                  <Ionicons name="person-add" size={15} color={Colors.white} style={{ marginRight: 6 }} />
+                  <Text style={styles.verifyNicCreateNewBtnText}>Register New Patient</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.modalCancelFullBtn}
+              onPress={() => setVerifyNicModalVisible(false)}
+            >
+              <Text style={styles.modalCancelFullBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── STAFF PROFILE & COUNTER MANAGEMENT MODAL ── */}
+      <Modal
+        visible={profileModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setProfileModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.profileModalContent}>
+            {/* Modal Header */}
+            <View style={styles.profileModalHeader}>
+              <View style={styles.profileModalTitleWrap}>
+                <Ionicons name="id-card" size={20} color={Colors.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.profileModalTitle}>Staff & Desk Profile</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setProfileModalVisible(false)}
+                style={styles.profileModalCloseBtn}
+                accessibilityLabel="Close profile modal"
+              >
+                <Ionicons name="close" size={20} color={Colors.textMedium} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Staff Card */}
+            <View style={styles.staffCardBig}>
+              <View style={styles.bigAvatarWrap}>
+                <Text style={styles.bigAvatarText}>{staffInitials}</Text>
+              </View>
+              <View style={styles.bigStaffDetails}>
+                <Text style={styles.bigStaffName} numberOfLines={1}>{staffName}</Text>
+                <View style={styles.roleTag}>
+                  <Text style={styles.roleTagText}>{staffRole} • OPD Front Desk</Text>
+                </View>
+                <Text style={styles.staffEmailText} numberOfLines={1}>{staffEmail}</Text>
+              </View>
+            </View>
+
+            {/* Counter Station Selector */}
+            <Text style={styles.sectionSubtitle}>Assigned Service Desk</Text>
+            <View style={styles.counterSelectorCol}>
+              {['OPD Counter 01', 'OPD Counter 02', 'OPD Counter 03'].map((counterOption) => {
+                const isSelected = activeCounter === counterOption;
+                return (
+                  <TouchableOpacity
+                    key={counterOption}
+                    style={[
+                      styles.counterOptionBtn,
+                      isSelected && styles.counterOptionBtnActive,
+                    ]}
+                    onPress={() => {
+                      setActiveCounter(counterOption);
+                      showToast(`Switched active desk to ${counterOption}`, 'info');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                      size={16}
+                      color={isSelected ? Colors.primary : Colors.textLight}
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text
+                      style={[
+                        styles.counterOptionText,
+                        isSelected && styles.counterOptionTextActive,
+                      ]}
+                    >
+                      {counterOption}
+                    </Text>
+                    {isSelected && (
+                      <View style={styles.activeDeskPill}>
+                        <Text style={styles.activeDeskPillText}>ACTIVE</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Shift & Duty Info Box */}
+            <View style={styles.dutyInfoBox}>
+              <View style={styles.dutyInfoRow}>
+                <Ionicons name="time-outline" size={15} color={Colors.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.dutyInfoLabel}>Desk Hours:</Text>
+                <Text style={styles.dutyInfoValue}>08:00 AM - 04:30 PM (Shift 1)</Text>
+              </View>
+              <View style={[styles.dutyInfoRow, { marginTop: 6 }]}>
+                <Ionicons name="medkit-outline" size={15} color={Colors.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.dutyInfoLabel}>Station:</Text>
+                <Text style={styles.dutyInfoValue}>Orthopedic & General Triage</Text>
+              </View>
+              <View style={[styles.dutyInfoRow, { marginTop: 6 }]}>
+                <Ionicons name="pulse" size={15} color="#059669" style={{ marginRight: 8 }} />
+                <Text style={styles.dutyInfoLabel}>Queue Status:</Text>
+                <Text style={[styles.dutyInfoValue, { color: '#059669', fontWeight: '700' }]}>Online & Dispatching</Text>
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.profileActionRow}>
+              <TouchableOpacity
+                style={styles.logoutBtn}
+                onPress={handleLogout}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="log-out-outline" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+                <Text style={styles.logoutBtnText}>Log Out</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.doneBtn}
+                onPress={() => setProfileModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.doneBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -956,6 +1314,13 @@ const styles = StyleSheet.create({
   staffHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  staffProfileTouchable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
   },
   avatarWrap: {
     width: 44,
@@ -988,14 +1353,25 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
   },
-  counterTitleRow: {
+  staffNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  counterTitle: {
-    fontSize: 18,
+  staffMainName: {
+    fontSize: 16,
     fontWeight: '800',
     color: Colors.white,
+    letterSpacing: -0.2,
+  },
+  staffMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  staffMetaText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '600',
     marginRight: 8,
   },
   livePill: {
@@ -1018,12 +1394,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#34D399',
     letterSpacing: 0.5,
-  },
-  staffSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.75)',
-    marginTop: 2,
-    fontWeight: '500',
   },
   bellButton: {
     width: 40,
@@ -1593,6 +1963,394 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textDark,
     fontWeight: '500',
+  },
+  profileModalContent: {
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  profileModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  profileModalTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  profileModalCloseBtn: {
+    padding: 4,
+  },
+  staffCardBig: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+  },
+  bigAvatarWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  bigAvatarText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: Colors.white,
+  },
+  bigStaffDetails: {
+    flex: 1,
+  },
+  bigStaffName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  roleTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#E6F6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  roleTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  staffEmailText: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginTop: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.textMedium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+  },
+  counterSelectorCol: {
+    marginBottom: 14,
+  },
+  counterOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  counterOptionBtnActive: {
+    backgroundColor: '#F0FDFA',
+    borderColor: Colors.primary,
+  },
+  counterOptionText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textMedium,
+  },
+  counterOptionTextActive: {
+    color: Colors.primary,
+    fontWeight: '800',
+  },
+  activeDeskPill: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activeDeskPillText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#059669',
+  },
+  dutyInfoBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  dutyInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dutyInfoLabel: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontWeight: '600',
+    marginRight: 6,
+  },
+  dutyInfoValue: {
+    fontSize: 12,
+    color: Colors.textDark,
+    fontWeight: '700',
+  },
+  profileActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logoutBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+    borderRadius: 12,
+    height: 44,
+  },
+  logoutBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  doneBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    height: 44,
+  },
+  doneBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  modalHeaderWithClose: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalHeaderTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  modalIconWrapSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  modalTitleText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  modalCloseIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verifyNicModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  verifyNicInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    width: '100%',
+  },
+  verifyNicInput: {
+    flex: 1,
+    height: 44,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    fontSize: 14,
+    color: Colors.textDark,
+    marginRight: 8,
+    fontWeight: '600',
+  },
+  verifyNicSearchBtn: {
+    height: 44,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verifyNicSearchBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  verifyNicFoundBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    width: '100%',
+    marginBottom: 14,
+  },
+  verifyNicBadgeRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(5, 150, 105, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  verifiedBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#059669',
+  },
+  verifyNicPatientName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textDark,
+    marginBottom: 4,
+  },
+  verifyNicPatientMeta: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  verifyNicPatientPhone: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginBottom: 12,
+  },
+  verifyNicActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  verifyNicDirectoryBtn: {
+    flex: 1,
+    height: 38,
+    backgroundColor: '#E6F6FF',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verifyNicDirectoryBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  verifyNicIntakeBtn: {
+    flex: 1,
+    height: 38,
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verifyNicIntakeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  verifyNicNotFoundBox: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 14,
+  },
+  verifyNicNotFoundTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#B45309',
+    marginBottom: 4,
+  },
+  verifyNicNotFoundSub: {
+    fontSize: 12,
+    color: Colors.textMedium,
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  verifyNicCreateNewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D97706',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  verifyNicCreateNewBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  modalCancelFullBtn: {
+    width: '100%',
+    height: 42,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+  },
+  modalCancelFullBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textMedium,
   },
 });
 

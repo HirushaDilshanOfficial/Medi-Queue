@@ -767,13 +767,33 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.headerActionBtn}
-          onPress={handleClearSearch}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="refresh" size={18} color={Colors.white} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            style={styles.headerActionBtn}
+            onPress={handleClearSearch}
+            activeOpacity={0.7}
+            accessibilityLabel="Refresh form"
+          >
+            <Ionicons name="refresh" size={18} color={Colors.white} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.headerActionBtn, { marginLeft: 8, backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}
+            onPress={() => {
+              if (navigation?.canGoBack?.()) {
+                navigation.goBack();
+              } else if (onNavigate) {
+                onNavigate('home');
+              } else if (navigation?.navigate) {
+                navigation.navigate('HomeTab');
+              }
+            }}
+            activeOpacity={0.7}
+            accessibilityLabel="Close and return to dashboard"
+          >
+            <Ionicons name="close" size={20} color={Colors.white} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <KeyboardAvoidingView

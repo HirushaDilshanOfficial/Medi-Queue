@@ -659,29 +659,68 @@ const searchPatients = asyncHandler(async (req, res) => {
     $or: conditions,
     isDeleted: { $ne: true },
   })
-    .select('fullName nic phone age gender dob bloodGroup nicVerified')
-    .limit(10)
+    .select('fullName nic phone age gender dob bloodGroup nicVerified district address')
+    .limit(20)
     .lean();
 
+  const patientsWithDetails = await attachLatestAppointments(patients);
+
   res.json({
-    found: patients.length > 0,
-    patients,
+    found: patientsWithDetails.length > 0,
+    patients: patientsWithDetails,
   });
 });
 
 /**
- * @desc    Get patients filtered by visited_today | recent | all
- * @route   GET /api/reception/patients?filter=visited_today|recent|all
+ * Helper to attach latest appointment details to an array of patients
+ */
+async function attachLatestAppointments(patients) {
+  if (!patients || patients.length === 0) return patients;
+  const pIds = patients.map((p) => p._id);
+  const appts = await Appointment.find({
+    patient: { $in: pIds },
+    status: { $ne: 'cancelled' },
+  })
+    .populate('doctor', 'name specialization department room')
+    .sort({ date: -1, slotTime: -1, createdAt: -1 })
+    .lean();
+
+  const latestByPatient = new Map();
+  for (const a of appts) {
+    const pidStr = String(a.patient);
+    if (!latestByPatient.has(pidStr)) {
+      latestByPatient.set(pidStr, a);
+    }
+  }
+
+  return patients.map((p) => {
+    const a = latestByPatient.get(String(p._id));
+    return {
+      ...p,
+      latestType: a ? (a.type || 'walk_in') : (p.registeredVia === 'app' ? 'pre_booked' : 'walk_in'),
+      latestVisitDate: a ? a.date : undefined,
+      latestVisitSlotTime: a ? a.slotTime : undefined,
+      latestDoctorName: a?.doctor?.name || undefined,
+      latestDepartment: a ? a.department : undefined,
+      latestTokenNumber: a ? a.tokenNumber : undefined,
+      latestStatus: a ? a.status : undefined,
+    };
+  });
+}
+
+/**
+ * @desc    Get patients filtered by visited_today | recent | walk_in | pre_booked | all
+ * @route   GET /api/reception/patients?filter=visited_today|recent|walk_in|pre_booked|all
  * @access  Private — receptionist
  */
 const getPatients = asyncHandler(async (req, res) => {
   const filter = req.query.filter || 'all';
 
-  if (!['visited_today', 'recent', 'all'].includes(filter)) {
-    throw createError('Invalid filter. Allowed values: visited_today, recent, all.', 400);
+  if (!['visited_today', 'recent', 'all', 'walk_in', 'pre_booked'].includes(filter)) {
+    throw createError('Invalid filter. Allowed values: visited_today, recent, walk_in, pre_booked, all.', 400);
   }
 
-  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 20);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
 
   const todayStr = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Colombo',
@@ -697,10 +736,47 @@ const getPatients = asyncHandler(async (req, res) => {
       .limit(limit)
       .lean();
 
-    return res.json(patients);
+    const result = await attachLatestAppointments(patients);
+    return res.json(result);
   }
 
-  // 2. Date match for visited_today or recent (last 30 days)
+  // 2. Filter: walk_in or pre_booked
+  if (filter === 'walk_in' || filter === 'pre_booked') {
+    const appts = await Appointment.find({
+      type: filter,
+      status: { $ne: 'cancelled' },
+    })
+      .sort({ date: -1, slotTime: -1, createdAt: -1 })
+      .lean();
+
+    const seenPatientIds = new Set();
+    const uniquePatientIds = [];
+    for (const a of appts) {
+      const pid = String(a.patient);
+      if (!seenPatientIds.has(pid)) {
+        seenPatientIds.add(pid);
+        uniquePatientIds.push(a.patient);
+      }
+    }
+
+    const patientDocs = await Patient.find({
+      _id: { $in: uniquePatientIds.slice(0, limit) },
+      isDeleted: { $ne: true },
+    }).lean();
+
+    const patientMap = new Map(patientDocs.map((p) => [String(p._id), p]));
+    const ordered = [];
+    for (const pid of uniquePatientIds) {
+      const p = patientMap.get(String(pid));
+      if (p) ordered.push(p);
+      if (ordered.length >= limit) break;
+    }
+
+    const result = await attachLatestAppointments(ordered);
+    return res.json(result);
+  }
+
+  // 3. Date match for visited_today or recent (last 30 days)
   let dateMatch;
   if (filter === 'visited_today') {
     dateMatch = todayStr;
@@ -768,7 +844,8 @@ const getPatients = asyncHandler(async (req, res) => {
     }
   }
 
-  res.json(orderedPatients);
+  const result = await attachLatestAppointments(orderedPatients);
+  res.json(result);
 });
 
 /**
@@ -818,8 +895,9 @@ const getPatientById = asyncHandler(async (req, res) => {
       } : null,
       department: appt.department,
       status: appt.status,
-      type: appt.type,
+      type: appt.type || 'walk_in',
       tokenNumber: appt.tokenNumber,
+      tokenLabel: appt.tokenNumber ? `OPD-${String(appt.tokenNumber).padStart(3, '0')}` : null,
       notes: appt.notes || '',
       createdAt: appt.createdAt,
     };
