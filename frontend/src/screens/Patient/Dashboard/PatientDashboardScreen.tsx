@@ -7,7 +7,8 @@ import { useFonts } from 'expo-font';
 import { DesignImage, type DesignImageName } from '../../../components/patient/DesignImage';
 import { patientApi } from '../../../services/patientApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
-import { ACTION_TILES, EVENTS, SPECIALTIES } from './dashboardContent';
+import { ACTION_TILES, EVENTS } from './dashboardContent';
+import { clinicApi } from '../../../services/clinicApi';
 import { C, styles } from './dashboardStyles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuthToken } from '../../../services/http';
@@ -36,11 +37,13 @@ export function PatientDashboardScreen() {
     ProfileInter700: require('../../../../assets/fonts/Inter-700.ttf'),
   });
   const dashboard = useAsyncResource(() => patientApi.getDashboard(), []);
+  const clinics = useAsyncResource(() => clinicApi.list(), []);
   const { reload } = dashboard;
   const hasFocused = useRef(false);
   const [now, setNow] = useState(() => new Date());
   const [sheet, setSheet] = useState<{ title: string; body: string } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showAllClinics, setShowAllClinics] = useState(false);
 
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(timer); }, []);
 
@@ -67,7 +70,8 @@ export function PatientDashboardScreen() {
     if (hasFocused.current) reload();
     hasFocused.current = true;
     checkUnreadNotifications();
-  }, [reload]));
+    void clinics.reload();
+  }, [clinics, reload]));
 
   const data = dashboard.data;
   const name = data?.patient.fullName.trim().split(/\s+/)[0] || 'there';
@@ -161,9 +165,21 @@ export function PatientDashboardScreen() {
         </ScrollView>
       </View>
       <View style={styles.section}>
-        <SectionHeading title="Hospital clinics" action="See all" onPress={doctors} />
+        <SectionHeading
+          title="Hospital clinics"
+          action={clinics.data && clinics.data.clinics.length > 16 ? (showAllClinics ? 'Show featured' : 'View all clinics') : undefined}
+          onPress={() => setShowAllClinics((value) => !value)}
+        />
         <Text style={styles.sectionCaption}>Find the right specialist for your care.</Text>
-        <View style={styles.specialties}>{SPECIALTIES.map(specialty => <Pressable key={specialty.key} accessibilityRole="button" accessibilityLabel={specialty.label} onPress={doctors} style={({ pressed }) => [styles.specialty, { width: specialtyWidth }, pressed && styles.pressed]}><View style={styles.specialtyIcon}><DesignImage name={specialty.icon} size={20} color={C.secondary} /></View><Text style={styles.specialtyLabel}>{specialty.label}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable>)}</View>
+        {clinics.loading && !clinics.data ? (
+          <View style={styles.status}><ActivityIndicator color={C.primary} /><Text style={styles.statusText}>Loading clinics…</Text></View>
+        ) : clinics.error ? (
+          <View style={styles.error}><Text style={styles.errorTitle}>Could not load clinics</Text><Text style={styles.statusText}>{clinics.error}</Text><Pressable onPress={clinics.reload} style={styles.textButton}><Text style={styles.link}>Try again</Text></Pressable></View>
+        ) : clinics.data?.clinics.length ? (
+          <View style={styles.specialties}>{(showAllClinics ? clinics.data.clinics : clinics.data.clinics.slice(0, 16)).map((clinic) => <Pressable key={clinic._id} accessibilityRole="button" accessibilityLabel={clinic.name} onPress={() => router.push({ pathname: '/(patient)/doctors', params: { department: clinic.department, hospitalId: clinic.hospital?._id } })} style={({ pressed }) => [styles.specialty, { width: specialtyWidth }, pressed && styles.pressed]}><View style={styles.specialtyIcon}><DesignImage name="stethoscope" size={20} color={C.secondary} /></View><Text style={styles.specialtyLabel}>{clinic.name.replace(/ Clinic$/, '')}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable>)}</View>
+        ) : (
+          <View style={styles.emptyActivity}><Text style={styles.activityTitle}>No clinics available</Text><Text style={styles.sectionCaption}>Your hospital has not enabled any clinics yet.</Text></View>
+        )}
       </View>
       <View style={styles.section}>
         <SectionHeading title="Recent activity" action="View history" onPress={history} />

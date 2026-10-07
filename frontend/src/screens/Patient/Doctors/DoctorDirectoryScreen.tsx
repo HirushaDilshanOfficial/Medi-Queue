@@ -11,9 +11,10 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { PatientTheme } from '../../../constants/PatientTheme';
 import { doctorApi } from '../../../services/doctorApi';
+import { clinicApi, type Clinic } from '../../../services/clinicApi';
 import { bookingApi } from '../../../services/bookingApi';
 import { queueApi } from '../../../services/queueApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
@@ -30,18 +31,26 @@ type Tab = 'directory' | 'bookings';
 export function DoctorDirectoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ department?: string; hospitalId?: string }>();
 
   const [tab, setTab] = useState<Tab>('directory');
   const [search, setSearch] = useState('');
-  const [department, setDepartment] = useState<string | null>(null);
+  const [department, setDepartment] = useState<string | null>(
+    Array.isArray(params.department) ? params.department[0] : params.department ?? null,
+  );
+  const [hospitalId, setHospitalId] = useState<string | null>(
+    Array.isArray(params.hospitalId) ? params.hospitalId[0] : params.hospitalId ?? null,
+  );
+  const [showAllClinics, setShowAllClinics] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
 
   const departments = useAsyncResource(() => doctorApi.departments(), []);
+  const clinics = useAsyncResource(() => clinicApi.list(), []);
 
   const doctors = useAsyncResource(
-    () => doctorApi.list({ search: search.trim() || undefined, department: department || undefined }),
-    [search, department],
+    () => doctorApi.list({ search: search.trim() || undefined, department: department || undefined, hospitalId: hospitalId || undefined }),
+    [search, department, hospitalId],
   );
 
   // Only fetched while the bookings tab is open, so the directory does not pay for
@@ -61,7 +70,8 @@ export function DoctorDirectoryScreen() {
     useCallback(() => {
       void doctors.reload();
       void departments.reload();
-    }, [departments, doctors]),
+      void clinics.reload();
+    }, [clinics, departments, doctors]),
   );
 
   const onRefresh = useCallback(async () => {
@@ -69,9 +79,10 @@ export function DoctorDirectoryScreen() {
     await Promise.all([
       tab === 'bookings' ? bookings.reload() : doctors.reload(),
       departments.reload(),
+      clinics.reload(),
     ]);
     setRefreshing(false);
-  }, [bookings, departments, doctors, tab]);
+  }, [bookings, clinics, departments, doctors, tab]);
 
   const openDoctor = useCallback(
     (doctor: Doctor) => {
@@ -180,20 +191,30 @@ export function DoctorDirectoryScreen() {
               contentContainerStyle={styles.chips}
             >
               <Chip label="All" active={!department} onPress={() => setDepartment(null)} />
-              {(departments.data?.departments ?? []).map((name) => (
+              {(showAllClinics ? clinics.data?.clinics ?? [] : (clinics.data?.clinics ?? []).slice(0, 16)).map((clinic: Clinic) => (
                 <Chip
-                  key={name}
-                  label={name}
-                  active={department === name}
-                  onPress={() => setDepartment((current) => (current === name ? null : name))}
+                  key={clinic._id}
+                  label={clinic.name.replace(/ Clinic$/, '')}
+                  active={department === clinic.department}
+                  onPress={() => {
+                    setDepartment((current) => (current === clinic.department ? null : clinic.department));
+                    setHospitalId((current) => (current === clinic.hospital?._id ? null : clinic.hospital?._id ?? null));
+                  }}
                 />
               ))}
+              {(clinics.data?.clinics?.length ?? 0) > 16 ? (
+                <Chip
+                  label={showAllClinics ? 'Featured clinics' : 'View all clinics'}
+                  active={false}
+                  onPress={() => setShowAllClinics((value) => !value)}
+                />
+              ) : null}
             </ScrollView>
           </>
         ) : null}
       </View>
     ),
-    [department, departments.data, search, tab],
+    [clinics.data, department, search, showAllClinics, tab],
   );
 
   const doctorList = (
