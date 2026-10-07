@@ -1,7 +1,9 @@
+import { router } from 'expo-router';
+import { clearAuthToken } from '../../services/http';
+import { setAuthToken as setApiAuthToken } from '../../services/api';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -15,6 +17,8 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { CurrentlyServingToken, QueueToken } from '../../types';
@@ -44,6 +48,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   navigation,
   onNavigate,
 }) => {
+  const { t } = useLanguage();
   const { user, logout } = useAuth();
   const { isShiftClosed } = useShiftContext();
   const { data, loading, error, refreshing, refresh } = useDashboard();
@@ -99,28 +104,49 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     .join('') || 'DS';
 
   // Action: Logout
+  const performLogout = async () => {
+    setProfileModalVisible(false);
+    try {
+      await clearAuthToken();
+      setApiAuthToken(null);
+      if (logout) {
+        await logout();
+      }
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      if (onNavigate) {
+        onNavigate('login');
+      } else if (navigation?.replace) {
+        navigation.replace('Login');
+      } else {
+        router.replace('/(auth)/login' as any);
+      }
+    }
+  };
+
   const handleLogout = () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out of your receptionist account?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            setProfileModalVisible(false);
-            try {
-              if (logout) {
-                await logout();
-              }
-            } catch (err) {
-              console.error('Logout error:', err);
-            }
+    if (Platform.OS === 'web') {
+      const confirmed = typeof window !== 'undefined'
+        ? window.confirm(t('Are you sure you want to log out of your receptionist account?'))
+        : true;
+      if (confirmed) {
+        performLogout();
+      }
+    } else {
+      Alert.alert(
+        t('Log Out'),
+        t('Are you sure you want to log out of your receptionist account?'),
+        [
+          { text: t('Cancel'), style: 'cancel' },
+          {
+            text: t('Log Out'),
+            style: 'destructive',
+            onPress: performLogout,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   // Helper to handle navigation whether in React Navigation stack or Expo Router
@@ -358,7 +384,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         <View style={styles.statusTopRow}>
           <Text style={styles.statusTimeText}>{currentTime}</Text>
           <View style={styles.counterOnlineWrap}>
-            <Text style={styles.counterOnlineText}>Counter Online</Text>
+            <Text style={styles.counterOnlineText}>{t('Counter Online')}</Text>
             <View style={styles.onlineDot} />
           </View>
         </View>
@@ -366,11 +392,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         {/* Row 2: Duty Shift & Desk Hours Container */}
         <View style={styles.dutyCard}>
           <View style={styles.dutyCardLeft}>
-            <Text style={styles.dutyShiftSubtitle}>DUTY SHIFT 1 • STATION #01</Text>
-            <Text style={styles.dutyShiftTitle}>Orthopedic & General Triage</Text>
+            <Text style={styles.dutyShiftSubtitle}>{t('DUTY SHIFT 1 • STATION #01')}</Text>
+            <Text style={styles.dutyShiftTitle}>{t('Orthopedic & General Triage')}</Text>
           </View>
           <View style={styles.deskHoursBadge}>
-            <Text style={styles.deskHoursLabel}>Desk Hours</Text>
+            <Text style={styles.deskHoursLabel}>{t('Desk Hours')}</Text>
             <Text style={styles.deskHoursValue}>08:00 - 16:30</Text>
           </View>
         </View>
@@ -398,11 +424,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               </View>
               <View style={styles.staffMetaRow}>
                 <Text style={styles.staffMetaText}>
-                  {staffRole} • {activeCounter}
+                  {t(staffRole)} • {activeCounter}
                 </Text>
                 <View style={styles.livePill}>
                   <Animated.View style={[styles.liveDot, { opacity: pulseAnim }]} />
-                  <Text style={styles.liveText}>LIVE</Text>
+                  <Text style={styles.liveText}>{t('LIVE')}</Text>
                 </View>
               </View>
             </View>
@@ -438,7 +464,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         {isShiftClosed && (
           <View style={styles.shiftClosedNoticeBanner}>
             <Ionicons name="lock-closed" size={16} color="#92400E" style={{ marginRight: 8 }} />
-            <Text style={styles.shiftClosedNoticeText}>Shift closed. Intake is disabled.</Text>
+            <Text style={styles.shiftClosedNoticeText}>{t('Shift closed. Intake is disabled.')}</Text>
           </View>
         )}
 
@@ -449,14 +475,14 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             {/* Card 1: Total Intake */}
             <View style={styles.statCard}>
               <View style={styles.statCardTop}>
-                <Text style={styles.statCardTitle}>Total Intake Today</Text>
+                <Text style={styles.statCardTitle}>{t('Total Intake Today')}</Text>
                 <View style={[styles.statIconCircle, { backgroundColor: '#E0F2FE' }]}>
                   <Ionicons name="people" size={16} color={Colors.primary} />
                 </View>
               </View>
               <Text style={styles.statCardValue}>{totalIntake}</Text>
               <Text style={styles.statCardSubtext}>
-                Walk-in: {walkInCount} • Pre-booked: {preBookedCount}
+                {t('Walk-in:')} {walkInCount} • {t('Pre-booked:')} {preBookedCount}
               </Text>
             </View>
 
@@ -470,7 +496,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             >
               <View style={styles.statCardTop}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={styles.statCardTitle}>In Waiting</Text>
+                  <Text style={styles.statCardTitle}>{t('In Waiting')}</Text>
                   <Ionicons name="chevron-forward" size={13} color="#D97706" style={{ marginLeft: 2 }} />
                 </View>
                 <View style={[styles.statIconCircle, { backgroundColor: '#FEF3C7' }]}>
@@ -479,7 +505,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               </View>
               <Text style={[styles.statCardValue, { color: '#D97706' }]}>{inWaiting}</Text>
               <Text style={styles.statCardSubtext}>
-                Avg Wait: <Text style={{ fontWeight: '700', color: Colors.textDark }}>{avgWait} mins</Text>
+                {t('Avg Wait:')} <Text style={{ fontWeight: '700', color: Colors.textDark }}>{avgWait} {t('mins')}</Text>
               </Text>
             </TouchableOpacity>
           </View>
@@ -489,27 +515,27 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             {/* Card 3: Attended Done */}
             <View style={styles.statCard}>
               <View style={styles.statCardTop}>
-                <Text style={styles.statCardTitle}>Attended Done</Text>
+                <Text style={styles.statCardTitle}>{t('Attended Done')}</Text>
                 <View style={[styles.statIconCircle, { backgroundColor: '#D1FAE5' }]}>
                   <Ionicons name="checkmark-circle" size={16} color="#059669" />
                 </View>
               </View>
               <Text style={styles.statCardValue}>{attendedDone}</Text>
               <Text style={[styles.statCardSubtext, { color: '#059669', fontWeight: '600' }]}>
-                Completed smoothly
+                {t('Completed smoothly')}
               </Text>
             </View>
 
             {/* Card 4: Doctors Active */}
             <View style={styles.statCard}>
               <View style={styles.statCardTop}>
-                <Text style={styles.statCardTitle}>Doctors Active</Text>
+                <Text style={styles.statCardTitle}>{t('Doctors Active')}</Text>
                 <View style={[styles.statIconCircle, { backgroundColor: '#EFF6FF' }]}>
                   <Ionicons name="medkit" size={16} color="#2563EB" />
                 </View>
               </View>
               <Text style={styles.statCardValue}>{activeDocs}</Text>
-              <Text style={styles.statCardSubtext}>Specialists on shift</Text>
+              <Text style={styles.statCardSubtext}>{t('Specialists on shift')}</Text>
             </View>
           </View>
         </View>
@@ -519,19 +545,19 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
           {/* Top Tag Row */}
           <View style={styles.heroServingHeader}>
             <View style={styles.nowServingBadge}>
-              <Text style={styles.nowServingBadgeText}>NOW SERVING AT {activeCounter.toUpperCase()}</Text>
+              <Text style={styles.nowServingBadgeText}>{t('NOW SERVING AT')} {activeCounter.toUpperCase()}</Text>
             </View>
-            <Text style={styles.tokenCallCountText}>Token Call #1</Text>
+            <Text style={styles.tokenCallCountText}>{t('Token Call')} #1</Text>
           </View>
 
           {/* Token Header Row */}
           <View style={styles.heroTokenRow}>
             <View>
-              <Text style={styles.patientQueueLabel}>Patient Queue Token</Text>
+              <Text style={styles.patientQueueLabel}>{t('Patient Queue Token')}</Text>
               <Text style={styles.heroTokenText}>{serving?.tokenLabel || 'OPD - 035'}</Text>
             </View>
             <View style={styles.walkInTypePill}>
-              <Text style={styles.walkInTypePillText}>General Walk-in</Text>
+              <Text style={styles.walkInTypePillText}>{t('General Walk-In')}</Text>
             </View>
           </View>
 
@@ -545,7 +571,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             </View>
 
             <Text style={styles.innerPatientMeta}>
-              Age: {serving?.patient?.age || 46} yrs • {serving?.patient?.gender || 'Male'} • NIC: {serving?.patient?.nic || '197824190V'}
+              {t('Age')}: {serving?.patient?.age || 46} • {t(serving?.patient?.gender || 'Male')} • {t('NIC')}: {serving?.patient?.nic || '197824190V'}
             </Text>
 
             {/* Doctor assigned row */}
@@ -560,7 +586,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                     : 'Dr. Emilia Emelson'}
                 </Text>
                 <Text style={styles.innerDoctorDept}>
-                  Consultant Orthopedic • Room {serving?.room || '3B'}
+                  {t('Consultant Orthopedic')} • {t('Room')} {serving?.room || '3B'}
                 </Text>
               </View>
             </View>
@@ -580,8 +606,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <Ionicons name="megaphone" size={18} color={Colors.white} style={{ marginRight: 8 }} />
               <Text style={styles.primaryCallNextBtnText}>
                 {isShiftClosed
-                  ? 'Shift Closed (Intake Disabled)'
-                  : `Call Next Patient (${nextTokenLabel})`}
+                  ? t('Shift Closed (Intake Disabled)')
+                  : `${t('Call Next Patient')} (${nextTokenLabel})`}
               </Text>
             </TouchableOpacity>
 
@@ -600,7 +626,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 accessibilityRole="button"
               >
                 <Ionicons name="notifications-outline" size={16} color={Colors.textDark} style={{ marginRight: 6 }} />
-                <Text style={styles.chimeBtnText}>Chime / Recall</Text>
+                <Text style={styles.chimeBtnText}>{t('Chime / Recall')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -616,7 +642,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 accessibilityRole="button"
               >
                 <Ionicons name="close-circle-outline" size={16} color="#DC2626" style={{ marginRight: 6 }} />
-                <Text style={styles.noShowBtnText}>Mark No-Show</Text>
+                <Text style={styles.noShowBtnText}>{t('Mark No-Show')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -625,9 +651,9 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         {/* ── DESK QUICK ACTIONS ── */}
         <View style={styles.sectionWrap}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderTitle}>DESK QUICK ACTIONS</Text>
+            <Text style={styles.sectionHeaderTitle}>{t('DESK QUICK ACTIONS')}</Text>
             <TouchableOpacity onPress={() => handleNav('RegisterTab')}>
-              <Text style={styles.sectionActionLink}>Shortcuts</Text>
+              <Text style={styles.sectionActionLink}>{t('Shortcuts')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -647,8 +673,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <View style={[styles.quickActionIconBox, { backgroundColor: '#F0FDF4' }]}>
                 <Ionicons name="person-add-outline" size={20} color={Colors.primary} />
               </View>
-              <Text style={styles.quickActionCardTitle}>+ New</Text>
-              <Text style={styles.quickActionCardTitle}>Intake</Text>
+              <Text style={styles.quickActionCardTitle}>{t('+ New')}</Text>
+              <Text style={styles.quickActionCardTitle}>{t('Intake')}</Text>
             </TouchableOpacity>
 
             {/* 2. Verify NIC */}
@@ -666,8 +692,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <View style={[styles.quickActionIconBox, { backgroundColor: '#F0F9FF' }]}>
                 <Ionicons name="id-card-outline" size={20} color="#0284C7" />
               </View>
-              <Text style={styles.quickActionCardTitle}>Verify</Text>
-              <Text style={styles.quickActionCardTitle}>NIC</Text>
+              <Text style={styles.quickActionCardTitle}>{t('Verify')}</Text>
+              <Text style={styles.quickActionCardTitle}>{t('NIC')}</Text>
             </TouchableOpacity>
 
             {/* 3. Reprint Slip */}
@@ -681,8 +707,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <View style={[styles.quickActionIconBox, { backgroundColor: '#FEF3C7' }]}>
                 <Ionicons name="print-outline" size={20} color="#D97706" />
               </View>
-              <Text style={styles.quickActionCardTitle}>Reprint</Text>
-              <Text style={styles.quickActionCardTitle}>Slip</Text>
+              <Text style={styles.quickActionCardTitle}>{t('Reprint')}</Text>
+              <Text style={styles.quickActionCardTitle}>{t('Slip')}</Text>
             </TouchableOpacity>
 
             {/* 4. Doc Roster */}
@@ -696,8 +722,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <View style={[styles.quickActionIconBox, { backgroundColor: '#F5F3FF' }]}>
                 <Ionicons name="calendar-outline" size={20} color="#7C3AED" />
               </View>
-              <Text style={styles.quickActionCardTitle}>Doc</Text>
-              <Text style={styles.quickActionCardTitle}>Roster</Text>
+              <Text style={styles.quickActionCardTitle}>{t('Doc')}</Text>
+              <Text style={styles.quickActionCardTitle}>{t('Roster')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -705,9 +731,9 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         {/* ── CONSULTATION ROOMS (LIVE) ── */}
         <View style={styles.sectionWrap}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderTitle}>CONSULTATION ROOMS (LIVE)</Text>
+            <Text style={styles.sectionHeaderTitle}>{t('Consultation Rooms (Live)')}</Text>
             <Text style={styles.sectionBadgeCount}>
-              {rooms.filter((r) => r.status === 'Consulting' || r.status === 'Available').length} Active
+              {rooms.filter((r) => r.status === 'Consulting' || r.status === 'Available').length} {t('Active')}
             </Text>
           </View>
 
@@ -764,7 +790,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <View style={styles.roomListInfo}>
                   <Text style={styles.roomListDoctorName}>{room.doctor}</Text>
                   <Text style={styles.roomListSub}>
-                    {room.department || 'General OPD'} • {room.withToken || (room.nextToken ? `Next #${room.nextToken}` : 'With patient')}
+                    {t(room.department || 'General OPD')} • {room.withToken ? room.withToken : room.nextToken ? `${t('Next')} #${room.nextToken}` : t('With patient')}
                   </Text>
                 </View>
 
@@ -772,7 +798,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <View style={[styles.roomStatusPill, { backgroundColor: statusPillBg }]}>
                   <View style={[styles.roomStatusDot, { backgroundColor: statusDotColor }]} />
                   <Text style={[styles.roomStatusPillText, { color: statusTextColor }]}>
-                    {room.status}
+                    {t(room.status)}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -783,9 +809,9 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         {/* ── NEXT IN QUEUE ── */}
         <View style={styles.sectionWrap}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderTitle}>NEXT IN QUEUE</Text>
+            <Text style={styles.sectionHeaderTitle}>{t('Next in Queue')}</Text>
             <TouchableOpacity onPress={() => handleNav('Queue')}>
-              <Text style={styles.sectionActionLink}>View All ({inWaiting})</Text>
+              <Text style={styles.sectionActionLink}>{t('View All')} ({inWaiting})</Text>
             </TouchableOpacity>
           </View>
 
@@ -831,7 +857,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                       { color: isCheckedIn ? '#059669' : '#D97706' },
                     ]}
                   >
-                    {isCheckedIn ? 'Checked-in' : 'Waiting'}
+                    {isCheckedIn ? t('Checked-in') : t('Waiting')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -858,7 +884,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <View style={[styles.modalIconWrapSmall, { backgroundColor: '#FEF3C7' }]}>
                   <Ionicons name="print" size={18} color="#D97706" />
                 </View>
-                <Text style={styles.modalTitleText}>Reprint Patient Token</Text>
+                <Text style={styles.modalTitleText}>{t('Reprint Patient Token')}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setReprintModalVisible(false)}
@@ -870,7 +896,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             </View>
 
             <View style={styles.slipCardPreview}>
-              <Text style={styles.slipHospitalTitle}>GOVERNMENT OPD CLINIC</Text>
+              <Text style={styles.slipHospitalTitle}>{t('GOVERNMENT OPD CLINIC')}</Text>
               <Text style={styles.slipTokenText}>{serving?.tokenLabel || 'OPD-035'}</Text>
               <Text style={styles.slipPatientName}>
                 {serving?.patient?.name || 'Kamal Gunaratne'}
@@ -883,7 +909,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 style={styles.modalCancelBtn}
                 onPress={() => setReprintModalVisible(false)}
               >
-                <Text style={styles.modalCancelBtnText}>Close</Text>
+                <Text style={styles.modalCancelBtnText}>{t('Close')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalConfirmBtn}
@@ -893,7 +919,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 }}
               >
                 <Ionicons name="print" size={16} color={Colors.white} style={{ marginRight: 6 }} />
-                <Text style={styles.modalConfirmBtnText}>Print Slip</Text>
+                <Text style={styles.modalConfirmBtnText}>{t('Print Slip')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -915,7 +941,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <View style={[styles.modalIconWrapSmall, { backgroundColor: '#F5F3FF' }]}>
                   <Ionicons name="calendar" size={18} color="#7C3AED" />
                 </View>
-                <Text style={styles.modalTitleText}>Today's Doctor Roster</Text>
+                <Text style={styles.modalTitleText}>{t("Today's Doctor Roster")}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setRosterModalVisible(false)}
@@ -931,7 +957,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <View key={idx} style={styles.rosterItem}>
                   <View>
                     <Text style={styles.rosterDocName}>{doc.doctor}</Text>
-                    <Text style={styles.rosterDocDept}>{doc.department || 'OPD'} · Room {doc.room}</Text>
+                    <Text style={styles.rosterDocDept}>{t(doc.department || 'OPD')} · Room {doc.room}</Text>
                   </View>
                   <View style={styles.rosterDocHours}>
                     <Text style={styles.rosterDocHoursText}>08:00 - 16:30</Text>
@@ -944,7 +970,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               style={[styles.modalConfirmBtn, { width: '100%', marginTop: 16 }]}
               onPress={() => setRosterModalVisible(false)}
             >
-              <Text style={styles.modalConfirmBtnText}>Done</Text>
+              <Text style={styles.modalConfirmBtnText}>{t('Done')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -958,14 +984,22 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         onRequestClose={() => setNotificationModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {/* Header with Close (X) */}
-            <View style={styles.modalHeaderWithClose}>
-              <View style={styles.modalHeaderTitleWrap}>
-                <View style={[styles.modalIconWrapSmall, { backgroundColor: '#E0F2FE' }]}>
-                  <Ionicons name="notifications" size={18} color={Colors.primary} />
+          <View style={styles.notifModalContent}>
+            {/* Header with Icon, Title, Badge & Close Button */}
+            <View style={styles.notifModalHeader}>
+              <View style={styles.notifModalHeaderLeft}>
+                <View style={styles.notifBellIconWrap}>
+                  <Ionicons name="notifications" size={20} color={Colors.primary} />
+                  <View style={styles.notifBadgeDot} />
                 </View>
-                <Text style={styles.modalTitleText}>Counter Notifications</Text>
+                <View style={styles.notifModalTitleWrap}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={styles.notifModalTitle}>{t('Counter Notifications')}</Text>
+                    <View style={styles.notifCountPill}>
+                      <Text style={styles.notifCountPillText}>{t('2 Active')}</Text>
+                    </View>
+                  </View>
+                </View>
               </View>
               <TouchableOpacity
                 onPress={() => setNotificationModalVisible(false)}
@@ -976,22 +1010,68 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               </TouchableOpacity>
             </View>
 
-            <View style={{ width: '100%', paddingVertical: 10 }}>
-              <View style={styles.notifItem}>
-                <Ionicons name="checkmark-circle" size={18} color="#059669" style={{ marginRight: 8 }} />
-                <Text style={styles.notifItemText}>Counter 01 Online · Triage Station Active</Text>
+            {/* Notification Cards List */}
+            <View style={styles.notifCardsContainer}>
+              {/* Card 1: Counter Station Online */}
+              <View style={styles.notifCardSuccess}>
+                <View style={styles.notifCardIconWrapSuccess}>
+                  <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                </View>
+                <View style={styles.notifCardContent}>
+                  <View style={styles.notifCardHeaderRow}>
+                    <Text style={styles.notifCardTitle}>{t('Counter 01 Online')}</Text>
+                    <View style={styles.notifStatusBadgeSuccess}>
+                      <View style={styles.pulseDotGreen} />
+                      <Text style={styles.notifStatusTextSuccess}>{t('ACTIVE')}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.notifCardDesc}>
+                    {t('Triage Station is active and ready to call walk-in & pre-booked patients.')}
+                  </Text>
+                  <View style={styles.notifCardFooterRow}>
+                    <View style={styles.notifMetaTag}>
+                      <Ionicons name="medkit-outline" size={12} color="#059669" style={{ marginRight: 4 }} />
+                      <Text style={styles.notifMetaTagText}>{t('Orthopedic & General Triage')}</Text>
+                    </View>
+                    <Text style={styles.notifTimeText}>{t('Live • Shift 1')}</Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.notifItem}>
-                <Ionicons name="sync" size={18} color={Colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.notifItemText}>Display board & queue synched automatically</Text>
+
+              {/* Card 2: Display Board Sync */}
+              <View style={styles.notifCardInfo}>
+                <View style={styles.notifCardIconWrapInfo}>
+                  <Ionicons name="sync-circle" size={22} color="#0284C7" />
+                </View>
+                <View style={styles.notifCardContent}>
+                  <View style={styles.notifCardHeaderRow}>
+                    <Text style={styles.notifCardTitle}>{t('Waiting Display Synced')}</Text>
+                    <View style={styles.notifStatusBadgeInfo}>
+                      <Ionicons name="cloud-done-outline" size={11} color="#0284C7" style={{ marginRight: 3 }} />
+                      <Text style={styles.notifStatusTextInfo}>{t('SYNCED')}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.notifCardDesc}>
+                    {t('Waiting hall display screens & audio chimes are synchronized in real-time.')}
+                  </Text>
+                  <View style={styles.notifCardFooterRow}>
+                    <View style={styles.notifMetaTag}>
+                      <Ionicons name="tv-outline" size={12} color="#0284C7" style={{ marginRight: 4 }} />
+                      <Text style={styles.notifMetaTagText}>{t('OPD Public Hall Screens')}</Text>
+                    </View>
+                    <Text style={styles.notifTimeText}>{t('Auto-updated')}</Text>
+                  </View>
+                </View>
               </View>
             </View>
 
+            {/* Close Button */}
             <TouchableOpacity
-              style={[styles.modalConfirmBtn, { width: '100%', marginTop: 12 }]}
+              style={styles.notifDoneBtn}
               onPress={() => setNotificationModalVisible(false)}
+              activeOpacity={0.8}
             >
-              <Text style={styles.modalConfirmBtnText}>Close</Text>
+              <Text style={styles.notifDoneBtnText}>{t('Close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1012,7 +1092,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <View style={[styles.modalIconWrapSmall, { backgroundColor: '#F0F9FF' }]}>
                   <Ionicons name="id-card" size={18} color="#0284C7" />
                 </View>
-                <Text style={styles.modalTitleText}>Verify Patient NIC</Text>
+                <Text style={styles.modalTitleText}>{t('Verify Patient NIC')}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setVerifyNicModalVisible(false)}
@@ -1027,7 +1107,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             <View style={styles.verifyNicInputRow}>
               <TextInput
                 style={styles.verifyNicInput}
-                placeholder="Enter or scan NIC / Barcode..."
+                placeholder={t('Enter or scan NIC / Barcode...')}
                 placeholderTextColor={Colors.textLight}
                 value={verifyNicQuery}
                 onChangeText={setVerifyNicQuery}
@@ -1051,7 +1131,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 {verifyNicLoading ? (
                   <ActivityIndicator size="small" color={Colors.white} />
                 ) : (
-                  <Text style={styles.verifyNicSearchBtnText}>Verify</Text>
+                  <Text style={styles.verifyNicSearchBtnText}>{t('Verify')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1062,14 +1142,14 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <View style={styles.verifyNicBadgeRow}>
                   <View style={styles.verifiedBadge}>
                     <Ionicons name="checkmark-circle" size={14} color="#059669" style={{ marginRight: 4 }} />
-                    <Text style={styles.verifiedBadgeText}>VERIFIED CITIZEN RECORD</Text>
+                    <Text style={styles.verifiedBadgeText}>{t('VERIFIED CITIZEN RECORD')}</Text>
                   </View>
                 </View>
                 <Text style={styles.verifyNicPatientName}>
                   {verifyNicResult.patient.fullName}
                 </Text>
                 <Text style={styles.verifyNicPatientMeta}>
-                  NIC: {verifyNicResult.patient.nic} • Age: {verifyNicResult.patient.age || 'N/A'} • {verifyNicResult.patient.gender || ''}
+                  {t('NIC')}: {verifyNicResult.patient.nic} • {t('Age')}: {verifyNicResult.patient.age || 'N/A'} • {t(verifyNicResult.patient.gender || '')}
                 </Text>
                 <Text style={styles.verifyNicPatientPhone}>
                   📞 {verifyNicResult.patient.phone || 'No phone recorded'}
@@ -1083,7 +1163,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                       handleNav('PatientsTab');
                     }}
                   >
-                    <Text style={styles.verifyNicDirectoryBtnText}>Full Profile</Text>
+                    <Text style={styles.verifyNicDirectoryBtnText}>{t('Full Profile')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.verifyNicIntakeBtn}
@@ -1092,7 +1172,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                       handleNav('RegisterTab');
                     }}
                   >
-                    <Text style={styles.verifyNicIntakeBtnText}>New Intake</Text>
+                    <Text style={styles.verifyNicIntakeBtnText}>{t('New Intake')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1101,7 +1181,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             {verifyNicResult && !verifyNicResult.found && (
               <View style={styles.verifyNicNotFoundBox}>
                 <Ionicons name="alert-circle-outline" size={30} color="#D97706" style={{ marginBottom: 6 }} />
-                <Text style={styles.verifyNicNotFoundTitle}>No Record Found</Text>
+                <Text style={styles.verifyNicNotFoundTitle}>{t('No Record Found')}</Text>
                 <Text style={styles.verifyNicNotFoundSub}>
                   No patient registered under NIC "{verifyNicQuery}".
                 </Text>
@@ -1113,7 +1193,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                   }}
                 >
                   <Ionicons name="person-add" size={15} color={Colors.white} style={{ marginRight: 6 }} />
-                  <Text style={styles.verifyNicCreateNewBtnText}>Register New Patient</Text>
+                  <Text style={styles.verifyNicCreateNewBtnText}>{t('Register New Patient')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1122,7 +1202,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               style={styles.modalCancelFullBtn}
               onPress={() => setVerifyNicModalVisible(false)}
             >
-              <Text style={styles.modalCancelFullBtnText}>Close</Text>
+              <Text style={styles.modalCancelFullBtnText}>{t('Close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1141,7 +1221,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             <View style={styles.profileModalHeader}>
               <View style={styles.profileModalTitleWrap}>
                 <Ionicons name="id-card" size={20} color={Colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.profileModalTitle}>Staff & Desk Profile</Text>
+                <Text style={styles.profileModalTitle}>{t('Staff & Desk Profile')}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setProfileModalVisible(false)}
@@ -1160,14 +1240,14 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <View style={styles.bigStaffDetails}>
                 <Text style={styles.bigStaffName} numberOfLines={1}>{staffName}</Text>
                 <View style={styles.roleTag}>
-                  <Text style={styles.roleTagText}>{staffRole} • OPD Front Desk</Text>
+                  <Text style={styles.roleTagText}>{t(staffRole)} • {t('OPD Front Desk')}</Text>
                 </View>
                 <Text style={styles.staffEmailText} numberOfLines={1}>{staffEmail}</Text>
               </View>
             </View>
 
             {/* Counter Station Selector */}
-            <Text style={styles.sectionSubtitle}>Assigned Service Desk</Text>
+            <Text style={styles.sectionSubtitle}>{t('Assigned Service Desk')}</Text>
             <View style={styles.counterSelectorCol}>
               {['OPD Counter 01', 'OPD Counter 02', 'OPD Counter 03'].map((counterOption) => {
                 const isSelected = activeCounter === counterOption;
@@ -1200,7 +1280,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                     </Text>
                     {isSelected && (
                       <View style={styles.activeDeskPill}>
-                        <Text style={styles.activeDeskPillText}>ACTIVE</Text>
+                        <Text style={styles.activeDeskPillText}>{t('ACTIVE')}</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -1212,18 +1292,18 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             <View style={styles.dutyInfoBox}>
               <View style={styles.dutyInfoRow}>
                 <Ionicons name="time-outline" size={15} color={Colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.dutyInfoLabel}>Desk Hours:</Text>
+                <Text style={styles.dutyInfoLabel}>{t('Desk Hours:')}</Text>
                 <Text style={styles.dutyInfoValue}>08:00 AM - 04:30 PM (Shift 1)</Text>
               </View>
               <View style={[styles.dutyInfoRow, { marginTop: 6 }]}>
                 <Ionicons name="medkit-outline" size={15} color={Colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.dutyInfoLabel}>Station:</Text>
-                <Text style={styles.dutyInfoValue}>Orthopedic & General Triage</Text>
+                <Text style={styles.dutyInfoLabel}>{t('Station:')}</Text>
+                <Text style={styles.dutyInfoValue}>{t('Orthopedic & General Triage')}</Text>
               </View>
               <View style={[styles.dutyInfoRow, { marginTop: 6 }]}>
                 <Ionicons name="pulse" size={15} color="#059669" style={{ marginRight: 8 }} />
-                <Text style={styles.dutyInfoLabel}>Queue Status:</Text>
-                <Text style={[styles.dutyInfoValue, { color: '#059669', fontWeight: '700' }]}>Online & Dispatching</Text>
+                <Text style={styles.dutyInfoLabel}>{t('Queue Status:')}</Text>
+                <Text style={[styles.dutyInfoValue, { color: '#059669', fontWeight: '700' }]}>{t('Online & Dispatching')}</Text>
               </View>
             </View>
 
@@ -1235,7 +1315,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 activeOpacity={0.8}
               >
                 <Ionicons name="log-out-outline" size={18} color="#DC2626" style={{ marginRight: 6 }} />
-                <Text style={styles.logoutBtnText}>Log Out</Text>
+                <Text style={styles.logoutBtnText}>{t('Log Out')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1243,7 +1323,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 onPress={() => setProfileModalVisible(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.doneBtnText}>Done</Text>
+                <Text style={styles.doneBtnText}>{t('Done')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1988,15 +2068,224 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textDark,
   },
-  notifItem: {
+  notifModalContent: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: Colors.white,
+    borderRadius: 22,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  notifModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  notifItemText: {
-    fontSize: 13,
+  notifModalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  notifBellIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    position: 'relative',
+  },
+  notifBadgeDot: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#059669',
+    borderWidth: 2,
+    borderColor: Colors.white,
+  },
+  notifModalTitleWrap: {
+    flex: 1,
+  },
+  notifModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
     color: Colors.textDark,
+  },
+  notifCountPill: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  notifCountPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  notifModalSubtitle: {
+    fontSize: 11,
+    color: Colors.textMedium,
     fontWeight: '500',
+    marginTop: 2,
+  },
+  notifCardsContainer: {
+    gap: 12,
+    marginBottom: 14,
+  },
+  notifCardSuccess: {
+    flexDirection: 'row',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  notifCardIconWrapSuccess: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  notifCardInfo: {
+    flexDirection: 'row',
+    backgroundColor: '#F0F9FF',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  notifCardIconWrapInfo: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  notifCardContent: {
+    flex: 1,
+  },
+  notifCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  notifCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textDark,
+  },
+  notifStatusBadgeSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  pulseDotGreen: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#059669',
+    marginRight: 4,
+  },
+  notifStatusTextSuccess: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  notifStatusBadgeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  notifStatusTextInfo: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  notifCardDesc: {
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 17,
+    marginBottom: 6,
+  },
+  notifCardFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  notifMetaTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notifMetaTagText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.textLight,
+  },
+  notifTimeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.textLight,
+  },
+  notifHealthStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  healthStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#059669',
+    marginRight: 8,
+  },
+  notifHealthStatusText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+    flex: 1,
+  },
+  notifDoneBtn: {
+    width: '100%',
+    height: 42,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifDoneBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.white,
   },
   profileModalContent: {
     width: '100%',

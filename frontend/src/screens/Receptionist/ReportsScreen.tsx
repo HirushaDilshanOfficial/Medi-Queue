@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
@@ -43,6 +44,18 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   const { t } = useLanguage();
   const { data, loading, error, refreshing, refresh } = useShiftSummary();
   const { isShiftClosed, setIsShiftClosed } = useShiftContext();
+
+  const handleGoHome = () => {
+    if (onNavigate) {
+      onNavigate('Home');
+    } else if (navigation?.canGoBack?.()) {
+      navigation.goBack();
+    } else if (navigation?.navigate) {
+      navigation.navigate('Home');
+    } else {
+      router.push('/(reception)/home' as any);
+    }
+  };
   const [exporting, setExporting] = useState<boolean>(false);
   const [exportingFormat, setExportingFormat] = useState<'csv' | 'pdf' | null>(null);
   const [closingShift, setClosingShift] = useState<boolean>(false);
@@ -426,9 +439,16 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       {/* ── DARK TEAL HEADER ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="document-text" size={20} color={Colors.white} />
-          </View>
+          <TouchableOpacity
+            style={styles.homeBackButton}
+            onPress={handleGoHome}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={t("Back to Home")}
+            accessibilityRole="button"
+          >
+            <Ionicons name="home" size={20} color={Colors.white} />
+          </TouchableOpacity>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle}>{t("End-of-Day Summary")}</Text>
             <View style={styles.headerMetaRow}>
@@ -601,7 +621,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                     <View>
                       <Text style={styles.heroThroughputLabel}>{t("Throughput Rate")}</Text>
                       <Text style={styles.heroThroughputSub}>
-                        {isGoalMet ? t('Exceeding target') : 'Target gap: ' + (95 - throughputPercent).toFixed(1) + '%'}
+                        {isGoalMet ? t('Exceeding target') : t('Target gap: {value0}%', { value0: (95 - throughputPercent).toFixed(1) })}
                       </Text>
                     </View>
                     <View style={styles.heroThroughputValueWrap}>
@@ -931,11 +951,6 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                         </View>
                       )}
                     </View>
-                    <Text style={styles.closeShiftSubtitle}>
-                      {shiftClosed
-                        ? t("Today's summary figures have been locked and archived.")
-                        : t("Finalize today's intake and store the shift performance snapshot.")}
-                    </Text>
                   </View>
                 </View>
 
@@ -1006,6 +1021,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+  },
+  homeBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   headerIconWrap: {
     width: 40,

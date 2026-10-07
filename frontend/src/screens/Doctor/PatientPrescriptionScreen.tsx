@@ -722,6 +722,15 @@ export default function PatientPrescriptionScreen() {
           {/* 1. TOP PROFILE BAR                                        */}
           {/* ========================================================= */}
           <View style={styles.topProfileBar}>
+            <TouchableOpacity
+              onPress={() => router.push('/(doctor)/dashboard' as any)}
+              style={styles.homeBackBtn}
+              activeOpacity={0.7}
+              accessibilityLabel={t("Back to Home")}
+              accessibilityRole="button"
+            >
+              <Ionicons name="home" size={18} color="#0D9488" />
+            </TouchableOpacity>
             <View style={styles.profileLeft}>
               <View style={styles.avatarContainer}>
                 <Image
@@ -1970,6 +1979,15 @@ const styles = StyleSheet.create({
   },
 
   // 1. TOP PROFILE BAR
+  homeBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
   topProfileBar: {
     flexDirection: 'row',
     alignItems: 'center',

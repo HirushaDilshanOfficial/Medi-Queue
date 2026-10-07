@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
@@ -152,10 +153,14 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
   };
 
   const handleBack = () => {
-    if (navigation?.canGoBack?.()) {
-      navigation.goBack();
-    } else if (onNavigate) {
+    if (onNavigate) {
       onNavigate('Home');
+    } else if (navigation?.canGoBack?.()) {
+      navigation.goBack();
+    } else if (navigation?.navigate) {
+      navigation.navigate('Home');
+    } else {
+      router.push('/(reception)/home' as any);
     }
   };
 
@@ -759,20 +764,16 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
       {/* Screen Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          {(navigation?.canGoBack?.() || onNavigate) ? (
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleBack}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="arrow-back" size={22} color={Colors.white} />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.headerIconWrap}>
-              <Ionicons name="layers" size={20} color={Colors.white} />
-            </View>
-          )}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleBack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={t("Back to Home")}
+            accessibilityRole="button"
+          >
+            <Ionicons name="home" size={20} color={Colors.white} />
+          </TouchableOpacity>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle}>{t("OPD Live Queue")}</Text>
             <Text style={styles.headerSubtitle}>{t("Real-time Patient Dispatch")}</Text>

@@ -524,6 +524,15 @@ export default function PatientQueueScreen() {
         <View style={styles.tealBanner}>
           {/* Top badges row */}
           <View style={styles.bannerBadgesRow}>
+            <TouchableOpacity
+              onPress={() => router.push('/(doctor)/dashboard' as any)}
+              style={styles.homeBackBtn}
+              activeOpacity={0.7}
+              accessibilityLabel={t("Back to Home")}
+              accessibilityRole="button"
+            >
+              <Ionicons name="home" size={18} color="#ffffff" />
+            </TouchableOpacity>
             <View style={styles.opdLiveBadge}>
               <View style={styles.mintDot} />
               <Text style={styles.opdLiveText}>{t("OPD CLINIC LIVE")}</Text>
@@ -1020,6 +1029,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 48,
+  },
+  homeBackBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
   },
   bannerBadgesRow: {
     flexDirection: 'row',
