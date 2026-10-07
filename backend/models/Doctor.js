@@ -2,6 +2,11 @@ const mongoose = require('mongoose');
 
 const doctorSchema = new mongoose.Schema(
   {
+    staffId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Staff',
+      index: true,
+    },
     name: {
       type: String,
       required: true,
@@ -37,6 +42,15 @@ const doctorSchema = new mongoose.Schema(
     workingHours: {
       start: { type: String, default: '08:00' },
       end: { type: String, default: '16:30' },
+    },
+    hospital: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Hospital',
+    },
+    hospitalName: {
+      type: String,
+      trim: true,
+      default: 'Colombo Teaching Hospital 1',
     },
   },
   {

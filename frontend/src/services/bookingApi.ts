@@ -10,7 +10,11 @@ export const bookingApi = {
     http.get<{ appointments: Appointment[]; scope: string }>('/bookings', { scope }),
 
   bookableDays: (doctorId: string) =>
-    http.get<{ days: BookableDay[]; horizonDays: number }>(`/bookings/doctors/${doctorId}/days`),
+    http.get<{
+      days: BookableDay[];
+      horizonDays: number;
+      scheduleConfigured: boolean;
+    }>(`/bookings/doctors/${doctorId}/days`),
 
   slots: (doctorId: string, date: string) =>
     http.get<{ date: string; slots: SlotOption[] }>(`/bookings/doctors/${doctorId}/slots`, { date }),

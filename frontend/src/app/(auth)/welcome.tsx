@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
@@ -13,6 +14,7 @@ import { BASE_URL } from '../../config';
 
 // Welcome/Splash Screen
 export default function WelcomeScreen() {
+  const { t } = useLanguage();
   const [stats, setStats] = useState({ hospitals: 0, doctors: 0, patients: 0 });
 
   useEffect(() => {
@@ -48,33 +50,33 @@ export default function WelcomeScreen() {
           </View>
 
           <View style={styles.queueBadge}>
-            <Text style={styles.queueBadgeLabel}>QUEUE</Text>
+            <Text style={styles.queueBadgeLabel}>{t("QUEUE")}</Text>
             <Text style={styles.queueBadgeNumber}>#024</Text>
           </View>
 
           <View style={styles.doctorsBadge}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><AppIcon name="profile" size={12} color={Colors.textMedium} /><Text style={styles.doctorsBadgeText}>CONNECTED</Text></View>
-            <Text style={styles.doctorsBadgeNumber}>186 Doctors</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><AppIcon name="profile" size={12} color={Colors.textMedium} /><Text style={styles.doctorsBadgeText}>{t("CONNECTED")}</Text></View>
+            <Text style={styles.doctorsBadgeNumber}>{t("186 Doctors")}</Text>
           </View>
-          <Text style={styles.appTitle}>Government OPD Queue{'\n'}Management System</Text>
-          <Text style={styles.appSubtitle}>Ministry of Health · Sri Lanka</Text>
+          <Text style={styles.appTitle}>{t("Government OPD Queue")}{'\n'}{t("Management System")}</Text>
+          <Text style={styles.appSubtitle}>{t("Ministry of Health · Sri Lanka")}</Text>
         </View>
 
         {/* ---- STATS SECTION ---- */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{stats.hospitals}</Text>
-            <Text style={styles.statLabel}>HOSPITALS</Text>
+            <Text style={styles.statLabel}>{t("HOSPITALS")}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{stats.doctors}</Text>
-            <Text style={styles.statLabel}>DOCTORS</Text>
+            <Text style={styles.statLabel}>{t("DOCTORS")}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{stats.patients > 1000 ? `${(stats.patients/1000).toFixed(1)}k+` : stats.patients}</Text>
-            <Text style={styles.statLabel}>PATIENTS</Text>
+            <Text style={styles.statLabel}>{t("PATIENTS")}</Text>
           </View>
         </View>
 
@@ -82,16 +84,16 @@ export default function WelcomeScreen() {
         <View style={styles.featureCard}>
           <AppIcon name="clock" size={24} color={Colors.primaryDark} style={{ marginRight: 14 }} />
           <View style={styles.featureText}>
-            <Text style={styles.featureTitle}>Live Token Tracking</Text>
-            <Text style={styles.featureDesc}>Real-time queue notifications & estimated arrival time</Text>
+            <Text style={styles.featureTitle}>{t("Live Token Tracking")}</Text>
+            <Text style={styles.featureDesc}>{t("Real-time queue notifications & estimated arrival time")}</Text>
           </View>
         </View>
 
         <View style={styles.featureCard}>
           <AppIcon name="clipboard" size={24} color={Colors.primaryDark} style={{ marginRight: 14 }} />
           <View style={styles.featureText}>
-            <Text style={styles.featureTitle}>Paperless Digital Pass</Text>
-            <Text style={styles.featureDesc}>Instant QR verification at outpatient consultation rooms</Text>
+            <Text style={styles.featureTitle}>{t("Paperless Digital Pass")}</Text>
+            <Text style={styles.featureDesc}>{t("Instant QR verification at outpatient consultation rooms")}</Text>
           </View>
         </View>
 
@@ -104,14 +106,14 @@ export default function WelcomeScreen() {
             style={styles.loginButton}
             onPress={() => router.push('/(auth)/login')}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.loginButtonText}>Login</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.loginButtonText}>{t("Login")}</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.registerButton}
             onPress={() => router.push('/(auth)/register')}
           >
-            <Text style={styles.registerButtonText}>New patient? Create Account</Text>
+            <Text style={styles.registerButtonText}>{t("New patient? Create Account")}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -147,16 +149,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     left: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: 8,
     alignItems: 'center',
   },
   queueBadgeLabel: {
     fontSize: 9,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.85)',
+    letterSpacing: 0.5,
   },
   queueBadgeNumber: {
     fontSize: 13,
@@ -167,16 +170,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     right: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: 8,
     alignItems: 'center',
   },
   doctorsBadgeText: {
     fontSize: 9,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.85)',
+    letterSpacing: 0.5,
   },
   doctorsBadgeNumber: {
     fontSize: 12,

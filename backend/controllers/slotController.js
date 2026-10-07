@@ -98,8 +98,11 @@ const listDoctorDays = async (req, res, next) => {
     const fromKey = today();
     const keys = horizonKeys(fromKey);
 
+    const schedules = await Schedule.find({ doctor: doctor._id, status: 'scheduled' })
+      .select('_id')
+      .lean();
     const slots = await Slot.find({
-      schedule: { $in: await scheduleIds(doctor._id) },
+      schedule: { $in: schedules.map((schedule) => schedule._id) },
       startsAt: { $gte: new Date() },
       status: 'available',
     })
@@ -121,7 +124,11 @@ const listDoctorDays = async (req, res, next) => {
       .filter((key) => byDay.has(key))
       .map((key) => ({ date: key, slotsRemaining: byDay.get(key) }));
 
-    return res.json({ days, horizonDays: BOOKING_HORIZON_DAYS });
+    return res.json({
+      days,
+      horizonDays: BOOKING_HORIZON_DAYS,
+      scheduleConfigured: schedules.length > 0,
+    });
   } catch (error) {
     return next(error);
   }

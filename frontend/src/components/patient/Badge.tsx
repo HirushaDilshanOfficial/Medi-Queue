@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 
 type Tone = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
@@ -20,12 +22,13 @@ type BadgeProps = {
 };
 
 export function Badge({ label, tone = 'brand', style }: BadgeProps) {
+  const { t } = useLanguage();
   const { bg, fg } = TONES[tone];
 
   return (
     <View style={[styles.badge, { backgroundColor: bg }, style]}>
       <Text style={[styles.badgeText, { color: fg }]} numberOfLines={1}>
-        {label}
+        {t(label ?? '')}
       </Text>
     </View>
   );

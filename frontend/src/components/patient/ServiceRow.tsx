@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage, type DesignImageName } from './DesignImage';
 
@@ -13,6 +15,7 @@ type Props = {
 };
 
 export function ServiceRow({ label, caption, badge, icon, onPress, style }: Props) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
@@ -25,11 +28,11 @@ export function ServiceRow({ label, caption, badge, icon, onPress, style }: Prop
       </View>
       <View style={styles.text}>
         <Text style={styles.label} numberOfLines={1}>
-          {label}
+          {t(label ?? '')}
         </Text>
         {caption ? (
           <Text style={styles.caption} numberOfLines={1}>
-            {caption}
+            {t(caption ?? '')}
           </Text>
         ) : null}
       </View>

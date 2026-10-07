@@ -28,6 +28,14 @@ const errorHandler = (err, req, res, next) => {
     statusCode = 409;
   }
 
+  if (err.name === 'MulterError' || err.code === 'LIMIT_FILE_SIZE') {
+    statusCode = 400;
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      err.message = 'The report file must be 10 MB or smaller.';
+    }
+    if (err.statusCode === 400) statusCode = 400;
+  }
+
   // Build clean message
   let message = err.message || 'An unexpected error occurred';
   if (err.name === 'CastError') {
@@ -79,4 +87,3 @@ const createError = (message, statusCode = 400, code) => {
 };
 
 module.exports = { errorHandler, asyncHandler, createError };
-

@@ -1,43 +1,61 @@
-import React from 'react';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
   TextInput,
   Platform,
-  StatusBar, RefreshControl } from 'react-native';
+  StatusBar, RefreshControl, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { fetchMohDashboard } from '../../services/mohService';
 
 // MOH Dashboard - Expo Router version matching the premium UI design
 export default function MOHDashboardScreen() {
-  const [refreshing, setRefreshing] = React.useState(false);
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    
-    setTimeout(() => {
+  const { t } = useLanguage();
+  const [refreshing, setRefreshing] = useState(false);
+  const [totalQueues, setTotalQueues] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+
+  const loadDashboardData = async () => {
+    try {
+      const data = await fetchMohDashboard();
+      setTotalQueues(data.totalQueues || 0);
+    } catch (error) {
+      console.log('Error fetching MOH dashboard:', error);
+    } finally {
+      setLoading(false);
       setRefreshing(false);
-    }, 1500);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadDashboardData();
   }, []);
 
   const quickActions = [
-    { id: 1, icon: '🏥', label: 'Hospitals', route: '/(moh)/manage-hospitals' as any },
-    { id: 2, icon: '🤒', label: 'Patients', route: '/(moh)/manage-patients' as any },
-    { id: 3, icon: '👩‍💼', label: 'Staff', route: '/(moh)/manage-staff' as any },
-    { id: 4, icon: '⚠️', label: 'Alerts', route: '/(moh)/alerts' as any },
-    { id: 5, icon: '📊', label: 'Reports', route: '/(moh)/reports' as any },
-    { id: 6, icon: '🛡️', label: 'Policy', route: '/(moh)/policy' as any },
+    { id: 1, icon: <Ionicons name="people-outline" size={24} color={Colors.primaryDark} />, label: 'Patients', route: '/(moh)/manage-patients' as any },
+    { id: 2, icon: <Ionicons name="notifications-outline" size={24} color={Colors.primaryDark} />, label: 'Send Alert', route: '/(moh)/send-notification' as any },
+    { id: 3, icon: <Ionicons name="stats-chart-outline" size={24} color={Colors.primaryDark} />, label: 'Reports', route: '/(moh)/reports' as any },
+    { id: 4, icon: <Ionicons name="shield-checkmark-outline" size={24} color={Colors.primaryDark} />, label: 'Policy', route: '/(moh)/policy' as any },
   ];
 
   const hospitalClinics = [
-    { id: 1, icon: '🦴', name: 'Orthopedic' },
-    { id: 2, icon: '🧠', name: 'Neuron' },
-    { id: 3, icon: '👂', name: 'ENT' },
-    { id: 4, icon: '❤️', name: 'Cardiology' },
-    { id: 5, icon: '👶', name: 'Pediatric' },
-    { id: 6, icon: '👁️', name: 'Eye Clinic' },
+    { id: 1, icon: <MaterialCommunityIcons name="bone" size={24} color={Colors.primaryDark} />, name: 'Orthopedic' },
+    { id: 2, icon: <MaterialCommunityIcons name="brain" size={24} color={Colors.primaryDark} />, name: 'Neuron' },
+    { id: 3, icon: <MaterialCommunityIcons name="ear-hearing" size={24} color={Colors.primaryDark} />, name: 'ENT' },
+    { id: 4, icon: <Ionicons name="heart-outline" size={24} color={Colors.primaryDark} />, name: 'Cardiology' },
+    { id: 5, icon: <MaterialCommunityIcons name="baby-face-outline" size={24} color={Colors.primaryDark} />, name: 'Pediatric' },
+    { id: 6, icon: <Ionicons name="eye-outline" size={24} color={Colors.primaryDark} />, name: 'Eye Clinic' },
   ];
 
   return (
@@ -62,16 +80,16 @@ export default function MOHDashboardScreen() {
                 <View style={styles.onlineDot} />
               </TouchableOpacity>
               <View>
-                <Text style={styles.greetingText}>Good Morning,</Text>
-                <Text style={styles.userNameText}>Ministry of Health</Text>
+                <Text style={styles.greetingText}>{t("Good Morning,")}</Text>
+                <Text style={styles.userNameText}>{t("Ministry of Health")}</Text>
               </View>
             </View>
             <View style={styles.headerIcons}>
-              <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/(moh)/alerts')}>
-                <Text style={styles.iconText}>🔔</Text>
+              <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
+                <Ionicons name="notifications" size={20} color={Colors.white} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconButton} onPress={() => router.replace('/(auth)/login')}>
-                <Text style={styles.iconText}>🚪</Text>
+                <Ionicons name="log-out" size={20} color={Colors.white} />
               </TouchableOpacity>
             </View>
           </View>
@@ -79,18 +97,18 @@ export default function MOHDashboardScreen() {
           {/* Status Text */}
           <View style={styles.statusRow}>
             <View style={styles.statusDot} />
-            <Text style={styles.statusText}>National OPD Central Health Portal • Online</Text>
+            <Text style={styles.statusText}>{t("National OPD Central Health Portal • Online")}</Text>
           </View>
 
           {/* Active Live Queue Card (Adapted for MOH) */}
           <View style={styles.activeQueueCard}>
             <View style={styles.queueCardHeader}>
               <View style={styles.queueIconContainer}>
-                <Text style={styles.queueIcon}>🏥</Text>
+                <Ionicons name="business" size={20} color={Colors.white} />
               </View>
               <View style={styles.queueTitleContainer}>
-                <Text style={styles.queueTitleLabel}>SYSTEM STATUS</Text>
-                <Text style={styles.queueTitle}>National Health Grid</Text>
+                <Text style={styles.queueTitleLabel}>{t("SYSTEM STATUS")}</Text>
+                <Text style={styles.queueTitle}>{t("National Health Grid")}</Text>
               </View>
               <TouchableOpacity style={styles.queueArrowBtn}>
                 <Text style={styles.queueArrowText}>❯</Text>
@@ -99,15 +117,17 @@ export default function MOHDashboardScreen() {
 
             <View style={styles.queueCardBody}>
               <View>
-                <Text style={styles.queueNumberLabel}>TOTAL QUEUES</Text>
-                <Text style={styles.queueNumber}>2,456</Text>
+                <Text style={styles.queueNumberLabel}>{t("TOTAL QUEUES")}</Text>
+                <Text style={styles.queueNumber}>
+                  {loading ? <ActivityIndicator size="small" color={Colors.primaryDark} /> : totalQueues.toLocaleString()}
+                </Text>
                 <View style={styles.queueTimeRow}>
-                  <Text style={styles.queueTimeIcon}>🕒</Text>
-                  <Text style={styles.queueTimeText}>Updated: Just now</Text>
+                  <Ionicons name="time-outline" size={14} color={Colors.textMedium} style={{ marginRight: 4 }} />
+                  <Text style={styles.queueTimeText}>{t("Updated: Just now")}</Text>
                 </View>
               </View>
               <View style={styles.servingBadge}>
-                <Text style={styles.servingBadgeText}>All Systems Nominal</Text>
+                <Text style={styles.servingBadgeText}>{t("All Systems Nominal")}</Text>
               </View>
             </View>
             
@@ -125,24 +145,24 @@ export default function MOHDashboardScreen() {
           {/* Main Action Banner (Add Staff / Register) */}
           <View style={styles.actionBanner}>
             <View style={styles.actionBannerTextContainer}>
-              <Text style={styles.actionBannerTag}>STAFF MANAGEMENT</Text>
-              <Text style={styles.actionBannerTitle}>Add Doctors &{'\n'}Hospital Staff</Text>
-              <Text style={styles.actionBannerDesc}>Instant credential generation</Text>
+              <Text style={styles.actionBannerTag}>{t("STAFF MANAGEMENT")}</Text>
+              <Text style={styles.actionBannerTitle}>{t("Add Doctors &")}{'\n'}{t("Hospital Staff")}</Text>
+              <Text style={styles.actionBannerDesc}>{t("Instant credential generation")}</Text>
             </View>
             <TouchableOpacity 
               style={styles.actionBannerButton}
               onPress={() => router.push('/(moh)/add-staff')}
             >
-              <Text style={styles.actionBannerButtonText}>Add Staff  →</Text>
+              <Text style={styles.actionBannerButtonText}>{t("Add Staff →")}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Search Bar */}
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons name="search" size={20} color={Colors.textLight} style={{ marginRight: 10 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search hospitals, doctors or clinics..."
+              placeholder={t("Search hospitals, doctors or clinics...")}
               placeholderTextColor={Colors.textLight}
             />
           </View>
@@ -150,10 +170,10 @@ export default function MOHDashboardScreen() {
           {/* Alert / Notice Banner */}
           <View style={styles.noticeBanner}>
             <View style={styles.noticeIconContainer}>
-              <Text style={styles.noticeIcon}>📢</Text>
+              <Ionicons name="megaphone" size={16} color={Colors.white} />
             </View>
-            <Text style={styles.noticeText}>Next update: <Text style={styles.noticeTextBold}>System Maintenance</Text></Text>
-            <Text style={styles.noticeTime}>Tonight</Text>
+            <Text style={styles.noticeText}>{t("Next update:")}{' '}<Text style={styles.noticeTextBold}>{t("System Maintenance")}</Text></Text>
+            <Text style={styles.noticeTime}>{t("Tonight")}</Text>
           </View>
 
           {/* Quick Actions Grid */}
@@ -165,18 +185,18 @@ export default function MOHDashboardScreen() {
                 onPress={() => action.route ? router.push(action.route) : null}
               >
                 <View style={styles.quickActionIconBg}>
-                  <Text style={styles.quickActionIcon}>{action.icon}</Text>
+                  {action.icon}
                 </View>
-                <Text style={styles.quickActionLabel}>{action.label}</Text>
+                <Text style={styles.quickActionLabel}>{t(action.label ?? '')}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
           {/* Hospital Clinics Section */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Hospital Clinics</Text>
+            <Text style={styles.sectionTitle}>{t("Hospital Clinics")}</Text>
             <TouchableOpacity>
-              <Text style={styles.sectionLink}>See All</Text>
+              <Text style={styles.sectionLink}>{t("See All")}</Text>
             </TouchableOpacity>
           </View>
 
@@ -184,9 +204,9 @@ export default function MOHDashboardScreen() {
             {hospitalClinics.map((clinic) => (
               <TouchableOpacity key={clinic.id} style={styles.clinicCard}>
                 <View style={styles.clinicIconContainer}>
-                  <Text style={styles.clinicIcon}>{clinic.icon}</Text>
+                  {clinic.icon}
                 </View>
-                <Text style={styles.clinicName}>{clinic.name}</Text>
+                <Text style={styles.clinicName}>{t(clinic.name)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -196,21 +216,21 @@ export default function MOHDashboardScreen() {
 
       {/* ---- BOTTOM NAVIGATION BAR ---- */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={[styles.navIcon, styles.navIconActive]}>🏠</Text>
-          <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/dashboard')}>
+          <Ionicons name="home" size={24} color={Colors.primaryDark} />
+          <Text style={[styles.navLabel, styles.navLabelActive]}>{t("Home")}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>🏥</Text>
-          <Text style={styles.navLabel}>Hospitals</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/manage-hospitals')}>
+          <Ionicons name="business-outline" size={24} color={Colors.textLight} />
+          <Text style={styles.navLabel}>{t("Hospitals")}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>⚠️</Text>
-          <Text style={styles.navLabel}>Alerts</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/manage-staff')}>
+          <Ionicons name="id-card-outline" size={24} color={Colors.textLight} />
+          <Text style={styles.navLabel}>{t("Staff")}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>🛡️</Text>
-          <Text style={styles.navLabel}>Policy</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/profile')}>
+          <Ionicons name="person-outline" size={24} color={Colors.textLight} />
+          <Text style={styles.navLabel}>{t("Profile")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -374,3 +394,4 @@ const styles = StyleSheet.create({
   navLabel: { fontSize: 10, color: Colors.textLight, fontWeight: '500' },
   navLabelActive: { color: Colors.primaryDark, fontWeight: '700' },
 });
+

@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const Staff = require('../models/Staff');
+const Doctor = require('../models/Doctor');
 const generateToken = require('../utils/generateToken');
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
@@ -13,11 +15,51 @@ const loginUser = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (user && (await user.matchPassword(password))) {
+      let hospital = null;
+      let hospitalName = '';
+      let doctorId = null;
+
+      try {
+        const staff = await Staff.findOne({
+          $or: [{ userId: user._id }, { email: user.email }],
+        }).populate('hospital');
+
+        if (staff) {
+          hospital = staff.hospital?._id || staff.hospital || null;
+          hospitalName = staff.hospitalName || staff.hospital?.name || '';
+        }
+
+        const cleanName = user.fullName.replace(/^Dr\.\s*/i, '').trim();
+        const doc = await Doctor.findOne({
+          name: { $regex: cleanName, $options: 'i' },
+        }).populate('hospital');
+
+        if (doc) {
+          doctorId = doc._id;
+          if (!hospitalName) {
+            hospitalName = doc.hospitalName || doc.hospital?.name || '';
+          }
+          if (!hospital) {
+            hospital = doc.hospital?._id || doc.hospital || null;
+          }
+        }
+      } catch (err) {
+        // Ignore lookup error
+      }
+
+      if (!hospitalName && (user.role === 'Doctor' || user.role === 'doctor')) {
+        hospitalName = 'Colombo Teaching Hospital 1';
+      }
+
       res.json({
         _id: user._id,
         fullName: user.fullName,
         email: user.email,
         role: user.role,
+        hospital,
+        hospitalName,
+        doctorId,
+        phone: user.phone || 'N/A',
         token: generateToken(user._id),
       });
     } else {

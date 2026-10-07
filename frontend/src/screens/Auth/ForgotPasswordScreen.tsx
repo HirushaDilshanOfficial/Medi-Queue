@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -17,12 +18,13 @@ import { BASE_URL } from '../../config';
 import { Alert, ActivityIndicator } from 'react-native';
 
 export default function ForgotPasswordScreen() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSendOtp = async () => {
     if (!email) {
-      Alert.alert('Error', 'Please enter your email address');
+      Alert.alert(t('Error'), t('Please enter your email address'));
       return;
     }
 
@@ -40,11 +42,11 @@ export default function ForgotPasswordScreen() {
         // Navigate to verify OTP screen passing email
         router.push({ pathname: '/(auth)/verify-otp', params: { email } });
       } else {
-        Alert.alert('Error', data.message || 'Failed to send OTP');
+        Alert.alert(t('Error'), data.message || t('Failed to send OTP'));
       }
     } catch (error) {
       console.error(error);
-      Alert.alert('Error', 'Network error. Please try again.');
+      Alert.alert(t('Error'), t('Network error. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -66,7 +68,7 @@ export default function ForgotPasswordScreen() {
 
           {/* Back Button */}
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>← Back</Text>
+            <Text style={styles.backButtonText}>{t("← Back")}</Text>
           </TouchableOpacity>
 
           {/* Icon */}
@@ -74,18 +76,17 @@ export default function ForgotPasswordScreen() {
             <Text style={styles.logoSmallIcon}>🔑</Text>
           </View>
 
-          <Text style={styles.headerTitle}>Forgot Password?</Text>
-          <Text style={styles.headerSubtitle}>No worries, we'll send you reset instructions.</Text>
+          <Text style={styles.headerTitle}>{t("Forgot Password?")}</Text>
+          <Text style={styles.headerSubtitle}>{t("No worries, we'll send you reset instructions.")}</Text>
         </View>
 
         {/* ---- FORM CARD ---- */}
         <View style={styles.formCard}>
           <Text style={styles.description}>
-            Enter your email address below to receive a password reset OTP.
-          </Text>
+            {t("Enter your email address below to receive a password reset OTP.")}</Text>
 
           {/* Email Field */}
-          <Text style={styles.fieldLabel}>Email Address</Text>
+          <Text style={styles.fieldLabel}>{t("Email Address")}</Text>
           <View style={styles.inputWrapper}>
             <Text style={styles.inputIcon}>✉️</Text>
             <TextInput
@@ -105,7 +106,7 @@ export default function ForgotPasswordScreen() {
             {loading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.primaryButtonText}>Send OTP</Text>
+              <Text style={styles.primaryButtonText}>{t("Send OTP")}</Text>
             )}
           </TouchableOpacity>
 

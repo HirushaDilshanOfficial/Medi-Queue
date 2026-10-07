@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -11,13 +12,18 @@ import {
   useColorScheme,
   Animated,
   StatusBar,
+  Alert,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   HOSPITALS,
   HospitalInfo,
   ScheduleAppointment,
+  AppointmentStatus,
   DaySchedule,
   INITIAL_SCHEDULE_DATA,
   REFERENCE_TODAY,
@@ -34,6 +40,7 @@ interface DoctorScheduleScreenProps {
 }
 
 export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScreenProps) {
+  const { t } = useLanguage();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -103,6 +110,25 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
   // Selected date key (Defaults to Oct 6, 2026 - Tue)
   const [selectedDateKey, setSelectedDateKey] = useState<string>(REFERENCE_TODAY);
+  const isTodaySelected = selectedDateKey === REFERENCE_TODAY;
+
+  // Relative day label for the selected date:
+  // - Day before current day (yesterday): "Yesterday"
+  // - Current day (today): "Today"
+  // - Day after current day (tomorrow): "Tomorrow"
+  // - Other dates: null (nothing shown)
+  const relativeDateLabel = useMemo(() => {
+    const selectedD = parseDateKey(selectedDateKey);
+    const todayD = parseDateKey(REFERENCE_TODAY);
+    const selectedUtc = Date.UTC(selectedD.getFullYear(), selectedD.getMonth(), selectedD.getDate());
+    const todayUtc = Date.UTC(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+    const diffDays = Math.round((selectedUtc - todayUtc) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === -1) return 'Yesterday';
+    if (diffDays === 1) return 'Tomorrow';
+    return null;
+  }, [selectedDateKey]);
   // Current week anchor date (used to calculate Mon-Sun strip)
   const [weekAnchorDate, setWeekAnchorDate] = useState<Date>(() => parseDateKey(REFERENCE_TODAY));
 
@@ -121,6 +147,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   // Filter state
   const [selectedHospitalId, setSelectedHospitalId] = useState<string>('all');
   const [isHospitalDropdownOpen, setIsHospitalDropdownOpen] = useState(false);
+  const [showAllShiftsOverview, setShowAllShiftsOverview] = useState(false);
 
   // Selected patient for bottom detail sheet
   const [selectedPatient, setSelectedPatient] = useState<ScheduleAppointment | null>(null);
@@ -130,12 +157,199 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     'schedule'
   );
 
+  // Break state & dropdown options (Tea break, Lunch break, Dinner break)
+  const [activeBreak, setActiveBreak] = useState<{
+    type: 'tea' | 'lunch' | 'dinner';
+    label: string;
+    duration: string;
+    minutes: number;
+    hospitalId: string;
+    hospitalName: string;
+    shiftName: string;
+    startTime: number;
+  } | null>(null);
+  const [openBreakDropdownHospId, setOpenBreakDropdownHospId] = useState<string | null>(null);
+
+  // Helper: Get shift-specific break options according to hospital/shift time:
+  // - Morning shift: Tea break (15 mins) & Lunch break (1 hour)
+  // - Afternoon shift: Tea break (15 mins) only
+  // - Evening/Night shift: Tea break (15 mins) & Dinner break (1 hour)
+  const getBreakOptionsForHospital = useCallback((hosp: HospitalInfo) => {
+    const sName = (hosp.shiftName || '').toLowerCase();
+    const hId = (hosp.id || '').toLowerCase();
+
+    const teaOption = {
+      type: 'tea' as const,
+      label: 'Tea break',
+      duration: '15 mins',
+      minutes: 15,
+      sub: '15 min rest & tea',
+      iconName: 'coffee',
+    };
+
+    const lunchOption = {
+      type: 'lunch' as const,
+      label: 'Lunch break',
+      duration: '1 hour',
+      minutes: 60,
+      sub: '1 hour meal break',
+      iconName: 'food-variant',
+    };
+
+    const dinnerOption = {
+      type: 'dinner' as const,
+      label: 'Dinner break',
+      duration: '1 hour',
+      minutes: 60,
+      sub: '1 hour dinner break',
+      iconName: 'food-fork-drink',
+    };
+
+    // Morning shift: Tea break and Lunch break
+    if (hId === 'cgh' || sName.includes('morning')) {
+      return [teaOption, lunchOption];
+    }
+
+    // Afternoon shift: Tea break only
+    if (hId === 'lakeview' || sName.includes('afternoon')) {
+      return [teaOption];
+    }
+
+    // Night / Evening shift: Tea break and Dinner break
+    if (hId === 'st-lucia' || sName.includes('evening') || sName.includes('night')) {
+      return [teaOption, dinnerOption];
+    }
+
+    return [teaOption];
+  }, []);
+
+  // Load saved break on screen focus
+  const loadActiveBreak = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem('@medi_queue_doctor_break');
+      if (raw) {
+        setActiveBreak(JSON.parse(raw));
+      } else {
+        setActiveBreak(null);
+      }
+    } catch (e) {
+      setActiveBreak(null);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadActiveBreak();
+    }, [loadActiveBreak])
+  );
+
+  const handleSelectBreak = async (type: 'tea' | 'lunch' | 'dinner', hosp: HospitalInfo) => {
+    let label = 'Tea Break';
+    let duration = '15 mins';
+    let minutes = 15;
+    if (type === 'lunch') {
+      label = 'Lunch Break';
+      duration = '1 hour';
+      minutes = 60;
+    } else if (type === 'dinner') {
+      label = 'Dinner Break';
+      duration = '1 hour';
+      minutes = 60;
+    }
+
+    const breakData = {
+      type,
+      label,
+      duration,
+      minutes,
+      hospitalId: hosp.id,
+      hospitalName: hosp.name,
+      shiftName: hosp.shiftName,
+      startTime: Date.now(),
+    };
+    setActiveBreak(breakData);
+    setOpenBreakDropdownHospId(null);
+    await AsyncStorage.setItem('@medi_queue_doctor_break', JSON.stringify(breakData));
+    showToast(
+      `✓ ${breakData.label} (${breakData.duration}) scheduled for ${hosp.shiftName}`
+    );
+  };
+
+  const handleEndBreak = async (hosp: HospitalInfo) => {
+    setActiveBreak(null);
+    setOpenBreakDropdownHospId(null);
+    await AsyncStorage.removeItem('@medi_queue_doctor_break');
+    showToast(`Break ended. Resumed ${hosp.shiftName}`);
+  };
+
   // Consultation elapsed counter for active patient
   const [elapsedMinutes, setElapsedMinutes] = useState(6);
 
   // Toast feedback system
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastFade] = useState(new Animated.Value(0));
+
+  // Walk-in Registration Modal state
+  const [isWalkInModalVisible, setIsWalkInModalVisible] = useState(false);
+  const [walkInName, setWalkInName] = useState('');
+  const [walkInAge, setWalkInAge] = useState('');
+  const [walkInGender, setWalkInGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [walkInHospitalId, setWalkInHospitalId] = useState<string>('cgh');
+  const [walkInReason, setWalkInReason] = useState('');
+  const [walkInErrors, setWalkInErrors] = useState<{
+    name?: string;
+    age?: string;
+    hospital?: string;
+    reason?: string;
+  }>({});
+
+  // 1. Delete Confirmation Modal state
+  const [walkInToDelete, setWalkInToDelete] = useState<ScheduleAppointment | null>(null);
+  const [isRemoveModalVisible, setIsRemoveModalVisible] = useState(false);
+
+  // 2. Edit Available Slots Modal state
+  const [isEditSlotsModalVisible, setIsEditSlotsModalVisible] = useState(false);
+  const [editSlotsHospitalId, setEditSlotsHospitalId] = useState<string>('cgh');
+  const [editSlotsCount, setEditSlotsCount] = useState<number>(5);
+  const [isEditSlotsHospDropdownOpen, setIsEditSlotsHospDropdownOpen] = useState(false);
+
+  // 3. Edit Walk-in Slot (Appointment) Modal state
+  const [isEditWalkInModalVisible, setIsEditWalkInModalVisible] = useState(false);
+  const [editingWalkInAppt, setEditingWalkInAppt] = useState<ScheduleAppointment | null>(null);
+  const [editPatientName, setEditPatientName] = useState('');
+  const [editPatientAge, setEditPatientAge] = useState('');
+  const [editPatientGender, setEditPatientGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [editPatientTime, setEditPatientTime] = useState('');
+  const [editPatientReason, setEditPatientReason] = useState('');
+  const [editPatientStatus, setEditPatientStatus] = useState<AppointmentStatus>('Waiting');
+
+  // Load persisted allocations and appointments on mount
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const storedAllocations = await AsyncStorage.getItem('@medi_queue_walkin_allocations');
+        if (storedAllocations && isMounted) {
+          const parsed = JSON.parse(storedAllocations);
+          if (parsed && typeof parsed === 'object') {
+            setWalkInAllocations((prev) => ({ ...prev, ...parsed }));
+          }
+        }
+        const storedSchedule = await AsyncStorage.getItem(`@medi_queue_schedule_data_${selectedDateKey}`);
+        if (storedSchedule && isMounted) {
+          const parsed = JSON.parse(storedSchedule);
+          if (parsed && typeof parsed === 'object') {
+            setScheduleData(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn('Error loading schedule storage:', e);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDateKey]);
 
   const showToast = useCallback(
     (msg: string) => {
@@ -166,6 +380,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
         if (e.key === 'Escape') {
           setSelectedPatient(null);
           setIsHospitalDropdownOpen(false);
+          setIsWalkInModalVisible(false);
         }
       };
       window.addEventListener('keydown', handleKeyDown);
@@ -216,6 +431,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     const newKey = formatDateKey(newSelected);
     setSelectedDateKey(newKey);
     setSelectedHospitalId('all'); // Reset filter on day change
+    setShowAllShiftsOverview(false);
     setIsHospitalDropdownOpen(false);
   };
 
@@ -239,6 +455,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     const newKey = formatDateKey(newSelected);
     setSelectedDateKey(newKey);
     setSelectedHospitalId('all'); // Reset filter on day change
+    setShowAllShiftsOverview(false);
     setIsHospitalDropdownOpen(false);
   };
 
@@ -248,6 +465,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     setWeekAnchorDate(today);
     setSelectedDateKey(REFERENCE_TODAY);
     setSelectedHospitalId('all');
+    setShowAllShiftsOverview(false);
     setIsHospitalDropdownOpen(false);
     showToast('Jumped to Today (Oct 6, 2026)');
   };
@@ -256,6 +474,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   const handleSelectDay = (key: string) => {
     setSelectedDateKey(key);
     setSelectedHospitalId('all'); // Resets to "All hospitals" when day changes
+    setShowAllShiftsOverview(false);
     setIsHospitalDropdownOpen(false);
   };
 
@@ -288,13 +507,28 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     return currentDayData.appointments || [];
   }, [currentDayData]);
 
-  // Filtered appointments based on hospital dropdown
+  // Active hospital for the current view (matching the displayed shift)
+  const currentActiveHospitalId = useMemo(() => {
+    if (dayHospitals.length === 0) return 'cgh';
+    const activeHosp =
+      dayHospitals.find((h) => (isTodaySelected ? h.id === 'cgh' : false)) ||
+      dayHospitals[0];
+    return activeHosp?.id || 'cgh';
+  }, [dayHospitals, isTodaySelected]);
+
+  // Filtered appointments based on hospital dropdown:
+  // User instruction: "time line eke show wenna one related hospital eke patints la"
+  // Shows ONLY the related hospital's patients!
   const filteredAppointments = useMemo(() => {
-    if (selectedHospitalId === 'all') {
+    if (selectedHospitalId !== 'all') {
+      return dayAppointments.filter((a) => a.hospitalId === selectedHospitalId);
+    }
+    if (showAllShiftsOverview) {
       return dayAppointments;
     }
-    return dayAppointments.filter((a) => a.hospitalId === selectedHospitalId);
-  }, [dayAppointments, selectedHospitalId]);
+    // Default view: Show ONLY the related hospital's patients (matches current active shift)
+    return dayAppointments.filter((a) => a.hospitalId === currentActiveHospitalId);
+  }, [dayAppointments, selectedHospitalId, showAllShiftsOverview, currentActiveHospitalId]);
 
   // Filtered shift cards based on hospital dropdown
   const filteredHospitals = useMemo(() => {
@@ -303,6 +537,27 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     }
     return dayHospitals.filter((h) => h.id === selectedHospitalId);
   }, [dayHospitals, selectedHospitalId]);
+
+  // Displayed shift cards:
+  // User requirement: "default current shift eka witharak show wenna thiyanna. anith ewa doctorta fileter option eken fileter kalama balanna puluwan wena vidihata"
+  // By default (when 'all' is selected), only show the CURRENT active shift!
+  // When filtered to a specific hospital, show that hospital's shift.
+  const displayedShiftHospitals = useMemo(() => {
+    if (selectedHospitalId !== 'all') {
+      return dayHospitals.filter((h) => h.id === selectedHospitalId);
+    }
+    if (showAllShiftsOverview) {
+      return dayHospitals;
+    }
+    if (dayHospitals.length === 0) return [];
+
+    // Find the currently active shift (In progress on today, or first shift of the day)
+    const activeHosp =
+      dayHospitals.find((h) => (isTodaySelected ? h.id === 'cgh' : false)) ||
+      dayHospitals[0];
+
+    return activeHosp ? [activeHosp] : [];
+  }, [dayHospitals, selectedHospitalId, showAllShiftsOverview, isTodaySelected]);
 
   // Patient now attending (if any in filtered list)
   const nowAttendingPatient = useMemo(() => {
@@ -315,10 +570,11 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   }, [filteredAppointments]);
 
   // ─────────────────────────────────────────────────────────
-  // WALK-IN SLOT HANDLER
+  // WALK-IN SLOT HANDLER (POPUP FORM MODAL)
+  // Form fields: Patient Name, Age, Gender, Hospital, Reason
   // ─────────────────────────────────────────────────────────
 
-  const handleAddWalkInSlot = () => {
+  const handleOpenWalkInModal = () => {
     if (selectedDateKey !== REFERENCE_TODAY) {
       showToast('Walk-ins can only be added for Today (Oct 6)');
       return;
@@ -333,38 +589,107 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     }
 
     // Determine target hospital
-    const targetHospitalId =
-      selectedHospitalId !== 'all' ? selectedHospitalId : dayHospitals[0]?.id || 'cgh';
-    const remaining = walkInAllocations[targetHospitalId] ?? 0;
+    const validHospWithSlots = dayHospitals.find(
+      (h) => (walkInAllocations[h.id] ?? 0) > 0
+    );
+    const targetHospId =
+      selectedHospitalId !== 'all' && (walkInAllocations[selectedHospitalId] ?? 0) > 0
+        ? selectedHospitalId
+        : validHospWithSlots?.id || dayHospitals[0]?.id || 'cgh';
 
-    if (remaining <= 0) {
-      const hName = HOSPITALS[targetHospitalId]?.shortName || 'Selected hospital';
-      showToast(`No walk-in slots remaining for ${hName}`);
+    setWalkInHospitalId(targetHospId);
+    setWalkInName('');
+    setWalkInAge('');
+    setWalkInGender('Male');
+    setWalkInReason('');
+    setWalkInErrors({});
+    setIsWalkInModalVisible(true);
+  };
+
+  const handleCloseWalkInModal = () => {
+    setIsWalkInModalVisible(false);
+    setWalkInErrors({});
+  };
+
+  const handleSubmitWalkInSlot = () => {
+    const errs: { name?: string; age?: string; hospital?: string; reason?: string } = {};
+
+    const trimmedName = walkInName.trim();
+    if (!trimmedName) {
+      errs.name = 'Patient name is required';
+    } else if (trimmedName.length < 2) {
+      errs.name = 'Name must be at least 2 characters';
+    }
+
+    const trimmedAge = walkInAge.trim();
+    const ageNum = parseInt(trimmedAge, 10);
+    if (!trimmedAge) {
+      errs.age = 'Patient age is required';
+    } else if (isNaN(ageNum) || ageNum <= 0 || ageNum > 120) {
+      errs.age = 'Please enter a valid age (1 - 120)';
+    }
+
+    if (!walkInHospitalId) {
+      errs.hospital = 'Please select a hospital';
+    } else {
+      const remaining = walkInAllocations[walkInHospitalId] ?? 0;
+      if (remaining <= 0) {
+        const hName = HOSPITALS[walkInHospitalId]?.shortName || 'Selected hospital';
+        errs.hospital = `No walk-in slots remaining for ${hName}`;
+      }
+    }
+
+    const trimmedReason = walkInReason.trim();
+    if (!trimmedReason) {
+      errs.reason = 'Reason for consultation is required';
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setWalkInErrors(errs);
       return;
     }
 
-    // Decrement allocation
+    // Decrement allocation for selected hospital
     setWalkInAllocations((prev) => ({
       ...prev,
-      [targetHospitalId]: (prev[targetHospitalId] || 0) - 1,
+      [walkInHospitalId]: Math.max(0, (prev[walkInHospitalId] || 0) - 1),
     }));
 
-    // Create walk-in appointment
-    const targetHospital = HOSPITALS[targetHospitalId];
-    const walkInTokenNum = 50 + Math.floor(Math.random() * 40);
+    // Generate Token Number
+    const daySchedule = scheduleData[selectedDateKey] || {
+      dateKey: selectedDateKey,
+      hospitals: dayHospitals.map((h) => h.id),
+      appointments: [],
+    };
+    const walkInsCount = daySchedule.appointments.filter(
+      (a) => a.isWalkIn || a.id.startsWith('walkin-')
+    ).length;
+    const walkInTokenNum = 70 + walkInsCount + Math.floor(Math.random() * 10);
+    const tokenStr = `Token #${String(walkInTokenNum).padStart(3, '0')}`;
+
+    // Current time formatted
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const formattedHours = hours % 12 || 12;
+    const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
+    const timeStr = `${String(formattedHours).padStart(2, '0')}:${formattedMinutes} ${ampm}`;
+
     const newAppointment: ScheduleAppointment = {
       id: `walkin-${Date.now()}`,
-      time: '11:15 AM',
-      patientName: `Walk-in Patient #${Math.floor(100 + Math.random() * 900)}`,
-      reason: 'Urgent Consultation',
-      token: `Token #${String(walkInTokenNum).padStart(3, '0')}`,
+      time: timeStr,
+      patientName: trimmedName,
+      reason: trimmedReason,
+      token: tokenStr,
       status: 'Waiting',
-      hospitalId: targetHospitalId,
-      age: 34,
-      sex: 'Male',
+      hospitalId: walkInHospitalId,
+      age: ageNum,
+      sex: walkInGender,
       bloodGroup: 'B+',
-      nic: `1992${Math.floor(10000000 + Math.random() * 90000000)}`,
-      phone: '077 555 0192',
+      nic: `2000${Math.floor(10000000 + Math.random() * 90000000)}`,
+      phone: `077 ${Math.floor(100 + Math.random() * 900)} ${Math.floor(1000 + Math.random() * 9000)}`,
+      isWalkIn: true,
     };
 
     setScheduleData((prev) => {
@@ -382,9 +707,182 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
       };
     });
 
-    showToast(
-      `+ Added walk-in token ${newAppointment.token} at ${targetHospital.shortName}`
-    );
+    setIsWalkInModalVisible(false);
+    const hosp = HOSPITALS[walkInHospitalId];
+    showToast(`✓ Added walk-in: ${trimmedName} (${tokenStr}) at ${hosp?.shortName || ''}`);
+  };
+
+  // ─────────────────────────────────────────────────────────
+  // WALK-IN REMOVAL & AVAILABLE SLOTS EDITING HANDLERS
+  // ─────────────────────────────────────────────────────────
+
+  // Open Delete Confirmation Modal
+  const handleOpenRemoveModal = (appt: ScheduleAppointment) => {
+    setWalkInToDelete(appt);
+    setIsRemoveModalVisible(true);
+  };
+
+  // Perform actual removal
+  const executeRemoveWalkIn = (appt: ScheduleAppointment) => {
+    // 1. Remove from schedule appointments
+    setScheduleData((prev) => {
+      const daySchedule = prev[selectedDateKey];
+      if (!daySchedule) return prev;
+      const updated = {
+        ...prev,
+        [selectedDateKey]: {
+          ...daySchedule,
+          appointments: daySchedule.appointments.filter((a) => a.id !== appt.id),
+        },
+      };
+      try {
+        AsyncStorage.setItem(`@medi_queue_schedule_data_${selectedDateKey}`, JSON.stringify(updated));
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem(`@medi_queue_schedule_data_${selectedDateKey}`, JSON.stringify(updated));
+        }
+      } catch (e) {}
+      return updated;
+    });
+
+    // 2. Restore walk-in allocation count
+    if (appt.hospitalId) {
+      setWalkInAllocations((prev) => {
+        const currentCount = prev[appt.hospitalId] ?? 0;
+        const updated = {
+          ...prev,
+          [appt.hospitalId]: currentCount + 1,
+        };
+        try {
+          AsyncStorage.setItem('@medi_queue_walkin_allocations', JSON.stringify(updated));
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem('@medi_queue_walkin_allocations', JSON.stringify(updated));
+          }
+        } catch (e) {}
+        return updated;
+      });
+    }
+
+    if (selectedPatient?.id === appt.id) {
+      setSelectedPatient(null);
+    }
+
+    setIsRemoveModalVisible(false);
+    setWalkInToDelete(null);
+
+    showToast(`✓ Removed walk-in slot (${appt.token}). Allocation restored.`);
+  };
+
+  // Backward compatibility alias
+  const handleConfirmRemoveWalkIn = (appt: ScheduleAppointment) => {
+    handleOpenRemoveModal(appt);
+  };
+
+  // Open Edit Available Slots Modal
+  const handleOpenEditSlotsModal = (hospId: string = 'cgh') => {
+    setEditSlotsHospitalId(hospId);
+    setEditSlotsCount(walkInAllocations[hospId] ?? (HOSPITALS[hospId]?.walkInCapacity || 5));
+    setIsEditSlotsHospDropdownOpen(false);
+    setIsEditSlotsModalVisible(true);
+  };
+
+  // Quick inline increment / decrement of available slots
+  const handleAdjustAllocation = (hospId: string, delta: number) => {
+    setWalkInAllocations((prev) => {
+      const current = prev[hospId] ?? (HOSPITALS[hospId]?.walkInCapacity || 5);
+      const nextCount = Math.max(0, current + delta);
+      const updated = {
+        ...prev,
+        [hospId]: nextCount,
+      };
+      try {
+        AsyncStorage.setItem('@medi_queue_walkin_allocations', JSON.stringify(updated));
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem('@medi_queue_walkin_allocations', JSON.stringify(updated));
+        }
+      } catch (e) {}
+      return updated;
+    });
+    const hName = HOSPITALS[hospId]?.shortName || 'Clinic';
+    showToast(`Updated ${hName} available slots`);
+  };
+
+  // Save Available Slots Modal
+  const handleSaveAvailableSlots = () => {
+    const validCount = Math.max(0, editSlotsCount);
+    setWalkInAllocations((prev) => {
+      const updated = {
+        ...prev,
+        [editSlotsHospitalId]: validCount,
+      };
+      try {
+        AsyncStorage.setItem('@medi_queue_walkin_allocations', JSON.stringify(updated));
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem('@medi_queue_walkin_allocations', JSON.stringify(updated));
+        }
+      } catch (e) {}
+      return updated;
+    });
+
+    setIsEditSlotsModalVisible(false);
+    const hName = HOSPITALS[editSlotsHospitalId]?.shortName || 'Clinic';
+    showToast(`✓ Available slots updated: ${hName} set to ${validCount} slots`);
+  };
+
+  // Open Edit Walk-in Patient Modal
+  const handleOpenEditWalkInModal = (appt: ScheduleAppointment) => {
+    setEditingWalkInAppt(appt);
+    setEditPatientName(appt.patientName);
+    setEditPatientAge(String(appt.age || ''));
+    setEditPatientGender(appt.sex || 'Male');
+    setEditPatientTime(appt.time || '');
+    setEditPatientReason(appt.reason || '');
+    setEditPatientStatus(appt.status || 'Waiting');
+    setIsEditWalkInModalVisible(true);
+  };
+
+  // Save Edited Walk-in Patient
+  const handleSaveEditedWalkIn = () => {
+    if (!editingWalkInAppt) return;
+    const trimmedName = editPatientName.trim();
+    if (!trimmedName) {
+      showToast('Patient name cannot be empty');
+      return;
+    }
+    const ageNum = parseInt(editPatientAge, 10) || editingWalkInAppt.age;
+
+    setScheduleData((prev) => {
+      const daySchedule = prev[selectedDateKey];
+      if (!daySchedule) return prev;
+      const updated = {
+        ...prev,
+        [selectedDateKey]: {
+          ...daySchedule,
+          appointments: daySchedule.appointments.map((a) => {
+            if (a.id !== editingWalkInAppt.id) return a;
+            return {
+              ...a,
+              patientName: trimmedName,
+              age: ageNum,
+              sex: editPatientGender,
+              time: editPatientTime.trim() || a.time,
+              reason: editPatientReason.trim() || a.reason,
+              status: editPatientStatus,
+            };
+          }),
+        },
+      };
+      try {
+        AsyncStorage.setItem(`@medi_queue_schedule_data_${selectedDateKey}`, JSON.stringify(updated));
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem(`@medi_queue_schedule_data_${selectedDateKey}`, JSON.stringify(updated));
+        }
+      } catch (e) {}
+      return updated;
+    });
+
+    setIsEditWalkInModalVisible(false);
+    setEditingWalkInAppt(null);
+    showToast(`✓ Updated slot for ${trimmedName}`);
   };
 
   // ─────────────────────────────────────────────────────────
@@ -431,7 +929,6 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   };
 
   // Current formatted time for timeline header (today only)
-  const isTodaySelected = selectedDateKey === REFERENCE_TODAY;
 
   return (
     <SafeAreaView
@@ -636,30 +1133,44 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   </TouchableOpacity>
                 </View>
 
-                {/* Jump to Today Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.todayPill,
-                    {
-                      backgroundColor: isTodaySelected
-                        ? theme.primaryDeep
-                        : theme.tint,
-                    },
-                  ]}
-                  onPress={handleJumpToday}
-                  activeOpacity={0.8}
-                >
-                  <Text
+                {/* Relative Date Indicator (Today / Yesterday / Tomorrow; hidden for other dates) */}
+                {relativeDateLabel ? (
+                  <TouchableOpacity
                     style={[
-                      styles.todayPillText,
+                      styles.todayPill,
                       {
-                        color: isTodaySelected ? '#ffffff' : theme.primaryDeep,
+                        backgroundColor:
+                          relativeDateLabel === 'Today'
+                            ? theme.primaryDeep
+                            : theme.tint,
                       },
                     ]}
+                    onPress={handleJumpToday}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      relativeDateLabel === 'Today'
+                        ? 'Current day selected'
+                        : `Selected: ${relativeDateLabel}. Tap to jump to Today`
+                    }
                   >
-                    Today
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={[
+                        styles.todayPillText,
+                        {
+                          color:
+                            relativeDateLabel === 'Today'
+                              ? '#ffffff'
+                              : theme.primaryDeep,
+                        },
+                      ]}
+                    >
+                      {relativeDateLabel}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={{ width: 1 }} />
+                )}
               </View>
 
               {/* 7 Days Row */}
@@ -861,7 +1372,9 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         { color: theme.primaryDeep },
                       ]}
                     >
-                      {dayAppointments.length} appts
+                      {dayAppointments.length === 1
+                        ? '1 patient'
+                        : `${dayAppointments.length} patients`}
                     </Text>
                   </TouchableOpacity>
 
@@ -921,7 +1434,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                             { color: hosp.accentColor },
                           ]}
                         >
-                          {count} appts
+                          {count === 1 ? '1 patient' : `${count} patients`}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -938,7 +1451,12 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 - Footer: "Avg. 9m / patient" and "Take 15m break" pill
                 - If leave day or no clinics: "On leave" or "No clinics scheduled"
                ───────────────────────────────────────────────────────── */}
-            <View style={styles.shiftsSection}>
+            <View
+              style={[
+                styles.shiftsSection,
+                { position: 'relative', zIndex: openBreakDropdownHospId ? 9999 : 20 },
+              ]}
+            >
               {/* Scenario A: Doctor is On Leave */}
               {isLeaveDay ? (
                 <View
@@ -983,7 +1501,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     </Text>
                   </View>
                 </View>
-              ) : filteredHospitals.length === 0 ? (
+              ) : displayedShiftHospitals.length === 0 ? (
                 /* Scenario B: No clinics scheduled */
                 <View
                   style={[
@@ -1016,8 +1534,9 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   </Text>
                 </View>
               ) : (
-                /* Scenario C: Render shift card per hospital */
-                filteredHospitals.map((hosp: HospitalInfo) => {
+                /* Scenario C: Render shift card per hospital (default current shift only) */
+                <>
+                  {displayedShiftHospitals.map((hosp: HospitalInfo, hIndex: number) => {
                   const hospAppts = dayAppointments.filter(
                     (a) => a.hospitalId === hosp.id
                   );
@@ -1068,6 +1587,9 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         {
                           backgroundColor: theme.card,
                           borderColor: theme.cardBorder,
+                          position: 'relative',
+                          zIndex: openBreakDropdownHospId === hosp.id ? 9999 : (20 - hIndex),
+                          elevation: openBreakDropdownHospId === hosp.id ? 25 : 2,
                         },
                       ]}
                     >
@@ -1193,12 +1715,14 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                           />
                         </View>
                       </View>
-
-                      {/* Card Footer: Avg 9m / patient & Break button */}
                       <View
                         style={[
                           styles.shiftFooter,
-                          { borderTopColor: theme.divider },
+                          {
+                            borderTopColor: theme.divider,
+                            position: 'relative',
+                            zIndex: openBreakDropdownHospId === hosp.id ? 9999 : 1,
+                          },
                         ]}
                       >
                         <View style={styles.avgConsultRow}>
@@ -1217,42 +1741,232 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                           </Text>
                         </View>
 
-                        <TouchableOpacity
-                          style={[
-                            styles.breakPillButton,
-                            {
-                              backgroundColor: theme.tint,
-                              borderColor: theme.cardBorder,
-                            },
-                          ]}
-                          activeOpacity={0.8}
-                          onPress={() =>
-                            showToast(
-                              `15m break scheduled after current consultation at ${hosp.shortName}`
-                            )
+                        {(() => {
+                          const isThisShiftBreak =
+                            activeBreak !== null &&
+                            (activeBreak.hospitalId === hosp.id ||
+                              activeBreak.shiftName === hosp.shiftName);
+                          const breakOptions = getBreakOptionsForHospital(hosp);
+
+                          let pillIconName: any = 'coffee-outline';
+                          if (isThisShiftBreak && activeBreak) {
+                            if (activeBreak.type === 'lunch') pillIconName = 'food-variant';
+                            else if (activeBreak.type === 'dinner') pillIconName = 'food-fork-drink';
+                            else pillIconName = 'coffee';
                           }
-                        >
-                          <MaterialCommunityIcons
-                            name="coffee-outline"
-                            size={14}
-                            color={theme.primaryDeep}
-                            style={{ marginRight: 4 }}
-                          />
-                          <Text
-                            style={[
-                              styles.breakPillText,
-                              { color: theme.primaryDeep },
-                            ]}
-                          >
-                            Take 15m break
-                          </Text>
-                        </TouchableOpacity>
+
+                          return (
+                            <View
+                              style={{
+                                position: 'relative',
+                                zIndex: openBreakDropdownHospId === hosp.id ? 99999 : 1,
+                              }}
+                            >
+                              <TouchableOpacity
+                                style={[
+                                  styles.breakPillButton,
+                                  isThisShiftBreak
+                                    ? {
+                                        backgroundColor: isDark ? '#33271a' : '#fef3c7',
+                                        borderColor: '#f59e0b',
+                                      }
+                                    : {
+                                        backgroundColor: theme.tint,
+                                        borderColor: theme.cardBorder,
+                                      },
+                                ]}
+                                activeOpacity={0.8}
+                                onPress={() =>
+                                  setOpenBreakDropdownHospId(
+                                    openBreakDropdownHospId === hosp.id ? null : hosp.id
+                                  )
+                                }
+                                accessibilityRole="button"
+                                accessibilityLabel="Take break options"
+                              >
+                                <MaterialCommunityIcons
+                                  name={pillIconName}
+                                  size={14}
+                                  color={isThisShiftBreak ? '#d97706' : theme.primaryDeep}
+                                  style={{ marginRight: 4 }}
+                                />
+                                <Text
+                                  style={[
+                                    styles.breakPillText,
+                                    { color: isThisShiftBreak ? '#b45309' : theme.primaryDeep },
+                                  ]}
+                                >
+                                  {isThisShiftBreak && activeBreak
+                                    ? `${activeBreak.label} (${activeBreak.type === 'tea' ? '15m' : '1h'})`
+                                    : 'Take break'}
+                                </Text>
+                                <Ionicons
+                                  name={
+                                    openBreakDropdownHospId === hosp.id
+                                      ? 'chevron-up'
+                                      : 'chevron-down'
+                                  }
+                                  size={12}
+                                  color={isThisShiftBreak ? '#b45309' : theme.primaryDeep}
+                                  style={{ marginLeft: 3 }}
+                                />
+                              </TouchableOpacity>
+
+                              {/* Break Dropdown Menu */}
+                              {openBreakDropdownHospId === hosp.id && (
+                                <View
+                                  style={[
+                                    styles.breakDropdownMenu,
+                                    {
+                                      backgroundColor: isDark ? '#192b2e' : '#ffffff',
+                                      borderColor: theme.cardBorder,
+                                    },
+                                  ]}
+                                >
+                                  {breakOptions.map((opt, optIdx) => {
+                                    const isSelected =
+                                      isThisShiftBreak && activeBreak?.type === opt.type;
+                                    return (
+                                      <TouchableOpacity
+                                        key={opt.type}
+                                        style={[
+                                          styles.breakDropdownItem,
+                                          optIdx > 0 && {
+                                            borderTopWidth: 1,
+                                            borderTopColor: theme.divider,
+                                          },
+                                          isSelected && {
+                                            backgroundColor: isDark ? '#23393c' : '#fef3c7',
+                                          },
+                                        ]}
+                                        activeOpacity={0.7}
+                                        onPress={() => handleSelectBreak(opt.type, hosp)}
+                                      >
+                                        <View style={styles.breakDropdownItemLeft}>
+                                          <View
+                                            style={[
+                                              styles.breakOptionIconWrap,
+                                              {
+                                                backgroundColor: isDark
+                                                  ? '#2b2619'
+                                                  : '#fef3c7',
+                                              },
+                                            ]}
+                                          >
+                                            <MaterialCommunityIcons
+                                              name={opt.iconName as any}
+                                              size={15}
+                                              color="#d97706"
+                                            />
+                                          </View>
+                                          <View>
+                                            <Text
+                                              style={[
+                                                styles.breakDropdownItemTitle,
+                                                { color: theme.textDark },
+                                              ]}
+                                            >
+                                              {opt.label} ({opt.duration})
+                                            </Text>
+                                            <Text
+                                              style={[
+                                                styles.breakDropdownItemSub,
+                                                { color: theme.textMuted },
+                                              ]}
+                                            >
+                                              {opt.sub}
+                                            </Text>
+                                          </View>
+                                        </View>
+                                        {isSelected && (
+                                          <Ionicons
+                                            name="checkmark-circle"
+                                            size={16}
+                                            color="#d97706"
+                                          />
+                                        )}
+                                      </TouchableOpacity>
+                                    );
+                                  })}
+
+                                  {/* End break option if this shift has active break */}
+                                  {isThisShiftBreak && (
+                                    <TouchableOpacity
+                                      style={[
+                                        styles.breakDropdownItem,
+                                        styles.endBreakDropdownItem,
+                                        {
+                                          borderTopWidth: 1,
+                                          borderTopColor: theme.divider,
+                                          backgroundColor: isDark
+                                            ? '#2b1b1b'
+                                            : '#fef2f2',
+                                        },
+                                      ]}
+                                      activeOpacity={0.7}
+                                      onPress={() => handleEndBreak(hosp)}
+                                    >
+                                      <Ionicons
+                                        name="stop-circle-outline"
+                                        size={16}
+                                        color="#ef4444"
+                                        style={{ marginRight: 6 }}
+                                      />
+                                      <Text style={styles.endBreakDropdownText}>
+                                        End Break & Resume Shift
+                                      </Text>
+                                    </TouchableOpacity>
+                                  )}
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })()}
                       </View>
                     </View>
                   );
-                })
-              )}
-            </View>
+                })}
+
+                {/* Optional toggle when 'all' is selected: View all shifts or only current shift */}
+                {selectedHospitalId === 'all' && dayHospitals.length > 1 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleAllShiftsBtn,
+                      {
+                        backgroundColor: isDark ? '#142528' : '#f0f9fa',
+                        borderColor: isDark ? '#1f383c' : '#d4eff2',
+                      },
+                    ]}
+                    onPress={() => setShowAllShiftsOverview((prev) => !prev)}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      showAllShiftsOverview
+                        ? 'Show current shift only'
+                        : 'View all shifts for today'
+                    }
+                  >
+                    <Ionicons
+                      name={showAllShiftsOverview ? 'chevron-up-circle-outline' : 'layers-outline'}
+                      size={15}
+                      color={theme.accent}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        styles.toggleAllShiftsBtnText,
+                        { color: theme.accent },
+                      ]}
+                    >
+                      {showAllShiftsOverview
+                        ? 'Show current shift only'
+                        : `View all ${dayHospitals.length} shifts today (${dayHospitals.length - 1} upcoming)`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
 
             {/* ─────────────────────────────────────────────────────────
                 6. TIMELINE
@@ -1264,7 +1978,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 - Rows for other appointments with AM/PM time, patient name,
                   reason • Token #030, hospital tag with dot, status pill
                ───────────────────────────────────────────────────────── */}
-            <View style={styles.timelineSection}>
+            <View style={[styles.timelineSection, { position: 'relative', zIndex: 1 }]}>
               {/* Timeline Header */}
               <View style={styles.timelineHeaderRow}>
                 <View style={styles.timelineTitleGroup}>
@@ -1319,7 +2033,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       { color: theme.textMuted },
                     ]}
                   >
-                    No appointments on this timeline
+                    {t("No appointments on this timeline")}
                   </Text>
                 </View>
               ) : (
@@ -1457,6 +2171,11 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   {/* Regular Appointment Rows */}
                   {regularAppointments.map((appt: ScheduleAppointment) => {
                     const hosp = HOSPITALS[appt.hospitalId] || HOSPITALS.cgh;
+                    const isWalkIn =
+                      Boolean(appt.isWalkIn) ||
+                      appt.id.startsWith('walkin-') ||
+                      appt.patientName.toLowerCase().includes('walk-in') ||
+                      appt.reason.toLowerCase().includes('walk-in');
 
                     // Status pill styling
                     let statusBg = isDark ? '#142023' : '#f1f5f9';
@@ -1551,21 +2270,61 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                           </View>
                         </View>
 
-                        {/* Status Pill */}
-                        <View
-                          style={[
-                            styles.statusPillSmall,
-                            { backgroundColor: statusBg },
-                          ]}
-                        >
-                          <Text
+                        {/* Status Pill & Remove Option for Walk-in */}
+                        <View style={styles.rowRightPillGroup}>
+                          <View
                             style={[
-                              styles.statusPillSmallText,
-                              { color: statusColor },
+                              styles.statusPillSmall,
+                              { backgroundColor: statusBg },
                             ]}
                           >
-                            {appt.status}
-                          </Text>
+                            <Text
+                              style={[
+                                styles.statusPillSmallText,
+                                { color: statusColor },
+                              ]}
+                            >
+                              {appt.status}
+                            </Text>
+                          </View>
+
+                          {isWalkIn && (
+                            <View style={styles.walkInActionsRow}>
+                              <TouchableOpacity
+                                style={styles.editWalkInRowBadge}
+                                activeOpacity={0.7}
+                                onPress={(e) => {
+                                  if (e && typeof e.stopPropagation === 'function') {
+                                    e.stopPropagation();
+                                  }
+                                  handleOpenEditWalkInModal(appt);
+                                }}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Edit walk-in ${appt.patientName}`}
+                              >
+                                <Ionicons name="pencil" size={11} color="#0d9488" style={{ marginRight: 3 }} />
+                                <Text style={styles.editWalkInRowBadgeText}>Edit</Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={styles.removeWalkInRowBadge}
+                                activeOpacity={0.7}
+                                onPress={(e) => {
+                                  if (e && typeof e.stopPropagation === 'function') {
+                                    e.stopPropagation();
+                                  }
+                                  handleOpenRemoveModal(appt);
+                                }}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Remove walk-in ${appt.patientName}`}
+                              >
+                                <Ionicons name="trash-outline" size={11} color="#dc2626" style={{ marginRight: 3 }} />
+                                <Text style={styles.removeWalkInRowBadgeText}>Remove</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
                         </View>
                       </TouchableOpacity>
                     );
@@ -1578,7 +2337,6 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 7. ADD WALK-IN SLOT
                 - Full-width dark teal pill button: "+ Add walk-in slot"
                 - Below it: small centered text per hospital:
-                  "{Hospital}: 4 walk-in allocations remaining"
                 - Tapping adds walk-in (today only) & reduces count
                ───────────────────────────────────────────────────────── */}
             <View style={styles.walkInSection}>
@@ -1588,7 +2346,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   { backgroundColor: theme.primaryDeep },
                 ]}
                 activeOpacity={0.85}
-                onPress={handleAddWalkInSlot}
+                onPress={handleOpenWalkInModal}
               >
                 <Ionicons
                   name="add"
@@ -1597,26 +2355,39 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   style={{ marginRight: 6 }}
                 />
                 <Text style={styles.addWalkInButtonText}>
-                  + Add walk-in slot
+                  Add walk-in slot
                 </Text>
               </TouchableOpacity>
 
-              {/* Allocations remaining text */}
-              <View style={styles.allocationsContainer}>
-                {filteredHospitals.map((hosp: HospitalInfo) => {
-                  const remaining = walkInAllocations[hosp.id] ?? 0;
-                  return (
-                    <Text
-                      key={hosp.id}
-                      style={[
-                        styles.allocationText,
-                        { color: theme.textMuted },
-                      ]}
-                    >
-                      {hosp.shortName}: {remaining} walk-in allocations remaining
-                    </Text>
-                  );
-                })}
+              {/* Clean Available Walk-in Slots Status Indicator (Edit button removed as edit is inside the modal) */}
+              <View
+                style={[
+                  styles.allocationsCleanBar,
+                  {
+                    backgroundColor: isDark ? '#142528' : '#f0f9fa',
+                    borderColor: isDark ? '#1f383c' : '#d4eff2',
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.allocationsDot,
+                    {
+                      backgroundColor:
+                        selectedHospitalId !== 'all'
+                          ? HOSPITALS[selectedHospitalId]?.accentColor || theme.accent
+                          : HOSPITALS[currentActiveHospitalId]?.accentColor || HOSPITALS.cgh.accentColor,
+                    },
+                  ]}
+                />
+                <Text style={[styles.allocationsCleanTitle, { color: theme.textDark }]}>
+                  Available walk-in slots:{' '}
+                  <Text style={{ fontWeight: '800', color: theme.accent }}>
+                    {selectedHospitalId !== 'all'
+                      ? `${walkInAllocations[selectedHospitalId] ?? 0} remaining`
+                      : `${walkInAllocations[currentActiveHospitalId] ?? 5} remaining`}
+                  </Text>
+                </Text>
               </View>
             </View>
 
@@ -2035,6 +2806,52 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   );
                 })()}
 
+                {/* Remove & Edit Walk-in buttons if this is a walk-in patient */}
+                {Boolean(
+                  selectedPatient.isWalkIn ||
+                  selectedPatient.id.startsWith('walkin-') ||
+                  selectedPatient.patientName.toLowerCase().includes('walk-in') ||
+                  selectedPatient.reason.toLowerCase().includes('walk-in')
+                ) && (
+                  <View style={styles.sheetWalkInBtnsRow}>
+                    <TouchableOpacity
+                      style={styles.sheetBtnEditWalkIn}
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        const p = selectedPatient;
+                        setSelectedPatient(null);
+                        handleOpenEditWalkInModal(p);
+                      }}
+                    >
+                      <Ionicons
+                        name="pencil"
+                        size={16}
+                        color="#0f766e"
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={styles.sheetBtnEditWalkInText}>
+                        Edit Walk-in Details
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.sheetBtnRemoveWalkIn}
+                      activeOpacity={0.8}
+                      onPress={() => handleOpenRemoveModal(selectedPatient)}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={16}
+                        color="#dc2626"
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={styles.sheetBtnRemoveWalkInText}>
+                        Remove Walk-in Slot
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {/* Bottom Action Buttons: Call patient & Open EHR */}
                 <View style={styles.sheetBtnRow}>
                   <TouchableOpacity
@@ -2092,6 +2909,1196 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             )}
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────
+          WALK-IN SLOT REGISTRATION MODAL
+          Form fields required:
+          1. Patient Name
+          2. Age
+          3. Gender (Male / Female / Other)
+          4. Hospital (Select from active hospitals with remaining slots)
+          5. Reason for Consultation
+         ───────────────────────────────────────────────────────── */}
+      <Modal
+        visible={isWalkInModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseWalkInModal}
+      >
+        <TouchableOpacity
+          style={[styles.modalOverlay, { backgroundColor: theme.modalOverlay }]}
+          activeOpacity={1}
+          onPress={handleCloseWalkInModal}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.keyboardAvoidingWrap}
+          >
+            <TouchableOpacity
+              style={[
+                styles.walkInModalSheet,
+                {
+                  backgroundColor: theme.sheetBg,
+                  borderColor: theme.cardBorder,
+                },
+              ]}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              {/* Sheet Handle */}
+              <View
+                style={[
+                  styles.sheetHandle,
+                  { backgroundColor: theme.cardBorder },
+                ]}
+              />
+
+              {/* Modal Header */}
+              <View style={styles.walkInModalHeader}>
+                <View style={styles.walkInModalHeaderLeft}>
+                  <View
+                    style={[
+                      styles.walkInIconBadge,
+                      { backgroundColor: theme.tint },
+                    ]}
+                  >
+                    <Ionicons
+                      name="person-add"
+                      size={20}
+                      color={theme.accent}
+                    />
+                  </View>
+                  <View>
+                    <Text
+                      style={[
+                        styles.walkInModalTitle,
+                        { color: theme.textDark },
+                      ]}
+                    >
+                      Add Walk-in Slot
+                    </Text>
+                    <Text
+                      style={[
+                        styles.walkInModalSubtitle,
+                        { color: theme.textMuted },
+                      ]}
+                    >
+                      Register a walk-in patient for today's queue
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.sheetCloseBtn,
+                    { backgroundColor: theme.cardBorder },
+                  ]}
+                  onPress={handleCloseWalkInModal}
+                >
+                  <Ionicons name="close" size={20} color={theme.textDark} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.walkInModalScroll}
+              >
+                {/* 1. Patient Name */}
+                <View style={styles.walkInFieldGroup}>
+                  <Text
+                    style={[styles.walkInFieldLabel, { color: theme.textMuted }]}
+                  >
+                    PATIENT NAME <Text style={styles.walkInRequiredStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.walkInTextInput,
+                      {
+                        backgroundColor: theme.inputBg,
+                        borderColor: walkInErrors.name ? '#ef4444' : theme.cardBorder,
+                        color: theme.textDark,
+                      },
+                    ]}
+                    placeholder="e.g. Kasun Perera"
+                    placeholderTextColor={theme.textMuted}
+                    value={walkInName}
+                    onChangeText={(val) => {
+                      setWalkInName(val);
+                      if (walkInErrors.name) {
+                        setWalkInErrors((prev) => ({ ...prev, name: undefined }));
+                      }
+                    }}
+                  />
+                  {walkInErrors.name && (
+                    <Text style={styles.walkInErrorText}>{walkInErrors.name}</Text>
+                  )}
+                </View>
+
+                {/* 2 & 3. Age & Gender */}
+                <View style={styles.walkInRowGroup}>
+                  {/* Age */}
+                  <View style={[styles.walkInFieldGroup, { flex: 0.85 }]}>
+                    <Text
+                      style={[
+                        styles.walkInFieldLabel,
+                        { color: theme.textMuted },
+                      ]}
+                    >
+                      AGE <Text style={styles.walkInRequiredStar}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.walkInTextInput,
+                        {
+                          backgroundColor: theme.inputBg,
+                          borderColor: walkInErrors.age ? '#ef4444' : theme.cardBorder,
+                          color: theme.textDark,
+                        },
+                      ]}
+                      placeholder="e.g. 34"
+                      placeholderTextColor={theme.textMuted}
+                      keyboardType="number-pad"
+                      maxLength={3}
+                      value={walkInAge}
+                      onChangeText={(val) => {
+                        setWalkInAge(val);
+                        if (walkInErrors.age) {
+                          setWalkInErrors((prev) => ({ ...prev, age: undefined }));
+                        }
+                      }}
+                    />
+                    {walkInErrors.age && (
+                      <Text style={styles.walkInErrorText}>{walkInErrors.age}</Text>
+                    )}
+                  </View>
+
+                  {/* Gender */}
+                  <View style={[styles.walkInFieldGroup, { flex: 1.35 }]}>
+                    <Text
+                      style={[
+                        styles.walkInFieldLabel,
+                        { color: theme.textMuted },
+                      ]}
+                    >
+                      GENDER <Text style={styles.walkInRequiredStar}>*</Text>
+                    </Text>
+                    <View style={styles.genderButtonGroup}>
+                      {(['Male', 'Female', 'Other'] as const).map((g) => {
+                        const isSelected = walkInGender === g;
+                        return (
+                          <TouchableOpacity
+                            key={g}
+                            style={[
+                              styles.genderBtn,
+                              {
+                                backgroundColor: isSelected
+                                  ? theme.primaryDeep
+                                  : theme.inputBg,
+                                borderColor: isSelected
+                                  ? theme.accent
+                                  : theme.cardBorder,
+                              },
+                            ]}
+                            activeOpacity={0.7}
+                            onPress={() => setWalkInGender(g)}
+                          >
+                            <Text
+                              style={[
+                                styles.genderBtnText,
+                                {
+                                  color: isSelected
+                                    ? '#ffffff'
+                                    : theme.textDark,
+                                  fontWeight: isSelected ? '700' : '500',
+                                },
+                              ]}
+                            >
+                              {g}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
+
+                {/* 4. Hospital Selection */}
+                <View style={styles.walkInFieldGroup}>
+                  <Text
+                    style={[styles.walkInFieldLabel, { color: theme.textMuted }]}
+                  >
+                    HOSPITAL / CLINIC <Text style={styles.walkInRequiredStar}>*</Text>
+                  </Text>
+                  <View style={styles.hospitalSelectionCol}>
+                    {filteredHospitals.map((hosp: HospitalInfo) => {
+                      const isSelected = walkInHospitalId === hosp.id;
+                      const remaining = walkInAllocations[hosp.id] ?? 0;
+                      const isFull = remaining <= 0;
+
+                      return (
+                        <TouchableOpacity
+                          key={hosp.id}
+                          disabled={isFull}
+                          style={[
+                            styles.hospitalCardOption,
+                            {
+                              backgroundColor: isSelected
+                                ? (isDark ? '#142a2d' : '#e6f7f9')
+                                : theme.inputBg,
+                              borderColor: isSelected
+                                ? theme.accent
+                                : theme.cardBorder,
+                              opacity: isFull ? 0.5 : 1,
+                            },
+                          ]}
+                          activeOpacity={0.75}
+                          onPress={() => {
+                            setWalkInHospitalId(hosp.id);
+                            if (walkInErrors.hospital) {
+                              setWalkInErrors((prev) => ({
+                                ...prev,
+                                hospital: undefined,
+                              }));
+                            }
+                          }}
+                        >
+                          <View style={styles.hospOptionLeft}>
+                            <View
+                              style={[
+                                styles.hospDotLarge,
+                                { backgroundColor: hosp.accentColor },
+                              ]}
+                            />
+                            <View>
+                              <Text
+                                style={[
+                                  styles.hospOptionName,
+                                  {
+                                    color: theme.textDark,
+                                    fontWeight: isSelected ? '700' : '600',
+                                  },
+                                ]}
+                              >
+                                {hosp.name}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.hospOptionRoom,
+                                  { color: theme.textMuted },
+                                ]}
+                              >
+                                {hosp.room}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.hospRemainingBadge,
+                              {
+                                backgroundColor: isFull
+                                  ? (isDark ? '#2a1616' : '#fee2e2')
+                                  : (isDark ? '#112920' : '#dcfce7'),
+                                borderColor: isFull
+                                  ? (isDark ? '#7f1d1d' : '#fca5a5')
+                                  : (isDark ? '#166534' : '#86efac'),
+                                borderWidth: 1,
+                              },
+                            ]}
+                            activeOpacity={0.7}
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              handleOpenEditSlotsModal(hosp.id);
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Edit ${hosp.shortName} available slots`}
+                          >
+                            <Text
+                              style={[
+                                styles.hospRemainingBadgeText,
+                                {
+                                  color: isFull ? '#dc2626' : '#15803d',
+                                },
+                              ]}
+                            >
+                              {isFull ? 'Full' : `${remaining} slots left`}
+                            </Text>
+                            <Ionicons
+                              name="pencil"
+                              size={11}
+                              color={isFull ? '#dc2626' : '#15803d'}
+                              style={{ marginLeft: 5 }}
+                            />
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {walkInErrors.hospital && (
+                    <Text style={styles.walkInErrorText}>
+                      {walkInErrors.hospital}
+                    </Text>
+                  )}
+                </View>
+
+                {/* 5. Reason for Consultation */}
+                <View style={styles.walkInFieldGroup}>
+                  <Text
+                    style={[styles.walkInFieldLabel, { color: theme.textMuted }]}
+                  >
+                    REASON FOR VISIT <Text style={styles.walkInRequiredStar}>*</Text>
+                  </Text>
+
+                  {/* Fast quick-chips */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.quickChipsRow}
+                  >
+                    {[
+                      'Urgent Consultation',
+                      'Fever & Cold',
+                      'Severe Headache',
+                      'Chest Discomfort',
+                      'Routine Follow-up',
+                    ].map((chip) => (
+                      <TouchableOpacity
+                        key={chip}
+                        style={[
+                          styles.quickChip,
+                          {
+                            backgroundColor:
+                              walkInReason === chip
+                                ? theme.primaryDeep
+                                : (isDark ? '#192b2e' : '#eaf4f6'),
+                            borderColor:
+                              walkInReason === chip
+                                ? theme.accent
+                                : theme.cardBorder,
+                          },
+                        ]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setWalkInReason(chip);
+                          if (walkInErrors.reason) {
+                            setWalkInErrors((prev) => ({
+                              ...prev,
+                              reason: undefined,
+                            }));
+                          }
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.quickChipText,
+                            {
+                              color:
+                                walkInReason === chip
+                                  ? '#ffffff'
+                                  : theme.primaryDeep,
+                            },
+                          ]}
+                        >
+                          {chip}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
+                  <TextInput
+                    style={[
+                      styles.walkInTextInput,
+                      styles.walkInTextarea,
+                      {
+                        backgroundColor: theme.inputBg,
+                        borderColor: walkInErrors.reason
+                          ? '#ef4444'
+                          : theme.cardBorder,
+                        color: theme.textDark,
+                      },
+                    ]}
+                    placeholder="Enter symptoms or consultation reason..."
+                    placeholderTextColor={theme.textMuted}
+                    value={walkInReason}
+                    multiline
+                    numberOfLines={2}
+                    onChangeText={(val) => {
+                      setWalkInReason(val);
+                      if (walkInErrors.reason) {
+                        setWalkInErrors((prev) => ({
+                          ...prev,
+                          reason: undefined,
+                        }));
+                      }
+                    }}
+                  />
+                  {walkInErrors.reason && (
+                    <Text style={styles.walkInErrorText}>
+                      {walkInErrors.reason}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Form Action Buttons */}
+                <View style={styles.walkInFormBtnRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.walkInCancelBtn,
+                      {
+                        backgroundColor: theme.card,
+                        borderColor: theme.cardBorder,
+                      },
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={handleCloseWalkInModal}
+                  >
+                    <Text
+                      style={[
+                        styles.walkInCancelBtnText,
+                        { color: theme.textMedium },
+                      ]}
+                    >
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.walkInSubmitBtn,
+                      { backgroundColor: theme.primaryDeep },
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={handleSubmitWalkInSlot}
+                  >
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={18}
+                      color="#ffffff"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.walkInSubmitBtnText}>
+                      Confirm & Add Slot
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────
+          A. REMOVE CONFIRMATION MODAL (GUARANTEED TO WORK ON WEB)
+         ───────────────────────────────────────────────────────── */}
+      <Modal
+        visible={isRemoveModalVisible && walkInToDelete !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setIsRemoveModalVisible(false);
+          setWalkInToDelete(null);
+        }}
+      >
+        <View style={styles.dialogBackdropOverlay}>
+          <TouchableOpacity
+            style={styles.backdropTapArea}
+            activeOpacity={1}
+            onPress={() => {
+              setIsRemoveModalVisible(false);
+              setWalkInToDelete(null);
+            }}
+          />
+
+          <View
+            style={[styles.dialogCard, { backgroundColor: theme.sheetBg }]}
+            accessibilityRole="alert"
+            aria-modal={true}
+          >
+            <View style={styles.dialogWarningIconWrap}>
+              <Ionicons name="alert-circle" size={32} color="#dc2626" />
+            </View>
+
+            <Text style={[styles.dialogTitle, { color: theme.textDark }]}>
+              Remove Walk-in Slot?
+            </Text>
+
+            <Text style={[styles.dialogBody, { color: theme.textMedium }]}>
+              Are you sure you want to remove{' '}
+              <Text style={{ fontWeight: '700', color: theme.textDark }}>
+                {walkInToDelete?.patientName} ({walkInToDelete?.token})
+              </Text>{' '}
+              from the schedule? The walk-in allocation will be restored to{' '}
+              {HOSPITALS[walkInToDelete?.hospitalId || 'cgh']?.shortName || 'clinic'}.
+            </Text>
+
+            <View style={styles.dialogButtonsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.dialogKeepBtn,
+                  { backgroundColor: isDark ? '#1e3034' : '#f1f5f9' },
+                ]}
+                onPress={() => {
+                  setIsRemoveModalVisible(false);
+                  setWalkInToDelete(null);
+                }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Keep slot"
+              >
+                <Text style={[styles.dialogKeepBtnText, { color: theme.textMedium }]}>
+                  Keep Slot
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.dialogRemoveBtn}
+                onPress={() => {
+                  if (walkInToDelete) executeRemoveWalkIn(walkInToDelete);
+                }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm remove slot"
+              >
+                <Ionicons name="trash-outline" size={16} color="#ffffff" style={{ marginRight: 4 }} />
+                <Text style={styles.dialogRemoveBtnText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────
+          B. EDIT AVAILABLE SLOTS MODAL
+         ───────────────────────────────────────────────────────── */}
+      <Modal
+        visible={isEditSlotsModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsEditSlotsModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdropOverlay}
+        >
+          <TouchableOpacity
+            style={styles.backdropTapArea}
+            activeOpacity={1}
+            onPress={() => setIsEditSlotsModalVisible(false)}
+          />
+
+          <View
+            style={[
+              styles.editSlotsSheetContainer,
+              { backgroundColor: theme.sheetBg },
+            ]}
+          >
+            <View style={styles.dragHandle} />
+
+            <View style={styles.editSlotsSheetHeader}>
+              <View>
+                <Text style={[styles.editSlotsSheetTitle, { color: theme.textDark }]}>
+                  Edit Available Slots
+                </Text>
+                <Text style={[styles.editSlotsSheetSubtitle, { color: theme.textMuted }]}>
+                  Adjust walk-in queue capacity for today's clinic
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.sheetCloseBtn,
+                  { backgroundColor: isDark ? '#192b2e' : '#f1f5f9' },
+                ]}
+                onPress={() => setIsEditSlotsModalVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close edit slots modal"
+              >
+                <Ionicons name="close" size={20} color={theme.textMedium} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Hospital Dropdown Selector */}
+            <Text style={[styles.editSlotsSectionLabel, { color: theme.textMuted }]}>
+              SELECT HOSPITAL / CLINIC
+            </Text>
+
+            <View style={styles.editSlotsDropdownWrap}>
+              <TouchableOpacity
+                style={[
+                  styles.editSlotsDropdownTrigger,
+                  {
+                    backgroundColor: isDark ? '#142326' : '#f8fafc',
+                    borderColor: isEditSlotsHospDropdownOpen ? theme.accent : theme.cardBorder,
+                  },
+                ]}
+                onPress={() => setIsEditSlotsHospDropdownOpen((prev) => !prev)}
+                activeOpacity={0.8}
+                accessibilityRole="combobox"
+                accessibilityLabel="Select hospital"
+              >
+                <View style={styles.editSlotsDropdownTriggerLeft}>
+                  <View
+                    style={[
+                      styles.hospDotDropdown,
+                      {
+                        backgroundColor:
+                          HOSPITALS[editSlotsHospitalId]?.accentColor || theme.accent,
+                      },
+                    ]}
+                  />
+                  <View>
+                    <Text
+                      style={[
+                        styles.editSlotsDropdownSelectedName,
+                        { color: theme.textDark },
+                      ]}
+                    >
+                      {HOSPITALS[editSlotsHospitalId]?.name || 'City General Hospital'}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.editSlotsDropdownSelectedSub,
+                        { color: theme.textMuted },
+                      ]}
+                    >
+                      {HOSPITALS[editSlotsHospitalId]?.room} ·{' '}
+                      {walkInAllocations[editSlotsHospitalId] ?? 0} slots currently available
+                    </Text>
+                  </View>
+                </View>
+
+                <Ionicons
+                  name={isEditSlotsHospDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={theme.accent}
+                />
+              </TouchableOpacity>
+
+              {/* Dropdown Menu Items */}
+              {isEditSlotsHospDropdownOpen && (
+                <View
+                  style={[
+                    styles.editSlotsDropdownMenu,
+                    {
+                      backgroundColor: isDark ? '#16272a' : '#ffffff',
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  {Object.values(HOSPITALS).map((hosp) => {
+                    const isSelected = editSlotsHospitalId === hosp.id;
+                    const count = walkInAllocations[hosp.id] ?? hosp.walkInCapacity;
+
+                    return (
+                      <TouchableOpacity
+                        key={hosp.id}
+                        style={[
+                          styles.editSlotsDropdownItem,
+                          isSelected && {
+                            backgroundColor: isDark ? '#1a3338' : '#e6f7f9',
+                          },
+                        ]}
+                        onPress={() => {
+                          setEditSlotsHospitalId(hosp.id);
+                          setEditSlotsCount(count);
+                          setIsEditSlotsHospDropdownOpen(false);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.editSlotsDropdownItemLeft}>
+                          <View
+                            style={[
+                              styles.hospDotDropdown,
+                              { backgroundColor: hosp.accentColor },
+                            ]}
+                          />
+                          <View>
+                            <Text
+                              style={[
+                                styles.editSlotsDropdownItemTitle,
+                                {
+                                  color: theme.textDark,
+                                  fontWeight: isSelected ? '700' : '600',
+                                },
+                              ]}
+                            >
+                              {hosp.name}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.editSlotsDropdownItemSub,
+                                { color: theme.textMuted },
+                              ]}
+                            >
+                              {hosp.room} · {hosp.shiftName}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.editSlotsDropdownItemRight}>
+                          <View
+                            style={[
+                              styles.editSlotsDropdownBadge,
+                              {
+                                backgroundColor: isDark ? '#142023' : '#f1f5f9',
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.editSlotsDropdownBadgeText,
+                                { color: hosp.accentColor },
+                              ]}
+                            >
+                              {count} slots
+                            </Text>
+                          </View>
+                          {isSelected && (
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={18}
+                              color={theme.accent}
+                              style={{ marginLeft: 6 }}
+                            />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
+            {/* Stepper Count Display */}
+            <Text style={[styles.editSlotsSectionLabel, { color: theme.textMuted }]}>
+              AVAILABLE WALK-IN SLOTS COUNT
+            </Text>
+            <View
+              style={[
+                styles.stepperContainer,
+                {
+                  backgroundColor: isDark ? '#142326' : '#f8fafc',
+                  borderColor: theme.cardBorder,
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.stepperActionBtn,
+                  {
+                    backgroundColor: isDark ? '#1e3236' : '#ffffff',
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+                onPress={() => setEditSlotsCount((prev) => Math.max(0, prev - 1))}
+                disabled={editSlotsCount <= 0}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Decrease slots count"
+              >
+                <Ionicons
+                  name="remove"
+                  size={24}
+                  color={editSlotsCount <= 0 ? '#94a3b8' : theme.accent}
+                />
+              </TouchableOpacity>
+
+              <View style={styles.stepperValueCol}>
+                <TextInput
+                  style={[styles.stepperNumberInput, { color: theme.textDark }]}
+                  keyboardType="numeric"
+                  value={String(editSlotsCount)}
+                  onChangeText={(val) => {
+                    const num = parseInt(val, 10);
+                    if (!isNaN(num)) {
+                      setEditSlotsCount(Math.min(50, Math.max(0, num)));
+                    } else if (val === '') {
+                      setEditSlotsCount(0);
+                    }
+                  }}
+                  selectTextOnFocus
+                />
+                <Text style={[styles.stepperSubtitle, { color: theme.textMuted }]}>
+                  slots remaining
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.stepperActionBtn,
+                  {
+                    backgroundColor: isDark ? '#1e3236' : '#ffffff',
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+                onPress={() => setEditSlotsCount((prev) => Math.min(50, prev + 1))}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Increase slots count"
+              >
+                <Ionicons
+                  name="add"
+                  size={24}
+                  color={theme.accent}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Preset Buttons */}
+            <Text style={[styles.editSlotsSectionLabel, { color: theme.textMuted }]}>
+              QUICK PRESETS
+            </Text>
+            <View style={styles.presetsRow}>
+              {[0, 3, 5, 8, 10, 15].map((preset) => {
+                const isSelected = editSlotsCount === preset;
+                return (
+                  <TouchableOpacity
+                    key={preset}
+                    style={[
+                      styles.presetChip,
+                      {
+                        backgroundColor: isSelected
+                          ? theme.primaryDeep
+                          : isDark
+                          ? '#16272a'
+                          : '#ffffff',
+                        borderColor: isSelected ? theme.accent : theme.cardBorder,
+                      },
+                    ]}
+                    onPress={() => setEditSlotsCount(preset)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.presetChipText,
+                        {
+                          color: isSelected ? '#ffffff' : theme.textMedium,
+                          fontWeight: isSelected ? '700' : '600',
+                        },
+                      ]}
+                    >
+                      {preset} slots
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Modal Actions */}
+            <View style={styles.editSlotsActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.editSlotsCancelBtn,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+                onPress={() => setIsEditSlotsModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.editSlotsCancelBtnText, { color: theme.textMedium }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.editSlotsSaveBtn,
+                  { backgroundColor: theme.primaryDeep },
+                ]}
+                onPress={handleSaveAvailableSlots}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="checkmark" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.editSlotsSaveBtnText}>
+                  Save Available Slots
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────
+          C. EDIT WALK-IN PATIENT / APPOINTMENT MODAL
+         ───────────────────────────────────────────────────────── */}
+      <Modal
+        visible={isEditWalkInModalVisible && editingWalkInAppt !== null}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setIsEditWalkInModalVisible(false);
+          setEditingWalkInAppt(null);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdropOverlay}
+        >
+          <TouchableOpacity
+            style={styles.backdropTapArea}
+            activeOpacity={1}
+            onPress={() => {
+              setIsEditWalkInModalVisible(false);
+              setEditingWalkInAppt(null);
+            }}
+          />
+
+          <View
+            style={[
+              styles.editWalkInSheetContainer,
+              { backgroundColor: theme.sheetBg },
+            ]}
+          >
+            <View style={styles.dragHandle} />
+
+            <View style={styles.editSlotsSheetHeader}>
+              <View>
+                <Text style={[styles.editSlotsSheetTitle, { color: theme.textDark }]}>
+                  Edit Walk-in Slot
+                </Text>
+                <Text style={[styles.editSlotsSheetSubtitle, { color: theme.textMuted }]}>
+                  {editingWalkInAppt?.token} · {HOSPITALS[editingWalkInAppt?.hospitalId || 'cgh']?.shortName}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.sheetCloseBtn,
+                  { backgroundColor: isDark ? '#192b2e' : '#f1f5f9' },
+                ]}
+                onPress={() => {
+                  setIsEditWalkInModalVisible(false);
+                  setEditingWalkInAppt(null);
+                }}
+              >
+                <Ionicons name="close" size={20} color={theme.textMedium} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={{ maxHeight: 380 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Patient Name */}
+              <View style={styles.walkInFieldGroup}>
+                <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
+                  PATIENT NAME *
+                </Text>
+                <View
+                  style={[
+                    styles.walkInInputWrap,
+                    {
+                      backgroundColor: theme.inputBg,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    style={[styles.walkInInput, { color: theme.textDark }]}
+                    placeholder="Patient Name"
+                    placeholderTextColor={theme.textMuted}
+                    value={editPatientName}
+                    onChangeText={setEditPatientName}
+                  />
+                </View>
+              </View>
+
+              {/* Age & Gender */}
+              <View style={styles.walkInRowGroup}>
+                <View style={[styles.walkInFieldGroup, { flex: 1, marginRight: 10 }]}>
+                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
+                    AGE
+                  </Text>
+                  <View
+                    style={[
+                      styles.walkInInputWrap,
+                      {
+                        backgroundColor: theme.inputBg,
+                        borderColor: theme.cardBorder,
+                      },
+                    ]}
+                  >
+                    <TextInput
+                      style={[styles.walkInInput, { color: theme.textDark }]}
+                      keyboardType="numeric"
+                      placeholder="e.g. 35"
+                      placeholderTextColor={theme.textMuted}
+                      value={editPatientAge}
+                      onChangeText={setEditPatientAge}
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.walkInFieldGroup, { flex: 1.5 }]}>
+                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
+                    GENDER
+                  </Text>
+                  <View style={styles.genderRow}>
+                    {(['Male', 'Female', 'Other'] as const).map((g) => {
+                      const isSelected = editPatientGender === g;
+                      return (
+                        <TouchableOpacity
+                          key={g}
+                          style={[
+                            styles.genderBtn,
+                            {
+                              backgroundColor: isSelected
+                                ? theme.primaryDeep
+                                : theme.inputBg,
+                              borderColor: isSelected
+                                ? theme.accent
+                                : theme.cardBorder,
+                            },
+                          ]}
+                          onPress={() => setEditPatientGender(g)}
+                        >
+                          <Text
+                            style={[
+                              styles.genderBtnText,
+                              {
+                                color: isSelected ? '#ffffff' : theme.textDark,
+                                fontWeight: isSelected ? '700' : '500',
+                              },
+                            ]}
+                          >
+                            {g}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+
+              {/* Time & Status */}
+              <View style={styles.walkInRowGroup}>
+                <View style={[styles.walkInFieldGroup, { flex: 1, marginRight: 10 }]}>
+                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
+                    TIME
+                  </Text>
+                  <View
+                    style={[
+                      styles.walkInInputWrap,
+                      {
+                        backgroundColor: theme.inputBg,
+                        borderColor: theme.cardBorder,
+                      },
+                    ]}
+                  >
+                    <TextInput
+                      style={[styles.walkInInput, { color: theme.textDark }]}
+                      placeholder="e.g. 03:51 PM"
+                      placeholderTextColor={theme.textMuted}
+                      value={editPatientTime}
+                      onChangeText={setEditPatientTime}
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.walkInFieldGroup, { flex: 1.2 }]}>
+                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
+                    STATUS
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {(['Waiting', 'Done'] as const).map((st) => {
+                      const isSel = editPatientStatus === st;
+                      return (
+                        <TouchableOpacity
+                          key={st}
+                          style={[
+                            styles.genderBtn,
+                            {
+                              flex: 1,
+                              backgroundColor: isSel
+                                ? st === 'Done'
+                                  ? '#059669'
+                                  : '#d97706'
+                                : theme.inputBg,
+                              borderColor: isSel ? 'transparent' : theme.cardBorder,
+                            },
+                          ]}
+                          onPress={() => setEditPatientStatus(st)}
+                        >
+                          <Text
+                            style={[
+                              styles.genderBtnText,
+                              {
+                                color: isSel ? '#ffffff' : theme.textDark,
+                                fontWeight: isSel ? '700' : '500',
+                              },
+                            ]}
+                          >
+                            {st}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+
+              {/* Reason */}
+              <View style={styles.walkInFieldGroup}>
+                <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
+                  REASON / SYMPTOMS
+                </Text>
+                <View
+                  style={[
+                    styles.walkInInputWrap,
+                    {
+                      backgroundColor: theme.inputBg,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    style={[styles.walkInInput, { color: theme.textDark }]}
+                    placeholder="Enter reason for visit"
+                    placeholderTextColor={theme.textMuted}
+                    value={editPatientReason}
+                    onChangeText={setEditPatientReason}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.editSlotsActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.editSlotsCancelBtn,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+                onPress={() => {
+                  setIsEditWalkInModalVisible(false);
+                  setEditingWalkInAppt(null);
+                }}
+              >
+                <Text style={[styles.editSlotsCancelBtnText, { color: theme.textMedium }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.editSlotsSaveBtn,
+                  { backgroundColor: theme.primaryDeep },
+                ]}
+                onPress={handleSaveEditedWalkIn}
+              >
+                <Ionicons name="checkmark" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.editSlotsSaveBtnText}>Save Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ─────────────────────────────────────────────────────────
@@ -2461,6 +4468,8 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     padding: 16,
     borderWidth: 1,
+    position: 'relative',
+    overflow: 'visible',
   },
   shiftHeader: {
     flexDirection: 'row',
@@ -2545,6 +4554,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: 12,
     borderTopWidth: 1,
+    position: 'relative',
   },
   avgConsultRow: {
     flexDirection: 'row',
@@ -2564,6 +4574,76 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   breakPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  breakDropdownMenu: {
+    position: 'absolute',
+    bottom: 40,
+    right: 0,
+    minWidth: 230,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    backgroundColor: '#ffffff',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 35,
+    zIndex: 999999,
+  },
+  breakDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  breakDropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  breakOptionIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  breakDropdownItemTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  breakDropdownItemSub: {
+    fontSize: 10.5,
+    marginTop: 1,
+  },
+  endBreakDropdownItem: {
+    justifyContent: 'center',
+    paddingVertical: 10,
+  },
+  endBreakDropdownText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ef4444',
+  },
+  toggleAllShiftsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    marginTop: -4,
+    marginBottom: 8,
+    alignSelf: 'center',
+  },
+  toggleAllShiftsBtnText: {
     fontSize: 12,
     fontWeight: '700',
   },
@@ -2787,15 +4867,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginTop: 4,
   },
+  rowRightPillGroup: {
+    alignItems: 'flex-end',
+    gap: 6,
+    marginLeft: 8,
+  },
   statusPillSmall: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
-    marginLeft: 8,
   },
   statusPillSmallText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  removeWalkInRowBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+  },
+  removeWalkInRowBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#dc2626',
   },
 
   // 7. Add Walk-In
@@ -3024,6 +5123,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+  sheetBtnRemoveWalkIn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1.2,
+    borderColor: '#fca5a5',
+    paddingVertical: 12,
+    borderRadius: 16,
+    marginBottom: 10,
+  },
+  sheetBtnRemoveWalkInText: {
+    color: '#dc2626',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   sheetBtnRow: {
     flexDirection: 'row',
     gap: 10,
@@ -3055,6 +5170,203 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  // Walk-in Registration Modal
+  keyboardAvoidingWrap: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  walkInModalSheet: {
+    width: '100%',
+    maxWidth: 440,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    maxHeight: '90%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  walkInModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#00000010',
+  },
+  walkInModalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  walkInIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  walkInModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  walkInModalSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  walkInModalScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
+  walkInFieldGroup: {
+    marginBottom: 16,
+  },
+  walkInFieldLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  walkInRequiredStar: {
+    color: '#ef4444',
+  },
+  walkInTextInput: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  walkInTextarea: {
+    minHeight: 64,
+    textAlignVertical: 'top',
+    paddingTop: 10,
+  },
+  walkInRowGroup: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  genderButtonGroup: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  genderBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderBtnText: {
+    fontSize: 13,
+  },
+  hospitalSelectionCol: {
+    gap: 8,
+  },
+  hospitalCardOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1.2,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  hospOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  hospDotLarge: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  hospOptionName: {
+    fontSize: 13,
+  },
+  hospOptionRoom: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  hospRemainingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  hospRemainingBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    lineHeight: 15,
+  },
+  quickChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+    paddingVertical: 2,
+  },
+  quickChip: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  quickChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  walkInErrorText: {
+    color: '#ef4444',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+    marginLeft: 2,
+  },
+  walkInFormBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+    paddingBottom: 10,
+  },
+  walkInCancelBtn: {
+    flex: 0.8,
+    paddingVertical: 13,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walkInCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  walkInSubmitBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    paddingVertical: 13,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walkInSubmitBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
   // Toast
   toastContainer: {
     position: 'absolute',
@@ -3076,5 +5388,539 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '600',
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Walk-in Row Actions (Edit & Remove)
+  // ─────────────────────────────────────────────────────────
+  walkInActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  editWalkInRowBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+  },
+  editWalkInRowBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0d9488',
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Allocations Container with Edit Slots Controls
+  // ─────────────────────────────────────────────────────────
+  allocationsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 8,
+  },
+  allocationsHeaderTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  editSlotsHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(14, 138, 150, 0.1)',
+  },
+  editSlotsHeaderBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  allocationRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 6,
+  },
+  allocationRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  hospDotSmall: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    marginRight: 6,
+  },
+  quickAdjustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  quickAdjustBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickAdjustCount: {
+    fontSize: 12,
+    fontWeight: '800',
+    minWidth: 18,
+    textAlign: 'center',
+  },
+  allocationPencilBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+
+  // Patient detail sheet buttons
+  sheetWalkInBtnsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  sheetBtnEditWalkIn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1.5,
+    borderColor: '#99f6e4',
+  },
+  sheetBtnEditWalkInText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f766e',
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Custom Modals Styling
+  // ─────────────────────────────────────────────────────────
+  dialogBackdropOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    padding: 20,
+  },
+  dialogCard: {
+    width: '100%',
+    maxWidth: 380,
+    borderRadius: 24,
+    padding: 22,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  dialogWarningIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#fee2e2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  dialogTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  dialogBody: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  dialogButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  dialogKeepBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dialogKeepBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dialogRemoveBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#dc2626',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: 'rgba(220, 38, 38, 0.25)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  dialogRemoveBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+
+  // Edit Slots Bottom Sheet
+  editSlotsSheetContainer: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    paddingHorizontal: 20,
+    maxHeight: '90%',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  editSlotsSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  editSlotsSheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  editSlotsSheetSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  editSlotsSectionLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  hospitalPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  hospPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  hospDotTiny: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  hospPillText: {
+    fontSize: 11,
+  },
+
+  // Stepper
+  stepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    marginBottom: 16,
+    width: '100%',
+  },
+  stepperActionBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+    flexShrink: 0,
+  },
+  stepperValueCol: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 0,
+  },
+  stepperNumberInput: {
+    fontSize: 34,
+    fontWeight: '800',
+    textAlign: 'center',
+    width: 80,
+    padding: 0,
+    height: 42,
+  },
+  stepperSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+
+  // Presets
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  presetChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    fontSize: 11,
+  },
+
+  editSlotsActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  editSlotsCancelBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editSlotsCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  editSlotsSaveBtn: {
+    flex: 1.6,
+    height: 46,
+    borderRadius: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: 'rgba(11, 79, 90, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  editSlotsSaveBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+
+  // Edit Walk-in Sheet
+  editWalkInSheetContainer: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    paddingHorizontal: 20,
+    maxHeight: '92%',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  backdropTapArea: {
+    flex: 1,
+  },
+  modalBackdropOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#cbd5e1',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  walkInInputWrap: {
+    width: '100%',
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  walkInInput: {
+    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minHeight: 44,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Clean Aligned Available Slots Bar
+  // ─────────────────────────────────────────────────────────
+  allocationsCleanBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1.2,
+    marginTop: 14,
+  },
+  allocationsDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  allocationsCleanTitle: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  editSlotsCleanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: 12,
+    borderWidth: 1.2,
+  },
+  editSlotsCleanBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Hospital Dropdown Selector in Edit Available Slots Modal
+  // ─────────────────────────────────────────────────────────
+  editSlotsDropdownWrap: {
+    marginBottom: 16,
+    position: 'relative',
+    zIndex: 99,
+  },
+  editSlotsDropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+    paddingHorizontal: 13,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  editSlotsDropdownTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  hospDotDropdown: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    marginRight: 10,
+  },
+  editSlotsDropdownSelectedName: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  editSlotsDropdownSelectedSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  editSlotsDropdownMenu: {
+    marginTop: 6,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  editSlotsDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  editSlotsDropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  editSlotsDropdownItemTitle: {
+    fontSize: 12.5,
+  },
+  editSlotsDropdownItemSub: {
+    fontSize: 10.5,
+    marginTop: 2,
+  },
+  editSlotsDropdownItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editSlotsDropdownBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  editSlotsDropdownBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

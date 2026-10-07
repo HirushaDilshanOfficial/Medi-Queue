@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { PatientTheme } from '../../constants/PatientTheme';
 
@@ -34,10 +36,11 @@ class QrBoundary extends React.Component<{ children: React.ReactNode }, Boundary
 }
 
 export function PassQr({ value, size = 168 }: Props) {
+  const { t } = useLanguage();
   if (!value) {
     return (
       <View style={[styles.box, { width: size, height: size }]}>
-        <Text style={styles.fallback}>Pass code unavailable</Text>
+        <Text style={styles.fallback}>{t("Pass code unavailable")}</Text>
       </View>
     );
   }
@@ -47,7 +50,7 @@ export function PassQr({ value, size = 168 }: Props) {
       <View
         style={[styles.box, { width: size, height: size }]}
         accessibilityRole="image"
-        accessibilityLabel="Scannable pass code"
+        accessibilityLabel={t("Scannable pass code")}
       >
         <QRCode
           value={value}

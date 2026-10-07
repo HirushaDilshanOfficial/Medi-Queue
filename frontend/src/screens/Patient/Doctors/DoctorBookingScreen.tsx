@@ -1,7 +1,9 @@
+import { LocalizedText as Text } from '../../../i18n/LocalizedText';
+import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal,
-  Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  Platform, Pressable, ScrollView, StyleSheet, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -37,6 +39,7 @@ function BookingIcon({ name, color = C.primary, size = 22 }: { name: BookingIcon
 }
 
 export function DoctorBookingScreen() {
+  const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id, rescheduleId } = useLocalSearchParams<{ id: string; rescheduleId?: string }>();
@@ -77,10 +80,10 @@ export function DoctorBookingScreen() {
     try {
       if (rescheduling) await bookingApi.reschedule(rescheduling, date, time);
       else await bookingApi.create({ doctorId, date, slotTime: time, reason: reason.trim() || undefined });
-      Alert.alert(rescheduling ? 'Appointment updated' : 'Appointment confirmed', `${longDayLabel(date)} at ${time}`);
+      Alert.alert(rescheduling ? t('Appointment updated') : t('Appointment confirmed'), t("{value0} at {value1}", { value0: String(longDayLabel(date, locale)), value1: String(time) }));
       router.back();
     } catch (error) {
-      Alert.alert('Could not confirm appointment', error instanceof HttpError ? error.message : 'Please try again.');
+      Alert.alert(t('Could not confirm appointment'), error instanceof HttpError ? error.message : t('Please try again.'));
       // Refresh capacity after a conflict so a sold-out slot cannot be retried.
       if (error instanceof HttpError && error.status === 409) {
         setTime(null);
@@ -94,16 +97,16 @@ export function DoctorBookingScreen() {
   };
 
   const showReports = () => Alert.alert(
-    'Medical documents',
-    'Add or view a medical report in your patient profile. Files cannot be attached directly to this booking yet.',
+    t('Medical documents'),
+    t('Add or view a medical report in your patient profile. Files cannot be attached directly to this booking yet.'),
     [
-      { text: 'Cancel', style: 'cancel' },
+      { text: t('Cancel'), style: 'cancel' },
       { text: 'View reports', onPress: () => router.push('/(patient)/profile/reports') },
-      { text: 'Add report', onPress: () => router.push('/(patient)/profile/report/new') },
+      { text: t('Add report'), onPress: () => router.push('/(patient)/profile/report/new') },
     ],
   );
-  const showOptions = () => Alert.alert('Appointment options', 'Choose an action', [
-    { text: 'Cancel', style: 'cancel' },
+  const showOptions = () => Alert.alert(t('Appointment options'), t('Choose an action'), [
+    { text: t('Cancel'), style: 'cancel' },
     { text: 'About this doctor', onPress: () => setTab('About') },
     { text: 'Refresh availability', onPress: () => { setTime(null); days.reload(); slots.reload(); } },
   ]);
@@ -116,23 +119,23 @@ export function DoctorBookingScreen() {
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[styles.headerSafe, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("Go back")} onPress={() => router.back()} style={styles.backButton}>
             <BookingIcon name="back" color={C.text} size={24} />
           </Pressable>
-          <Text style={styles.headerTitle}>{rescheduling ? 'Change Appointment' : 'Book Department Slot'}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Open patient profile" onPress={() => router.push('/(patient)/profile')} style={styles.profileButton}>
+          <Text style={styles.headerTitle}>{rescheduling ? t('Change Appointment') : t('Book Department Slot')}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("Open patient profile")} onPress={() => router.push('/(patient)/profile')} style={styles.profileButton}>
             <DesignImage name="profile" size={18} color={C.white} />
           </Pressable>
         </View>
       </View>
 
       {doctor.loading ? (
-        <View style={styles.state}><ActivityIndicator color={C.primary} /><Text style={styles.hint}>Loading doctor…</Text></View>
+        <View style={styles.state}><ActivityIndicator color={C.primary} /><Text style={styles.hint}>{t("Loading doctor…")}</Text></View>
       ) : !profile || doctor.error ? (
         <View style={styles.state}>
-          <Text style={styles.sectionTitle}>Could not load this doctor</Text>
-          <Text style={styles.hint}>{doctor.error ?? 'The doctor may no longer be listed.'}</Text>
-          <Pressable accessibilityRole="button" onPress={doctor.reload} style={styles.retry}><Text style={styles.link}>Try again</Text></Pressable>
+          <Text style={styles.sectionTitle}>{t("Could not load this doctor")}</Text>
+          <Text style={styles.hint}>{doctor.error ?? t('The doctor may no longer be listed.')}</Text>
+          <Pressable accessibilityRole="button" onPress={doctor.reload} style={styles.retry}><Text style={styles.link}>{t("Try again")}</Text></Pressable>
         </View>
       ) : (
         <>
@@ -145,8 +148,8 @@ export function DoctorBookingScreen() {
                 <Path d="M37.5,-52.2C48.9,-42.6,58.7,-31.4,63.4,-18.2C68.1,-4.9,67.6,10.4,61.9,23.3C56.2,36.2,45.3,46.8,32.7,54.8C20,62.8,5.6,68.2,-8.1,66.7C-21.8,65.1,-34.7,56.6,-45.5,46.2C-56.2,35.8,-64.8,23.5,-67.7,9.6C-70.6,-4.3,-67.8,-19.9,-59.7,-31.9C-51.6,-43.8,-38.3,-52.2,-25.2,-60.8C-12.1,-69.3,0.7,-78,13.8,-73.4C26.9,-68.8,36.1,-50.8,37.5,-52.2Z" fill="#84f4fb" />
               </Svg>
               <View style={styles.heroActions}>
-                <Pressable accessibilityRole="button" accessibilityLabel="Call clinic" onPress={() => Alert.alert('Contact the clinic', 'A clinic phone number has not been provided. Please contact your hospital reception.')} style={({ pressed }) => [styles.heroButton, pressed && styles.pressed]}><BookingIcon name="phone" size={20} /></Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="Appointment options" onPress={showOptions} style={({ pressed }) => [styles.heroButton, pressed && styles.pressed]}><BookingIcon name="more" size={20} /></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("Call clinic")} onPress={() => Alert.alert(t('Contact the clinic'), t('A clinic phone number has not been provided. Please contact your hospital reception.'))} style={({ pressed }) => [styles.heroButton, pressed && styles.pressed]}><BookingIcon name="phone" size={20} /></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("Appointment options")} onPress={showOptions} style={({ pressed }) => [styles.heroButton, pressed && styles.pressed]}><BookingIcon name="more" size={20} /></Pressable>
               </View>
               <View style={styles.profileRow}>
                 <View style={styles.bio}>
@@ -160,25 +163,25 @@ export function DoctorBookingScreen() {
                 </View>
               </View>
               <View style={styles.stats}>
-                <View style={styles.stat}><Text style={styles.statValue}>{profile.workingHours.start && profile.workingHours.end ? `${profile.workingHours.start}–${profile.workingHours.end}` : 'Hospital OPD'}</Text><Text style={styles.statLabel}>Clinic hours</Text></View>
-                <View style={styles.stat}><Text style={styles.statValue}>{profile.avgConsultMinutes} Minutes</Text><Text style={styles.statLabel}>Consultation</Text></View>
+                <View style={styles.stat}><Text style={styles.statValue}>{profile.workingHours.start && profile.workingHours.end ? `${profile.workingHours.start}–${profile.workingHours.end}` : t('Hospital OPD')}</Text><Text style={styles.statLabel}>{t("Clinic hours")}</Text></View>
+                <View style={styles.stat}><Text style={styles.statValue}>{profile.avgConsultMinutes} {t("Minutes")}</Text><Text style={styles.statLabel}>{t("Consultation")}</Text></View>
               </View>
             </View>
 
             <View style={styles.tabs}>{(['Appointment', 'Schedule', 'About'] as const).map(item => (
               <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => setTab(item)} style={styles.tab}>
-                <Text style={[styles.tabText, tab === item && styles.tabTextActive]}>{item}</Text>
+                <Text style={[styles.tabText, tab === item && styles.tabTextActive]}>{t(item)}</Text>
                 {tab === item && <View style={styles.tabUnderline} />}
               </Pressable>
             ))}</View>
 
             {tab === 'About' ? (
               <View style={styles.aboutSection}>
-                <Text style={styles.sectionTitle}>About {profile.displayName || profile.name}</Text>
-                <Text style={styles.aboutText}>{profile.about || 'Contact the clinic for more information about this doctor.'}</Text>
+                <Text style={styles.sectionTitle}>{t("About")}{' '}{profile.displayName || profile.name}</Text>
+                <Text style={styles.aboutText}>{profile.about || t('Contact the clinic for more information about this doctor.')}</Text>
                 {!!profile.qualifications && <Text style={styles.aboutText}>{profile.qualifications}</Text>}
-                {!!profile.languages.length && <Text style={styles.hint}>Languages: {profile.languages.join(', ')}</Text>}
-                {!!profile.room && <Text style={styles.hint}>Clinic room: {profile.room}</Text>}
+                {!!profile.languages.length && <Text style={styles.hint}>{t("Languages:")}{' '}{profile.languages.join(', ')}</Text>}
+                {!!profile.room && <Text style={styles.hint}>{t("Clinic room:")}{' '}{profile.room}</Text>}
               </View>
             ) : (
               <>
@@ -186,27 +189,31 @@ export function DoctorBookingScreen() {
                   <View style={styles.modeSection}>
                     <View style={styles.segment}>{(['Hospital', 'Online'] as const).map(item => (
                       <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: mode === item }} onPress={() => setMode(item)} style={[styles.mode, mode === item && styles.modeActive]}>
-                        <Text style={[styles.modeText, mode === item && styles.whiteText]}>{item}</Text>
+                        <Text style={[styles.modeText, mode === item && styles.whiteText]}>{t(item)}</Text>
                       </Pressable>
                     ))}</View>
-                    {mode === 'Online' && <Text style={styles.modeHint}>Online consultations are not available yet. Choose Hospital to book a clinic slot.</Text>}
+                    {mode === 'Online' && <Text style={styles.modeHint}>{t("Online consultations are not available yet. Choose Hospital to book a clinic slot.")}</Text>}
                   </View>
                 )}
 
                 <View style={styles.availability}>
                   <View style={styles.sectionHeading}>
-                    <Text style={styles.sectionTitle}>Available Date & Time</Text>
-                    <Pressable accessibilityRole="button" accessibilityLabel="Browse available dates" onPress={() => setCalendarOpen(true)} style={styles.calendarButton}><DesignImage name="arrow" size={20} color={C.primary} /></Pressable>
+                    <Text style={styles.sectionTitle}>{t("Available Date & Time")}</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel={t("Browse available dates")} onPress={() => setCalendarOpen(true)} style={styles.calendarButton}><DesignImage name="arrow" size={20} color={C.primary} /></Pressable>
                   </View>
-                  {date && <Text style={styles.dateContext}>{new Date(`${date}T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</Text>}
+                  {date && <Text style={styles.dateContext}>{new Date(`${date}T12:00:00Z`).toLocaleDateString(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' })}</Text>}
                   {days.loading ? <ActivityIndicator style={styles.loading} color={C.primary} /> : days.error ? (
-                    <View style={styles.notice}><Text style={styles.hint}>{days.error}</Text><Pressable accessibilityRole="button" onPress={days.reload}><Text style={styles.link}>Try again</Text></Pressable></View>
-                  ) : !days.data?.days.length ? <Text style={styles.hint}>No available dates. Please check again later.</Text> : (
+                    <View style={styles.notice}><Text style={styles.hint}>{days.error}</Text><Pressable accessibilityRole="button" onPress={days.reload}><Text style={styles.link}>{t("Try again")}</Text></Pressable></View>
+                  ) : !days.data?.days.length ? <Text style={styles.hint}>
+                    {days.data?.scheduleConfigured === false
+                      ? t('This doctor has no clinic schedule configured yet. Please check again later.')
+                      : t('No available dates. Please check again later.')}
+                  </Text> : (
                     <ScrollView ref={dateStrip} horizontal showsHorizontalScrollIndicator={false} style={styles.dateStrip} contentContainerStyle={styles.dateContent}>
                       {days.data.days.map(day => {
-                        const parts = shortDayParts(day.date);
+                        const parts = shortDayParts(day.date, locale);
                         const selected = day.date === date;
-                        return <Pressable key={day.date} accessibilityRole="button" accessibilityLabel={`${longDayLabel(day.date)}, ${day.slotsRemaining} slots available`} accessibilityState={{ selected }} onPress={() => selectDate(day.date)} style={({ pressed }) => [styles.day, selected && styles.dayActive, pressed && styles.pressed]}>
+                        return <Pressable key={day.date} accessibilityRole="button" accessibilityLabel={t("{value0}, {value1} slots available", { value0: String(longDayLabel(day.date, locale)), value1: String(day.slotsRemaining) })} accessibilityState={{ selected }} onPress={() => selectDate(day.date)} style={({ pressed }) => [styles.day, selected && styles.dayActive, pressed && styles.pressed]}>
                           <Text style={[styles.dayNumber, selected && styles.whiteText]}>{parts.day}</Text>
                           <Text style={[styles.weekday, selected && styles.selectedWeekday]}>{parts.weekday}</Text>
                         </Pressable>;
@@ -214,8 +221,8 @@ export function DoctorBookingScreen() {
                     </ScrollView>
                   )}
                   {date && (slots.loading || slots.data?.date !== date) && !slots.error ? <ActivityIndicator color={C.primary} style={styles.loading} /> : slots.error ? (
-                    <View style={styles.notice}><Text style={styles.hint}>{slots.error}</Text><Pressable accessibilityRole="button" onPress={slots.reload}><Text style={styles.link}>Retry times</Text></Pressable></View>
-                  ) : date && !currentSlots.length ? <Text style={styles.hint}>No clinic times for this day. Try another date.</Text> : (
+                    <View style={styles.notice}><Text style={styles.hint}>{slots.error}</Text><Pressable accessibilityRole="button" onPress={slots.reload}><Text style={styles.link}>{t("Retry times")}</Text></Pressable></View>
+                  ) : date && !currentSlots.length ? <Text style={styles.hint}>{t("No clinic times for this day. Try another date.")}</Text> : (
                     <View style={styles.slotGrid}>{currentSlots.map(slot => {
                       const selected = slot.time === time;
                       return <View key={slot.id} style={styles.slotCell}><Pressable accessibilityRole="button" accessibilityState={{ selected, disabled: !slot.available }} accessibilityLabel={`${slot.time}, ${slot.available ? `${slot.remaining} slots remaining` : 'fully booked'}`} disabled={!slot.available} onPress={() => setTime(slot.time)} style={({ pressed }) => [styles.slot, selected && styles.slotActive, !slot.available && styles.slotUnavailable, pressed && styles.pressed]}>
@@ -228,14 +235,14 @@ export function DoctorBookingScreen() {
                 {tab === 'Appointment' && !rescheduling && (
                   <View style={styles.form}>
                     <View>
-                      <View style={styles.fieldHeading}><Text style={styles.fieldLabel}>Your Symptom <Text style={styles.optional}>(Optional)</Text></Text><Text style={styles.counter}>{reason.length}/300</Text></View>
-                      <TextInput value={reason} onChangeText={setReason} multiline maxLength={300} placeholder="Describe how you are feeling or what hurts..." placeholderTextColor={C.outline} style={styles.reasonInput} accessibilityLabel="Your symptom, optional" />
+                      <View style={styles.fieldHeading}><Text style={styles.fieldLabel}>{t("Your Symptom")}{' '}<Text style={styles.optional}>{t("(Optional)")}</Text></Text><Text style={styles.counter}>{reason.length}/300</Text></View>
+                      <TextInput value={reason} onChangeText={setReason} multiline maxLength={300} placeholder={t("Describe how you are feeling or what hurts...")} placeholderTextColor={C.outline} style={styles.reasonInput} accessibilityLabel={t("Your symptom, optional")} />
                     </View>
                     <View>
-                      <Text style={styles.fieldLabel}>Medical Document <Text style={styles.optional}>(Optional)</Text></Text>
-                      <Pressable accessibilityRole="button" accessibilityLabel="Add or view medical reports" onPress={showReports} style={({ pressed }) => [styles.uploadCard, pressed && styles.pressed]}>
+                      <Text style={styles.fieldLabel}>{t("Medical Document")}{' '}<Text style={styles.optional}>{t("(Optional)")}</Text></Text>
+                      <Pressable accessibilityRole="button" accessibilityLabel={t("Add or view medical reports")} onPress={showReports} style={({ pressed }) => [styles.uploadCard, pressed && styles.pressed]}>
                         <View style={styles.uploadIcon}><BookingIcon name="upload" color={C.secondary} /></View>
-                        <View style={styles.uploadCopy}><Text style={styles.uploadTitle}>Attach reports or scans</Text><Text style={styles.uploadHint} numberOfLines={1}>Example: latest medical check and referral document</Text></View>
+                        <View style={styles.uploadCopy}><Text style={styles.uploadTitle}>{t("Attach reports or scans")}</Text><Text style={styles.uploadHint} numberOfLines={1}>{t("Example: latest medical check and referral document")}</Text></View>
                         <BookingIcon name="plus" color={C.outline} size={20} />
                       </Pressable>
                     </View>
@@ -247,7 +254,7 @@ export function DoctorBookingScreen() {
 
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
             <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canSubmit, busy: submitting }} disabled={!canSubmit} onPress={submit} style={({ pressed }) => [styles.cta, !canSubmit && styles.ctaDisabled, pressed && styles.pressed]}>
-              {submitting ? <ActivityIndicator color={C.white} /> : <><Text style={styles.ctaLabel}>{rescheduling ? 'Confirm New Appointment' : 'Confirm Appointment'}</Text><BookingIcon name="check" size={18} color={C.white} /></>}
+              {submitting ? <ActivityIndicator color={C.white} /> : <><Text style={styles.ctaLabel}>{rescheduling ? t('Confirm New Appointment') : t('Confirm Appointment')}</Text><BookingIcon name="check" size={18} color={C.white} /></>}
             </Pressable>
           </View>
         </>
@@ -256,12 +263,16 @@ export function DoctorBookingScreen() {
       <Modal visible={calendarOpen} transparent animationType="slide" onRequestClose={() => setCalendarOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.calendarSheet, { paddingBottom: Math.max(insets.bottom, 24) }]} accessibilityViewIsModal>
-            <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Choose an available date</Text><Pressable accessibilityRole="button" accessibilityLabel="Close date picker" onPress={() => setCalendarOpen(false)} style={styles.calendarButton}><Text style={styles.link}>Done</Text></Pressable></View>
+            <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{t("Choose an available date")}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("Close date picker")} onPress={() => setCalendarOpen(false)} style={styles.calendarButton}><Text style={styles.link}>{t("Done")}</Text></Pressable></View>
             <ScrollView contentContainerStyle={styles.calendarDays}>
               {(days.data?.days ?? []).map((day, index) => <Pressable key={day.date} accessibilityRole="button" accessibilityState={{ selected: date === day.date }} onPress={() => { selectDate(day.date); setCalendarOpen(false); dateStrip.current?.scrollTo({ x: index * 64, animated: true }); }} style={[styles.calendarDay, date === day.date && styles.modeActive]}>
-                <Text style={[styles.fieldLabel, date === day.date && styles.whiteText]}>{longDayLabel(day.date)}</Text><Text style={[styles.hint, date === day.date && styles.whiteText]}>{day.slotsRemaining} slots available</Text>
+                <Text style={[styles.fieldLabel, date === day.date && styles.whiteText]}>{longDayLabel(day.date, locale)}</Text><Text style={[styles.hint, date === day.date && styles.whiteText]}>{day.slotsRemaining} {t("slots available")}</Text>
               </Pressable>)}
-              {!days.data?.days.length && <Text style={styles.hint}>No available dates to display.</Text>}
+              {!days.data?.days.length && <Text style={styles.hint}>
+                {days.data?.scheduleConfigured === false
+                  ? t('This doctor has no clinic schedule configured yet.')
+                  : t('No available dates to display.')}
+              </Text>}
             </ScrollView>
           </View>
         </View>

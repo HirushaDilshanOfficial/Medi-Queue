@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   ScrollView,
@@ -35,6 +36,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { t } = useLanguage();
   // Form State
   const [phone, setPhone] = useState<string>('');
   const [address, setAddress] = useState<string>('');
@@ -93,7 +95,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
 
     // Avoid duplicate names
     if (allergies.some((a) => a.name?.toLowerCase() === trimmed.toLowerCase())) {
-      showToast('Allergy is already in the list', 'warning');
+      showToast(t('Allergy is already in the list'), 'warning');
       return;
     }
 
@@ -114,13 +116,13 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
     const trimmedPhone = phone.trim();
     if (!trimmedPhone) {
       setPhoneError('Primary phone number is required');
-      showToast('Phone number is required', 'error');
+      showToast(t('Phone number is required'), 'error');
       return;
     }
 
     if (!isValidSLPhone(trimmedPhone)) {
       setPhoneError('Invalid SL phone number format (e.g. 0771234567)');
-      showToast('Please enter a valid Sri Lankan phone number', 'error');
+      showToast(t('Please enter a valid Sri Lankan phone number'), 'error');
       return;
     }
     setPhoneError(null);
@@ -129,7 +131,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
     const trimmedEmPhone = emPhone.trim();
     if (trimmedEmPhone && !isValidSLPhone(trimmedEmPhone)) {
       setEmPhoneError('Invalid emergency phone format (e.g. 0719876543)');
-      showToast('Please enter a valid emergency contact phone', 'error');
+      showToast(t('Please enter a valid emergency contact phone'), 'error');
       return;
     }
     setEmPhoneError(null);
@@ -155,7 +157,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
       };
 
       const res = await updatePatient(patientId, payload);
-      showToast(res.message || 'Patient details updated successfully', 'success');
+      showToast(res.message || t('Patient details updated successfully'), 'success');
 
       if (onSuccess && res.patient) {
         onSuccess(res.patient);
@@ -167,7 +169,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
       }, 400);
     } catch (err: any) {
       const msg = getErrorMessage(err);
-      showToast(msg || 'Failed to update patient details', 'error');
+      showToast(msg || t('Failed to update patient details'), 'error');
     } finally {
       setSaving(false);
     }
@@ -203,10 +205,10 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
                 <Ionicons name="create-outline" size={20} color={Colors.primary} />
               </View>
               <View style={styles.modalTitleWrap}>
-                <Text style={styles.modalTitle}>Update Patient Details</Text>
+                <Text style={styles.modalTitle}>{t("Update Patient Details")}</Text>
                 <Text style={styles.modalSubtitle} numberOfLines={1}>
-                  {patient?.fullName || 'Patient Profile'}
-                  {patient?.nic ? ` • NIC: ${patient.nic}` : ''}
+                  {patient?.fullName || t('Patient Profile')}
+                  {patient?.nic ? t(" • NIC: {value0}", { value0: String(patient.nic) }) : ''}
                 </Text>
               </View>
             </View>
@@ -217,7 +219,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
               disabled={saving}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Close modal"
+              accessibilityLabel={t("Close modal")}
             >
               <Ionicons name="close" size={20} color={Colors.textDark} />
             </TouchableOpacity>
@@ -232,12 +234,12 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
           >
             {/* ── SECTION 1: PRIMARY CONTACT & LOCATION ── */}
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionHeading}>Contact & Location</Text>
+              <Text style={styles.sectionHeading}>{t("Contact & Location")}</Text>
 
               {/* Phone Field */}
               <View style={styles.inputGroup}>
                 <View style={styles.inputLabelRow}>
-                  <Text style={styles.inputLabel}>Primary Phone *</Text>
+                  <Text style={styles.inputLabel}>{t("Primary Phone *")}</Text>
                   {phoneError ? (
                     <Text style={styles.inputErrorText}>{phoneError}</Text>
                   ) : null}
@@ -271,7 +273,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
 
               {/* District Field */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>District</Text>
+                <Text style={styles.inputLabel}>{t("District")}</Text>
                 <View style={styles.inputWrapper}>
                   <Ionicons
                     name="location-outline"
@@ -283,7 +285,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
                     style={styles.textInput}
                     value={district}
                     onChangeText={setDistrict}
-                    placeholder="e.g. Colombo / Gampaha / Kandy"
+                    placeholder={t("e.g. Colombo / Gampaha / Kandy")}
                     placeholderTextColor={Colors.textLight}
                   />
                 </View>
@@ -291,7 +293,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
 
               {/* Address Field */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Home / Street Address</Text>
+                <Text style={styles.inputLabel}>{t("Home / Street Address")}</Text>
                 <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
                   <Ionicons
                     name="home-outline"
@@ -303,7 +305,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
                     style={[styles.textInput, styles.textAreaInput]}
                     value={address}
                     onChangeText={setAddress}
-                    placeholder="e.g. No. 45, Temple Road, Colombo 03"
+                    placeholder={t("e.g. No. 45, Temple Road, Colombo 03")}
                     placeholderTextColor={Colors.textLight}
                     multiline
                     numberOfLines={2}
@@ -314,11 +316,11 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
 
             {/* ── SECTION 2: MEDICAL PROFILE ── */}
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionHeading}>Medical Profile</Text>
+              <Text style={styles.sectionHeading}>{t("Medical Profile")}</Text>
 
               {/* Blood Group */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Blood Group</Text>
+                <Text style={styles.inputLabel}>{t("Blood Group")}</Text>
                 <View style={styles.bloodChipsGrid}>
                   {BLOOD_GROUPS.map((bg) => {
                     const isSelected = bloodGroup === bg;
@@ -332,7 +334,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
                         onPress={() => setBloodGroup(isSelected ? '' : bg)}
                         activeOpacity={0.7}
                         accessibilityRole="button"
-                        accessibilityLabel={`Blood group ${bg}`}
+                        accessibilityLabel={t("Blood group {value0}", { value0: String(bg) })}
                       >
                         <Text
                           style={[
@@ -350,7 +352,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
 
               {/* Allergies */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Known Allergies</Text>
+                <Text style={styles.inputLabel}>{t("Known Allergies")}</Text>
 
                 {/* Existing Allergy Chips */}
                 {allergies.length > 0 ? (
@@ -378,8 +380,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
                   </View>
                 ) : (
                   <Text style={styles.noAllergiesHint}>
-                    No allergies currently recorded.
-                  </Text>
+                    {t("No allergies currently recorded.")}</Text>
                 )}
 
                 {/* Add New Allergy Row */}
@@ -389,7 +390,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
                       style={styles.allergyTextInput}
                       value={newAllergyName}
                       onChangeText={setNewAllergyName}
-                      placeholder="Add allergy (e.g. Penicillin, Aspirin)"
+                      placeholder={t("Add allergy (e.g. Penicillin, Aspirin)")}
                       placeholderTextColor={Colors.textLight}
                     />
                     <TouchableOpacity
@@ -402,13 +403,13 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
                       activeOpacity={0.7}
                     >
                       <Ionicons name="add" size={16} color={Colors.white} />
-                      <Text style={styles.addAllergyButtonText}>Add</Text>
+                      <Text style={styles.addAllergyButtonText}>{t("Add")}</Text>
                     </TouchableOpacity>
                   </View>
 
                   {newAllergyName.trim().length > 0 ? (
                     <View style={styles.severitySelectorRow}>
-                      <Text style={styles.severityHelperLabel}>Severity:</Text>
+                      <Text style={styles.severityHelperLabel}>{t("Severity:")}</Text>
                       {SEVERITIES.map((sev) => {
                         const isSelected = newAllergySeverity === sev;
                         return (
@@ -440,11 +441,11 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
 
             {/* ── SECTION 3: EMERGENCY CONTACT ── */}
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionHeading}>Emergency Contact</Text>
+              <Text style={styles.sectionHeading}>{t("Emergency Contact")}</Text>
 
               {/* Name */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Contact Person Name</Text>
+                <Text style={styles.inputLabel}>{t("Contact Person Name")}</Text>
                 <View style={styles.inputWrapper}>
                   <Ionicons
                     name="person-outline"
@@ -464,7 +465,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
 
               {/* Relationship Chips */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Relationship</Text>
+                <Text style={styles.inputLabel}>{t("Relationship")}</Text>
                 <View style={styles.relationshipChipsGrid}>
                   {RELATIONSHIPS.map((rel) => {
                     const isSelected = emRelationship === rel;
@@ -497,7 +498,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
               {/* Emergency Phone */}
               <View style={styles.inputGroup}>
                 <View style={styles.inputLabelRow}>
-                  <Text style={styles.inputLabel}>Emergency Phone</Text>
+                  <Text style={styles.inputLabel}>{t("Emergency Phone")}</Text>
                   {emPhoneError ? (
                     <Text style={styles.inputErrorText}>{emPhoneError}</Text>
                   ) : null}
@@ -541,9 +542,9 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
               disabled={saving}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Cancel edit"
+              accessibilityLabel={t("Cancel edit")}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t("Cancel")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -555,7 +556,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
               disabled={saving}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Save patient details"
+              accessibilityLabel={t("Save patient details")}
             >
               {saving ? (
                 <ActivityIndicator size="small" color={Colors.white} />
@@ -567,7 +568,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
                     color={Colors.white}
                     style={{ marginRight: 6 }}
                   />
-                  <Text style={styles.saveButtonText}>Save Details</Text>
+                  <Text style={styles.saveButtonText}>{t("Save Details")}</Text>
                 </>
               )}
             </TouchableOpacity>

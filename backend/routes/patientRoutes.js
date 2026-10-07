@@ -5,12 +5,16 @@ const {
   updateMyProfile,
   getMyHistory,
   getMyReports,
+  getMyReport,
   createMyReport,
+  updateMyReport,
   deleteMyReport,
+  getMyReportFile,
   getDashboard,
 } = require('../controllers/patientController');
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 const { loadPatientProfile, patientOnly } = require('../middleware/patientMiddleware');
+const { reportUpload } = require('../middleware/reportUpload');
 
 // Patient portal routes (/api/v1/patients/me*) -> Patient role only
 const patientAuth = [protect, patientOnly, loadPatientProfile];
@@ -19,9 +23,11 @@ router.patch('/me', ...patientAuth, updateMyProfile);
 router.get('/me/dashboard', ...patientAuth, getDashboard);
 router.get('/me/history', ...patientAuth, getMyHistory);
 router.get('/me/reports', ...patientAuth, getMyReports);
-router.post('/me/reports', ...patientAuth, createMyReport);
+router.get('/me/reports/:id', ...patientAuth, getMyReport);
+router.post('/me/reports', ...patientAuth, reportUpload.single('file'), createMyReport);
+router.patch('/me/reports/:id', ...patientAuth, reportUpload.single('file'), updateMyReport);
 router.delete('/me/reports/:id', ...patientAuth, deleteMyReport);
-
+router.get('/me/reports/:id/file', ...patientAuth, getMyReportFile);
 const {
   getPatients,
   getPatientById,

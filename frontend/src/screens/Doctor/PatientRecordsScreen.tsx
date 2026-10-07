@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -13,7 +14,7 @@ import {
   Platform,
   Animated,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { savePrescriptionApi } from '../../services/prescriptionService';
@@ -26,14 +27,19 @@ import {
   getHRStatus,
   getTempStatus,
   getSpO2Status,
+  formatTempCelsius,
+  getBMIStatus,
+  calculateBMI,
   checkMedicationAllergy,
   MedicationItem,
   VitalHistoryReading,
 } from '../../services/patientRecordsService';
 
-type ActiveVitalType = 'bp' | 'hr' | 'temp' | 'spo2';
+type ActiveVitalType = 'bp' | 'hr' | 'temp' | 'spo2' | 'weight' | 'bmi';
 
 export default function PatientRecordsScreen({ navigation }: { navigation?: any } = {}) {
+  const { t } = useLanguage();
+  const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string; patientId?: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -97,7 +103,31 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   // STATE MANAGEMENT
   // ─────────────────────────────────────────────────────────
   const [patients, setPatients] = useState<PatientRecord[]>(ALL_DUMMY_PATIENTS);
-  const [currentPatientId, setCurrentPatientId] = useState<string>(ALL_DUMMY_PATIENTS[0].id);
+  const [currentPatientId, setCurrentPatientId] = useState<string>(() => {
+    const pToken = params?.tokenNumber ? Number(params.tokenNumber) : null;
+    const pName = params?.patientName ? params.patientName.trim().toLowerCase() : null;
+    const pId = params?.patientId;
+
+    if (pId) {
+      const match = ALL_DUMMY_PATIENTS.find((p) => p.id === pId);
+      if (match) return match.id;
+    }
+    if (pName) {
+      const match = ALL_DUMMY_PATIENTS.find(
+        (p) =>
+          p.name.toLowerCase().includes(pName) ||
+          pName.includes(p.name.toLowerCase()) ||
+          p.shortName.toLowerCase().includes(pName) ||
+          pName.includes(p.shortName.toLowerCase())
+      );
+      if (match) return match.id;
+    }
+    if (pToken) {
+      const match = ALL_DUMMY_PATIENTS.find((p) => p.tokenNumber === pToken);
+      if (match) return match.id;
+    }
+    return ALL_DUMMY_PATIENTS[0].id;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<PatientStatus>('All');
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('records');
@@ -109,6 +139,114 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
 
   // Scroll reference for smooth scrolling to top on patient selection
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Sync when route parameters change
+  useEffect(() => {
+    const pToken = params?.tokenNumber ? Number(params.tokenNumber) : null;
+    const pName = params?.patientName ? params.patientName.trim().toLowerCase() : null;
+    const pId = params?.patientId;
+
+    if (!pToken && !pName && !pId) return;
+
+    let matched: PatientRecord | undefined;
+    if (pId) {
+      matched = patients.find((p) => p.id === pId);
+    }
+    if (!matched && pName) {
+      matched = patients.find(
+        (p) =>
+          p.name.toLowerCase().includes(pName) ||
+          pName.includes(p.name.toLowerCase()) ||
+          p.shortName.toLowerCase().includes(pName) ||
+          pName.includes(p.shortName.toLowerCase())
+      );
+    }
+    if (!matched && pToken) {
+      matched = patients.find((p) => p.tokenNumber === pToken);
+    }
+
+    if (matched) {
+      setCurrentPatientId(matched.id);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }
+  }, [params?.tokenNumber, params?.patientName, params?.patientId, patients]);
+
+  // Sync from AsyncStorage if active patient was set by other screens
+  useEffect(() => {
+    (async () => {
+      try {
+        const storedToken = await AsyncStorage.getItem('active_record_patient_token');
+        const storedName = await AsyncStorage.getItem('active_record_patient_name');
+        if (storedToken || storedName) {
+          const num = storedToken ? Number(storedToken) : null;
+          const sName = storedName ? storedName.trim().toLowerCase() : null;
+          const matched = patients.find((p) => {
+            if (sName && (p.name.toLowerCase().includes(sName) || sName.includes(p.name.toLowerCase()))) {
+              return true;
+            }
+            if (num && p.tokenNumber === num) {
+              return true;
+            }
+            return false;
+          });
+          if (matched) {
+            setCurrentPatientId(matched.id);
+          }
+        }
+      } catch (e) {}
+    })();
+  }, [patients]);
+
+  // Sync allergies from storage for the currently active patient
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const token = currentPatient?.tokenNumber;
+        if (!token) return;
+        const key = `@medi_queue_patient_allergies_${token}`;
+        let raw = await AsyncStorage.getItem(key);
+        if (!raw && typeof window !== 'undefined' && window.localStorage) {
+          raw = window.localStorage.getItem(key);
+        }
+        if (raw && isMounted) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            setPatients((prev) =>
+              prev.map((p) => {
+                if (p.tokenNumber !== token) return p;
+                if (parsed.length === 0) {
+                  return {
+                    ...p,
+                    allergies: [],
+                    allergy: {
+                      hasAllergy: false,
+                      title: 'No known allergies',
+                      description: 'Patient has no documented medication allergies.',
+                    },
+                  };
+                }
+                const first = parsed[0];
+                return {
+                  ...p,
+                  allergies: parsed,
+                  allergy: {
+                    hasAllergy: true,
+                    isHighRisk: first.severity === 'life-threatening' || first.severity === 'severe',
+                    title: `Allergy alert • ${first.reaction}`,
+                    description: `${first.allergen}${first.note ? ' – ' + first.note : ''}`,
+                  },
+                };
+              })
+            );
+          }
+        }
+      } catch (e) {}
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentPatientId, currentPatient?.tokenNumber]);
 
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -132,6 +270,41 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
       setToastMessage(null);
     });
   }, [toastFade]);
+
+  // Spin animation for Refresh button
+  const spinAnim = useRef(new Animated.Value(0)).current;
+
+  const triggerSpin = useCallback(() => {
+    spinAnim.setValue(0);
+    Animated.timing(spinAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, [spinAnim]);
+
+  const spinInterpolate = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  // Reset / Refresh back to the current active consultation patient
+  const handleResetToCurrentPatient = useCallback(async () => {
+    triggerSpin();
+    try {
+      await AsyncStorage.removeItem('active_record_patient_token');
+      await AsyncStorage.removeItem('active_record_patient_name');
+    } catch (e) {}
+
+    // Find the primary in-consultation patient (default #029 Aurelia Sisca)
+    const inConsultationPatient =
+      patients.find((p) => p.status === 'In consultation') || patients[0];
+
+    setCurrentPatientId(inConsultationPatient.id);
+    setSearchQuery('');
+    showToast(`Refreshed: ${inConsultationPatient.name} (${inConsultationPatient.tokenFormatted})`);
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+  }, [patients, showToast, triggerSpin]);
 
   // ─────────────────────────────────────────────────────────
   // 1. ADD MEDICATION BOTTOM SHEET STATE & LOGIC
@@ -170,16 +343,14 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
           router.push('/(doctor)/prescription' as any);
         } catch (err) {
           if (typeof window !== 'undefined') {
-            window.location.href = '/(doctor)/prescription';
+            router.push('/(doctor)/prescription' as any);
           }
         }
       }
     }
     if (typeof window !== 'undefined') {
       setTimeout(() => {
-        if (!window.location.pathname.includes('prescription')) {
-          window.location.href = `/(doctor)/prescription?tokenNumber=${encodeURIComponent(String(currentPatient.tokenNumber || 29))}&patientName=${encodeURIComponent(currentPatient.name)}`;
-        }
+        router.push(`/(doctor)/prescription?tokenNumber=${encodeURIComponent(String(currentPatient.tokenNumber || 29))}&patientName=${encodeURIComponent(currentPatient.name)}` as any);
       }, 120);
     }
   };
@@ -292,6 +463,8 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   const [formHeartRate, setFormHeartRate] = useState('');
   const [formBodyTemp, setFormBodyTemp] = useState('');
   const [formSpO2, setFormSpO2] = useState('');
+  const [formWeight, setFormWeight] = useState('');
+  const [formHeight, setFormHeight] = useState('');
 
   const [fieldErrors, setFieldErrors] = useState<{
     systolic?: string;
@@ -299,6 +472,8 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     heartRate?: string;
     bodyTemp?: string;
     spO2?: string;
+    weight?: string;
+    height?: string;
   }>({});
 
   const systolicInputRef = useRef<TextInput>(null);
@@ -306,13 +481,24 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   const heartRateInputRef = useRef<TextInput>(null);
   const bodyTempInputRef = useRef<TextInput>(null);
   const spO2InputRef = useRef<TextInput>(null);
+  const weightInputRef = useRef<TextInput>(null);
+  const heightInputRef = useRef<TextInput>(null);
 
   const handleOpenEditVitals = () => {
     setFormSystolic(String(currentPatient.vitals.systolic));
     setFormDiastolic(String(currentPatient.vitals.diastolic));
     setFormHeartRate(String(currentPatient.vitals.heartRateNum));
-    setFormBodyTemp(String(currentPatient.vitals.tempNum));
+    const tempC = formatTempCelsius(currentPatient.vitals.tempNum).display;
+    setFormBodyTemp(tempC);
     setFormSpO2(String(currentPatient.vitals.spO2Num));
+    const rawWeight = currentPatient.vitals.weightNum
+      ? String(currentPatient.vitals.weightNum)
+      : (currentPatient.vitals.weight || '65').replace(/[^0-9.]/g, '');
+    const rawHeight = currentPatient.vitals.heightNum
+      ? String(currentPatient.vitals.heightNum)
+      : (currentPatient.vitals.height || '170').replace(/[^0-9.]/g, '');
+    setFormWeight(rawWeight);
+    setFormHeight(rawHeight);
     setFieldErrors({});
     setIsEditVitalsOpen(true);
     setTimeout(() => {
@@ -329,8 +515,10 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     const sys = parseFloat(formSystolic);
     const dia = parseFloat(formDiastolic);
     const hr = parseFloat(formHeartRate);
-    const temp = parseFloat(formBodyTemp);
+    let temp = parseFloat(formBodyTemp);
     const spo2 = parseFloat(formSpO2);
+    const weightVal = parseFloat(formWeight);
+    const heightVal = parseFloat(formHeight);
 
     const errors: typeof fieldErrors = {};
 
@@ -354,14 +542,26 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
       errors.heartRate = 'Enter a heart rate from 20 to 250 bpm';
     }
 
-    // 5. Body temp: 90 to 110 °F
-    if (isNaN(temp) || temp < 90 || temp > 110) {
-      errors.bodyTemp = 'Enter temperature from 90 to 110 °F';
+    // 5. Body temp: 34 to 43 °C (auto-convert if entered in Fahrenheit > 50)
+    if (temp > 50 && temp <= 110) {
+      temp = Math.round(((temp - 32) * (5 / 9)) * 10) / 10;
+    } else if (isNaN(temp) || temp < 34 || temp > 43) {
+      errors.bodyTemp = 'Enter temperature from 34.0 to 43.0 °C';
     }
 
     // 6. SpO2: 50 to 100
     if (isNaN(spo2) || spo2 < 50 || spo2 > 100) {
       errors.spO2 = 'Enter SpO2 from 50 to 100%';
+    }
+
+    // 7. Weight validation
+    if (formWeight.trim() && (isNaN(weightVal) || weightVal < 1 || weightVal > 300)) {
+      errors.weight = 'Enter valid weight (1 - 300 kg)';
+    }
+
+    // 8. Height validation
+    if (formHeight.trim() && (isNaN(heightVal) || heightVal < 30 || heightVal > 250)) {
+      errors.height = 'Enter valid height (30 - 250 cm)';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -371,8 +571,14 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
       else if (errors.heartRate) heartRateInputRef.current?.focus();
       else if (errors.bodyTemp) bodyTempInputRef.current?.focus();
       else if (errors.spO2) spO2InputRef.current?.focus();
+      else if (errors.weight) weightInputRef.current?.focus();
+      else if (errors.height) heightInputRef.current?.focus();
       return;
     }
+
+    const finalWeight = !isNaN(weightVal) ? weightVal : (currentPatient.vitals.weightNum || 65);
+    const finalHeight = !isNaN(heightVal) ? heightVal : (currentPatient.vitals.heightNum || 170);
+    const bmiCalc = calculateBMI(finalWeight, finalHeight);
 
     // New history item
     const newHistoryItem: VitalHistoryReading = {
@@ -384,6 +590,8 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
       heartRate: hr,
       bodyTemp: temp,
       spO2: spo2,
+      weight: finalWeight,
+      bmi: bmiCalc.bmi,
     };
 
     setPatients((prevList) =>
@@ -405,12 +613,20 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               bloodPressure: `${sys}/${dia}`,
               heartRate: String(hr),
               bodyTemp: temp.toFixed(1),
+              bodyTempUnit: '°C',
               spO2: `${spo2}%`,
               systolic: sys,
               diastolic: dia,
               heartRateNum: hr,
               tempNum: temp,
               spO2Num: spo2,
+              weight: `${finalWeight} kg`,
+              weightNum: finalWeight,
+              height: `${finalHeight} cm`,
+              heightNum: finalHeight,
+              bmi: bmiCalc.bmi > 0 ? bmiCalc.bmi.toFixed(1) : p.vitals.bmi,
+              bmiNum: bmiCalc.bmi > 0 ? bmiCalc.bmi : p.vitals.bmiNum,
+              bmiStatus: bmiCalc.status.label,
             },
             vitalsHistory: updatedHistory,
           };
@@ -507,8 +723,23 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   // Calculated vital status labels
   const bpStatus = getBPStatus(currentPatient.vitals.systolic, currentPatient.vitals.diastolic);
   const hrStatus = getHRStatus(currentPatient.vitals.heartRateNum);
-  const tempStatus = getTempStatus(currentPatient.vitals.tempNum);
+  const currentTempC = formatTempCelsius(currentPatient.vitals.tempNum);
+  const tempStatus = getTempStatus(currentTempC.tempC);
   const spO2Status = getSpO2Status(currentPatient.vitals.spO2Num);
+
+  // Weight and BMI calculations
+  const currentWeightNum =
+    currentPatient.vitals.weightNum ||
+    (currentPatient.vitals.weight ? parseFloat(currentPatient.vitals.weight.replace(/[^0-9.]/g, '')) : 65);
+  const currentHeightNum =
+    currentPatient.vitals.heightNum ||
+    (currentPatient.vitals.height ? parseFloat(currentPatient.vitals.height.replace(/[^0-9.]/g, '')) : 170);
+
+  const fallbackBmi = calculateBMI(currentWeightNum, currentHeightNum);
+  const bmiDisplay = currentPatient.vitals.bmi || fallbackBmi.bmi.toFixed(1);
+  const bmiStatusResult = currentPatient.vitals.bmiNum
+    ? getBMIStatus(currentPatient.vitals.bmiNum)
+    : fallbackBmi.status;
 
   // Trend summary helper
   const trendInfo = useMemo(() => {
@@ -550,20 +781,49 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
         normalRangeLabel: 'Normal range: 60 to 100 bpm',
       };
     } else if (activeTrendVital === 'temp') {
-      const diff = prev ? (latest.bodyTemp - prev.bodyTemp).toFixed(1) : '0.0';
+      const latestC = formatTempCelsius(latest.bodyTemp).tempC;
+      const prevC = prev ? formatTempCelsius(prev.bodyTemp).tempC : latestC;
+      const diff = prev ? (latestC - prevC).toFixed(1) : '0.0';
       const changeText =
         parseFloat(diff) > 0
-          ? `Up ${diff} °F since previous reading`
+          ? `Up ${diff} °C since previous reading`
           : parseFloat(diff) < 0
-          ? `Down ${Math.abs(parseFloat(diff))} °F since previous reading`
+          ? `Down ${Math.abs(parseFloat(diff))} °C since previous reading`
           : 'Stable compared to previous reading';
       return {
         title: 'Body temperature',
-        unit: '°F',
-        latestText: `${latest.bodyTemp} °F`,
+        unit: '°C',
+        latestText: `${latestC.toFixed(1)} °C`,
         statusResult: tempStatus,
         changeText,
-        normalRangeLabel: 'Normal range: 97.0 to 99.5 °F',
+        normalRangeLabel: 'Normal range: 36.1 to 37.2 °C',
+      };
+    } else if (activeTrendVital === 'weight') {
+      const latestW = latest.weight || currentWeightNum;
+      const prevW = prev?.weight || latestW;
+      const diff = prev ? (latestW - prevW).toFixed(1) : '0.0';
+      const changeText =
+        parseFloat(diff) > 0
+          ? `Up ${diff} kg since previous reading`
+          : parseFloat(diff) < 0
+          ? `Down ${Math.abs(parseFloat(diff))} kg since previous reading`
+          : 'Stable compared to previous reading';
+      return {
+        title: 'Body weight',
+        unit: 'kg',
+        latestText: `${latestW} kg`,
+        statusResult: { label: `Height: ${currentHeightNum} cm`, isAbnormal: false },
+        changeText,
+        normalRangeLabel: 'Standard clinic measured weight in kilograms',
+      };
+    } else if (activeTrendVital === 'bmi') {
+      return {
+        title: 'Body Mass Index (BMI)',
+        unit: 'kg/m²',
+        latestText: `${bmiDisplay} kg/m²`,
+        statusResult: bmiStatusResult,
+        changeText: `Category: ${bmiStatusResult.label}`,
+        normalRangeLabel: 'Normal BMI range: 18.5 to 24.9 kg/m²',
       };
     } else {
       const diff = prev ? latest.spO2 - prev.spO2 : 0;
@@ -582,7 +842,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
         normalRangeLabel: 'Normal range: 95% to 100%',
       };
     }
-  }, [currentPatient, activeTrendVital, bpStatus, hrStatus, tempStatus, spO2Status]);
+  }, [currentPatient, activeTrendVital, bpStatus, hrStatus, tempStatus, spO2Status, currentWeightNum, currentHeightNum, bmiDisplay, bmiStatusResult]);
 
   return (
     <SafeAreaView
@@ -652,24 +912,48 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 </View>
               </View>
 
-              <TouchableOpacity
-                style={[
-                  styles.bellButton,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: theme.cardBorder,
-                  },
-                ]}
-                activeOpacity={0.7}
-                onPress={() => showToast('Notifications: No new alerts')}
-              >
-                <Ionicons
-                  name="notifications-outline"
-                  size={20}
-                  color={theme.textDark}
-                />
-                <View style={styles.redDot} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {/* Top Bar Refresh Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.topRefreshButton,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={handleResetToCurrentPatient}
+                  accessibilityLabel="Refresh Current Patient"
+                >
+                  <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
+                    <Ionicons
+                      name="refresh-outline"
+                      size={20}
+                      color={theme.accent}
+                    />
+                  </Animated.View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.bellButton,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => showToast('Notifications: No new alerts')}
+                >
+                  <Ionicons
+                    name="notifications-outline"
+                    size={20}
+                    color={theme.textDark}
+                  />
+                  <View style={styles.redDot} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* ─────────────────────────────────────────────────────────
@@ -1122,7 +1406,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 </TouchableOpacity>
               </View>
 
-              {/* g. 2x2 Grid of Vital Cards (Tappable for Trend) */}
+              {/* g. Grid of Vital Cards (6 cards: BP, HR, Temp, SpO2, Weight, BMI - Tappable for Trend) */}
               <View style={styles.vitalsGrid}>
                 {/* 1. Blood Pressure */}
                 <TouchableOpacity
@@ -1204,7 +1488,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   </Text>
                 </TouchableOpacity>
 
-                {/* 3. Body Temp */}
+                {/* 3. Body Temp (Celsius) */}
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={() => handleOpenVitalsTrend('temp')}
@@ -1233,8 +1517,8 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     </Text>
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
-                    {currentPatient.vitals.bodyTemp}{' '}
-                    <Text style={styles.vitalUnit}>°F</Text>
+                    {currentTempC.display}{' '}
+                    <Text style={styles.vitalUnit}>°C</Text>
                   </Text>
                   <Text
                     style={[
@@ -1284,6 +1568,90 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     ]}
                   >
                     {spO2Status.label}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 5. Weight */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => handleOpenVitalsTrend('weight')}
+                  style={[
+                    styles.vitalCard,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <View style={styles.vitalCardTop}>
+                    <View
+                      style={[styles.vitalIconCircle, { backgroundColor: '#f3e8ff' }]}
+                    >
+                      <MaterialCommunityIcons
+                        name="scale-bathroom"
+                        size={16}
+                        color="#9333ea"
+                      />
+                    </View>
+                    <Text
+                      style={[styles.vitalLabel, { color: theme.textMuted }]}
+                    >
+                      Weight
+                    </Text>
+                  </View>
+                  <Text style={[styles.vitalValue, { color: theme.textDark }]}>
+                    {currentWeightNum}{' '}
+                    <Text style={styles.vitalUnit}>kg</Text>
+                  </Text>
+                  <Text
+                    style={[
+                      styles.vitalCalculatedStatus,
+                      { color: theme.textMuted },
+                    ]}
+                  >
+                    Ht: {currentHeightNum} cm
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 6. BMI (Body Mass Index) */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => handleOpenVitalsTrend('bmi')}
+                  style={[
+                    styles.vitalCard,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <View style={styles.vitalCardTop}>
+                    <View
+                      style={[styles.vitalIconCircle, { backgroundColor: '#ccfbf1' }]}
+                    >
+                      <MaterialCommunityIcons
+                        name="calculator-variant-outline"
+                        size={16}
+                        color="#0d9488"
+                      />
+                    </View>
+                    <Text
+                      style={[styles.vitalLabel, { color: theme.textMuted }]}
+                    >
+                      BMI Index
+                    </Text>
+                  </View>
+                  <Text style={[styles.vitalValue, { color: theme.textDark }]}>
+                    {bmiDisplay}{' '}
+                    <Text style={styles.vitalUnit}>kg/m²</Text>
+                  </Text>
+                  <Text
+                    style={[
+                      styles.vitalCalculatedStatus,
+                      { color: bmiStatusResult.isAbnormal ? '#ef4444' : '#10b981' },
+                    ]}
+                  >
+                    {bmiStatusResult.label}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1530,213 +1898,6 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               </TouchableOpacity>
             </View>
 
-            {/* ─────────────────────────────────────────────────────────
-                4. ALL PATIENTS SECTION (Below Current Patient)
-               ───────────────────────────────────────────────────────── */}
-            <View style={styles.allPatientsSection}>
-              <View style={styles.allPatientsHeadingRow}>
-                <Text
-                  style={[styles.sectionHeadingTitle, { color: theme.textDark }]}
-                >
-                  ALL PATIENTS
-                </Text>
-                <Text
-                  style={[
-                    styles.allPatientsSubCount,
-                    { color: theme.textMuted },
-                  ]}
-                >
-                  {filteredPatients.length} of {patients.length} available
-                </Text>
-              </View>
-
-              {/* Filter Chips */}
-              <View style={styles.filterChipsRow}>
-                {(['All', 'Waiting', 'In consultation', 'Seen'] as PatientStatus[]).map(
-                  (st) => {
-                    const isSelected = statusFilter === st;
-                    return (
-                      <TouchableOpacity
-                        key={st}
-                        style={[
-                          styles.filterChip,
-                          isSelected && [
-                            styles.filterChipActive,
-                            { backgroundColor: theme.primaryDeep },
-                          ],
-                          !isSelected && {
-                            backgroundColor: theme.card,
-                            borderColor: theme.cardBorder,
-                          },
-                        ]}
-                        activeOpacity={0.7}
-                        onPress={() => setStatusFilter(st)}
-                      >
-                        <Text
-                          style={[
-                            styles.filterChipText,
-                            isSelected
-                              ? styles.filterChipTextActive
-                              : { color: theme.textMedium },
-                          ]}
-                        >
-                          {st}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  }
-                )}
-              </View>
-
-              {/* Patients List or Empty State */}
-              {filteredPatients.length === 0 ? (
-                <View
-                  style={[
-                    styles.emptySearchBox,
-                    {
-                      backgroundColor: theme.card,
-                      borderColor: theme.cardBorder,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="search-outline"
-                    size={32}
-                    color={theme.accent}
-                    style={{ marginBottom: 8 }}
-                  />
-                  <Text
-                    style={[styles.emptySearchTitle, { color: theme.textDark }]}
-                  >
-                    No matching patients found
-                  </Text>
-                  <Text
-                    style={[styles.emptySearchDesc, { color: theme.textMuted }]}
-                  >
-                    Please check patient name, token number (#029) or NIC format
-                    and try again.
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.allPatientsList}>
-                  {filteredPatients.map((patient) => {
-                    const isCurrent = patient.id === currentPatient.id;
-
-                    let statusBg = isDark ? '#142023' : '#f1f5f9';
-                    let statusColor = '#64748b';
-                    if (patient.status === 'In consultation') {
-                      statusBg = isDark ? '#1a2e33' : '#e6f7f9';
-                      statusColor = theme.accent;
-                    } else if (patient.status === 'Waiting') {
-                      statusBg = isDark ? '#302613' : '#fffbeb';
-                      statusColor = '#d97706';
-                    } else if (patient.status === 'Seen') {
-                      statusBg = isDark ? '#142b23' : '#ecfdf5';
-                      statusColor = '#059669';
-                    }
-
-                    return (
-                      <TouchableOpacity
-                        key={patient.id}
-                        activeOpacity={0.75}
-                        onPress={() => handleSelectPatient(patient)}
-                        style={[
-                          styles.patientRowCard,
-                          {
-                            backgroundColor: theme.card,
-                            borderColor: isCurrent
-                              ? theme.accent
-                              : theme.cardBorder,
-                            borderWidth: isCurrent ? 2 : 1,
-                          },
-                        ]}
-                      >
-                        <View style={styles.patientRowLeft}>
-                          <View
-                            style={[
-                              styles.patientRowAvatar,
-                              { backgroundColor: theme.tint },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.patientRowAvatarText,
-                                { color: theme.primaryDeep },
-                              ]}
-                            >
-                              {patient.name
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')
-                                .slice(0, 2)
-                                .toUpperCase()}
-                            </Text>
-                          </View>
-
-                          <View style={styles.patientRowMeta}>
-                            <View style={styles.patientRowNameGroup}>
-                              <Text
-                                style={[
-                                  styles.patientRowName,
-                                  { color: theme.textDark },
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {patient.name}
-                              </Text>
-
-                              {patient.allergy.hasAllergy && (
-                                <Ionicons
-                                  name="warning"
-                                  size={14}
-                                  color="#ef4444"
-                                  style={{ marginLeft: 5 }}
-                                />
-                              )}
-                            </View>
-
-                            <Text
-                              style={[
-                                styles.patientRowSub,
-                                { color: theme.textMuted },
-                              ]}
-                            >
-                              {patient.age} yrs • {patient.gender}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.patientRowRight}>
-                          <Text
-                            style={[
-                              styles.patientRowToken,
-                              { color: theme.textDark },
-                            ]}
-                          >
-                            {patient.tokenFormatted}
-                          </Text>
-                          <View
-                            style={[
-                              styles.statusPillSmall,
-                              { backgroundColor: statusBg },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.statusPillSmallText,
-                                { color: statusColor },
-                              ]}
-                            >
-                              {patient.status}
-                            </Text>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
 
             <View style={{ height: 100 }} />
           </ScrollView>
@@ -2249,10 +2410,12 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       const isLatest = idx === currentPatient.vitalsHistory.length - 1;
 
                       // Calculate normalized height for bars/points
-                      let val1 = item.systolic;
-                      let val2 = item.diastolic;
+                      let val1: number | string = item.systolic;
+                      let val2: number | string = item.diastolic;
                       if (activeTrendVital === 'hr') val1 = item.heartRate;
-                      if (activeTrendVital === 'temp') val1 = item.bodyTemp;
+                      if (activeTrendVital === 'temp') val1 = formatTempCelsius(item.bodyTemp).display;
+                      if (activeTrendVital === 'weight') val1 = item.weight || currentWeightNum;
+                      if (activeTrendVital === 'bmi') val1 = item.bmi || parseFloat(bmiDisplay);
                       if (activeTrendVital === 'spo2') val1 = item.spO2;
 
                       return (
@@ -2386,8 +2549,16 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       readingVal = `${r.heartRate} bpm`;
                       isAbnormal = getHRStatus(r.heartRate).isAbnormal;
                     } else if (activeTrendVital === 'temp') {
-                      readingVal = `${r.bodyTemp} °F`;
-                      isAbnormal = getTempStatus(r.bodyTemp).isAbnormal;
+                      const c = formatTempCelsius(r.bodyTemp);
+                      readingVal = `${c.display} °C`;
+                      isAbnormal = getTempStatus(c.tempC).isAbnormal;
+                    } else if (activeTrendVital === 'weight') {
+                      readingVal = `${r.weight || currentWeightNum} kg`;
+                      isAbnormal = false;
+                    } else if (activeTrendVital === 'bmi') {
+                      const b = r.bmi || parseFloat(bmiDisplay);
+                      readingVal = `${b} kg/m²`;
+                      isAbnormal = getBMIStatus(b).isAbnormal;
                     } else if (activeTrendVital === 'spo2') {
                       readingVal = `${r.spO2}%`;
                       isAbnormal = getSpO2Status(r.spO2).isAbnormal;
@@ -2652,7 +2823,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               {/* Body Temp */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                  Body temp (°F)
+                  Body temp (°C)
                 </Text>
                 <TextInput
                   ref={bodyTempInputRef}
@@ -2666,7 +2837,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       color: theme.textDark,
                     },
                   ]}
-                  placeholder="e.g. 98.6"
+                  placeholder="e.g. 37.0"
                   keyboardType="decimal-pad"
                   value={formBodyTemp}
                   onChangeText={(val) => {
@@ -2714,6 +2885,110 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   <Text style={styles.fieldErrorText}>{fieldErrors.spO2}</Text>
                 )}
               </View>
+
+              {/* Weight & Height Row */}
+              <View style={styles.formRowTwoCols}>
+                {/* Weight */}
+                <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+                  <Text style={[styles.formLabel, { color: theme.textDark }]}>
+                    Weight (kg)
+                  </Text>
+                  <TextInput
+                    ref={weightInputRef}
+                    style={[
+                      styles.formInput,
+                      {
+                        backgroundColor: theme.inputBg,
+                        borderColor: fieldErrors.weight
+                          ? '#ef4444'
+                          : theme.cardBorder,
+                        color: theme.textDark,
+                      },
+                    ]}
+                    placeholder="e.g. 68"
+                    keyboardType="decimal-pad"
+                    value={formWeight}
+                    onChangeText={(val) => {
+                      setFormWeight(val);
+                      if (fieldErrors.weight) {
+                        setFieldErrors((prev) => ({ ...prev, weight: undefined }));
+                      }
+                    }}
+                  />
+                  {fieldErrors.weight && (
+                    <Text style={styles.fieldErrorText}>{fieldErrors.weight}</Text>
+                  )}
+                </View>
+
+                {/* Height */}
+                <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+                  <Text style={[styles.formLabel, { color: theme.textDark }]}>
+                    Height (cm)
+                  </Text>
+                  <TextInput
+                    ref={heightInputRef}
+                    style={[
+                      styles.formInput,
+                      {
+                        backgroundColor: theme.inputBg,
+                        borderColor: fieldErrors.height
+                          ? '#ef4444'
+                          : theme.cardBorder,
+                        color: theme.textDark,
+                      },
+                    ]}
+                    placeholder="e.g. 172"
+                    keyboardType="numeric"
+                    value={formHeight}
+                    onChangeText={(val) => {
+                      setFormHeight(val);
+                      if (fieldErrors.height) {
+                        setFieldErrors((prev) => ({ ...prev, height: undefined }));
+                      }
+                    }}
+                  />
+                  {fieldErrors.height && (
+                    <Text style={styles.fieldErrorText}>{fieldErrors.height}</Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Live calculated BMI hint if weight and height entered */}
+              {(() => {
+                const w = parseFloat(formWeight);
+                const h = parseFloat(formHeight);
+                if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+                  const preview = calculateBMI(w, h);
+                  return (
+                    <View
+                      style={{
+                        backgroundColor: isDark ? 'rgba(34, 170, 184, 0.15)' : '#e0f7fa',
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        marginBottom: 14,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, color: theme.primaryDeep, fontWeight: '600' }}>
+                        Calculated BMI: {preview.bmi} kg/m²
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: '700',
+                          color: preview.status.isAbnormal ? '#ef4444' : '#059669',
+                        }}
+                      >
+                        {preview.status.label}
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              })()}
 
               <View style={styles.sheetActionRow}>
                 <TouchableOpacity
@@ -2870,6 +3145,14 @@ const styles = StyleSheet.create({
   doctorSubtitle: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  topRefreshButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   bellButton: {
     width: 42,
@@ -3604,6 +3887,10 @@ const styles = StyleSheet.create({
   },
   formGroup: {
     marginBottom: 14,
+  },
+  formRowTwoCols: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   formLabel: {
     fontSize: 12,

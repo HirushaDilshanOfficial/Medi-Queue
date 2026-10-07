@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -46,6 +47,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
   navigation,
   onNavigate,
 }) => {
+  const { t, locale } = useLanguage();
   const { isShiftClosed } = useShiftContext();
   const [filter, setFilter] = useState<LiveQueueFilter>('all');
   const { data, loading, error, refreshing, refresh } = useLiveQueue(filter);
@@ -159,21 +161,21 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
 
   // Format timestamp for display
   const formatTime = (isoString?: string) => {
-    if (!isoString) return 'Just now';
+    if (!isoString) return t('Just now');
     try {
       const d = new Date(isoString);
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     } catch {
-      return 'Just now';
+      return t('Just now');
     }
   };
 
   const formatWaitTime = (minutes: number) => {
-    if (minutes <= 0) return '0 min';
-    if (minutes < 60) return `~${minutes} min`;
+    if (minutes <= 0) return t('{minutes} min', { minutes: 0 });
+    if (minutes < 60) return t('~{minutes} min', { minutes });
     const hrs = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    return mins > 0 ? `~${hrs}h ${mins}m` : `~${hrs}h`;
+    return mins > 0 ? t('~{hours}h {minutes}m', { hours: hrs, minutes: mins }) : t('~{hours}h', { hours: hrs });
   };
 
   // Calculate wait so far for a token
@@ -182,14 +184,14 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
       token.createdAt ||
       (typeof token.appointment === 'object' && token.appointment?.createdAt) ||
       null;
-    if (!timeSource) return '5 mins';
+    if (!timeSource) return t('{minutes} min', { minutes: 5 });
     try {
       const start = new Date(timeSource).getTime();
       const now = Date.now();
       const diffMins = Math.max(1, Math.round((now - start) / 60000));
-      return `${diffMins} min${diffMins === 1 ? '' : 's'}`;
+      return t('{minutes} min', { minutes: diffMins });
     } catch {
-      return '5 mins';
+      return t('{minutes} min', { minutes: 5 });
     }
   };
 
@@ -205,14 +207,14 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     try {
       await updateAutoAdvance(newValue);
       showToast(
-        newValue ? 'Auto-Advance queue enabled' : 'Auto-Advance queue disabled',
+        newValue ? t('Auto-Advance queue enabled') : t('Auto-Advance queue disabled'),
         'success'
       );
     } catch (err: any) {
       // Revert switch on error
       setAutoAdvanceEnabled(!newValue);
       const msg = getErrorMessage(err);
-      showToast(msg || 'Failed to update auto-advance setting', 'error');
+      showToast(msg || t('Failed to update auto-advance setting'), 'error');
     } finally {
       if (isMounted.current) {
         setSavingAutoAdvance(false);
@@ -234,11 +236,11 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         department: department || nextInLine.department,
       });
       const tokenName = nextInLine.tokenLabel || res?.tokenLabel || `OPD-${nextInLine.tokenNumber}`;
-      showToast(`Token ${tokenName} called to Room ${roomNumber}`, 'success');
+      showToast(t("Token {value0} called to Room {value1}", { value0: String(tokenName), value1: String(roomNumber) }), 'success');
       await refresh(false);
     } catch (err: any) {
       const msg = getErrorMessage(err);
-      showToast(msg || 'Failed to call next patient. Queue may be empty.', 'error');
+      showToast(msg || t('Failed to call next patient. Queue may be empty.'), 'error');
     } finally {
       if (isMounted.current) {
         setActionLoading(false);
@@ -252,22 +254,22 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     const tokenLabel = token.tokenLabel || `OPD-${token.tokenNumber}`;
 
     Alert.alert(
-      'Confirm No-Show',
-      `Are you sure you want to mark ${tokenLabel} (${patientName}) as No-Show?`,
+      t('Confirm No-Show'),
+      t("Are you sure you want to mark {value0} ({value1}) as No-Show?", { value0: String(tokenLabel), value1: String(patientName) }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         {
-          text: 'Mark No-Show',
+          text: t('Mark No-Show'),
           style: 'destructive',
           onPress: async () => {
             try {
               setActionLoading(true);
               await markNoShow(token._id || tokenLabel);
-              showToast(`Token ${tokenLabel} marked as No-Show`, 'info');
+              showToast(t("Token {value0} marked as No-Show", { value0: String(tokenLabel) }), 'info');
               await refresh(false);
             } catch (err: any) {
               const msg = getErrorMessage(err);
-              showToast(msg || 'Failed to mark token as no-show', 'error');
+              showToast(msg || t('Failed to mark token as no-show'), 'error');
             } finally {
               if (isMounted.current) {
                 setActionLoading(false);
@@ -285,21 +287,21 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     const tokenLabel = token.tokenLabel || `OPD-${token.tokenNumber}`;
 
     Alert.alert(
-      'Move Token Back',
-      `Move ${tokenLabel} 3 positions back in the waiting queue?`,
+      t('Move Token Back'),
+      t("Move {value0} 3 positions back in the waiting queue?", { value0: String(tokenLabel) }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         {
           text: 'Move Back',
           onPress: async () => {
             try {
               setActionLoading(true);
               await moveBack(token._id || tokenLabel);
-              showToast(`Token ${tokenLabel} moved back in queue`, 'success');
+              showToast(t("Token {value0} moved back in queue", { value0: String(tokenLabel) }), 'success');
               await refresh(false);
             } catch (err: any) {
               const msg = getErrorMessage(err);
-              showToast(msg || 'Failed to move token back', 'error');
+              showToast(msg || t('Failed to move token back'), 'error');
             } finally {
               if (isMounted.current) {
                 setActionLoading(false);
@@ -325,17 +327,16 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
       return (
         <View style={styles.nextInLineSection}>
           <SectionHeader
-            title="Next in Line"
-            subtitle="Immediate priority queue"
+            title={t("Next in Line")}
+            subtitle={t("Immediate priority queue")}
           />
           <View style={styles.nextInLineEmptyCard}>
             <View style={styles.emptyLineIconBox}>
               <Ionicons name="people-outline" size={26} color={Colors.textLight} />
             </View>
-            <Text style={styles.nextInLineEmptyTitle}>No patients waiting</Text>
+            <Text style={styles.nextInLineEmptyTitle}>{t("No patients waiting")}</Text>
             <Text style={styles.nextInLineEmptySubtitle}>
-              All active patients have been called or attended.
-            </Text>
+              {t("All active patients have been called or attended.")}</Text>
           </View>
         </View>
       );
@@ -369,12 +370,12 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     return (
       <View style={styles.nextInLineSection}>
         <SectionHeader
-          title="Next in Line"
-          subtitle="Top waiting token ready to be dispatched"
+          title={t("Next in Line")}
+          subtitle={t("Top waiting token ready to be dispatched")}
           rightElement={
             <View style={styles.readyBadge}>
               <View style={styles.readyDot} />
-              <Text style={styles.readyBadgeText}>READY</Text>
+              <Text style={styles.readyBadgeText}>{t("READY")}</Text>
             </View>
           }
         />
@@ -394,15 +395,15 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                 </Text>
                 <View style={styles.nextPatientSubRow}>
                   {patientObj?.age ? (
-                    <Text style={styles.nextSubText}>{patientObj.age} yrs</Text>
+                    <Text style={styles.nextSubText}>{patientObj.age} {t("yrs")}</Text>
                   ) : null}
                   {patientObj?.gender ? (
                     <Text style={styles.nextSubText}>
-                      • {patientObj.gender.charAt(0).toUpperCase() + patientObj.gender.slice(1)}
+                      • {t(patientObj.gender.charAt(0).toUpperCase() + patientObj.gender.slice(1))}
                     </Text>
                   ) : null}
                   {patientObj?.nic ? (
-                    <Text style={styles.nextSubText}>• NIC: {patientObj.nic}</Text>
+                    <Text style={styles.nextSubText}>{t("• NIC:")}{' '}{patientObj.nic}</Text>
                   ) : null}
                 </View>
               </View>
@@ -426,7 +427,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                   { color: isWalkIn ? '#0284C7' : '#0D9488' },
                 ]}
               >
-                {isWalkIn ? 'Walk-in' : 'Pre-booked'}
+                {isWalkIn ? t('Walk-in') : t('Pre-booked')}
               </Text>
             </View>
           </View>
@@ -435,13 +436,13 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
           <View style={styles.nextDetailsGrid}>
             <View style={styles.nextDetailItem}>
               <Ionicons name="time" size={15} color="#D97706" style={{ marginRight: 6 }} />
-              <Text style={styles.nextDetailLabel}>Wait so far:</Text>
+              <Text style={styles.nextDetailLabel}>{t("Wait so far:")}</Text>
               <Text style={styles.nextDetailValue}>{waitSoFar}</Text>
             </View>
 
             <View style={styles.nextDetailItem}>
               <Ionicons name="medkit" size={15} color={Colors.primary} style={{ marginRight: 6 }} />
-              <Text style={styles.nextDetailLabel}>Doctor:</Text>
+              <Text style={styles.nextDetailLabel}>{t("Doctor:")}</Text>
               <Text style={styles.nextDetailValue} numberOfLines={1}>
                 {doctorName}
               </Text>
@@ -466,7 +467,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
               disabled={actionLoading || isShiftClosed}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel={`Call Next to Room ${roomNumber}`}
+              accessibilityLabel={t("Call Next to Room {value0}", { value0: String(roomNumber) })}
             >
               <Ionicons
                 name={isShiftClosed ? 'lock-closed' : 'play-forward'}
@@ -475,7 +476,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                 style={styles.btnIcon}
               />
               <Text style={styles.primaryCallBtnText}>
-                {isShiftClosed ? 'Shift Closed (Intake Disabled)' : `Call Next to Room ${roomNumber}`}
+                {isShiftClosed ? t('Shift Closed (Intake Disabled)') : t("Call Next to Room {value0}", { value0: String(roomNumber) })}
               </Text>
             </TouchableOpacity>
 
@@ -493,7 +494,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                   disabled={actionLoading}
                   activeOpacity={0.7}
                   accessibilityRole="button"
-                  accessibilityLabel={`Move back token ${tokenLabel}`}
+                  accessibilityLabel={t("Move back token {value0}", { value0: String(tokenLabel) })}
                 >
                   <Ionicons
                     name="swap-vertical"
@@ -502,7 +503,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                     style={styles.btnIcon}
                   />
                   <Text style={styles.moveBackBtnText}>
-                    Move Back ({moveBackCount})
+                    {t("Move Back (")}{moveBackCount})
                   </Text>
                 </TouchableOpacity>
               ) : null}
@@ -519,7 +520,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                 disabled={actionLoading}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel={`Mark token ${tokenLabel} as no show`}
+                accessibilityLabel={t("Mark token {value0} as no show", { value0: String(tokenLabel) })}
               >
                 <Ionicons
                   name="close-circle-outline"
@@ -527,7 +528,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                   color={Colors.danger}
                   style={styles.btnIcon}
                 />
-                <Text style={styles.noShowBtnText}>Mark No-Show</Text>
+                <Text style={styles.noShowBtnText}>{t("Mark No-Show")}</Text>
               </TouchableOpacity>
             </View>
 
@@ -535,8 +536,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
             <View style={styles.callNextHelperNoticeRow}>
               <Ionicons name="sync-outline" size={13} color={Colors.textLight} style={{ marginRight: 5 }} />
               <Text style={styles.callNextHelperNoticeText}>
-                Patient display and doctor queue update automatically.
-              </Text>
+                {t("Patient display and doctor queue update automatically.")}</Text>
             </View>
           </View>
         </View>
@@ -551,8 +551,8 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     return (
       <View style={styles.upcomingSection}>
         <SectionHeader
-          title={`Upcoming Patients (${upcomingTokens.length})`}
-          subtitle="Queue order following the next-in-line patient"
+          title={t("Upcoming Patients ({value0})", { value0: String(upcomingTokens.length) })}
+          subtitle={t("Queue order following the next-in-line patient")}
         />
 
         {upcomingTokens.length > 0 ? (
@@ -603,12 +603,12 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                     {isUrgent ? (
                       <View style={[styles.priorityBadge, styles.urgentPriorityBadge]}>
                         <Ionicons name="alert-circle" size={11} color="#DC2626" style={{ marginRight: 3 }} />
-                        <Text style={styles.urgentPriorityText}>Urgent</Text>
+                        <Text style={styles.urgentPriorityText}>{t("Urgent")}</Text>
                       </View>
                     ) : isSenior ? (
                       <View style={[styles.priorityBadge, styles.seniorPriorityBadge]}>
                         <Ionicons name="ribbon" size={11} color="#D97706" style={{ marginRight: 3 }} />
-                        <Text style={styles.seniorPriorityText}>Senior</Text>
+                        <Text style={styles.seniorPriorityText}>{t("Senior")}</Text>
                       </View>
                     ) : null}
 
@@ -630,7 +630,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                           { color: isWalkIn ? '#0284C7' : '#0D9488' },
                         ]}
                       >
-                        {isWalkIn ? 'Walk-in' : 'Pre-booked'}
+                        {isWalkIn ? t('Walk-in') : t('Pre-booked')}
                       </Text>
                     </View>
                   </View>
@@ -643,11 +643,11 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                   </Text>
                   <View style={styles.upcomingPatientMeta}>
                     {patientObj?.age ? (
-                      <Text style={styles.upcomingMetaText}>{patientObj.age} yrs</Text>
+                      <Text style={styles.upcomingMetaText}>{patientObj.age} {t("yrs")}</Text>
                     ) : null}
                     {patientObj?.gender ? (
                       <Text style={styles.upcomingMetaText}>
-                        • {patientObj.gender.charAt(0).toUpperCase() + patientObj.gender.slice(1)}
+                        • {t(patientObj.gender.charAt(0).toUpperCase() + patientObj.gender.slice(1))}
                       </Text>
                     ) : null}
                     {patientObj?.nic ? (
@@ -678,9 +678,9 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                         onPress={() => openDoctorModal(token)}
                         activeOpacity={0.7}
                         accessibilityRole="button"
-                        accessibilityLabel={`Change assigned doctor for ${tokenLabel}`}
+                        accessibilityLabel={t("Change assigned doctor for {value0}", { value0: String(tokenLabel) })}
                       >
-                        <Text style={styles.changeDoctorBtnText}>Change</Text>
+                        <Text style={styles.changeDoctorBtnText}>{t("Change")}</Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
@@ -688,7 +688,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                     <View style={styles.doctorUnassignedWrap}>
                       <View style={styles.unassignedLabelWrap}>
                         <Ionicons name="alert-circle-outline" size={14} color="#D97706" style={{ marginRight: 4 }} />
-                        <Text style={styles.unassignedLabelText}>Doctor unassigned</Text>
+                        <Text style={styles.unassignedLabelText}>{t("Doctor unassigned")}</Text>
                       </View>
 
                       <TouchableOpacity
@@ -696,10 +696,10 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                         onPress={() => openDoctorModal(token)}
                         activeOpacity={0.7}
                         accessibilityRole="button"
-                        accessibilityLabel={`Assign doctor to ${tokenLabel}`}
+                        accessibilityLabel={t("Assign doctor to {value0}", { value0: String(tokenLabel) })}
                       >
                         <Ionicons name="person-add" size={12} color={Colors.white} style={{ marginRight: 4 }} />
-                        <Text style={styles.assignDoctorBtnText}>Assign Doctor</Text>
+                        <Text style={styles.assignDoctorBtnText}>{t("Assign Doctor")}</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -712,11 +712,11 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
             <View style={styles.upcomingEmptyIconBox}>
               <Ionicons name="people-outline" size={24} color={Colors.textLight} />
             </View>
-            <Text style={styles.upcomingEmptyTitle}>No upcoming patients</Text>
+            <Text style={styles.upcomingEmptyTitle}>{t("No upcoming patients")}</Text>
             <Text style={styles.upcomingEmptySubtitle}>
               {nextInLine
-                ? 'There are no additional waiting patients queued after the next in line.'
-                : 'No patients are currently waiting in this queue.'}
+                ? t('There are no additional waiting patients queued after the next in line.')
+                : t('No patients are currently waiting in this queue.')}
             </Text>
           </View>
         )}
@@ -748,11 +748,11 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         }}
         onSuccess={async (doctor: Doctor, tokenLabel: string) => {
           const docName = doctor.name.startsWith('Dr.') ? doctor.name : `Dr. ${doctor.name}`;
-          showToast(`Assigned ${docName} to ${tokenLabel}`, 'success');
+          showToast(t("Assigned {value0} to {value1}", { value0: String(docName), value1: String(tokenLabel) }), 'success');
           await refresh(false);
         }}
         onError={(err: string) => {
-          showToast(err || 'Failed to assign doctor', 'error');
+          showToast(err || t('Failed to assign doctor'), 'error');
         }}
       />
 
@@ -774,8 +774,8 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
             </View>
           )}
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerTitle}>OPD Live Queue</Text>
-            <Text style={styles.headerSubtitle}>Real-time Patient Dispatch</Text>
+            <Text style={styles.headerTitle}>{t("OPD Live Queue")}</Text>
+            <Text style={styles.headerSubtitle}>{t("Real-time Patient Dispatch")}</Text>
           </View>
         </View>
 
@@ -811,7 +811,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         {isShiftClosed && (
           <View style={styles.shiftClosedNoticeBanner}>
             <Ionicons name="lock-closed" size={16} color="#92400E" style={{ marginRight: 8 }} />
-            <Text style={styles.shiftClosedNoticeText}>Shift closed. Intake is disabled.</Text>
+            <Text style={styles.shiftClosedNoticeText}>{t("Shift closed. Intake is disabled.")}</Text>
           </View>
         )}
 
@@ -823,7 +823,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
           <View style={styles.bannerTopRow}>
             <View style={styles.bannerTagWrap}>
               <Ionicons name="flash" size={13} color="#F59E0B" style={styles.bannerTagIcon} />
-              <Text style={styles.bannerTagText}>LIVE DISPATCH QUEUE</Text>
+              <Text style={styles.bannerTagText}>{t("LIVE DISPATCH QUEUE")}</Text>
             </View>
 
             {/* Green ACTIVE Badge */}
@@ -844,7 +844,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                   },
                 ]}
               />
-              <Text style={styles.activeBadgeText}>ACTIVE</Text>
+              <Text style={styles.activeBadgeText}>{t("ACTIVE")}</Text>
             </View>
           </View>
 
@@ -857,7 +857,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
               </View>
               <View style={styles.metricInfo}>
                 <Text style={styles.metricValue}>{totalInQueue}</Text>
-                <Text style={styles.metricLabel}>Total in Queue</Text>
+                <Text style={styles.metricLabel}>{t("Total in Queue")}</Text>
               </View>
             </View>
 
@@ -870,7 +870,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
               </View>
               <View style={styles.metricInfo}>
                 <Text style={styles.metricValue}>{formatWaitTime(avgWaitMinutes)}</Text>
-                <Text style={styles.metricLabel}>Average Wait</Text>
+                <Text style={styles.metricLabel}>{t("Average Wait")}</Text>
               </View>
             </View>
           </View>
@@ -880,14 +880,14 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
             <View style={styles.bannerFooterItem}>
               <Ionicons name="walk-outline" size={13} color={Colors.textLight} />
               <Text style={styles.bannerFooterText}>
-                Walk-ins: <Text style={styles.boldText}>{walkInsCount}</Text>
+                {t("Walk-ins:")}{' '}<Text style={styles.boldText}>{walkInsCount}</Text>
               </Text>
             </View>
             <Text style={styles.bannerFooterDot}>•</Text>
             <View style={styles.bannerFooterItem}>
               <Ionicons name="calendar-outline" size={13} color={Colors.textLight} />
               <Text style={styles.bannerFooterText}>
-                Pre-booked: <Text style={styles.boldText}>{preBookedCount}</Text>
+                {t("Pre-booked:")}{' '}<Text style={styles.boldText}>{preBookedCount}</Text>
               </Text>
             </View>
             <Text style={styles.bannerFooterDot}>•</Text>
@@ -904,7 +904,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         {/* 2. FILTER CHIPS ROW                                       */}
         {/* ======================================================== */}
         <View style={styles.filterSection}>
-          <Text style={styles.filterSectionTitle}>Filter By Intake Type</Text>
+          <Text style={styles.filterSectionTitle}>{t("Filter By Intake Type")}</Text>
           <View style={styles.filterChipsRow}>
             {/* Filter: All */}
             <TouchableOpacity
@@ -915,7 +915,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
               onPress={() => handleFilterChange('all')}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Filter all queue tokens"
+              accessibilityLabel={t("Filter all queue tokens")}
             >
               <Text
                 style={[
@@ -923,8 +923,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                   filter === 'all' && styles.filterChipTextActive,
                 ]}
               >
-                All
-              </Text>
+                {t("All")}</Text>
               <View
                 style={[
                   styles.countBadge,
@@ -951,7 +950,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
               onPress={() => handleFilterChange('walk_in')}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Filter walk in queue tokens"
+              accessibilityLabel={t("Filter walk in queue tokens")}
             >
               <Ionicons
                 name="walk"
@@ -965,8 +964,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                   filter === 'walk_in' && styles.filterChipTextActive,
                 ]}
               >
-                Walk-ins
-              </Text>
+                {t("Walk-ins")}</Text>
               <View
                 style={[
                   styles.countBadge,
@@ -993,7 +991,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
               onPress={() => handleFilterChange('pre_booked')}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Filter pre booked appointments"
+              accessibilityLabel={t("Filter pre booked appointments")}
             >
               <Ionicons
                 name="calendar"
@@ -1007,8 +1005,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                   filter === 'pre_booked' && styles.filterChipTextActive,
                 ]}
               >
-                Pre-booked
-              </Text>
+                {t("Pre-booked")}</Text>
               <View
                 style={[
                   styles.countBadge,
@@ -1035,11 +1032,10 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
           <View style={styles.autoAdvanceInfo}>
             <View style={styles.autoAdvanceTitleRow}>
               <Ionicons name="flash-outline" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
-              <Text style={styles.autoAdvanceTitle}>Auto-Advance Queue</Text>
+              <Text style={styles.autoAdvanceTitle}>{t("Auto-Advance Queue")}</Text>
             </View>
             <Text style={styles.autoAdvanceSubtitle}>
-              Automatically dispatch next waiting patient when doctor finishes
-            </Text>
+              {t("Automatically dispatch next waiting patient when doctor finishes")}</Text>
           </View>
 
           <Switch
@@ -1069,7 +1065,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         {loading && !data ? (
           <View style={styles.stateContainer}>
             <LoadingState
-              message="Fetching live queue dispatch..."
+              message={t("Fetching live queue dispatch...")}
               size="large"
               fullscreen={false}
             />
@@ -1077,7 +1073,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         ) : error && !data ? (
           <View style={styles.stateContainer}>
             <ErrorState
-              title="Unable to load queue"
+              title={t("Unable to load queue")}
               message={error}
               onRetry={() => refresh(false)}
               retryLabel="Retry Queue Fetch"
@@ -1085,6 +1081,17 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
             />
           </View>
         ) : null}
+
+        {/* ======================================================== */}
+        {/* 7. TIP BANNER                                             */}
+        {/* ======================================================== */}
+        <View style={styles.tipBanner}>
+          <View style={styles.tipIconWrap}>
+            <Ionicons name="information-circle" size={20} color={Colors.primary} />
+          </View>
+          <Text style={styles.tipText}>
+            {t("Pressing Call Next alerts the patient display and doctor queue automatically.")}</Text>
+        </View>
 
         {/* Bottom padding for tab bar / safe layout */}
         <View style={styles.bottomSpacer} />

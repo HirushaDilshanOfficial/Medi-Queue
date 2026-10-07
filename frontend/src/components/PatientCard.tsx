@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
+import { useLanguage } from '../i18n/LanguageContext';
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   StyleProp,
@@ -32,6 +33,7 @@ export const PatientCard: React.FC<PatientCardProps> = ({
   rightElement,
   style,
 }) => {
+  const { t } = useLanguage();
   const getInitials = (name: string): string => {
     if (!name) return 'P';
     const parts = name.trim().split(/\s+/);
@@ -78,19 +80,19 @@ export const PatientCard: React.FC<PatientCardProps> = ({
 
           {subtitle ? (
             <Text style={styles.customSubtitle} numberOfLines={1}>
-              {subtitle}
+              {t(subtitle ?? '')}
             </Text>
           ) : (
             <View style={styles.metaRow}>
               {patient.nic ? (
-                <Text style={styles.nicText}>NIC: {patient.nic}</Text>
+                <Text style={styles.nicText}>{t("NIC:")}{' '}{patient.nic}</Text>
               ) : null}
               {patient.age ? (
-                <Text style={styles.bulletText}>• {patient.age} yrs</Text>
+                <Text style={styles.bulletText}>• {patient.age} {t("yrs")}</Text>
               ) : null}
               {patient.gender ? (
                 <Text style={styles.bulletText}>
-                  • {patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1)}
+                  • {t(patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1))}
                 </Text>
               ) : null}
             </View>
@@ -139,7 +141,7 @@ export const PatientCard: React.FC<PatientCardProps> = ({
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
-            accessibilityLabel="Edit patient details"
+            accessibilityLabel={t("Edit patient details")}
           >
             <Ionicons name="create-outline" size={18} color={Colors.primary} />
           </TouchableOpacity>

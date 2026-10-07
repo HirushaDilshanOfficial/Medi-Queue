@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import type { Appointment } from '../../types/patient';
 import { waitLabel } from '../../utils/opdDates';
@@ -22,6 +24,7 @@ const STATUS_STYLES: Record<string, { label: string; color: string; background: 
 };
 
 export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn }: Props) {
+  const { t, language } = useLanguage();
   const status = STATUS_STYLES[appointment.status] ?? STATUS_STYLES.booked;
   const live = appointment.live;
 
@@ -41,7 +44,7 @@ export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn
           </Text>
         </View>
         <View style={[styles.badge, { backgroundColor: status.background }]}>
-          <Text style={[styles.badgeLabel, { color: status.color }]}>{status.label}</Text>
+          <Text style={[styles.badgeLabel, { color: status.color }]}>{t(status.label)}</Text>
         </View>
       </View>
 
@@ -49,15 +52,15 @@ export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn
         <View style={styles.liveStrip}>
           <DesignImage name="ticket" size={13} color={PatientTheme.brandMid} />
           <Text style={styles.liveText}>
-            Queue {appointment.tokenNumber ? `A-${String(appointment.tokenNumber).padStart(3, '0')}` : ''} ·{' '}
-            {live.position <= 1 ? 'You are next' : `${live.peopleAhead} ahead`}
+            {t("Queue")}{' '}{appointment.tokenNumber ? `A-${String(appointment.tokenNumber).padStart(3, '0')}` : ''} ·{' '}
+            {live.position <= 1 ? t('You are next') : t("{value0} ahead", { value0: String(live.peopleAhead) })}
             {live.estimatedTurnAt ? ` · ~${live.estimatedTurnAt}` : ''}
           </Text>
         </View>
       ) : null}
 
       {live && live.position > 1 && appointment.status === 'checked_in' ? (
-        <Text style={styles.waitHint}>Estimated wait {waitLabel(live.waitMinutes)}</Text>
+        <Text style={styles.waitHint}>{t("Estimated wait")}{' '}{waitLabel(live.waitMinutes, language)}</Text>
       ) : null}
 
       {appointment.reason ? <Text style={styles.reason}>“{appointment.reason}”</Text> : null}
@@ -70,7 +73,7 @@ export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn
               accessibilityRole="button"
               style={({ pressed }) => [styles.button, styles.buttonPrimary, pressed && styles.pressed]}
             >
-              <Text style={styles.buttonPrimaryLabel}>Check in</Text>
+              <Text style={styles.buttonPrimaryLabel}>{t("Check in")}</Text>
             </Pressable>
           ) : null}
 
@@ -80,7 +83,7 @@ export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn
               accessibilityRole="button"
               style={({ pressed }) => [styles.button, pressed && styles.pressed]}
             >
-              <Text style={styles.buttonLabel}>Reschedule</Text>
+              <Text style={styles.buttonLabel}>{t("Reschedule")}</Text>
             </Pressable>
           ) : null}
 
@@ -90,7 +93,7 @@ export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn
               accessibilityRole="button"
               style={({ pressed }) => [styles.button, pressed && styles.pressed]}
             >
-              <Text style={[styles.buttonLabel, styles.buttonDanger]}>Cancel</Text>
+              <Text style={[styles.buttonLabel, styles.buttonDanger]}>{t("Cancel")}</Text>
             </Pressable>
           ) : null}
         </View>

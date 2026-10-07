@@ -1,11 +1,16 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, Platform, SafeAreaView } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, Platform, SafeAreaView } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { BASE_URL } from '../../config';
 
+import { getAuthToken, clearAuthToken } from '../../services/http';
+
 export default function ProfileScreen() {
+  const { t } = useLanguage();
   const [refreshing, setRefreshing] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -13,26 +18,42 @@ export default function ProfileScreen() {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      
+      const token = await getAuthToken();
+      const userStr = await AsyncStorage.getItem('user');
+
       if (!token) {
-        router.replace('/(auth)/login');
+        setUserData({ fullName: 'NO TOKEN FOUND' });
+        setLoading(false);
         return;
       }
 
-      const response = await fetch(`${BASE_URL}/api/users/profile`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setUserData(user);
+      } else {
+        // Try fetching if user data is missing in storage
+        const response = await fetch(`${BASE_URL}/api/users/profile`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setUserData(data);
+          await AsyncStorage.setItem('user', JSON.stringify(data));
+        } else {
+          setUserData({ fullName: 'FETCH FAILED: ' + response.status });
         }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setUserData(data);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch profile', error);
+      setUserData({
+        fullName: 'ERROR: ' + error.message,
+      });
     } finally {
       setLoading(false);
     }
@@ -50,7 +71,7 @@ export default function ProfileScreen() {
   }, []);
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem('token');
+    await clearAuthToken();
     await AsyncStorage.removeItem('user');
     router.replace('/(auth)/login');
   };
@@ -72,7 +93,7 @@ export default function ProfileScreen() {
               <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
                 <Text style={styles.iconText}>←</Text>
               </TouchableOpacity>
-              <Text style={styles.headerTitle}>My Profile</Text>
+              <Text style={styles.headerTitle}>{t("My Profile")}</Text>
               <View style={{ width: 36 }} />
             </View>
 
@@ -80,23 +101,23 @@ export default function ProfileScreen() {
               <View style={styles.avatarContainer}>
                 <Text style={styles.avatarText}>{userData?.fullName ? userData.fullName.charAt(0).toUpperCase() : 'U'}</Text>
               </View>
-              <Text style={styles.userNameText}>{userData?.fullName || 'Loading...'}</Text>
-              <Text style={styles.userRoleText}>{userData?.role || 'Role N/A'}</Text>
+              <Text style={styles.userNameText}>{userData?.fullName || t('Loading...')}</Text>
+              <Text style={styles.userRoleText}>{t(userData?.role ?? '') || t('Role N/A')}</Text>
             </View>
           </View>
 
           {/* Content */}
           <View style={styles.contentSection}>
             <View style={styles.infoCard}>
-              <Text style={styles.sectionTitle}>Personal Information</Text>
+              <Text style={styles.sectionTitle}>{t("Personal Information")}</Text>
               
               <View style={styles.infoRow}>
                 <View style={styles.infoIconBg}>
                   <Text style={styles.infoIcon}>👤</Text>
                 </View>
                 <View style={styles.infoTextContainer}>
-                  <Text style={styles.infoLabel}>Full Name</Text>
-                  <Text style={styles.infoValue}>{userData?.fullName || 'N/A'}</Text>
+                  <Text style={styles.infoLabel}>{t("Full Name")}</Text>
+                  <Text style={styles.infoValue}>{userData?.fullName || t('N/A')}</Text>
                 </View>
               </View>
 
@@ -107,8 +128,8 @@ export default function ProfileScreen() {
                   <Text style={styles.infoIcon}>✉️</Text>
                 </View>
                 <View style={styles.infoTextContainer}>
-                  <Text style={styles.infoLabel}>Email</Text>
-                  <Text style={styles.infoValue}>{userData?.email || 'N/A'}</Text>
+                  <Text style={styles.infoLabel}>{t("Email")}</Text>
+                  <Text style={styles.infoValue}>{userData?.email || t('N/A')}</Text>
                 </View>
               </View>
 
@@ -119,19 +140,19 @@ export default function ProfileScreen() {
                   <Text style={styles.infoIcon}>📞</Text>
                 </View>
                 <View style={styles.infoTextContainer}>
-                  <Text style={styles.infoLabel}>Contact Number</Text>
-                  <Text style={styles.infoValue}>{userData?.phone || 'N/A'}</Text>
+                  <Text style={styles.infoLabel}>{t("Contact Number")}</Text>
+                  <Text style={styles.infoValue}>{userData?.phone || t('N/A')}</Text>
                 </View>
               </View>
             </View>
 
             <View style={styles.settingsCard}>
-              <Text style={styles.sectionTitle}>Settings</Text>
+              <Text style={styles.sectionTitle}>{t("Settings")}</Text>
               
               <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/(moh)/edit-profile')}>
                 <View style={styles.settingItemLeft}>
                   <Text style={styles.settingIcon}>✏️</Text>
-                  <Text style={styles.settingText}>Edit Profile</Text>
+                  <Text style={styles.settingText}>{t("Edit Profile")}</Text>
                 </View>
                 <Text style={styles.settingArrow}>❯</Text>
               </TouchableOpacity>
@@ -139,7 +160,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.settingItem}>
                 <View style={styles.settingItemLeft}>
                   <Text style={styles.settingIcon}>🔐</Text>
-                  <Text style={styles.settingText}>Change Password</Text>
+                  <Text style={styles.settingText}>{t("Change Password")}</Text>
                 </View>
                 <Text style={styles.settingArrow}>❯</Text>
               </TouchableOpacity>
@@ -147,7 +168,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.settingItem}>
                 <View style={styles.settingItemLeft}>
                   <Text style={styles.settingIcon}>🔔</Text>
-                  <Text style={styles.settingText}>Notifications</Text>
+                  <Text style={styles.settingText}>{t("Notifications")}</Text>
                 </View>
                 <Text style={styles.settingArrow}>❯</Text>
               </TouchableOpacity>
@@ -155,7 +176,7 @@ export default function ProfileScreen() {
 
             <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
               <Text style={styles.logoutIcon}>🚪</Text>
-              <Text style={styles.logoutText}>Log Out</Text>
+              <Text style={styles.logoutText}>{t("Log Out")}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

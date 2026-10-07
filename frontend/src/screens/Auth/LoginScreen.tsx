@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -11,12 +12,16 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { AppIcon } from '../../components/AppIcon';
+import { login } from '../../services/authService';
 
 // LoginScreen - user login කිරීමේ screen
 // Navigation: Login සාර්ථකව ගිය ගමන් role අනුව dashboard එකට
 export default function LoginScreen({ navigation }: any) {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -25,17 +30,31 @@ export default function LoginScreen({ navigation }: any) {
   const handleLogin = async () => {
     // Basic validation
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('Error'), t('Please fill in all fields'));
       return;
     }
 
     setIsLoading(true);
 
-    // TODO: API call - authService.login(email, password)
-    setTimeout(() => {
+    try {
+      const data = await login(email, password);
+      
+      await AsyncStorage.setItem('token', data.token);
+      // The backend returns user fields directly on 'data'
+      await AsyncStorage.setItem('user', JSON.stringify(data));
+      
+      if (data.role === 'MOH') {
+        router.replace('/(moh)/dashboard');
+      } else if (data.role === 'DOCTOR' || data.role === 'Doctor') {
+        router.replace('/(doctor)/dashboard');
+      } else {
+        router.replace('/(patient)'); // Default patient route
+      }
+    } catch (error: any) {
+      Alert.alert(t('Login Failed'), error.message || t('Invalid credentials'));
+    } finally {
       setIsLoading(false);
-      Alert.alert('Success', 'Logged in!');
-    }, 1500);
+    }
   };
 
   return (
@@ -57,36 +76,36 @@ export default function LoginScreen({ navigation }: any) {
 
           {/* Queue Badge */}
           <View style={styles.queueBadge}>
-            <Text style={styles.queueBadgeLabel}>QUEUE</Text>
+            <Text style={styles.queueBadgeLabel}>{t("QUEUE")}</Text>
             <Text style={styles.queueBadgeNumber}>#024</Text>
           </View>
 
           {/* Doctors Badge */}
           <View style={styles.doctorsBadge}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><AppIcon name="profile" size={12} color={Colors.textMedium} /><Text style={styles.doctorsBadgeText}>CONNECTED</Text></View>
-            <Text style={styles.doctorsBadgeNumber}>186 Doctors</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><AppIcon name="profile" size={12} color={Colors.textMedium} /><Text style={styles.doctorsBadgeText}>{t("CONNECTED")}</Text></View>
+            <Text style={styles.doctorsBadgeNumber}>{t("186 Doctors")}</Text>
           </View>
 
           {/* App Title */}
-          <Text style={styles.appTitle}>Government OPD Queue{'\n'}Management System</Text>
-          <Text style={styles.appSubtitle}>Ministry of Health · Sri Lanka</Text>
+          <Text style={styles.appTitle}>{t("Government OPD Queue")}{'\n'}{t("Management System")}</Text>
+          <Text style={styles.appSubtitle}>{t("Ministry of Health · Sri Lanka")}</Text>
         </View>
 
         {/* ---- STATS SECTION ---- */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>24</Text>
-            <Text style={styles.statLabel}>HOSPITALS</Text>
+            <Text style={styles.statLabel}>{t("HOSPITALS")}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>186</Text>
-            <Text style={styles.statLabel}>DOCTORS</Text>
+            <Text style={styles.statLabel}>{t("DOCTORS")}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>2.6M+</Text>
-            <Text style={styles.statLabel}>PATIENTS</Text>
+            <Text style={styles.statLabel}>{t("PATIENTS")}</Text>
           </View>
         </View>
 
@@ -94,16 +113,16 @@ export default function LoginScreen({ navigation }: any) {
         <View style={styles.featureCard}>
           <AppIcon name="clock" size={24} color={Colors.primaryDark} style={{ marginRight: 14 }} />
           <View style={styles.featureText}>
-            <Text style={styles.featureTitle}>Live Token Tracking</Text>
-            <Text style={styles.featureDesc}>Real-time queue notifications & estimated arrival time</Text>
+            <Text style={styles.featureTitle}>{t("Live Token Tracking")}</Text>
+            <Text style={styles.featureDesc}>{t("Real-time queue notifications & estimated arrival time")}</Text>
           </View>
         </View>
 
         <View style={styles.featureCard}>
           <AppIcon name="clipboard" size={24} color={Colors.primaryDark} style={{ marginRight: 14 }} />
           <View style={styles.featureText}>
-            <Text style={styles.featureTitle}>Paperless Digital Pass</Text>
-            <Text style={styles.featureDesc}>Instant QR verification at outpatient consultation rooms</Text>
+            <Text style={styles.featureTitle}>{t("Paperless Digital Pass")}</Text>
+            <Text style={styles.featureDesc}>{t("Instant QR verification at outpatient consultation rooms")}</Text>
           </View>
         </View>
 
@@ -111,7 +130,7 @@ export default function LoginScreen({ navigation }: any) {
         <View style={styles.formContainer}>
           <TextInput
             style={styles.input}
-            placeholder="Email Address"
+            placeholder={t("Email Address")}
             placeholderTextColor={Colors.textLight}
             value={email}
             onChangeText={setEmail}
@@ -120,7 +139,7 @@ export default function LoginScreen({ navigation }: any) {
           />
           <TextInput
             style={styles.input}
-            placeholder="Password"
+            placeholder={t("Password")}
             placeholderTextColor={Colors.textLight}
             value={password}
             onChangeText={setPassword}
@@ -136,7 +155,7 @@ export default function LoginScreen({ navigation }: any) {
             {isLoading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.loginButtonText}>Login</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={styles.loginButtonText}>{t("Login")}</Text><AppIcon name="forward" size={20} color={Colors.white} /></View>
             )}
           </TouchableOpacity>
 
@@ -145,7 +164,7 @@ export default function LoginScreen({ navigation }: any) {
             style={styles.registerButton}
             onPress={() => navigation.navigate('Register')}
           >
-            <Text style={styles.registerButtonText}>New patient? Create Account</Text>
+            <Text style={styles.registerButtonText}>{t("New patient? Create Account")}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

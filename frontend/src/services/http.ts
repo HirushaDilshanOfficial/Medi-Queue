@@ -57,15 +57,16 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   try {
     const token = await getAuthToken();
 
-    const response = await fetch(buildUrl(path, query), {
+      const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+      const response = await fetch(buildUrl(path, query), {
       method,
       signal: controller.signal,
       headers: {
         Accept: 'application/json',
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (isFormData ? body as BodyInit : JSON.stringify(body)) : undefined,
     });
 
     const text = await response.text();
@@ -105,6 +106,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 export const http = {
   get: <T>(path: string, query?: RequestOptions['query']) => request<T>(path, { query }),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
+  postForm: <T>(path: string, body: FormData) => request<T>(path, { method: 'POST', body }),
+  patchForm: <T>(path: string, body: FormData) => request<T>(path, { method: 'PATCH', body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),

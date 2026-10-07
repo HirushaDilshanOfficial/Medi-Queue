@@ -17,6 +17,14 @@ export interface PatientVitalsRecord {
   heartRateNum: number;
   tempNum: number;
   spO2Num: number;
+  weight?: string;
+  weightNum?: number;
+  height?: string;
+  heightNum?: number;
+  bmi?: string;
+  bmiNum?: number;
+  bmiStatus?: string;
+  pulseRate?: string;
 }
 
 export interface VitalHistoryReading {
@@ -28,6 +36,25 @@ export interface VitalHistoryReading {
   heartRate: number;
   bodyTemp: number;
   spO2: number;
+  weight?: number;
+  bmi?: number;
+}
+
+export type AllergySeverity = 'mild' | 'moderate' | 'severe' | 'life-threatening';
+export type AllergyReaction =
+  | 'Angioedema'
+  | 'Anaphylaxis'
+  | 'Rash / hives'
+  | 'Breathing difficulty'
+  | 'Nausea / vomiting'
+  | 'Other';
+
+export interface AllergyItem {
+  id: string;
+  allergen: string;
+  reaction: AllergyReaction | string;
+  severity: AllergySeverity;
+  note?: string;
 }
 
 export interface PatientAllergy {
@@ -80,6 +107,7 @@ export interface PatientRecord {
   status: 'Waiting' | 'In consultation' | 'Seen';
   photoUrl?: string;
   allergy: PatientAllergy;
+  allergies?: AllergyItem[];
   chronicConditions: string[];
   medications: MedicationItem[];
   vitals: PatientVitalsRecord;
@@ -113,10 +141,44 @@ export const getHRStatus = (hr: number): VitalStatusResult => {
   return { label: 'Normal', isAbnormal: false };
 };
 
+export const formatTempCelsius = (temp: number | string): { tempC: number; display: string } => {
+  const num = typeof temp === 'string' ? parseFloat(temp) : temp;
+  if (isNaN(num)) return { tempC: 37.0, display: '37.0' };
+  // If temp is in Fahrenheit (> 50), convert to Celsius: (F - 32) * 5 / 9
+  const c = num > 50 ? ((num - 32) * 5) / 9 : num;
+  const rounded = Math.round(c * 10) / 10;
+  return { tempC: rounded, display: rounded.toFixed(1) };
+};
+
 export const getTempStatus = (temp: number): VitalStatusResult => {
-  if (temp >= 100.4) return { label: 'Fever', isAbnormal: true };
-  if (temp < 95) return { label: 'Low', isAbnormal: true };
+  // If temp is in Fahrenheit (> 50), convert to Celsius
+  const tempC = temp > 50 ? ((temp - 32) * 5) / 9 : temp;
+  if (tempC >= 38.0) return { label: 'Fever', isAbnormal: true };
+  if (tempC < 35.5) return { label: 'Low', isAbnormal: true };
   return { label: 'Normal', isAbnormal: false };
+};
+
+export const getBMIStatus = (bmi: number): VitalStatusResult => {
+  if (bmi <= 0) return { label: 'N/A', isAbnormal: false };
+  if (bmi < 18.5) return { label: 'Underweight', isAbnormal: true };
+  if (bmi <= 24.9) return { label: 'Normal', isAbnormal: false };
+  if (bmi <= 29.9) return { label: 'Overweight', isAbnormal: true };
+  return { label: 'Obese', isAbnormal: true };
+};
+
+export const calculateBMI = (
+  weightKg: number,
+  heightCm: number
+): { bmi: number; status: VitalStatusResult } => {
+  if (!weightKg || !heightCm || heightCm <= 0) {
+    return { bmi: 0, status: { label: 'N/A', isAbnormal: false } };
+  }
+  const heightM = heightCm / 100;
+  const bmi = Math.round((weightKg / (heightM * heightM)) * 10) / 10;
+  return {
+    bmi,
+    status: getBMIStatus(bmi),
+  };
 };
 
 export const getSpO2Status = (spo2: number): VitalStatusResult => {
@@ -161,58 +223,100 @@ export interface AllergyCheckResult {
   note?: string;
 }
 
-export const checkMedicationAllergy = (
+export const getDefaultAllergiesForPatient = (patient: PatientRecord): AllergyItem[] => {
+  if (patient.allergies && patient.allergies.length > 0) {
+    return patient.allergies;
+  }
+  if (!patient.allergy || !patient.allergy.hasAllergy) {
+    return [];
+  }
+  const isHighRisk = patient.allergy.isHighRisk;
+  let reaction: AllergyReaction = 'Other';
+  const desc = (patient.allergy.title + ' ' + patient.allergy.description).toLowerCase();
+  if (desc.includes('angioedema')) reaction = 'Angioedema';
+  else if (desc.includes('anaphylaxis')) reaction = 'Anaphylaxis';
+  else if (desc.includes('rash') || desc.includes('hives')) reaction = 'Rash / hives';
+  else if (desc.includes('breathing') || desc.includes('bronchospasm')) reaction = 'Breathing difficulty';
+  else if (desc.includes('nausea') || desc.includes('vomit')) reaction = 'Nausea / vomiting';
+
+  let allergen = patient.allergy.title.replace(/.*Allergy\s*•?\s*/i, '').trim();
+  if (patient.allergy.description) {
+    const firstPart = patient.allergy.description.split('.')[0];
+    if (firstPart && firstPart.length < 50) allergen = firstPart.trim();
+  }
+
+  return [
+    {
+      id: `alg-${patient.id}-1`,
+      allergen: allergen || 'Sulfa Drugs',
+      reaction,
+      severity: isHighRisk ? 'life-threatening' : 'moderate',
+      note: patient.allergy.description,
+    },
+  ];
+};
+
+export const checkMedicationAllergyWithList = (
   drugNameInput: string,
-  patient: PatientRecord
+  allergiesList: AllergyItem[],
+  medications: MedicationItem[] = []
 ): AllergyCheckResult => {
   const query = drugNameInput.trim().toLowerCase();
   if (query.length < 3) {
     return { status: 'short' };
   }
 
-  // 1. Check patient allergies
-  if (patient.allergy.hasAllergy) {
-    const allergyDesc = (patient.allergy.title + ' ' + patient.allergy.description).toLowerCase();
+  // 1. Check patient allergies list
+  for (const item of allergiesList) {
+    const allergenLower = item.allergen.toLowerCase();
+    const noteLower = (item.note || '').toLowerCase();
+    const combined = allergenLower + ' ' + noteLower;
 
-    // Check Sulfa
-    if (allergyDesc.includes('sulfa')) {
+    if (combined.includes('sulfa')) {
       const match = SULFA_KEYWORDS.find((kw) => query.includes(kw));
       if (match) {
         return {
           status: 'conflict',
-          allergen: 'Sulfa Drugs (Sulfonamides, TMP-SMX)',
-          note: patient.allergy.description,
+          allergen: item.allergen,
+          note: item.note || `Documented ${item.severity} reaction: ${item.reaction}`,
         };
       }
     }
 
-    // Check Penicillin
-    if (allergyDesc.includes('penicillin')) {
+    if (combined.includes('penicillin') || combined.includes('amoxicillin')) {
       const match = PENICILLIN_KEYWORDS.find((kw) => query.includes(kw));
       if (match) {
         return {
           status: 'conflict',
-          allergen: 'Penicillin / Beta-lactams',
-          note: patient.allergy.description,
+          allergen: item.allergen,
+          note: item.note || `Documented ${item.severity} reaction: ${item.reaction}`,
         };
       }
     }
 
-    // Check NSAIDs / Aspirin
-    if (allergyDesc.includes('nsaid') || allergyDesc.includes('aspirin')) {
+    if (combined.includes('nsaid') || combined.includes('aspirin') || combined.includes('ibuprofen')) {
       const match = NSAID_KEYWORDS.find((kw) => query.includes(kw));
       if (match) {
         return {
           status: 'conflict',
-          allergen: 'NSAIDs / Aspirin',
-          note: patient.allergy.description,
+          allergen: item.allergen,
+          note: item.note || `Documented ${item.severity} reaction: ${item.reaction}`,
         };
       }
     }
+
+    // Direct substring match
+    if (query.includes(allergenLower) || allergenLower.includes(query)) {
+      return {
+        status: 'conflict',
+        allergen: item.allergen,
+        note: item.note || `Documented ${item.severity} reaction: ${item.reaction}`,
+      };
+    }
   }
 
-  // 2. Check similar drug already listed in patient's active medications
-  const isSimilar = patient.medications.some((m) => {
+  // 2. Check similar drug in active medications
+  const isSimilar = medications.some((m) => {
     const existingName = m.drugName.toLowerCase();
     return existingName.includes(query) || query.includes(existingName.split(' ')[0]);
   });
@@ -228,6 +332,14 @@ export const checkMedicationAllergy = (
     status: 'safe',
     note: 'No known allergy conflicts detected for this medication.',
   };
+};
+
+export const checkMedicationAllergy = (
+  drugNameInput: string,
+  patient: PatientRecord
+): AllergyCheckResult => {
+  const allergies = getDefaultAllergiesForPatient(patient);
+  return checkMedicationAllergyWithList(drugNameInput, allergies, patient.medications);
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -280,15 +392,22 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
       bloodPressureUnit: 'mmHg',
       heartRate: '72',
       heartRateUnit: 'bpm',
-      bodyTemp: '98.6',
-      bodyTempUnit: '°F',
+      bodyTemp: '37.0',
+      bodyTempUnit: '°C',
       spO2: '99%',
       spO2Status: 'Normal',
       systolic: 118,
       diastolic: 75,
       heartRateNum: 72,
-      tempNum: 98.6,
+      tempNum: 37.0,
       spO2Num: 99,
+      weight: '58 kg',
+      weightNum: 58,
+      height: '165 cm',
+      heightNum: 165,
+      bmi: '21.3',
+      bmiNum: 21.3,
+      bmiStatus: 'Normal',
     },
     vitalsHistory: [
       {
@@ -298,8 +417,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 124,
         diastolic: 80,
         heartRate: 76,
-        bodyTemp: 98.4,
+        bodyTemp: 36.9,
         spO2: 99,
+        weight: 59,
+        bmi: 21.7,
       },
       {
         id: 'vh-2',
@@ -308,8 +429,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 120,
         diastolic: 78,
         heartRate: 74,
-        bodyTemp: 98.8,
+        bodyTemp: 37.1,
         spO2: 98,
+        weight: 58.5,
+        bmi: 21.5,
       },
       {
         id: 'vh-3',
@@ -318,8 +441,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 126,
         diastolic: 82,
         heartRate: 80,
-        bodyTemp: 98.5,
+        bodyTemp: 36.9,
         spO2: 99,
+        weight: 58.2,
+        bmi: 21.4,
       },
       {
         id: 'vh-4',
@@ -328,8 +453,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 122,
         diastolic: 79,
         heartRate: 75,
-        bodyTemp: 98.6,
+        bodyTemp: 37.0,
         spO2: 99,
+        weight: 58,
+        bmi: 21.3,
       },
       {
         id: 'vh-5',
@@ -338,8 +465,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 118,
         diastolic: 75,
         heartRate: 72,
-        bodyTemp: 98.6,
+        bodyTemp: 37.0,
         spO2: 99,
+        weight: 58,
+        bmi: 21.3,
       },
     ],
     imaging: {
@@ -421,15 +550,22 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
       bloodPressureUnit: 'mmHg',
       heartRate: '78',
       heartRateUnit: 'bpm',
-      bodyTemp: '98.4',
-      bodyTempUnit: '°F',
+      bodyTemp: '36.9',
+      bodyTempUnit: '°C',
       spO2: '98%',
       spO2Status: 'Normal',
       systolic: 138,
       diastolic: 88,
       heartRateNum: 78,
-      tempNum: 98.4,
+      tempNum: 36.9,
       spO2Num: 98,
+      weight: '78 kg',
+      weightNum: 78,
+      height: '172 cm',
+      heightNum: 172,
+      bmi: '26.4',
+      bmiNum: 26.4,
+      bmiStatus: 'Overweight',
     },
     vitalsHistory: [
       {
@@ -439,8 +575,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 142,
         diastolic: 92,
         heartRate: 82,
-        bodyTemp: 98.3,
+        bodyTemp: 36.8,
         spO2: 97,
+        weight: 80,
+        bmi: 27.0,
       },
       {
         id: 'vhk-2',
@@ -449,8 +587,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 140,
         diastolic: 90,
         heartRate: 79,
-        bodyTemp: 98.5,
+        bodyTemp: 37.0,
         spO2: 98,
+        weight: 79,
+        bmi: 26.7,
       },
       {
         id: 'vhk-3',
@@ -459,8 +599,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 136,
         diastolic: 86,
         heartRate: 76,
-        bodyTemp: 98.4,
+        bodyTemp: 36.9,
         spO2: 99,
+        weight: 78.5,
+        bmi: 26.5,
       },
       {
         id: 'vhk-4',
@@ -469,8 +611,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 138,
         diastolic: 88,
         heartRate: 78,
-        bodyTemp: 98.4,
+        bodyTemp: 36.9,
         spO2: 98,
+        weight: 78,
+        bmi: 26.4,
       },
     ],
     imaging: {
@@ -528,15 +672,22 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
       bloodPressureUnit: 'mmHg',
       heartRate: '92',
       heartRateUnit: 'bpm',
-      bodyTemp: '100.8',
-      bodyTempUnit: '°F',
+      bodyTemp: '38.2',
+      bodyTempUnit: '°C',
       spO2: '99%',
       spO2Status: 'Normal',
       systolic: 98,
       diastolic: 62,
       heartRateNum: 92,
-      tempNum: 100.8,
+      tempNum: 38.2,
       spO2Num: 99,
+      weight: '22 kg',
+      weightNum: 22,
+      height: '118 cm',
+      heightNum: 118,
+      bmi: '15.8',
+      bmiNum: 15.8,
+      bmiStatus: 'Normal',
     },
     vitalsHistory: [
       {
@@ -546,8 +697,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 96,
         diastolic: 60,
         heartRate: 88,
-        bodyTemp: 98.4,
+        bodyTemp: 36.9,
         spO2: 100,
+        weight: 21,
+        bmi: 15.3,
       },
       {
         id: 'vhs-2',
@@ -556,8 +709,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 98,
         diastolic: 64,
         heartRate: 94,
-        bodyTemp: 99.8,
+        bodyTemp: 37.7,
         spO2: 99,
+        weight: 21.5,
+        bmi: 15.5,
       },
       {
         id: 'vhs-3',
@@ -566,8 +721,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 98,
         diastolic: 62,
         heartRate: 92,
-        bodyTemp: 100.8,
+        bodyTemp: 38.2,
         spO2: 99,
+        weight: 22,
+        bmi: 15.8,
       },
     ],
     imaging: {
@@ -628,15 +785,22 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
       bloodPressureUnit: 'mmHg',
       heartRate: '84',
       heartRateUnit: 'bpm',
-      bodyTemp: '98.6',
-      bodyTempUnit: '°F',
+      bodyTemp: '37.0',
+      bodyTempUnit: '°C',
       spO2: '99%',
       spO2Status: 'Normal',
       systolic: 110,
       diastolic: 68,
       heartRateNum: 84,
-      tempNum: 98.6,
+      tempNum: 37.0,
       spO2Num: 99,
+      weight: '64 kg',
+      weightNum: 64,
+      height: '160 cm',
+      heightNum: 160,
+      bmi: '25.0',
+      bmiNum: 25.0,
+      bmiStatus: 'Normal',
     },
     vitalsHistory: [
       {
@@ -646,8 +810,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 108,
         diastolic: 66,
         heartRate: 80,
-        bodyTemp: 98.5,
+        bodyTemp: 36.9,
         spO2: 99,
+        weight: 60,
+        bmi: 23.4,
       },
       {
         id: 'vhr-2',
@@ -656,8 +822,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 112,
         diastolic: 70,
         heartRate: 82,
-        bodyTemp: 98.6,
+        bodyTemp: 37.0,
         spO2: 100,
+        weight: 62,
+        bmi: 24.2,
       },
       {
         id: 'vhr-3',
@@ -666,8 +834,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 110,
         diastolic: 68,
         heartRate: 84,
-        bodyTemp: 98.6,
+        bodyTemp: 37.0,
         spO2: 99,
+        weight: 64,
+        bmi: 25.0,
       },
     ],
     imaging: {
@@ -729,15 +899,22 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
       bloodPressureUnit: 'mmHg',
       heartRate: '82',
       heartRateUnit: 'bpm',
-      bodyTemp: '98.2',
-      bodyTempUnit: '°F',
+      bodyTemp: '36.8',
+      bodyTempUnit: '°C',
       spO2: '96%',
       spO2Status: 'Normal',
       systolic: 145,
       diastolic: 94,
       heartRateNum: 82,
-      tempNum: 98.2,
+      tempNum: 36.8,
       spO2Num: 96,
+      weight: '84 kg',
+      weightNum: 84,
+      height: '170 cm',
+      heightNum: 170,
+      bmi: '29.1',
+      bmiNum: 29.1,
+      bmiStatus: 'Overweight',
     },
     vitalsHistory: [
       {
@@ -747,8 +924,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 148,
         diastolic: 96,
         heartRate: 86,
-        bodyTemp: 98.3,
+        bodyTemp: 36.8,
         spO2: 95,
+        weight: 86,
+        bmi: 29.8,
       },
       {
         id: 'vhro-2',
@@ -757,8 +936,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 144,
         diastolic: 92,
         heartRate: 84,
-        bodyTemp: 98.4,
+        bodyTemp: 36.9,
         spO2: 96,
+        weight: 85,
+        bmi: 29.4,
       },
       {
         id: 'vhro-3',
@@ -767,8 +948,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 145,
         diastolic: 94,
         heartRate: 82,
-        bodyTemp: 98.2,
+        bodyTemp: 36.8,
         spO2: 96,
+        weight: 84,
+        bmi: 29.1,
       },
     ],
     imaging: {
@@ -829,15 +1012,22 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
       bloodPressureUnit: 'mmHg',
       heartRate: '70',
       heartRateUnit: 'bpm',
-      bodyTemp: '98.3',
-      bodyTempUnit: '°F',
+      bodyTemp: '36.8',
+      bodyTempUnit: '°C',
       spO2: '99%',
       spO2Status: 'Normal',
       systolic: 112,
       diastolic: 70,
       heartRateNum: 70,
-      tempNum: 98.3,
+      tempNum: 36.8,
       spO2Num: 99,
+      weight: '55 kg',
+      weightNum: 55,
+      height: '158 cm',
+      heightNum: 158,
+      bmi: '22.0',
+      bmiNum: 22.0,
+      bmiStatus: 'Normal',
     },
     vitalsHistory: [
       {
@@ -847,8 +1037,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 114,
         diastolic: 72,
         heartRate: 72,
-        bodyTemp: 98.4,
+        bodyTemp: 36.9,
         spO2: 99,
+        weight: 56,
+        bmi: 22.4,
       },
       {
         id: 'vhsp-2',
@@ -857,8 +1049,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 110,
         diastolic: 68,
         heartRate: 68,
-        bodyTemp: 98.2,
+        bodyTemp: 36.8,
         spO2: 100,
+        weight: 55.5,
+        bmi: 22.2,
       },
       {
         id: 'vhsp-3',
@@ -867,8 +1061,10 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         systolic: 112,
         diastolic: 70,
         heartRate: 70,
-        bodyTemp: 98.3,
+        bodyTemp: 36.8,
         spO2: 99,
+        weight: 55,
+        bmi: 22.0,
       },
     ],
     imaging: {
@@ -895,6 +1091,93 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
         details: 'Complete blood count normal, full resolution of symptoms.',
         statusBadge: 'Resolved',
         icon: 'clipboard-check-outline',
+      },
+    ],
+  },
+
+  // 7. Dilshan Madushanka (Token 31, Walk-in, 28 yrs, Male, X-Ray Ready, Acute knee sprain)
+  {
+    id: 'pat-dilshan-031',
+    name: 'Dilshan Madushanka',
+    shortName: 'Dilshan',
+    verified: true,
+    age: 28,
+    gender: 'Male',
+    bloodGroup: 'A+',
+    tokenNumber: 31,
+    tokenFormatted: '#031',
+    nic: '1998-3210945',
+    registeredTime: '10:32 AM',
+    status: 'Waiting',
+    photoUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=200',
+    allergy: {
+      hasAllergy: false,
+      title: 'No known allergies',
+      description: 'No known drug or environmental allergies reported on clinical intake.',
+    },
+    chronicConditions: [],
+    medications: [
+      {
+        id: 'med-dil-1',
+        drugName: 'Paracetamol',
+        dose: '500 mg',
+        frequency: 'Every 6 hours as needed for knee pain',
+        duration: '5 days',
+        sinceDate: 'Today, 10:40 AM',
+      },
+    ],
+    vitals: {
+      triageTime: 'Triage: 15 min ago',
+      bloodPressure: '120/80',
+      bloodPressureUnit: 'mmHg',
+      heartRate: '74',
+      heartRateUnit: 'bpm',
+      bodyTemp: '36.9',
+      bodyTempUnit: '°C',
+      spO2: '99%',
+      spO2Status: 'Normal',
+      systolic: 120,
+      diastolic: 80,
+      heartRateNum: 74,
+      tempNum: 36.9,
+      spO2Num: 99,
+      weight: '72 kg',
+      weightNum: 72,
+      height: '176 cm',
+      heightNum: 176,
+      bmi: '23.2',
+      bmiNum: 23.2,
+      bmiStatus: 'Normal',
+    },
+    vitalsHistory: [
+      {
+        id: 'vh-dil-1',
+        dateLabel: 'Now',
+        timestamp: 'Today, 10:35 AM',
+        systolic: 120,
+        diastolic: 80,
+        heartRate: 74,
+        bodyTemp: 36.9,
+        spO2: 99,
+        weight: 72,
+        bmi: 23.2,
+      },
+    ],
+    imaging: {
+      hasImaging: true,
+      subtitle: 'Recent (Today, 10:32 AM)',
+      title: 'X-Ray Right Knee',
+      description: 'AP & Lateral Views • Radiology returned (X-Ray Ready)',
+      imageUrl: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=300',
+      reportSummary: 'No acute bony fracture or dislocation. Mild joint effusion and soft tissue swelling around medial collateral ligament.',
+    },
+    recentVisits: [
+      {
+        id: 'rec-dil-1',
+        title: 'Acute Right Knee Sprain',
+        date: 'Today',
+        details: 'Twisted knee during badminton. Ice compression, elevation, and radiology ordered.',
+        icon: 'account-injury-outline',
       },
     ],
   },

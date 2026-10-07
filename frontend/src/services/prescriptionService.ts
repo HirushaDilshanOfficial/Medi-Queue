@@ -1,4 +1,5 @@
 import { API_URL } from '../config';
+import { PatientAllergy } from './patientRecordsService';
 
 export interface MedicineItem {
   id: string;
@@ -44,6 +45,7 @@ export interface PatientPrescriptionDetails {
       pulseRate: string;
       weight: string;
     };
+    allergy?: PatientAllergy;
   };
   diagnoses: DiagnosisItem[];
   clinicalNotes: string;
@@ -71,9 +73,15 @@ export const fallbackPrescriptionData: PatientPrescriptionDetails = {
     tokenNumber: 28,
     tokenFormatted: 'Token #028',
     vitals: {
-      bloodPressure: '120/80',
-      pulseRate: '74 bpm',
-      weight: '72 kg',
+      bloodPressure: '138/88',
+      pulseRate: '78 bpm',
+      weight: '78 kg',
+    },
+    allergy: {
+      hasAllergy: true,
+      isHighRisk: false,
+      title: 'Moderate Allergy • Penicillin',
+      description: 'Mild cutaneous rash with amoxicillin. Use cephalosporins with caution.',
     },
   },
   diagnoses: [
@@ -178,6 +186,12 @@ export const aureliaPrescriptionData: PatientPrescriptionDetails = {
       bloodPressure: '118/76',
       pulseRate: '72 bpm',
       weight: '58 kg',
+    },
+    allergy: {
+      hasAllergy: true,
+      isHighRisk: true,
+      title: 'High Risk Allergy • Angioedema',
+      description: 'Sulfa Drugs (Sulfonamides, TMP-SMX). Do not administer.',
     },
   },
   diagnoses: [

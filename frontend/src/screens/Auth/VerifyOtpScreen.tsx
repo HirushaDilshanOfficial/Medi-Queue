@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -17,13 +18,14 @@ import { BASE_URL } from '../../config';
 import { Alert, ActivityIndicator } from 'react-native';
 
 export default function VerifyOtpScreen() {
+  const { t } = useLanguage();
   const { email } = useLocalSearchParams();
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleVerify = async () => {
     if (!otp || otp.length < 6) {
-      Alert.alert('Error', 'Please enter a valid 6-digit OTP');
+      Alert.alert(t('Error'), t('Please enter a valid 6-digit OTP'));
       return;
     }
 
@@ -41,11 +43,11 @@ export default function VerifyOtpScreen() {
         // Navigate to reset password passing email and otp
         router.push({ pathname: '/(auth)/reset-password', params: { email, otp } });
       } else {
-        Alert.alert('Error', data.message || 'Invalid OTP');
+        Alert.alert(t('Error'), data.message || t('Invalid OTP'));
       }
     } catch (error) {
       console.error(error);
-      Alert.alert('Error', 'Network error. Please try again.');
+      Alert.alert(t('Error'), t('Network error. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -67,7 +69,7 @@ export default function VerifyOtpScreen() {
 
           {/* Back Button */}
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>← Back</Text>
+            <Text style={styles.backButtonText}>{t("← Back")}</Text>
           </TouchableOpacity>
 
           {/* Icon */}
@@ -75,19 +77,19 @@ export default function VerifyOtpScreen() {
             <Text style={styles.logoSmallIcon}>📩</Text>
           </View>
 
-          <Text style={styles.headerTitle}>Check your email</Text>
-          <Text style={styles.headerSubtitle}>We sent a verification code to you.</Text>
+          <Text style={styles.headerTitle}>{t("Check your email")}</Text>
+          <Text style={styles.headerSubtitle}>{t("We sent a verification code to you.")}</Text>
         </View>
 
         {/* ---- FORM CARD ---- */}
         <View style={styles.formCard}>
           <Text style={styles.description}>
-            We have sent a 6-digit verification code to {'\n'}
-            <Text style={styles.boldText}>{email || 'your email'}</Text>
+            {t("We have sent a 6-digit verification code to")}{' '}{'\n'}
+            <Text style={styles.boldText}>{email || t('your email')}</Text>
           </Text>
 
           {/* OTP Field */}
-          <Text style={styles.fieldLabel}>Enter OTP</Text>
+          <Text style={styles.fieldLabel}>{t("Enter OTP")}</Text>
           <View style={styles.inputWrapper}>
             <Text style={styles.inputIcon}>🔢</Text>
             <TextInput
@@ -106,7 +108,7 @@ export default function VerifyOtpScreen() {
             {loading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.primaryButtonText}>Verify & Proceed</Text>
+              <Text style={styles.primaryButtonText}>{t("Verify & Proceed")}</Text>
             )}
           </TouchableOpacity>
 

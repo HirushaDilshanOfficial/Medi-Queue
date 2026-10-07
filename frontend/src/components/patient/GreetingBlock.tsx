@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 
 type Props = {
@@ -14,12 +16,13 @@ function daypartFor(hour: number): string {
 }
 
 export function GreetingBlock({ name, hour }: Props) {
+  const { t } = useLanguage();
   return (
     <View style={styles.root}>
       <Text style={styles.greeting} numberOfLines={1}>
         {daypartFor(hour)}, {name}
       </Text>
-      <Text style={styles.subtitle}>Let us make you better</Text>
+      <Text style={styles.subtitle}>{t("Let us make you better")}</Text>
     </View>
   );
 }

@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import type { SlotOption } from '../../types/patient';
 
@@ -13,10 +15,11 @@ type Props = {
 // Grid of times for the selected day. A slot that is sold out stays visible but
 // disabled, so the shape of the day is obvious instead of silently shifting.
 export function SlotGrid({ slots, selected, onSelect, loading }: Props) {
+  const { t } = useLanguage();
   if (loading) {
     return (
       <View style={styles.placeholder}>
-        <Text style={styles.placeholderText}>Checking availability...</Text>
+        <Text style={styles.placeholderText}>{t("Checking availability...")}</Text>
       </View>
     );
   }
@@ -24,7 +27,7 @@ export function SlotGrid({ slots, selected, onSelect, loading }: Props) {
   if (!slots.length) {
     return (
       <View style={styles.placeholder}>
-        <Text style={styles.placeholderText}>No clinic times for this day. Try another date.</Text>
+        <Text style={styles.placeholderText}>{t("No clinic times for this day. Try another date.")}</Text>
       </View>
     );
   }
@@ -43,7 +46,7 @@ export function SlotGrid({ slots, selected, onSelect, loading }: Props) {
             accessibilityRole="button"
             accessibilityState={{ selected: active, disabled: soldOut }}
             accessibilityLabel={
-              soldOut ? `${slot.time}, fully booked` : `${slot.time}, ${slot.remaining} left`
+              soldOut ? t("{value0}, fully booked", { value0: String(slot.time) }) : t("{value0}, {value1} left", { value0: String(slot.time), value1: String(slot.remaining) })
             }
             style={({ pressed }) => [
               styles.slot,
@@ -56,12 +59,11 @@ export function SlotGrid({ slots, selected, onSelect, loading }: Props) {
               {slot.time}
             </Text>
             {soldOut ? (
-              <Text style={styles.soldOutLabel}>Full</Text>
+              <Text style={styles.soldOutLabel}>{t("Full")}</Text>
             ) : (
               slot.remaining <= 3 && (
                 <Text style={[styles.remaining, active && styles.textActive]}>
-                  {slot.remaining} left
-                </Text>
+                  {slot.remaining} {t("left")}</Text>
               )
             )}
           </Pressable>

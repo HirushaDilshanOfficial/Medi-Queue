@@ -1,4 +1,5 @@
 const Hospital = require('../models/Hospital');
+const { provisionHospitalClinics } = require('./clinicController');
 
 // Add a new hospital
 exports.addHospital = async (req, res) => {
@@ -30,6 +31,7 @@ exports.addHospital = async (req, res) => {
     });
 
     await hospital.save();
+    await provisionHospitalClinics(hospital._id);
     res.status(201).json({ message: 'Hospital added successfully', hospital });
 
   } catch (error) {
