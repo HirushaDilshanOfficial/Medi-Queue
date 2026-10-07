@@ -20,6 +20,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchDoctorDashboard } from '../../services/doctorService';
 import {
   fetchPrescriptionDetails,
   savePrescriptionApi,
@@ -30,6 +31,7 @@ import {
   COMMON_MEDICINES,
   COMMON_DIAGNOSES,
   fallbackPrescriptionData,
+  blankPrescriptionData,
   aureliaPrescriptionData,
 } from '../../services/prescriptionService';
 import {
@@ -46,13 +48,16 @@ export default function PatientPrescriptionScreen() {
   const { t } = useLanguage();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string }>();
-  const initialToken = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
-  const isAurelia = !params?.tokenNumber || initialToken === 29 || (params?.patientName ? String(params.patientName).includes('Aurelia') : true);
+  const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string; patientId?: string }>();
+  const initialToken = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : undefined;
+  const isAurelia = params?.patientName
+    ? String(params.patientName).toLowerCase().includes('aurelia')
+    : initialToken === 29;
 
   const [data, setData] = useState<PatientPrescriptionDetails>(
-    isAurelia ? aureliaPrescriptionData : fallbackPrescriptionData
+    isAurelia ? aureliaPrescriptionData : blankPrescriptionData
   );
+  const [currentHospital, setCurrentHospital] = useState<string>('Colombo Teaching Hospital 1');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('rx');
 
@@ -67,7 +72,7 @@ export default function PatientPrescriptionScreen() {
   const [takeNight, setTakeNight] = useState(true);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [clinicalNotes, setClinicalNotes] = useState(
-    isAurelia ? aureliaPrescriptionData.clinicalNotes : fallbackPrescriptionData.clinicalNotes
+    isAurelia ? aureliaPrescriptionData.clinicalNotes : ''
   );
   const [isSaving, setIsSaving] = useState(false);
   const [addMedError, setAddMedError] = useState<string | null>(null);
@@ -80,6 +85,15 @@ export default function PatientPrescriptionScreen() {
   const [referralType, setReferralType] = useState('Physiotherapy');
   const [referralNotes, setReferralNotes] = useState('');
   const [isSaveSuccessModalOpen, setIsSaveSuccessModalOpen] = useState(false);
+
+  // In-app confirmation dialog states (no browser window.confirm)
+  const [deleteMedTarget, setDeleteMedTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteDiagTarget, setDeleteDiagTarget] = useState<{ id: string; name: string } | null>(null);
+  const [pendingAllergyConflictMed, setPendingAllergyConflictMed] = useState<{
+    med: MedicineItem;
+    allergen: string;
+    note: string;
+  } | null>(null);
 
   // Edit Medicine Modal State
   const [isEditMedModalOpen, setIsEditMedModalOpen] = useState(false);
@@ -149,11 +163,41 @@ export default function PatientPrescriptionScreen() {
   // Load prescription details
   const loadData = useCallback(async () => {
     try {
-      const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
-      const cacheKey = `@medi_queue_prescription_${tokenNum}`;
+      let tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : undefined;
+      let patientName = params?.patientName;
+      let patientId = params?.patientId;
+
+      if (!tokenNum && !patientName && !patientId) {
+        try {
+          const dash = await fetchDoctorDashboard();
+          if (dash?.currentPatient) {
+            tokenNum = dash.currentPatient.tokenNumber;
+            patientName = dash.currentPatient.patientName;
+            patientId = dash.currentPatient.patientId;
+          }
+        } catch (e) {}
+
+        if (!tokenNum && !patientName && !patientId) {
+          try {
+            const cachedToken = await AsyncStorage.getItem('active_record_patient_token');
+            if (cachedToken) tokenNum = parseInt(cachedToken, 10);
+            const cachedName = await AsyncStorage.getItem('active_record_patient_name');
+            if (cachedName && !patientName) patientName = cachedName;
+          } catch (e) {}
+        }
+      }
+
+      const cacheKey = tokenNum ? `@medi_queue_prescription_${tokenNum}` : '@medi_queue_prescription_active';
+
+      // 0. Read active hospital assigned to doctor
+      try {
+        const storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
+        if (storedHosp) {
+          setCurrentHospital(storedHosp);
+        }
+      } catch (hospErr) {}
 
       // 1. Immediately read local cache if available
-      let localFound = false;
       try {
         let raw = await AsyncStorage.getItem(cacheKey);
         if (!raw && typeof window !== 'undefined' && window.localStorage) {
@@ -162,18 +206,10 @@ export default function PatientPrescriptionScreen() {
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && Array.isArray(parsed.diagnoses) && Array.isArray(parsed.prescriptions)) {
-            // If prescriptions list is empty, populate from patient records
-            if (parsed.prescriptions.length === 0) {
-              const defaultMeds = getRecordMeds();
-              if (defaultMeds.length > 0) {
-                parsed.prescriptions = defaultMeds;
-              }
-            }
             setData(parsed);
             if (parsed.clinicalNotes !== undefined) {
               setClinicalNotes(parsed.clinicalNotes);
             }
-            localFound = true;
           }
         }
       } catch (cacheErr) {
@@ -181,15 +217,8 @@ export default function PatientPrescriptionScreen() {
       }
 
       // 2. Fetch from backend API
-      const res = await fetchPrescriptionDetails(tokenNum);
+      const res = await fetchPrescriptionDetails(tokenNum, patientName, patientId);
       if (res) {
-        // If backend prescriptions list is empty, populate from patient records
-        if (!res.prescriptions || res.prescriptions.length === 0) {
-          const defaultMeds = getRecordMeds();
-          if (defaultMeds.length > 0) {
-            res.prescriptions = defaultMeds;
-          }
-        }
         setData(res);
         setClinicalNotes(res.clinicalNotes || '');
         await AsyncStorage.setItem(cacheKey, JSON.stringify(res));
@@ -202,7 +231,7 @@ export default function PatientPrescriptionScreen() {
     } finally {
       setLoading(false);
     }
-  }, [params?.tokenNumber, getRecordMeds]);
+  }, [params?.tokenNumber, params?.patientName, params?.patientId]);
 
   useEffect(() => {
     loadData();
@@ -234,15 +263,26 @@ export default function PatientPrescriptionScreen() {
         }, 120);
       }
     } else if (tab === 'records') {
-      try {
-        router.push('/(doctor)/records' as any);
-      } catch (e) {
-        router.push('/records' as any);
-      }
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
+      const p = data?.patient;
+      if (p) {
+        try {
+          router.push({
+            pathname: '/(doctor)/records' as any,
+            params: {
+              patientId: (p as any).patientId || '',
+              patientName: p.name,
+              tokenNumber: String(p.tokenNumber),
+            },
+          });
+        } catch (e) {
           router.push('/(doctor)/records' as any);
-        }, 120);
+        }
+      } else {
+        try {
+          router.push('/(doctor)/records' as any);
+        } catch (e) {
+          router.push('/records' as any);
+        }
       }
     } else if (tab === 'schedule') {
       try {
@@ -260,36 +300,21 @@ export default function PatientPrescriptionScreen() {
     }
   };
 
-  // Remove diagnosis chip
+  // Remove diagnosis chip (triggers custom in-app modal)
   const handleRemoveDiagnosis = (id: string, name?: string) => {
-    const doRemove = () => {
-      setData((prev) => {
-        const nextDiagnoses = prev.diagnoses.filter((d) => d.id !== id);
-        const nextData = { ...prev, diagnoses: nextDiagnoses, clinicalNotes };
-        persistPrescription(nextData);
-        return nextData;
-      });
-    };
+    setDeleteDiagTarget({ id, name: name || 'this diagnosis' });
+  };
 
-    // On web, Alert.alert multi-button callbacks don't fire — use window.confirm instead
-    if (Platform.OS === 'web') {
-      const ok = (window as any).confirm(`Remove "${name || 'this diagnosis'}" from the diagnosis list?`);
-      if (!ok) return;
-      doRemove();
-      return;
-    }
-    Alert.alert(
-      t('Remove Diagnosis'),
-      t("Remove \"{value0}\"?", { value0: String(name || 'this diagnosis') }),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        {
-          text: t('Remove'),
-          style: 'destructive',
-          onPress: doRemove,
-        },
-      ]
-    );
+  const confirmRemoveDiagnosis = () => {
+    if (!deleteDiagTarget) return;
+    const { id } = deleteDiagTarget;
+    setData((prev) => {
+      const nextDiagnoses = prev.diagnoses.filter((d) => d.id !== id);
+      const nextData = { ...prev, diagnoses: nextDiagnoses, clinicalNotes };
+      persistPrescription(nextData);
+      return nextData;
+    });
+    setDeleteDiagTarget(null);
   };
 
   // Add diagnosis
@@ -314,36 +339,21 @@ export default function PatientPrescriptionScreen() {
     setIsAddDiagnosisModalOpen(false);
   };
 
-  // Remove medicine item
+  // Remove medicine item (triggers custom in-app modal)
   const handleRemoveMedicine = (id: string, name: string) => {
-    const doRemove = () => {
-      setData((prev) => {
-        const nextPrescriptions = prev.prescriptions.filter((m) => m.id !== id);
-        const nextData = { ...prev, prescriptions: nextPrescriptions, clinicalNotes };
-        persistPrescription(nextData);
-        return nextData;
-      });
-    };
+    setDeleteMedTarget({ id, name });
+  };
 
-    // On web, Alert.alert multi-button callbacks don't fire — use window.confirm instead
-    if (Platform.OS === 'web') {
-      const ok = (window as any).confirm(`Remove ${name} from this prescription?`);
-      if (!ok) return;
-      doRemove();
-      return;
-    }
-    Alert.alert(
-      t('Remove Medicine'),
-      t("Are you sure you want to remove {value0} from this prescription?", { value0: String(name) }),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        {
-          text: t('Remove'),
-          style: 'destructive',
-          onPress: doRemove,
-        },
-      ]
-    );
+  const confirmRemoveMedicine = () => {
+    if (!deleteMedTarget) return;
+    const { id } = deleteMedTarget;
+    setData((prev) => {
+      const nextPrescriptions = prev.prescriptions.filter((m) => m.id !== id);
+      const nextData = { ...prev, prescriptions: nextPrescriptions, clinicalNotes };
+      persistPrescription(nextData);
+      return nextData;
+    });
+    setDeleteMedTarget(null);
   };
 
   // Helper to format medicine instructions with meal timing and times of day
@@ -507,7 +517,7 @@ export default function PatientPrescriptionScreen() {
     setEditingMed(null);
   };
 
-  const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
+  const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : (data?.patient?.tokenNumber || 1);
   const currentPatientRecord = useMemo(() => {
     return (
       ALL_DUMMY_PATIENTS.find(
@@ -515,15 +525,28 @@ export default function PatientPrescriptionScreen() {
           p.tokenNumber === tokenNum ||
           (params?.patientName && p.name.includes(params.patientName)) ||
           (data?.patient && p.name === data.patient.name)
-      ) || ALL_DUMMY_PATIENTS[0]
+      ) || undefined
     );
-  }, [params?.tokenNumber, params?.patientName, data?.patient]);
+  }, [tokenNum, params?.patientName, data?.patient]);
 
   const patientAllergy = data?.patient?.allergy || currentPatientRecord?.allergy;
 
   const [currentAllergies, setCurrentAllergies] = useState<AllergyItem[]>(() => {
-    return currentPatientRecord ? getDefaultAllergiesForPatient(currentPatientRecord) : [];
+    return (data?.patient as any)?.allergies || (currentPatientRecord ? getDefaultAllergiesForPatient(currentPatientRecord) : []);
   });
+
+  useEffect(() => {
+    if (data?.patient) {
+      const pAllergies = (data.patient as any)?.allergies;
+      if (Array.isArray(pAllergies)) {
+        setCurrentAllergies(pAllergies);
+      } else if (currentPatientRecord) {
+        setCurrentAllergies(getDefaultAllergiesForPatient(currentPatientRecord));
+      } else {
+        setCurrentAllergies([]);
+      }
+    }
+  }, [data?.patient?.tokenNumber, data?.patient?.name, currentPatientRecord]);
 
   const handleAllergiesChange = useCallback((updatedList: AllergyItem[]) => {
     setCurrentAllergies(updatedList);
@@ -572,6 +595,18 @@ export default function PatientPrescriptionScreen() {
     }
     return null;
   }, [searchQuery, currentAllergies, currentPatientRecord]);
+
+  // Commit a new medicine to prescription
+  const commitAddMedicine = (itemToSave: MedicineItem) => {
+    setData((prev) => {
+      const nextPrescriptions = [...prev.prescriptions, itemToSave];
+      const nextData = { ...prev, prescriptions: nextPrescriptions, clinicalNotes };
+      persistPrescription(nextData);
+      return nextData;
+    });
+    setSearchQuery('');
+    setShowSuggestions(false);
+  };
 
   // Add medicine to prescription
   const handleAddMedicine = () => {
@@ -630,50 +665,45 @@ export default function PatientPrescriptionScreen() {
       tagType,
     };
 
-    const commitAddMedicine = (itemToSave: MedicineItem) => {
-      const nextPrescriptions = [...data.prescriptions, itemToSave];
-      const nextData = { ...data, prescriptions: nextPrescriptions, clinicalNotes };
-      setData(nextData);
-      persistPrescription(nextData);
-      setSearchQuery('');
-      setShowSuggestions(false);
-    };
-
     if (allergyConflict) {
-      if (Platform.OS === 'web') {
-        const confirmAdd = (window as any).confirm(
-          `⚠️ ALLERGY CONFLICT WARNING!\n\n${allergyConflict.allergen} detected!\n${allergyConflict.note}\n\nDo you want to override and prescribe this medication anyway?`
-        );
-        if (!confirmAdd) return;
-        commitAddMedicine(newItem);
-        return;
-      } else {
-        Alert.alert(
-          '⚠️ Allergy Conflict Warning',
-          `${allergyConflict.allergen} detected!\n\n${allergyConflict.note}\n\nDo you want to override and prescribe this medication anyway?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Override & Prescribe',
-              style: 'destructive',
-              onPress: () => commitAddMedicine(newItem),
-            },
-          ]
-        );
-        return;
-      }
+      setPendingAllergyConflictMed({
+        med: newItem,
+        allergen: allergyConflict.allergen || 'Known Allergen',
+        note: allergyConflict.note || '',
+      });
+      return;
     }
 
     commitAddMedicine(newItem);
+  };
+
+  const confirmOverrideAllergyConflict = () => {
+    if (!pendingAllergyConflictMed) return;
+    commitAddMedicine(pendingAllergyConflictMed.med);
+    setPendingAllergyConflictMed(null);
   };
 
   // Save Prescription & Download PDF
   const handleSavePrescription = async () => {
     setIsSaving(true);
     try {
-      const nextData = { ...data, clinicalNotes };
+      let activeHospital = currentHospital;
+      try {
+        const h = await AsyncStorage.getItem('doctor_current_hospital');
+        if (h) activeHospital = h;
+      } catch (e) {}
+
+      const nextData: PatientPrescriptionDetails = {
+        ...data,
+        clinicalNotes,
+        hospitalName: activeHospital,
+        doctor: {
+          ...data.doctor,
+          hospitalName: activeHospital,
+        },
+      };
       await persistPrescription(nextData);
-      downloadPrescription(nextData, clinicalNotes);
+      await downloadPrescription(nextData, clinicalNotes);
       setIsSaveSuccessModalOpen(true);
     } catch (err) {
       Alert.alert(t('Saved Offline'), t('Prescription details saved locally and queued for dispatch.'));
@@ -810,7 +840,7 @@ export default function PatientPrescriptionScreen() {
               {/* Weight */}
               <View style={styles.vitalBox}>
                 <Text style={styles.vitalLabel}>{t("Weight")}</Text>
-                <Text style={styles.vitalValue}>{patient.vitals.weight || (currentPatientRecord?.vitals?.weightNum ? `${currentPatientRecord.vitals.weightNum} kg` : '58 kg')}</Text>
+                <Text style={styles.vitalValue}>{patient.vitals.weight || (currentPatientRecord?.vitals?.weightNum ? `${currentPatientRecord.vitals.weightNum} kg` : '-- kg')}</Text>
               </View>
             </View>
           </View>
@@ -1440,32 +1470,26 @@ export default function PatientPrescriptionScreen() {
               </View>
             </View>
 
-            {/* 6. Live Summary Strip */}
-            <View style={styles.liveSummaryStrip}>
-              <View style={styles.liveSummaryIconWrap}>
-                <MaterialCommunityIcons name="pill" size={15} color="#064e59" />
+            {/* 6. Live Summary Strip - only shown when medicine name is typed/selected */}
+            {Boolean(searchQuery.trim()) && (
+              <View style={styles.liveSummaryStrip}>
+                <View style={styles.liveSummaryIconWrap}>
+                  <MaterialCommunityIcons name="pill" size={15} color="#064e59" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.liveSummaryLabel}>{t("PRESCRIPTION PREVIEW")}</Text>
+                  <Text style={styles.liveSummaryText} numberOfLines={2}>
+                    {`${searchQuery.trim()} – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
+                      takeMorning && 'Morning',
+                      takeAfternoon && 'Afternoon',
+                      takeNight && 'Night',
+                    ]
+                      .filter(Boolean)
+                      .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`}
+                  </Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.liveSummaryLabel}>{t("PRESCRIPTION PREVIEW")}</Text>
-                <Text style={styles.liveSummaryText} numberOfLines={2}>
-                  {searchQuery.trim()
-                    ? `${searchQuery.trim()} – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
-                        takeMorning && 'Morning',
-                        takeAfternoon && 'Afternoon',
-                        takeNight && 'Night',
-                      ]
-                        .filter(Boolean)
-                        .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`
-                    : `Paracetamol 500mg – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
-                        takeMorning && 'Morning',
-                        takeAfternoon && 'Afternoon',
-                        takeNight && 'Night',
-                      ]
-                        .filter(Boolean)
-                        .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`}
-                </Text>
-              </View>
-            </View>
+            )}
 
             {addMedError && (
               <View style={styles.addMedErrorWrap}>
@@ -1985,7 +2009,21 @@ export default function PatientPrescriptionScreen() {
 
             <TouchableOpacity
               style={styles.downloadRxModalBtn}
-              onPress={() => downloadPrescription(data, clinicalNotes)}
+              onPress={async () => {
+                let activeHospital = currentHospital;
+                try {
+                  const h = await AsyncStorage.getItem('doctor_current_hospital');
+                  if (h) activeHospital = h;
+                } catch (e) {}
+                downloadPrescription(
+                  {
+                    ...data,
+                    hospitalName: activeHospital,
+                    doctor: { ...data.doctor, hospitalName: activeHospital },
+                  },
+                  clinicalNotes
+                );
+              }}
               activeOpacity={0.85}
             >
               <MaterialCommunityIcons
@@ -2004,6 +2042,152 @@ export default function PatientPrescriptionScreen() {
             >
               <Text style={styles.successDoneBtnText}>{t("Done")}</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* MODAL: DELETE MEDICINE IN-APP CONFIRMATION                */}
+      {/* ========================================================= */}
+      <Modal
+        visible={Boolean(deleteMedTarget)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeleteMedTarget(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmDeleteCard}>
+            <View style={styles.confirmDeleteIconCircle}>
+              <MaterialCommunityIcons name="trash-can-outline" size={32} color="#ef4444" />
+            </View>
+
+            <Text style={styles.confirmDeleteTitle}>{t("Remove Medicine?")}</Text>
+
+            <Text style={styles.confirmDeleteDesc}>
+              {t("Are you sure you want to remove")}{' '}
+              <Text style={{ fontWeight: '700', color: '#0f172a' }}>
+                {deleteMedTarget?.name}
+              </Text>{' '}
+              {t("from this prescription?")}
+            </Text>
+
+            <View style={styles.confirmDeleteButtonsRow}>
+              <TouchableOpacity
+                style={styles.confirmDeleteCancelBtn}
+                onPress={() => setDeleteMedTarget(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmDeleteCancelBtnText}>{t("Cancel")}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmDeleteRemoveBtn}
+                onPress={confirmRemoveMedicine}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="trash-can-outline" size={17} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.confirmDeleteRemoveBtnText}>{t("Remove")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* MODAL: DELETE DIAGNOSIS IN-APP CONFIRMATION               */}
+      {/* ========================================================= */}
+      <Modal
+        visible={Boolean(deleteDiagTarget)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeleteDiagTarget(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmDeleteCard}>
+            <View style={styles.confirmDeleteIconCircle}>
+              <MaterialCommunityIcons name="close-circle-outline" size={32} color="#ef4444" />
+            </View>
+
+            <Text style={styles.confirmDeleteTitle}>{t("Remove Diagnosis?")}</Text>
+
+            <Text style={styles.confirmDeleteDesc}>
+              {t("Remove")}{' '}
+              <Text style={{ fontWeight: '700', color: '#0f172a' }}>
+                {deleteDiagTarget?.name}
+              </Text>{' '}
+              {t("from the diagnosis list?")}
+            </Text>
+
+            <View style={styles.confirmDeleteButtonsRow}>
+              <TouchableOpacity
+                style={styles.confirmDeleteCancelBtn}
+                onPress={() => setDeleteDiagTarget(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmDeleteCancelBtnText}>{t("Cancel")}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmDeleteRemoveBtn}
+                onPress={confirmRemoveDiagnosis}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close" size={18} color="#ffffff" style={{ marginRight: 4 }} />
+                <Text style={styles.confirmDeleteRemoveBtnText}>{t("Remove")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* MODAL: ALLERGY CONFLICT IN-APP CONFIRMATION               */}
+      {/* ========================================================= */}
+      <Modal
+        visible={Boolean(pendingAllergyConflictMed)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPendingAllergyConflictMed(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmDeleteCard}>
+            <View style={[styles.confirmDeleteIconCircle, { backgroundColor: '#fef2f2' }]}>
+              <MaterialCommunityIcons name="alert-decagram" size={34} color="#dc2626" />
+            </View>
+
+            <Text style={[styles.confirmDeleteTitle, { color: '#991b1b' }]}>
+              {t("Allergy Conflict Warning")}
+            </Text>
+
+            <Text style={styles.confirmDeleteDesc}>
+              <Text style={{ fontWeight: '700', color: '#b91c1c' }}>
+                {pendingAllergyConflictMed?.med?.name}
+              </Text>{' '}
+              {t("conflicts with known patient allergy:")}{' '}
+              <Text style={{ fontWeight: '700', color: '#0f172a' }}>
+                {pendingAllergyConflictMed?.allergen}
+              </Text>.{'\n'}
+              {pendingAllergyConflictMed?.note ? `${pendingAllergyConflictMed.note}\n\n` : '\n'}
+              {t("Do you want to override and prescribe this medication anyway?")}
+            </Text>
+
+            <View style={styles.confirmDeleteButtonsRow}>
+              <TouchableOpacity
+                style={styles.confirmDeleteCancelBtn}
+                onPress={() => setPendingAllergyConflictMed(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmDeleteCancelBtnText}>{t("Cancel")}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.confirmDeleteRemoveBtn, { backgroundColor: '#dc2626' }]}
+                onPress={confirmOverrideAllergyConflict}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmDeleteRemoveBtnText}>{t("Override & Prescribe")}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -3381,5 +3565,81 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#475569',
+  },
+
+  // IN-APP DELETE / CONFIRMATION DIALOG STYLES
+  confirmDeleteCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    padding: 24,
+    alignItems: 'center',
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
+    shadowColor: 'rgba(0, 0, 0, 0.15)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  confirmDeleteIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fef2f2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  confirmDeleteTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  confirmDeleteDesc: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 22,
+  },
+  confirmDeleteButtonsRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  confirmDeleteCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  confirmDeleteRemoveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: 'rgba(239, 68, 68, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  confirmDeleteRemoveBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

@@ -27,6 +27,7 @@ import {
   updateDoctorStatusApi,
   updateDoctorHospitalApi,
   callNextPatientApi,
+  callSpecificTokenApi,
   undoPatientApi,
   addWalkInSlotApi,
   getCatalogPatient,
@@ -694,7 +695,22 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
     if (tab === 'queue') {
       try { router.push('/(doctor)/queue' as any); } catch (e) { router.push('/queue' as any); }
     } else if (tab === 'records') {
-      try { router.push('/(doctor)/records' as any); } catch (e) { router.push('/records' as any); }
+      if (currentPatient) {
+        try {
+          router.push({
+            pathname: '/(doctor)/records' as any,
+            params: {
+              patientId: (currentPatient as any).patientId || '',
+              patientName: currentPatient.patientName,
+              tokenNumber: String(currentPatient.tokenNumber),
+            },
+          });
+        } catch (e) {
+          router.push('/(doctor)/records' as any);
+        }
+      } else {
+        try { router.push('/(doctor)/records' as any); } catch (e) { router.push('/records' as any); }
+      }
     } else if (tab === 'schedule') {
       try { router.push('/(doctor)/schedule' as any); } catch (e) { router.push('/schedule' as any); }
     } else if (tab === 'rx') {
@@ -707,33 +723,44 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
     await setLanguage(nextLang);
   };
 
-  // Up next queue list: combine backend queue with default samples if empty
+  // Up next queue list: use real backend queue from database
   const displayQueue: PatientQueueItem[] = useMemo(() => {
-    if (data?.upcomingQueue && data.upcomingQueue.length > 0) {
+    if (data?.upcomingQueue && Array.isArray(data.upcomingQueue)) {
       return data.upcomingQueue;
     }
-    return SAMPLE_QUEUE;
+    return [];
   }, [data?.upcomingQueue]);
 
-  const currentPatient = data?.currentPatient || {
-    tokenNumber: 28,
-    patientName: 'Kamal Gunaratne',
-    age: 48,
-    gender: 'Male',
-    priority: 'normal',
-    status: 'in_consultation',
-    reason: 'Spine Checkup',
-    bloodPressure: '124/82',
+  const currentPatient = data?.currentPatient ?? (displayQueue.length > 0 ? {
+    tokenNumber: displayQueue[0].tokenNumber,
+    patientName: displayQueue[0].patientName,
+    age: displayQueue[0].age,
+    gender: displayQueue[0].gender,
+    priority: displayQueue[0].priority === 'urgent' ? 'urgent' : 'normal',
+    status: 'next',
+    reason: displayQueue[0].reason || 'OPD Consultation',
+    bloodPressure: '120/80',
     heartRate: '76 bpm',
-    fileRecord: 'REC-828',
-    checkedInTime: '10:45 AM',
-    calledAtTime: '08:47',
-  };
+    fileRecord: `REC-${displayQueue[0].tokenNumber}`,
+    checkedInTime: displayQueue[0].slotTime || '10:00 AM',
+    calledAtTime: '09:00',
+    allergy: null,
+    patientId: (displayQueue[0] as any).patientId,
+    appointmentId: (displayQueue[0] as any).appointmentId,
+  } : null);
 
-  const waitingCount = data?.metrics?.waitingCount ?? 14;
-  const completedCount = data?.metrics?.completedCount ?? 18;
-  const totalCapacity = data?.doctor?.dailyCapacity ?? 32;
-  const avgWaitMinutes = data?.metrics?.avgWaitMinutes ?? 9;
+  const waitingCount = data?.metrics?.waitingCount ?? displayQueue.length;
+  const completedCount = data?.metrics?.completedCount ?? 0;
+  const totalCapacity = data?.doctor?.dailyCapacity ?? 30;
+  const avgWaitMinutes = data?.metrics?.avgWaitMinutes ?? 10;
+
+  const doctorDisplayName = data?.doctor?.name || 'Dr. Palitha Perera';
+  const doctorInitials = useMemo(() => {
+    const clean = doctorDisplayName.replace(/^Dr\.\s*/i, '').trim();
+    const parts = clean.split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return clean.slice(0, 2).toUpperCase() || 'DR';
+  }, [doctorDisplayName]);
 
   return (
     <SafeAreaView style={[styles.safeContainer, { backgroundColor: colors.bgPage }]}>
@@ -765,38 +792,18 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               <View style={styles.headerTopRow}>
                 <View style={styles.doctorProfileWrap}>
                   <View style={styles.avatarCircle}>
-                    <Text style={styles.avatarInitials}>PP</Text>
+                    <Text style={styles.avatarInitials}>{doctorInitials}</Text>
                   </View>
                   <View style={styles.doctorInfoCol}>
-                    <Text style={styles.doctorName}>Dr. Palitha Perera</Text>
+                    <Text style={styles.doctorName}>{doctorDisplayName}</Text>
                     <View style={styles.onlineBadgeRow}>
                       <View style={styles.greenOnlineDot} />
-                      <Text style={styles.onlineBadgeText}>{t('Room 101 Online')}</Text>
+                      <Text style={styles.onlineBadgeText}>{t(`${data?.doctor?.room || 'Room 101'} Online`)}</Text>
                     </View>
                   </View>
                 </View>
 
                 <View style={styles.headerActionsWrap}>
-                  {/* Appearance Mode Toggle */}
-                  <TouchableOpacity
-                    style={styles.headerIconBtn}
-                    onPress={() => setIsDarkMode((prev) => !prev)}
-                    activeOpacity={0.75}
-                    accessibilityLabel={t('Toggle Dark Mode')}
-                  >
-                    <Ionicons name={isDarkMode ? 'sunny-outline' : 'moon-outline'} size={18} color="#FFFFFF" />
-                  </TouchableOpacity>
-
-                  {/* Language Button */}
-                  <TouchableOpacity
-                    style={styles.headerIconBtn}
-                    onPress={toggleLanguage}
-                    activeOpacity={0.75}
-                    accessibilityLabel={t('Language')}
-                  >
-                    <LineGlobe color="#FFFFFF" size={18} />
-                  </TouchableOpacity>
-
                   {/* Notification Bell with Badge '3' */}
                   <TouchableOpacity
                     style={styles.headerIconBtn}
@@ -816,7 +823,9 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               <View style={styles.greetingHeaderRow}>
                 <View style={styles.greetingWrap}>
                   <Text style={styles.greetingSmall}>{t('Good morning,')}</Text>
-                  <Text style={styles.greetingDoctor}>Dr. Palitha</Text>
+                  <Text style={styles.greetingDoctor}>
+                    {doctorDisplayName.startsWith('Dr.') ? doctorDisplayName : `Dr. ${doctorDisplayName}`}
+                  </Text>
                 </View>
 
                 {/* Shift / Break status badge button */}
@@ -943,112 +952,167 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             {/* SECTION 2: NOW SERVING CARD (OVERLAPS HEADER BY 50PX) */}
             {/* ========================================================= */}
             <View style={[styles.nowServingContainer, activeBreak && { marginTop: 0 }]}>
-              <View style={[styles.nowServingCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle }, colors.cardShadow]}>
-                
-                {/* Top Row: Pulsing Dot + "NOW SERVING" and Tinted Live Timer */}
-                <View style={styles.nowServingTopRow}>
-                  <View style={styles.pulsingTitleWrap}>
-                    <View style={styles.pulseDotOuter}>
-                      <View style={styles.pulseDotRing} />
-                      <View style={styles.pulseDotCore} />
+              {currentPatient ? (
+                <View style={[styles.nowServingCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle }, colors.cardShadow]}>
+                  
+                  {/* Top Row: Pulsing Dot + "NOW SERVING" and Tinted Live Timer */}
+                  <View style={styles.nowServingTopRow}>
+                    <View style={styles.pulsingTitleWrap}>
+                      <View style={styles.pulseDotOuter}>
+                        <View style={styles.pulseDotRing} />
+                        <View style={styles.pulseDotCore} />
+                      </View>
+                      <Text style={styles.nowServingLabel}>{t('NOW SERVING')}</Text>
                     </View>
-                    <Text style={styles.nowServingLabel}>{t('NOW SERVING')}</Text>
+
+                    {/* Tinted Pill with Clock Icon and Live Running Timer */}
+                    <View style={[styles.timerPill, { backgroundColor: colors.tealTint }]}>
+                      <LineClock color={colors.tealDeep} size={14} />
+                      <Text style={[styles.timerText, { color: colors.tealDeep }]}>
+                        {formatTimer(timerSeconds)}
+                      </Text>
+                    </View>
                   </View>
 
-                  {/* Tinted Pill with Clock Icon and Live Running Timer */}
-                  <View style={[styles.timerPill, { backgroundColor: colors.tealTint }]}>
-                    <LineClock color={colors.tealDeep} size={14} />
-                    <Text style={[styles.timerText, { color: colors.tealDeep }]}>
-                      {formatTimer(timerSeconds)}
-                    </Text>
+                  {/* Patient Row: Dark Teal Token Badge (70px) + Patient Info */}
+                  <View style={styles.patientRow}>
+                    <View style={styles.tokenBadgeDark}>
+                      <Text style={styles.tokenBadgeLabel}>{t('TOKEN')}</Text>
+                      <Text style={styles.tokenBadgeNumber}>
+                        {String(currentPatient.tokenNumber).padStart(3, '0')}
+                      </Text>
+                    </View>
+
+                    <View style={styles.patientDetailsCol}>
+                      <Text style={[styles.patientNameText, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {currentPatient.patientName}
+                      </Text>
+                      <Text style={[styles.patientSubtitleText, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {t(currentPatient.reason || 'OPD Consultation')} • {currentPatient.age || 35} {t('yrs')}
+                      </Text>
+                    </View>
                   </View>
+
+                  {/* Vitals Chips Row */}
+                  <View style={styles.vitalsChipsRow}>
+                    <View style={[styles.vitalChip, { backgroundColor: colors.chipGrey }]}>
+                      <Text style={[styles.vitalChipLabel, { color: colors.textSecondary }]}>BP: </Text>
+                      <Text style={[styles.vitalChipVal, { color: colors.textPrimary }]}>{currentPatient.bloodPressure || '120/80'}</Text>
+                    </View>
+                    <View style={[styles.vitalChip, { backgroundColor: colors.chipGrey }]}>
+                      <Text style={[styles.vitalChipLabel, { color: colors.textSecondary }]}>HR: </Text>
+                      <Text style={[styles.vitalChipVal, { color: colors.textPrimary }]}>{currentPatient.heartRate || '76 bpm'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Dynamic Allergy Alert Banner */}
+                  {currentPatient.allergy ? (
+                    <View style={[styles.allergyBanner, { backgroundColor: colors.alertBg }]}>
+                      <LineAlertTriangle color={colors.alertText} size={18} />
+                      <Text style={[styles.allergyText, { color: colors.alertText }]} numberOfLines={1}>
+                        {t('Allergy:')} {currentPatient.allergy}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.allergyBanner, { backgroundColor: isDarkMode ? '#132e27' : '#ecfdf5', borderColor: isDarkMode ? '#065f46' : '#a7f3d0', borderWidth: 1 }]}>
+                      <Ionicons name="shield-checkmark" size={17} color="#10b981" style={{ marginRight: 6 }} />
+                      <Text style={[styles.allergyText, { color: isDarkMode ? '#6ee7b7' : '#047857' }]}>
+                        {t('No Known Drug Allergies (NKDA)')}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Action Row: Three Buttons with PERFECT single-line fit */}
+                  <View style={styles.actionRow}>
+                    {/* 1. Square Icon-only Undo Button (tinted) */}
+                    <TouchableOpacity
+                      style={[styles.actionBtnUndo, { backgroundColor: colors.tealTint }]}
+                      onPress={handleUndoPatient}
+                      disabled={isProcessing}
+                      activeOpacity={0.75}
+                      accessibilityLabel={t('Undo')}
+                    >
+                      <LineUndo color={colors.tealDeep} size={18} />
+                    </TouchableOpacity>
+
+                    {/* 2. Tinted "Rx Prescribe" Button with document icon */}
+                    <TouchableOpacity
+                      style={[styles.actionBtnRx, { backgroundColor: colors.tealTint }]}
+                      onPress={() => {
+                        if (currentPatient) {
+                          try {
+                            router.push({
+                              pathname: '/(doctor)/prescription' as any,
+                              params: {
+                                tokenNumber: String(currentPatient.tokenNumber),
+                                patientName: currentPatient.patientName,
+                                patientId: (currentPatient as any).patientId || '',
+                              },
+                            });
+                          } catch (e) {
+                            handleTabPress('rx');
+                          }
+                        } else {
+                          handleTabPress('rx');
+                        }
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <LineDocument color={colors.tealDeep} size={16} />
+                      <Text style={[styles.actionBtnRxText, { color: colors.tealDeep }]} numberOfLines={1}>
+                        {t('Rx Prescribe')}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* 3. Wide Primary Dark-teal Button "Complete & Next" - perfectly single line */}
+                    <TouchableOpacity
+                      style={styles.actionBtnComplete}
+                      onPress={handleCompleteAndNext}
+                      disabled={isProcessing}
+                      activeOpacity={0.82}
+                    >
+                      {isProcessing ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <LineCheckCircle color="#FFFFFF" size={16} />
+                          <Text style={styles.actionBtnCompleteText} numberOfLines={1} ellipsizeMode="tail">
+                            {t('Complete & Next')}
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
                 </View>
-
-                {/* Patient Row: Dark Teal Token Badge (70px) + Patient Info */}
-                <View style={styles.patientRow}>
-                  <View style={styles.tokenBadgeDark}>
-                    <Text style={styles.tokenBadgeLabel}>{t('TOKEN')}</Text>
-                    <Text style={styles.tokenBadgeNumber}>
-                      {String(currentPatient.tokenNumber).padStart(3, '0')}
-                    </Text>
+              ) : (
+                <View style={[styles.nowServingCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle, alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 }, colors.cardShadow]}>
+                  <View style={[styles.quickActionCircle, { backgroundColor: colors.tealTint, width: 52, height: 52, borderRadius: 26, marginBottom: 10, alignItems: 'center', justifyContent: 'center' }]}>
+                    <LineSpeaker color={colors.tealDeep} size={24} />
                   </View>
-
-                  <View style={styles.patientDetailsCol}>
-                    <Text style={[styles.patientNameText, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {currentPatient.patientName}
-                    </Text>
-                    <Text style={[styles.patientSubtitleText, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {t(currentPatient.reason || 'Spine Checkup')} • {currentPatient.age || 48} {t('yrs')}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Vitals Chips Row */}
-                <View style={styles.vitalsChipsRow}>
-                  <View style={[styles.vitalChip, { backgroundColor: colors.chipGrey }]}>
-                    <Text style={[styles.vitalChipLabel, { color: colors.textSecondary }]}>BP: </Text>
-                    <Text style={[styles.vitalChipVal, { color: colors.textPrimary }]}>{currentPatient.bloodPressure || '124/82'}</Text>
-                  </View>
-                  <View style={[styles.vitalChip, { backgroundColor: colors.chipGrey }]}>
-                    <Text style={[styles.vitalChipLabel, { color: colors.textSecondary }]}>HR: </Text>
-                    <Text style={[styles.vitalChipVal, { color: colors.textPrimary }]}>{currentPatient.heartRate || '76 bpm'}</Text>
-                  </View>
-                </View>
-
-                {/* Allergy Alert Banner */}
-                <View style={[styles.allergyBanner, { backgroundColor: colors.alertBg }]}>
-                  <LineAlertTriangle color={colors.alertText} size={18} />
-                  <Text style={[styles.allergyText, { color: colors.alertText }]}>
-                    {t('Allergy: Sulfa drugs')}
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textPrimary, marginBottom: 4, textAlign: 'center' }}>
+                    {t('No Patient in Consultation')}
                   </Text>
+                  <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginBottom: 14 }}>
+                    {displayQueue.length > 0
+                      ? t('{value0} patient(s) waiting in queue', { value0: String(displayQueue.length) })
+                      : t('Queue is clear. New walk-in patients will appear here.')}
+                  </Text>
+                  {displayQueue.length > 0 && (
+                    <TouchableOpacity
+                      style={[styles.actionBtnComplete, { alignSelf: 'stretch', justifyContent: 'center' }]}
+                      onPress={handleCallNext}
+                      disabled={isProcessing}
+                      activeOpacity={0.82}
+                    >
+                      <Ionicons name="notifications" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                      <Text style={styles.actionBtnCompleteText}>
+                        {t('Call Next Patient (#{value0})', { value0: String(displayQueue[0].tokenNumber).padStart(3, '0') })}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-
-                {/* Action Row: Three Buttons with PERFECT single-line fit */}
-                <View style={styles.actionRow}>
-                  {/* 1. Square Icon-only Undo Button (tinted) */}
-                  <TouchableOpacity
-                    style={[styles.actionBtnUndo, { backgroundColor: colors.tealTint }]}
-                    onPress={handleUndoPatient}
-                    disabled={isProcessing}
-                    activeOpacity={0.75}
-                    accessibilityLabel={t('Undo')}
-                  >
-                    <LineUndo color={colors.tealDeep} size={18} />
-                  </TouchableOpacity>
-
-                  {/* 2. Tinted "Rx Prescribe" Button with document icon */}
-                  <TouchableOpacity
-                    style={[styles.actionBtnRx, { backgroundColor: colors.tealTint }]}
-                    onPress={() => handleTabPress('rx')}
-                    activeOpacity={0.75}
-                  >
-                    <LineDocument color={colors.tealDeep} size={16} />
-                    <Text style={[styles.actionBtnRxText, { color: colors.tealDeep }]} numberOfLines={1}>
-                      {t('Rx Prescribe')}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* 3. Wide Primary Dark-teal Button "Complete & Next" - perfectly single line */}
-                  <TouchableOpacity
-                    style={styles.actionBtnComplete}
-                    onPress={handleCompleteAndNext}
-                    disabled={isProcessing}
-                    activeOpacity={0.82}
-                  >
-                    {isProcessing ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <LineCheckCircle color="#FFFFFF" size={16} />
-                        <Text style={styles.actionBtnCompleteText} numberOfLines={1} ellipsizeMode="tail">
-                          {t('Complete & Next')}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-
-              </View>
+              )}
             </View>
 
             {/* ========================================================= */}
@@ -1150,69 +1214,122 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
 
               {/* Vertical list of queue cards */}
               <View style={styles.queueCardsList}>
-                {displayQueue.map((item, index) => (
-                  <TouchableOpacity
-                    key={`${item.tokenNumber}-${index}`}
-                    style={[styles.queueCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle }, colors.cardShadowSm]}
-                    activeOpacity={0.85}
-                    onPress={() =>
-                      Alert.alert(
-                        `Token #${String(item.tokenNumber).padStart(3, '0')}`,
-                        `${item.patientName}\n${item.reason || 'OPD Consultation'}\nTime: ${item.slotTime || '11:15 AM'}`
-                      )
-                    }
-                  >
-                    {/* Light-tint token tile (58px) */}
-                    <View style={[styles.queueTokenTile, { backgroundColor: colors.tealTint }]}>
-                      <Text style={[styles.queueTokenLabel, { color: colors.tealDeep }]}>
-                        {t('TKN')}
-                      </Text>
-                      <Text style={[styles.queueTokenNum, { color: colors.tealDeep }]}>
-                        {String(item.tokenNumber).padStart(3, '0')}
-                      </Text>
-                    </View>
-
-                    {/* Patient Name and Subtitle */}
-                    <View style={styles.queueItemInfo}>
-                      <Text style={[styles.queueItemName, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {item.patientName}
-                      </Text>
-                      <Text style={[styles.queueItemSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {t(item.reason || (index === 0 ? 'Post-op Check' : 'Hypertension Follow-up'))} • {item.age} {t('yrs')}
-                      </Text>
-                    </View>
-
-                    {/* Teal-tinted Appointment Time Pill & Three-dot Menu */}
-                    <View style={styles.queueCardRight}>
-                      <View style={[styles.queueTimePill, { backgroundColor: colors.tealTint }]}>
-                        <Text style={[styles.queueTimeText, { color: colors.tealDeep }]}>
-                          {item.slotTime || (index === 0 ? '11:15 AM' : index === 1 ? '11:30 AM' : index === 2 ? '11:45 AM' : index === 3 ? '12:00 PM' : index === 4 ? '12:15 PM' : '12:30 PM')}
+                {displayQueue.length === 0 ? (
+                  <View style={[styles.queueCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle, alignItems: 'center', justifyContent: 'center', paddingVertical: 24, paddingHorizontal: 16 }]}>
+                    <Ionicons name="people-outline" size={32} color={colors.textSecondary} style={{ marginBottom: 8 }} />
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textPrimary }}>
+                      {t('No Patients in Queue')}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>
+                      {t('New checked-in or walk-in patients will appear here automatically.')}
+                    </Text>
+                  </View>
+                ) : (
+                  displayQueue.map((item, index) => (
+                    <TouchableOpacity
+                      key={`${item.tokenNumber}-${index}`}
+                      style={[styles.queueCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle }, colors.cardShadowSm]}
+                      activeOpacity={0.85}
+                      onPress={() =>
+                        Alert.alert(
+                          `Token #${String(item.tokenNumber).padStart(3, '0')} - ${item.patientName}`,
+                          `${item.reason || 'OPD Consultation'}\nTime: ${item.slotTime || '--:--'}`,
+                          [
+                            {
+                              text: t('Call into Room'),
+                              onPress: async () => {
+                                setIsProcessing(true);
+                                try {
+                                  const res = await callSpecificTokenApi(item.tokenNumber);
+                                  if (res && res.data) setData(res.data);
+                                } finally {
+                                  setIsProcessing(false);
+                                }
+                              },
+                            },
+                            {
+                              text: t('View Records'),
+                              onPress: () => {
+                                router.push({
+                                  pathname: '/(doctor)/records' as any,
+                                  params: {
+                                    tokenNumber: String(item.tokenNumber),
+                                    patientName: item.patientName,
+                                    patientId: (item as any).patientId || '',
+                                  },
+                                });
+                              },
+                            },
+                            {
+                              text: t('Prescribe Rx'),
+                              onPress: () => {
+                                router.push({
+                                  pathname: '/(doctor)/prescription' as any,
+                                  params: {
+                                    tokenNumber: String(item.tokenNumber),
+                                    patientName: item.patientName,
+                                    patientId: (item as any).patientId || '',
+                                  },
+                                });
+                              },
+                            },
+                            { text: t('Cancel'), style: 'cancel' },
+                          ]
+                        )
+                      }
+                    >
+                      {/* Light-tint token tile (58px) */}
+                      <View style={[styles.queueTokenTile, { backgroundColor: colors.tealTint }]}>
+                        <Text style={[styles.queueTokenLabel, { color: colors.tealDeep }]}>
+                          {t('TKN')}
+                        </Text>
+                        <Text style={[styles.queueTokenNum, { color: colors.tealDeep }]}>
+                          {String(item.tokenNumber).padStart(3, '0')}
                         </Text>
                       </View>
-                      <TouchableOpacity
-                        style={styles.threeDotBtn}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          Alert.alert(
-                            `${item.patientName} (Token #${String(item.tokenNumber).padStart(3, '0')})`,
-                            t('Choose an action'),
-                            [
-                              { text: t('Cancel'), style: 'cancel' },
-                              {
-                                text: t('Remove'),
-                                style: 'destructive',
-                                onPress: () => handleRemoveQueuePatient(item.tokenNumber, item.patientName),
-                              },
-                            ]
-                          );
-                        }}
-                        accessibilityLabel={`Options for ${item.patientName}`}
-                      >
-                        <LineThreeDot color={colors.textSecondary} size={18} />
-                      </TouchableOpacity>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+
+                      {/* Patient Name and Subtitle */}
+                      <View style={styles.queueItemInfo}>
+                        <Text style={[styles.queueItemName, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {item.patientName}
+                        </Text>
+                        <Text style={[styles.queueItemSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                          {t(item.reason || (index === 0 ? 'OPD Check' : 'Follow-up'))} • {item.age} {t('yrs')}
+                        </Text>
+                      </View>
+
+                      {/* Teal-tinted Appointment Time Pill & Three-dot Menu */}
+                      <View style={styles.queueCardRight}>
+                        <View style={[styles.queueTimePill, { backgroundColor: colors.tealTint }]}>
+                          <Text style={[styles.queueTimeText, { color: colors.tealDeep }]}>
+                            {item.slotTime || '--:--'}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.threeDotBtn}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            Alert.alert(
+                              `${item.patientName} (Token #${String(item.tokenNumber).padStart(3, '0')})`,
+                              t('Choose an action'),
+                              [
+                                { text: t('Cancel'), style: 'cancel' },
+                                {
+                                  text: t('Remove'),
+                                  style: 'destructive',
+                                  onPress: () => handleRemoveQueuePatient(item.tokenNumber, item.patientName),
+                                },
+                              ]
+                            );
+                          }}
+                          accessibilityLabel={`Options for ${item.patientName}`}
+                        >
+                          <LineThreeDot color={colors.textSecondary} size={18} />
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )}
               </View>
             </View>
 

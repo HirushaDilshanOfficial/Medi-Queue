@@ -15,10 +15,12 @@ import {
   Alert,
   TextInput,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../../config';
 import {
   HOSPITALS,
   HospitalInfo,
@@ -237,10 +239,40 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     }
   }, []);
 
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
+
+  // Fetch real schedule from backend database for the selected dateKey
+  const fetchScheduleForDate = useCallback(async (dateKey: string) => {
+    try {
+      setIsLoadingSchedule(true);
+      const res = await fetch(`${API_URL}/doctor/schedule?dateKey=${dateKey}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const daySchedule: DaySchedule = {
+            dateKey: json.data.dateKey || dateKey,
+            hospitals: json.data.hospitals || [],
+            appointments: json.data.appointments || [],
+          };
+          setScheduleData((prev) => ({
+            ...prev,
+            [dateKey]: daySchedule,
+          }));
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Error fetching doctor schedule for date:', dateKey, e);
+    } finally {
+      setIsLoadingSchedule(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadActiveBreak();
-    }, [loadActiveBreak])
+      fetchScheduleForDate(selectedDateKey);
+    }, [loadActiveBreak, fetchScheduleForDate, selectedDateKey])
   );
 
   const handleSelectBreak = async (type: 'tea' | 'lunch' | 'dinner', hosp: HospitalInfo) => {
@@ -323,7 +355,12 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   const [editPatientReason, setEditPatientReason] = useState('');
   const [editPatientStatus, setEditPatientStatus] = useState<AppointmentStatus>('Waiting');
 
-  // Load persisted allocations and appointments on mount
+  // Fetch schedule whenever selectedDateKey changes
+  useEffect(() => {
+    fetchScheduleForDate(selectedDateKey);
+  }, [selectedDateKey, fetchScheduleForDate]);
+
+  // Load persisted walk-in allocations on mount
   useEffect(() => {
     let isMounted = true;
     (async () => {
@@ -335,13 +372,6 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             setWalkInAllocations((prev) => ({ ...prev, ...parsed }));
           }
         }
-        const storedSchedule = await AsyncStorage.getItem(`@medi_queue_schedule_data_${selectedDateKey}`);
-        if (storedSchedule && isMounted) {
-          const parsed = JSON.parse(storedSchedule);
-          if (parsed && typeof parsed === 'object') {
-            setScheduleData(parsed);
-          }
-        }
       } catch (e) {
         console.warn('Error loading schedule storage:', e);
       }
@@ -349,7 +379,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     return () => {
       isMounted = false;
     };
-  }, [selectedDateKey]);
+  }, []);
 
   const showToast = useCallback(
     (msg: string) => {
@@ -2017,7 +2047,27 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               </View>
 
               {/* Patient List */}
-              {filteredAppointments.length === 0 ? (
+              {isLoadingSchedule && filteredAppointments.length === 0 ? (
+                <View
+                  style={[
+                    styles.emptyTimelineBox,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <ActivityIndicator size="small" color={theme.accent} style={{ marginBottom: 6 }} />
+                  <Text
+                    style={[
+                      styles.emptyTimelineText,
+                      { color: theme.textMuted },
+                    ]}
+                  >
+                    {t("Loading schedule...")}
+                  </Text>
+                </View>
+              ) : filteredAppointments.length === 0 ? (
                 <View
                   style={[
                     styles.emptyTimelineBox,
