@@ -219,6 +219,24 @@ Close Report|වාර්තාව වසන්න|அறிக்கையை �
 Medical History Archive|වෛද්‍ය ඉතිහාස ලේඛනාගාරය|மருத்துவ வரலாற்றுக் காப்பகம்
 Clinical episodes for|සායනික සිදුවීම් සඳහා|மருத்துவ நிகழ்வுகள்:
 Close Archive|ලේඛනාගාරය වසන්න|காப்பகத்தை மூடவும்
+Good morning,|සුබ උදෑසනක්,|காலை வணக்கம்,
+Waiting|රැඳී සිටින|காத்திருப்போர்
+Done|අවසන් කළ|முடிந்தது
+min|මිනි|நிமி
+NOW SERVING|දැනට හමුවන රෝගියා|தற்போது சிகிச்சையில்
+Switch|මාරු කරන්න|மாற்றுக
+Allergy: Sulfa drugs|අසාත්මිකතා: සල්ෆා ඖෂධ|ஒவ்வாமை: சல்பா மருந்துகள்
+Allergy|අසාත්මිකතා|ஒவ்வாமை
+Sulfa drugs|සල්ෆා ඖෂධ|சல்பா மருந்துகள்
+Complete|සම්පූර්ණයි|முடிந்தது
+End Break|විවේකය අවසන් කරන්න|இடைவேளையை முடிக்கவும்
+Recall|නැවත කැඳවීම|மீண்டும் அழைப்பு
+Full Queue|සම්පූර්ණ පෝලිම|முழு வரிசை
+Room 101 Online|101 කාමරය සක්‍රියයි|101 அறை செயலில் உள்ளது
+Records|වාර්තා|பதிவுகள்
+Prescription|ඖෂධ වට්ටෝරුව|மருந்துச் சீட்டு
+Spine Checkup|කොඳු ඇට පෙළ පරීක්ෂාව|முதுகெலும்பு பரிசோதனை
+yrs|අවු|ஆண்டு
 `;
 export const doctorCopy = Object.fromEntries(copy.trim().split('\n').map(line => {
   const [key, si, ta] = line.split('|');
