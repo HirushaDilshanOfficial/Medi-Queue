@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -41,6 +42,18 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
   onNavigate,
 }) => {
   const { t, locale } = useLanguage();
+
+  const handleGoHome = () => {
+    if (onNavigate) {
+      onNavigate('Home');
+    } else if (navigation?.canGoBack?.()) {
+      navigation.goBack();
+    } else if (navigation?.navigate) {
+      navigation.navigate('Home');
+    } else {
+      router.push('/(reception)/home' as any);
+    }
+  };
   const [query, setQuery] = useState<string>('');
   const [filter, setFilter] = useState<PatientListFilter>('all');
   const [verifyingNic, setVerifyingNic] = useState<boolean>(false);
@@ -226,9 +239,16 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
       {/* Screen Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="people" size={20} color={Colors.white} />
-          </View>
+          <TouchableOpacity
+            style={styles.homeBackButton}
+            onPress={handleGoHome}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={t("Back to Home")}
+            accessibilityRole="button"
+          >
+            <Ionicons name="home" size={20} color={Colors.white} />
+          </TouchableOpacity>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle}>{t("Patient Directory")}</Text>
             <Text style={styles.headerSubtitle}>
@@ -250,23 +270,6 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
               color={Colors.white}
               style={loading ? styles.rotatingIcon : undefined}
             />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.refreshIconButton, { marginLeft: 8, backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}
-            onPress={() => {
-              if (navigation?.canGoBack?.()) {
-                navigation.goBack();
-              } else if (onNavigate) {
-                onNavigate('home');
-              } else if (navigation?.navigate) {
-                navigation.navigate('HomeTab');
-              }
-            }}
-            activeOpacity={0.7}
-            accessibilityLabel="Close and return to dashboard"
-          >
-            <Ionicons name="close" size={20} color={Colors.white} />
           </TouchableOpacity>
         </View>
       </View>
@@ -1062,6 +1065,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+  },
+  homeBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   headerIconWrap: {
     width: 40,

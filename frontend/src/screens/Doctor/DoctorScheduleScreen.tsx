@@ -997,6 +997,15 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                ───────────────────────────────────────────────────────── */}
             <View style={styles.headerRow}>
               <View style={styles.headerLeft}>
+                <TouchableOpacity
+                  onPress={() => router.push('/(doctor)/dashboard' as any)}
+                  style={styles.homeBackBtn}
+                  activeOpacity={0.7}
+                  accessibilityLabel={t("Back to Home")}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="home" size={18} color="#0D9488" />
+                </TouchableOpacity>
                 {/* Doctor Avatar with online badge */}
                 <View style={styles.avatarWrapper}>
                   <View
@@ -4219,6 +4228,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
+  },
+  homeBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
   headerLeft: {
     flexDirection: 'row',

@@ -23,6 +23,10 @@ export default function HomeScreen() {
       case 'reports':
         router.push('/(reception)/reports');
         break;
+      case 'Login':
+      case 'login':
+        router.replace('/(auth)/login');
+        break;
       default:
         router.push('/(reception)/queue');
     }

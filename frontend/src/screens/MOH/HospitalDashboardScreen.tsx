@@ -70,8 +70,8 @@ export default function HospitalDashboardScreen() {
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Text style={styles.backButtonText}>←</Text>
+            <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.push('/(moh)/dashboard' as any); } }} style={styles.backButton} accessibilityLabel={t("Back to Home")}>
+              <Ionicons name="home" size={18} color={Colors.white} />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
               <View style={{flexDirection: 'row', alignItems: 'center'}}>
