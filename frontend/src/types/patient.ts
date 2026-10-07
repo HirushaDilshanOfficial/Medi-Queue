@@ -97,6 +97,9 @@ export type MedicalReport = {
   performedOn: string | null;
   notes: string | null;
   fileName: string | null;
+  fileMimeType: string | null;
+  fileSize: number | null;
+  fileUrl: string | null;
   status: ReportStatus;
   createdAt: string | null;
 };
@@ -281,4 +284,3 @@ export type LiveDepartment = {
   waiting: number;
   nowServing: number | null;
 };
-

@@ -37,6 +37,7 @@ frontend/example/
 coverage/
 build/
 dist/
+backend/private-uploads/
 
 # IDEs
 .vscode/

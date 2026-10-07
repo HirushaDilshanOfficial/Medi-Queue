@@ -5,12 +5,16 @@ const {
   updateMyProfile,
   getMyHistory,
   getMyReports,
+  getMyReport,
   createMyReport,
+  updateMyReport,
   deleteMyReport,
+  getMyReportFile,
   getDashboard,
 } = require('../controllers/patientController');
 const { protect } = require('../middleware/authMiddleware');
 const { loadPatientProfile, patientOnly } = require('../middleware/patientMiddleware');
+const { reportUpload } = require('../middleware/reportUpload');
 
 router.use(protect, patientOnly, loadPatientProfile);
 
@@ -19,8 +23,11 @@ router.patch('/me', updateMyProfile);
 router.get('/me/dashboard', getDashboard);
 router.get('/me/history', getMyHistory);
 router.get('/me/reports', getMyReports);
-router.post('/me/reports', createMyReport);
+router.get('/me/reports/:id', getMyReport);
+router.post('/me/reports', reportUpload.single('file'), createMyReport);
+router.patch('/me/reports/:id', reportUpload.single('file'), updateMyReport);
 router.delete('/me/reports/:id', deleteMyReport);
+router.get('/me/reports/:id/file', getMyReportFile);
  
 const { authorizeRoles } = require('../middleware/authMiddleware');
 const {

@@ -39,7 +39,7 @@ export function ReportRow({ report, onPress, onDelete }: Props) {
             {report.title}
           </Text>
           <Text style={styles.meta} numberOfLines={1}>
-            {[report.category, dated].filter(Boolean).join(' · ')}
+            {[report.category, dated, report.fileName ? 'File attached' : null].filter(Boolean).join(' · ')}
           </Text>
           {report.notes ? (
             <Text style={styles.notes} numberOfLines={2}>

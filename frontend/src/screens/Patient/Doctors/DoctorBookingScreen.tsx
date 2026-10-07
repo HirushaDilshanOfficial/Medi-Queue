@@ -201,7 +201,11 @@ export function DoctorBookingScreen() {
                   {date && <Text style={styles.dateContext}>{new Date(`${date}T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</Text>}
                   {days.loading ? <ActivityIndicator style={styles.loading} color={C.primary} /> : days.error ? (
                     <View style={styles.notice}><Text style={styles.hint}>{days.error}</Text><Pressable accessibilityRole="button" onPress={days.reload}><Text style={styles.link}>Try again</Text></Pressable></View>
-                  ) : !days.data?.days.length ? <Text style={styles.hint}>No available dates. Please check again later.</Text> : (
+                  ) : !days.data?.days.length ? <Text style={styles.hint}>
+                    {days.data?.scheduleConfigured === false
+                      ? 'This doctor has no clinic schedule configured yet. Please check again later.'
+                      : 'No available dates. Please check again later.'}
+                  </Text> : (
                     <ScrollView ref={dateStrip} horizontal showsHorizontalScrollIndicator={false} style={styles.dateStrip} contentContainerStyle={styles.dateContent}>
                       {days.data.days.map(day => {
                         const parts = shortDayParts(day.date);
@@ -261,7 +265,11 @@ export function DoctorBookingScreen() {
               {(days.data?.days ?? []).map((day, index) => <Pressable key={day.date} accessibilityRole="button" accessibilityState={{ selected: date === day.date }} onPress={() => { selectDate(day.date); setCalendarOpen(false); dateStrip.current?.scrollTo({ x: index * 64, animated: true }); }} style={[styles.calendarDay, date === day.date && styles.modeActive]}>
                 <Text style={[styles.fieldLabel, date === day.date && styles.whiteText]}>{longDayLabel(day.date)}</Text><Text style={[styles.hint, date === day.date && styles.whiteText]}>{day.slotsRemaining} slots available</Text>
               </Pressable>)}
-              {!days.data?.days.length && <Text style={styles.hint}>No available dates to display.</Text>}
+              {!days.data?.days.length && <Text style={styles.hint}>
+                {days.data?.scheduleConfigured === false
+                  ? 'This doctor has no clinic schedule configured yet.'
+                  : 'No available dates to display.'}
+              </Text>}
             </ScrollView>
           </View>
         </View>

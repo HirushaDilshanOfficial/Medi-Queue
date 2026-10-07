@@ -10,6 +10,7 @@ import { patientApi } from '../../../services/patientApi';
 import { queueApi } from '../../../services/queueApi';
 import { clearAuthToken } from '../../../services/http';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
+import { calendarDateLabel } from '../../../utils/opdDates';
 import type { VisitRecord } from '../../../types/patient';
 import { ProfileIcon } from '../../../components/patient/ProfileIcon';
 import { AccountRow, Avatar, EmptyState, IconButton, isPrescription, Metric, PersonalInfo, VisitCard } from './ProfileParts';
@@ -189,7 +190,7 @@ export function PatientProfileScreen() {
       {tab === 'Documents' ? <View style={styles.section}>
         <View style={styles.sectionHeading}><Text accessibilityRole="header" style={styles.sectionTitle}>Medical Documents</Text><Pressable accessibilityRole="button" onPress={() => router.push('/(patient)/profile/report/new')} style={styles.exportButton}><Text style={styles.link}>Add report</Text></Pressable></View>
         {history.loading && !history.data ? <ActivityIndicator color={C.primary} /> : history.error ? <EmptyState title="Could not load documents" body={history.error} onRetry={reloadHistory} /> : reports.length ? reports.map(report =>
-          <Pressable key={report.id} accessibilityRole="button" onPress={() => showMessage(report.title, [report.category, report.reportDate, report.notes, report.fileName ? `File reference: ${report.fileName}` : null, 'The original document is held by the clinic.'].filter(Boolean).join('\n\n'))} style={styles.documentCard}>
+          <Pressable key={report.id} accessibilityRole="button" onPress={() => showMessage(report.title, [report.category, calendarDateLabel(report.reportDate), report.notes, report.fileName ? `File reference: ${report.fileName}` : null, 'The original document is held by the clinic.'].filter(Boolean).join('\n\n'))} style={styles.documentCard}>
             <View style={styles.squareIcon}><ProfileIcon name={isPrescription(report) ? 'pill' : 'clipboard'} /></View><View style={styles.grow}><Text style={styles.rowTitle}>{report.title}</Text><Text style={styles.caption}>{report.category} • {report.status === 'reviewed' ? 'Reviewed' : 'Pending review'}</Text></View><ProfileIcon name="arrow" size={16} /></Pressable>) : <EmptyState title="No documents yet" body="Add a lab report, referral or prescription to your profile." />}
         <Pressable accessibilityRole="button" onPress={openReports} style={styles.moreButton}><Text style={styles.link}>Manage medical reports</Text><ProfileIcon name="arrow" size={16} /></Pressable>
       </View> : null}

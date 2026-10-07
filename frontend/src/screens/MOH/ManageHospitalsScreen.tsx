@@ -182,6 +182,12 @@ export default function ManageHospitalsScreen() {
                     <View style={styles.hospitalIconContainer}>
                       <Text style={styles.hospitalIcon}>🏥</Text>
                     </View>
+                    <TouchableOpacity
+                      style={styles.clinicButton}
+                      onPress={() => router.push(`/(moh)/manage-clinics?hospitalId=${hospital._id}&hospitalName=${encodeURIComponent(hospital.name)}`)}
+                    >
+                      <Text style={styles.clinicButtonText}>Configure clinics</Text>
+                    </TouchableOpacity>
                     <View style={styles.hospitalInfo}>
                       <Text style={styles.hospitalName} numberOfLines={1}>{hospital.name}</Text>
                       <Text style={styles.hospitalDetails}>{hospital.type} • {hospital.location}</Text>
@@ -421,6 +427,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 16,
+  },
+  clinicButton: {
+    marginRight: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#e8f5f6',
+  },
+  clinicButtonText: {
+    color: Colors.primaryDark,
+    fontSize: 11,
+    fontWeight: '700',
   },
   hospitalIconContainer: {
     width: 44,
