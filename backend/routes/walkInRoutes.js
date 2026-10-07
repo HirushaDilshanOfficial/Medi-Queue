@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
-const { searchPatients, getSlots, walkInBooking } = require('../controllers/walkInController');
+const {
+  searchPatients,
+  getSlots,
+  walkInBooking,
+  getPreBookedAppointments,
+} = require('../controllers/walkInController');
 const {
   callNext,
   recallToken,
@@ -13,7 +18,10 @@ const {
 } = require('../controllers/queueController');
 
 // All routes below require auth + receptionist role
-router.use(protect, authorizeRoles('receptionist', 'doctor'));
+router.use(protect, authorizeRoles('receptionist', 'admin', 'doctor'));
+
+// GET /api/reception/pre-booked?date=&q=
+router.get('/pre-booked', getPreBookedAppointments);
 
 // GET /api/reception/patients/search?q=
 router.get('/patients/search', searchPatients);

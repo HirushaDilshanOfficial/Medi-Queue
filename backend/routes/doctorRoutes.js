@@ -13,7 +13,7 @@ const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 router.get('/departments', protect, patientOnly, listDepartments);
 router.get('/', protect, patientOnly, listDoctors);
 // Reception mounts this router at /api/reception, so expose /doctors there.
-router.get('/doctors', protect, authorizeRoles('receptionist'), listDoctors);
-router.get('/:id', protect, patientOnly, getDoctor);
+router.get('/doctors', protect, authorizeRoles('receptionist', 'admin', 'doctor'), listDoctors);
+router.get('/:id([0-9a-fA-F]{24})', protect, patientOnly, getDoctor);
 
 module.exports = router;

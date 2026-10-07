@@ -7,8 +7,10 @@ export interface WalkInPatientState {
   name?: string;
   nic: string;
   phone: string;
+  dob?: string;
   age: string | number;
   gender: 'male' | 'female' | 'other' | '';
+  bloodGroup?: string;
 }
 
 export interface WalkInFormState {
@@ -27,8 +29,10 @@ const INITIAL_PATIENT_STATE: WalkInPatientState = {
   fullName: '',
   nic: '',
   phone: '',
+  dob: '',
   age: '',
   gender: '',
+  bloodGroup: '',
 };
 
 const INITIAL_FORM_STATE: WalkInFormState = {
@@ -143,7 +147,7 @@ export const useWalkInForm = (
       }
 
       // Direct patient field aliases
-      if (['fullName', 'name', 'nic', 'phone', 'age', 'gender'].includes(field)) {
+      if (['fullName', 'name', 'nic', 'phone', 'dob', 'age', 'gender', 'bloodGroup'].includes(field)) {
         const targetField = field === 'name' ? 'fullName' : field;
         delete newErrors[targetField];
         delete newErrors[field];

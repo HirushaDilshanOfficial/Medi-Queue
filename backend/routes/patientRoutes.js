@@ -9,20 +9,19 @@ const {
   deleteMyReport,
   getDashboard,
 } = require('../controllers/patientController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 const { loadPatientProfile, patientOnly } = require('../middleware/patientMiddleware');
 
-router.use(protect, patientOnly, loadPatientProfile);
+// Patient portal routes (/api/v1/patients/me*) -> Patient role only
+const patientAuth = [protect, patientOnly, loadPatientProfile];
+router.get('/me', ...patientAuth, getMyProfile);
+router.patch('/me', ...patientAuth, updateMyProfile);
+router.get('/me/dashboard', ...patientAuth, getDashboard);
+router.get('/me/history', ...patientAuth, getMyHistory);
+router.get('/me/reports', ...patientAuth, getMyReports);
+router.post('/me/reports', ...patientAuth, createMyReport);
+router.delete('/me/reports/:id', ...patientAuth, deleteMyReport);
 
-router.get('/me', getMyProfile);
-router.patch('/me', updateMyProfile);
-router.get('/me/dashboard', getDashboard);
-router.get('/me/history', getMyHistory);
-router.get('/me/reports', getMyReports);
-router.post('/me/reports', createMyReport);
-router.delete('/me/reports/:id', deleteMyReport);
- 
-const { authorizeRoles } = require('../middleware/authMiddleware');
 const {
   getPatients,
   getPatientById,
@@ -31,22 +30,22 @@ const {
   verifyPatientNIC,
 } = require('../controllers/patientController');
 
-// All reception patient routes require auth + receptionist role
-router.use(protect, authorizeRoles('receptionist'));
+// Reception patient routes (/api/reception/patients*) -> Receptionist/Admin/Doctor
+const receptionAuth = [protect, authorizeRoles('receptionist', 'admin', 'doctor')];
 
 // /patients/search MUST be registered BEFORE /patients/:id
-router.get('/patients/search', searchPatients);
+router.get('/patients/search', ...receptionAuth, searchPatients);
 
 // GET /patients?filter=visited_today|recent|all
-router.get('/patients', getPatients);
+router.get('/patients', ...receptionAuth, getPatients);
 
 // POST /patients/:id/verify-nic
-router.post('/patients/:id/verify-nic', verifyPatientNIC);
+router.post('/patients/:id/verify-nic', ...receptionAuth, verifyPatientNIC);
 
 // GET /patients/:id
-router.get('/patients/:id', getPatientById);
+router.get('/patients/:id', ...receptionAuth, getPatientById);
 
 // PATCH /patients/:id
-router.patch('/patients/:id', updatePatientProfile);
+router.patch('/patients/:id', ...receptionAuth, updatePatientProfile);
 
 module.exports = router;

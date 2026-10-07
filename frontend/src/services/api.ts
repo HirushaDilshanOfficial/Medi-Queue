@@ -235,11 +235,42 @@ export interface WalkInPatientInput {
 export interface WalkInPayload {
   patient?: WalkInPatientInput;
   existingPatientId?: string;
+  appointmentId?: string;
   department: string;
   doctorId: string;
   date: string;
   slotTime?: string;
   priority?: 'normal' | 'senior' | 'urgent';
+  type?: 'walk_in' | 'pre_booked';
+  intakeType?: 'walk_in' | 'pre_booked';
+}
+
+export interface PreBookedAppointment {
+  _id: string;
+  bookingRef: string;
+  date: string;
+  slotTime: string;
+  department: string;
+  status: string;
+  type: string;
+  priority?: 'normal' | 'senior' | 'urgent';
+  tokenNumber?: number | null;
+  tokenLabel?: string | null;
+  queueStatus?: string | null;
+  patient: {
+    _id: string;
+    fullName: string;
+    nic: string;
+    phone: string;
+    age?: number;
+    gender?: 'male' | 'female' | 'other';
+  } | null;
+  doctor: {
+    _id: string;
+    name: string;
+    department?: string;
+    room?: string;
+  } | null;
 }
 
 export interface WalkInResponse {
@@ -351,6 +382,24 @@ export const createWalkIn = async (
   token?: string
 ): Promise<WalkInResponse> => {
   return api.post<WalkInResponse>('/api/reception/walk-in', data, { token });
+};
+
+/**
+ * List or search pre-booked appointments for today or a specific date.
+ */
+export const getPreBookedAppointments = async (
+  date?: string,
+  query?: string,
+  token?: string
+): Promise<{ success: boolean; count: number; appointments: PreBookedAppointment[] }> => {
+  const params = new URLSearchParams();
+  if (date) params.append('date', date);
+  if (query) params.append('q', query);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return api.get<{ success: boolean; count: number; appointments: PreBookedAppointment[] }>(
+    `/api/reception/pre-booked${qs}`,
+    { token }
+  );
 };
 
 /**

@@ -659,7 +659,7 @@ const searchPatients = asyncHandler(async (req, res) => {
     $or: conditions,
     isDeleted: { $ne: true },
   })
-    .select('fullName nic phone age gender nicVerified')
+    .select('fullName nic phone age gender dob bloodGroup nicVerified')
     .limit(10)
     .lean();
 

@@ -2,6 +2,7 @@ const Doctor = require('../models/Doctor');
 const Schedule = require('../models/Schedule');
 const Slot = require('../models/Slot');
 const OpdAppointment = require('../models/OpdAppointment');
+const Appointment = require('../models/Appointment');
 const { localDate } = require('../models/receptionistFields');
 const { today } = require('../utils/opdQueue');
 const { clockLabel, isValidObjectId } = require('../utils/opdAppointment');
@@ -40,16 +41,29 @@ async function scheduleIds(doctorId) {
  * the caller compares against the slot's own capacity.
  */
 async function bookedCounts(doctorId, dateKeys) {
-  const appointments = await OpdAppointment.find({
-    doctor: doctorId,
-    date: { $in: dateKeys },
-    status: { $in: ACTIVE_STATUSES },
-  })
-    .select('date slotTime')
-    .lean();
+  const [appointments, recAppointments] = await Promise.all([
+    OpdAppointment.find({
+      doctor: doctorId,
+      date: { $in: dateKeys },
+      status: { $in: ACTIVE_STATUSES },
+    })
+      .select('date slotTime')
+      .lean(),
+    Appointment.find({
+      doctor: doctorId,
+      date: { $in: dateKeys },
+      status: { $nin: ['cancelled', 'no_show'] },
+    })
+      .select('date slotTime')
+      .lean(),
+  ]);
 
   const counts = new Map();
   for (const appointment of appointments) {
+    const key = `${appointment.date}|${appointment.slotTime}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  for (const appointment of recAppointments) {
     const key = `${appointment.date}|${appointment.slotTime}`;
     counts.set(key, (counts.get(key) || 0) + 1);
   }
