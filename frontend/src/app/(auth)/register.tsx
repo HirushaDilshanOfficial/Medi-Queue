@@ -200,7 +200,7 @@ export default function RegisterScreen() {
       {renderDropdownModal(showBloodGroupDropdown, setShowBloodGroupDropdown, bloodGroups, setBloodGroup, 'Select Blood Group')}
 
       {/* Date Picker */}
-      {Platform.OS === 'ios' ? (
+      {Platform.OS === 'ios' || Platform.OS === 'web' ? (
         <Modal visible={showDatePicker} transparent animationType="slide">
           <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
             <View style={{ backgroundColor: Colors.white, padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 40 }}>
@@ -216,15 +216,32 @@ export default function RegisterScreen() {
                   <Text style={{ color: Colors.primary, fontWeight: 'bold', fontSize: 16 }}>Done</Text>
                 </TouchableOpacity>
               </View>
-              <DateTimePicker
-                value={date}
-                mode="date"
-                display="spinner"
-                maximumDate={new Date()}
-                onChange={(event, selectedDate) => {
-                  if (selectedDate) setDate(selectedDate);
-                }}
-              />
+              {Platform.OS === 'web' ? (
+                <input
+                  type="date"
+                  value={birthday}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    if (value) {
+                      setBirthday(value);
+                      setDate(new Date(`${value}T12:00:00`));
+                    }
+                  }}
+                  style={{ width: '100%', minHeight: 52, fontSize: 16, padding: 12, border: '1px solid #D7DDE5', borderRadius: 8 }}
+                  aria-label="Choose birthday"
+                />
+              ) : (
+                <DateTimePicker
+                  value={date}
+                  mode="date"
+                  display="spinner"
+                  maximumDate={new Date()}
+                  onChange={(event, selectedDate) => {
+                    if (selectedDate) setDate(selectedDate);
+                  }}
+                />
+              )}
             </View>
           </View>
         </Modal>

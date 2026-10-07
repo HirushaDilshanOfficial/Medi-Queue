@@ -6,11 +6,13 @@ import {
   ScrollView,
   Pressable,
   KeyboardAvoidingView,
+  Modal,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { PatientTheme } from '../../../constants/PatientTheme';
 import { patientApi } from '../../../services/patientApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
@@ -18,7 +20,7 @@ import type { ReportDraft } from '../../../types/patient';
 import { ScreenHeader } from '../../../components/patient/ScreenHeader';
 import { ScreenLoader } from '../../../components/patient/ScreenStates';
 import { FormField, ChipGroup } from '../../../components/patient/FormField';
-import { dayLabel, todayKey } from '../../../utils/opdDates';
+import { calendarDateLabel, dayLabel, todayKey } from '../../../utils/opdDates';
 
 // Suggestions, not a closed list. The category is stored as free text so the
 // hospital can add a type without needing an app release.
@@ -53,6 +55,9 @@ export function AddReportScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [pickerDate, setPickerDate] = useState(() => new Date());
+  const [openingFile, setOpeningFile] = useState(false);
 
   useEffect(() => {
     const report = existing.data?.report;
@@ -60,6 +65,7 @@ export function AddReportScreen() {
     setTitle(report.title);
     setCategory(report.category);
     setReportDate(report.reportDate ? report.reportDate.slice(0, 10) : '');
+    if (report.reportDate) setPickerDate(new Date(`${report.reportDate.slice(0, 10)}T12:00:00`));
     setFileName(report.fileName ?? '');
     setNotes(report.notes ?? '');
     setAppointmentId(report.appointmentId);
@@ -155,6 +161,33 @@ export function AddReportScreen() {
     setFileName(file.name);
   }, []);
 
+  const openDatePicker = useCallback(() => {
+    if (reportDate) setPickerDate(new Date(`${reportDate}T12:00:00`));
+    setDatePickerOpen(true);
+  }, [reportDate]);
+
+  const selectReportDate = useCallback((value: Date) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    setReportDate(`${year}-${month}-${day}`);
+    setDatePickerOpen(false);
+    setError(null);
+  }, []);
+
+  const openExistingFile = useCallback(async () => {
+    const report = existing.data?.report;
+    if (!report) return;
+    setOpeningFile(true);
+    try {
+      await patientApi.openReportFile(report);
+    } catch (fileError) {
+      setError(fileError instanceof Error ? fileError.message : 'Could not open the attached file.');
+    } finally {
+      setOpeningFile(false);
+    }
+  }, [existing.data]);
+
   if ((history.loading && !history.data) || (reportId && existing.loading && !existing.data)) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
@@ -217,15 +250,30 @@ export function AddReportScreen() {
             options={CATEGORIES}
             onChange={(value) => setCategory(value ?? 'General')}
           />
-          <FormField
-            label="Report date"
-            value={reportDate}
-            onChangeText={setReportDate}
-            placeholder="YYYY-MM-DD"
-            hint="The date printed on the report, not today"
-            optional
-            maxLength={10}
-          />
+          <Text style={styles.dateLabel}>Report date <Text style={styles.optional}>(Optional)</Text></Text>
+          {Platform.OS === 'web' ? (
+            <View style={styles.dateButton}>
+              <input
+                type="date"
+                value={reportDate}
+                max={todayKey()}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setReportDate(value);
+                  setError(null);
+                }}
+                style={styles.webDateInput}
+                aria-label="Choose report date"
+              />
+            </View>
+          ) : (
+            <Pressable onPress={openDatePicker} style={styles.dateButton} accessibilityRole="button">
+              <Text style={reportDate ? styles.dateValue : styles.datePlaceholder}>
+                {calendarDateLabel(reportDate) || 'Choose report date'}
+              </Text>
+            </Pressable>
+          )}
+          <Text style={styles.dateHint}>The date printed on the report, not today</Text>
           <FormField
             label="File name"
             value={fileName}
@@ -239,6 +287,12 @@ export function AddReportScreen() {
             <Text style={styles.fileButtonLabel}>{selectedFile ? 'Change attached file' : 'Attach PDF or image'}</Text>
             <Text style={styles.fileButtonHint}>{selectedFile?.name ?? 'Maximum 10 MB'}</Text>
           </Pressable>
+          {reportId && existing.data?.report.fileUrl && !selectedFile ? (
+            <Pressable onPress={openExistingFile} style={styles.openFileButton} accessibilityRole="button" disabled={openingFile}>
+              <Text style={styles.openFileLabel}>{openingFile ? 'Opening attached file...' : 'Open current attached file'}</Text>
+              <Text style={styles.fileButtonHint}>{fileName}</Text>
+            </Pressable>
+          ) : null}
           <FormField
             label="Notes"
             value={notes}
@@ -313,6 +367,40 @@ export function AddReportScreen() {
         {error ? <Text style={styles.inlineError}>{error}</Text> : null}
       </ScrollView>
 
+      <Modal visible={Platform.OS !== 'web' && datePickerOpen} transparent animationType="slide" onRequestClose={() => setDatePickerOpen(false)}>
+        <View style={styles.dateModalBackdrop}>
+          <View style={styles.dateModal}>
+            <View style={styles.dateModalActions}>
+              <Pressable onPress={() => setDatePickerOpen(false)}><Text style={styles.dateAction}>Cancel</Text></Pressable>
+              <Pressable onPress={() => Platform.OS === 'web' ? setDatePickerOpen(false) : selectReportDate(pickerDate)}>
+                <Text style={styles.dateAction}>Done</Text>
+              </Pressable>
+            </View>
+            {Platform.OS === 'web' ? (
+              <input
+                type="date"
+                value={reportDate}
+                max={todayKey()}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  if (value) setReportDate(value);
+                }}
+                style={styles.webDateInput}
+                aria-label="Choose report date"
+              />
+            ) : (
+              <DateTimePicker
+                value={pickerDate}
+                mode="date"
+                display={Platform.OS === 'android' ? 'calendar' : 'spinner'}
+                maximumDate={new Date()}
+                onChange={(_, value) => { if (value) setPickerDate(value); }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <View style={[styles.footer, { paddingBottom: insets.bottom + PatientTheme.spaceSm }]}>
         <Pressable
           onPress={onSubmit}
@@ -351,6 +439,41 @@ const styles = StyleSheet.create({
   },
   fileButtonLabel: { color: PatientTheme.brand, fontWeight: '700' },
   fileButtonHint: { color: PatientTheme.textSecondary, marginTop: 4 },
+  openFileButton: {
+    borderWidth: 1,
+    borderColor: PatientTheme.brand,
+    borderRadius: PatientTheme.radiusMd,
+    padding: PatientTheme.spaceMd,
+    backgroundColor: PatientTheme.surfaceMuted,
+  },
+  openFileLabel: { color: PatientTheme.brand, fontWeight: '700' },
+  dateLabel: { color: PatientTheme.textPrimary, fontWeight: '700' },
+  optional: { color: PatientTheme.textSecondary, fontWeight: '400' },
+  dateButton: {
+    borderWidth: 1,
+    borderColor: PatientTheme.border,
+    borderRadius: PatientTheme.radiusMd,
+    padding: PatientTheme.spaceMd,
+    backgroundColor: PatientTheme.surface,
+  },
+  dateValue: { color: PatientTheme.textPrimary },
+  datePlaceholder: { color: PatientTheme.textSecondary },
+  dateHint: { color: PatientTheme.textSecondary, fontSize: PatientTheme.designType.caption, marginTop: -8 },
+  dateModalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  dateModal: { backgroundColor: PatientTheme.surface, padding: PatientTheme.spaceLg, borderTopLeftRadius: PatientTheme.radiusLg, borderTopRightRadius: PatientTheme.radiusLg },
+  dateModalActions: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: PatientTheme.spaceMd },
+  dateAction: { color: PatientTheme.brand, fontWeight: '700', fontSize: PatientTheme.designType.body },
+  webDateInput: {
+    width: '100%',
+    minHeight: 44,
+    borderWidth: 0,
+    padding: 0,
+    boxSizing: 'border-box',
+    fontSize: 16,
+    color: PatientTheme.textPrimary,
+    backgroundColor: 'transparent',
+    outlineStyle: 'none',
+  } as React.CSSProperties,
   loadError: {
     margin: PatientTheme.spaceLg,
     padding: PatientTheme.spaceLg,

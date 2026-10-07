@@ -128,6 +128,14 @@ export default function PatientTabsLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="profile/report/[id]"
+        options={{
+          title: 'Edit report',
+          href: null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
     </Tabs>
   );
 }

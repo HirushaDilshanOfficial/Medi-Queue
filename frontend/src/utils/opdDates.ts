@@ -56,6 +56,18 @@ export function longDayLabel(dateKey: string): string {
   });
 }
 
+// A clear date for forms and report details, without exposing the storage
+// format used by the date input and API.
+export function calendarDateLabel(dateKey: string | null | undefined): string | null {
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+  return keyToUtcDate(dateKey).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 // Weekday initials plus day number, for the horizontal day strip in booking.
 export function shortDayParts(dateKey: string): { weekday: string; day: string; month: string } {
   const date = keyToUtcDate(dateKey);
