@@ -39,6 +39,7 @@ export function PatientDashboardScreen() {
   const dashboard = useAsyncResource(() => patientApi.getDashboard(), []);
   const clinics = useAsyncResource(() => clinicApi.list(), []);
   const { reload } = dashboard;
+  const reloadClinics = clinics.reload;
   const hasFocused = useRef(false);
   const [now, setNow] = useState(() => new Date());
   const [sheet, setSheet] = useState<{ title: string; body: string } | null>(null);
@@ -70,8 +71,8 @@ export function PatientDashboardScreen() {
     if (hasFocused.current) reload();
     hasFocused.current = true;
     checkUnreadNotifications();
-    void clinics.reload();
-  }, [clinics, reload]));
+    void reloadClinics();
+  }, [reload, reloadClinics]));
 
   const data = dashboard.data;
   const name = data?.patient.fullName.trim().split(/\s+/)[0] || 'there';

@@ -65,24 +65,28 @@ export function DoctorDirectoryScreen() {
           }),
     [tab],
   );
+  const reloadDoctors = doctors.reload;
+  const reloadDepartments = departments.reload;
+  const reloadClinics = clinics.reload;
+  const reloadBookings = bookings.reload;
 
   useFocusEffect(
     useCallback(() => {
-      void doctors.reload();
-      void departments.reload();
-      void clinics.reload();
-    }, [clinics, departments, doctors]),
+      void reloadDoctors();
+      void reloadDepartments();
+      void reloadClinics();
+    }, [reloadClinics, reloadDepartments, reloadDoctors]),
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
-      tab === 'bookings' ? bookings.reload() : doctors.reload(),
-      departments.reload(),
-      clinics.reload(),
+      tab === 'bookings' ? reloadBookings() : reloadDoctors(),
+      reloadDepartments(),
+      reloadClinics(),
     ]);
     setRefreshing(false);
-  }, [bookings, clinics, departments, doctors, tab]);
+  }, [reloadBookings, reloadClinics, reloadDepartments, reloadDoctors, tab]);
 
   const openDoctor = useCallback(
     (doctor: Doctor) => {
