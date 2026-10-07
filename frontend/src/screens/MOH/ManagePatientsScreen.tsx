@@ -12,6 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
+import { Ionicons } from '@expo/vector-icons';
+import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function ManagePatientsScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
@@ -24,6 +26,7 @@ export default function ManagePatientsScreen() {
   }, []);
 
   const [activeFilter, setActiveFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
@@ -127,9 +130,14 @@ export default function ManagePatientsScreen() {
     );
   };
 
-  const filteredPatients = activeFilter === 'All' 
-    ? patients 
-    : patients.filter(p => p.gender === activeFilter);
+  const filteredPatients = patients.filter(p => {
+    const matchesFilter = activeFilter === 'All' || p.gender === activeFilter;
+    const matchesSearch = searchQuery === '' || 
+      (p.fullName && p.fullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (p.nic && p.nic.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (p.patientNo && p.patientNo.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -138,7 +146,13 @@ export default function ManagePatientsScreen() {
         
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(moh)/dashboard');
+            }
+          }} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Patient Management</Text>
@@ -153,11 +167,13 @@ export default function ManagePatientsScreen() {
           </View>
 
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons name="search" size={18} color={Colors.textLight} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search by name, NIC or Patient ID..."
               placeholderTextColor={Colors.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </View>
 
@@ -206,7 +222,7 @@ export default function ManagePatientsScreen() {
                 >
                   <View style={styles.cardHeader}>
                     <View style={styles.patientIconContainer}>
-                      <Text style={styles.patientIcon}>{patient.gender === 'Female' ? '👩' : '👨'}</Text>
+                      <Ionicons name={patient.gender === 'Female' ? 'woman' : 'man'} size={24} color={Colors.primary} />
                     </View>
                     <View style={styles.patientInfo}>
                       <Text style={styles.patientName} numberOfLines={1}>{patient.fullName}</Text>
@@ -275,17 +291,20 @@ export default function ManagePatientsScreen() {
                   params: { editPatientData: JSON.stringify(selectedPatient) }
                 });
               }}>
-                <Text style={styles.actionOptionText}>✏️ Edit Details</Text>
+                <Ionicons name="pencil" size={18} color={Colors.textDark} style={{ marginRight: 12 }} />
+                <Text style={styles.actionOptionText}>Edit Details</Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOption} onPress={() => handleToggleStatus(selectedPatient)}>
+                <Ionicons name={selectedPatient?.status === 'Active' ? 'pause-circle' : 'play-circle'} size={18} color={Colors.textDark} style={{ marginRight: 12 }} />
                 <Text style={styles.actionOptionText}>
-                  {selectedPatient?.status === 'Active' ? '⏸ Deactivate' : '▶️ Activate'}
+                  {selectedPatient?.status === 'Active' ? 'Deactivate' : 'Activate'}
                 </Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionOptionDelete} onPress={() => handleDelete(selectedPatient)}>
-                <Text style={styles.actionOptionTextDelete}>🗑 Delete Patient</Text>
+                <Ionicons name="trash" size={18} color={Colors.error} style={{ marginRight: 12 }} />
+                <Text style={styles.actionOptionTextDelete}>Delete Patient</Text>
               </TouchableOpacity>
               
               <View style={styles.actionSheetDivider} />
@@ -334,6 +353,7 @@ export default function ManagePatientsScreen() {
           </TouchableOpacity>
         </Modal>
 
+        <MOHBottomNav activeTab="patients" />
       </SafeAreaView>
     </View>
   );
@@ -365,7 +385,7 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   topSection: {
     paddingHorizontal: 20,

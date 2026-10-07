@@ -4,8 +4,10 @@ import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { BASE_URL } from '../../config';
+import { Ionicons } from '@expo/vector-icons';
 
 import { getAuthToken, clearAuthToken } from '../../services/http';
+import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
@@ -87,7 +89,13 @@ export default function ProfileScreen() {
           {/* Header */}
           <View style={styles.headerBackground}>
             <View style={styles.headerTop}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+              <TouchableOpacity onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/(moh)/dashboard');
+                }
+              }} style={styles.iconButton}>
                 <Text style={styles.iconText}>←</Text>
               </TouchableOpacity>
               <Text style={styles.headerTitle}>My Profile</Text>
@@ -110,7 +118,7 @@ export default function ProfileScreen() {
               
               <View style={styles.infoRow}>
                 <View style={styles.infoIconBg}>
-                  <Text style={styles.infoIcon}>👤</Text>
+                  <Ionicons name="person" size={20} color={Colors.primaryDark} />
                 </View>
                 <View style={styles.infoTextContainer}>
                   <Text style={styles.infoLabel}>Full Name</Text>
@@ -122,7 +130,7 @@ export default function ProfileScreen() {
 
               <View style={styles.infoRow}>
                 <View style={styles.infoIconBg}>
-                  <Text style={styles.infoIcon}>✉️</Text>
+                  <Ionicons name="mail" size={20} color={Colors.primaryDark} />
                 </View>
                 <View style={styles.infoTextContainer}>
                   <Text style={styles.infoLabel}>Email</Text>
@@ -134,7 +142,7 @@ export default function ProfileScreen() {
 
               <View style={styles.infoRow}>
                 <View style={styles.infoIconBg}>
-                  <Text style={styles.infoIcon}>📞</Text>
+                  <Ionicons name="call" size={20} color={Colors.primaryDark} />
                 </View>
                 <View style={styles.infoTextContainer}>
                   <Text style={styles.infoLabel}>Contact Number</Text>
@@ -148,42 +156,43 @@ export default function ProfileScreen() {
               
               <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/(moh)/edit-profile')}>
                 <View style={styles.settingItemLeft}>
-                  <Text style={styles.settingIcon}>✏️</Text>
+                  <Ionicons name="pencil" size={20} color={Colors.textDark} style={styles.settingIcon} />
                   <Text style={styles.settingText}>Edit Profile</Text>
                 </View>
-                <Text style={styles.settingArrow}>❯</Text>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.settingItem}>
                 <View style={styles.settingItemLeft}>
-                  <Text style={styles.settingIcon}>🔐</Text>
+                  <Ionicons name="lock-closed" size={20} color={Colors.textDark} style={styles.settingIcon} />
                   <Text style={styles.settingText}>Change Password</Text>
                 </View>
-                <Text style={styles.settingArrow}>❯</Text>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.settingItem}>
                 <View style={styles.settingItemLeft}>
-                  <Text style={styles.settingIcon}>🔔</Text>
+                  <Ionicons name="notifications" size={20} color={Colors.textDark} style={styles.settingIcon} />
                   <Text style={styles.settingText}>Notifications</Text>
                 </View>
-                <Text style={styles.settingArrow}>❯</Text>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-              <Text style={styles.logoutIcon}>🚪</Text>
+              <Ionicons name="log-out-outline" size={22} color={Colors.error} style={{ marginRight: 8 }} />
               <Text style={styles.logoutText}>Log Out</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
+        <MOHBottomNav activeTab="profile" />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: 100 },
   headerBackground: {
     backgroundColor: Colors.primaryDark,
     paddingTop: Platform.OS === 'android' ? 20 : 10,

@@ -182,7 +182,10 @@ export default function MOHPolicyDashboardScreen() {
             {epidemicAlerts.length > 0 ? (
               epidemicAlerts.map((alert, index) => (
                 <View key={index} style={styles.warningBox}>
-                  <Text style={styles.warningText}>⚠️ {alert.message}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                    <Ionicons name="warning" size={16} color={Colors.warning} style={{ marginRight: 6, marginTop: 2 }} />
+                    <Text style={[styles.warningText, { flex: 1 }]}>{alert.message}</Text>
+                  </View>
                 </View>
               ))
             ) : (

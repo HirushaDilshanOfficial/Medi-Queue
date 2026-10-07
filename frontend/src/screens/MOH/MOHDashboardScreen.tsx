@@ -11,6 +11,7 @@ import { View,
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import MOHBottomNav from '../../components/MOHBottomNav';
 import { fetchMohDashboard } from '../../services/mohService';
 
 // MOH Dashboard - Expo Router version matching the premium UI design
@@ -213,24 +214,7 @@ export default function MOHDashboardScreen() {
       </ScrollView>
 
       {/* ---- BOTTOM NAVIGATION BAR ---- */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/dashboard')}>
-          <Ionicons name="home" size={24} color={Colors.primaryDark} />
-          <Text style={[styles.navLabel, styles.navLabelActive]}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/manage-hospitals')}>
-          <Ionicons name="business-outline" size={24} color={Colors.textLight} />
-          <Text style={styles.navLabel}>Hospitals</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/manage-staff')}>
-          <Ionicons name="id-card-outline" size={24} color={Colors.textLight} />
-          <Text style={styles.navLabel}>Staff</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/profile')}>
-          <Ionicons name="person-outline" size={24} color={Colors.textLight} />
-          <Text style={styles.navLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>
+      <MOHBottomNav activeTab="home" />
 
         </View>
       </View>

@@ -13,6 +13,7 @@ import {
   Modal,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
 
@@ -150,7 +151,7 @@ export default function AddHospitalScreen() {
                     <Text style={{ color: formData.type ? Colors.textDark : Colors.textLight }}>
                       {formData.type || 'Select Type'}
                     </Text>
-                    <Text style={{ color: Colors.textMedium, fontSize: 12 }}>▼</Text>
+                    <Ionicons name="chevron-down" size={16} color={Colors.textMedium} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -234,7 +235,7 @@ export default function AddHospitalScreen() {
                     styles.modalOptionText,
                     formData.type === type && styles.modalOptionTextActive
                   ]}>{type}</Text>
-                  {formData.type === type && <Text style={styles.modalOptionCheck}>✓</Text>}
+                  {formData.type === type && <Ionicons name="checkmark" size={16} color={Colors.white} style={styles.modalOptionCheck} />}
                 </TouchableOpacity>
               ))}
             </View>
