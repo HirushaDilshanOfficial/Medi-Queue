@@ -4,6 +4,7 @@ const { asyncHandler } = require('../utils/errorHandler');
 const QueueEntry = require('../models/QueueEntry');
 const Patient = require('../models/Patient');
 const { mapDoctor } = require('../utils/mapDoctor');
+const Hospital = require('../models/Hospital');
 
 const ACTIVE_STATUSES = ['booked', 'checked_in', 'in_consultation'];
 
@@ -367,9 +368,90 @@ const updateDoctorStatus = async (req, res) => {
   }
 };
 
+const resolveDoctor = async (req, doctorId) => {
+  if (doctorId) return Doctor.findById(doctorId);
+  if (req.user && req.user._id) {
+    const byStaff = await Doctor.findOne({ staffId: req.user._id });
+    if (byStaff) return byStaff;
+    const byUser = await Doctor.findById(req.user._id).catch(() => null);
+    if (byUser) return byUser;
+  }
+  return Doctor.findOne();
+};
+
+const updateDoctorHospital = async (req, res) => {
+  try {
+    const { doctorId, hospitalId } = req.body;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: 'Hospital ID is required' });
+    }
+
+    const hospital = await Hospital.findOne({ _id: hospitalId, isDeleted: false }).lean();
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: 'Hospital not found' });
+    }
+
+    const doctor = await resolveDoctor(req, doctorId);
+    if (!doctor) {
+      return res.status(404).json({ success: false, message: 'Doctor not found' });
+    }
+
+    doctor.hospital = hospital._id;
+    doctor.hospitalName = hospital.name;
+    await doctor.save();
+
+    return res.json({
+      success: true,
+      doctor: {
+        id: String(doctor._id),
+        hospitalId: String(hospital._id),
+        hospitalName: hospital.name,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getDoctorHospitals = async (req, res) => {
+  try {
+    const hospitals = await Hospital.find({ isDeleted: false, status: 'Active' })
+      .select('name code type location departments')
+      .sort({ name: 1 })
+      .lean();
+    return res.json({ success: true, hospitals });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Call next patient in queue
 // @route   POST /api/v1/doctor/call-next
 // @access  Public / Protected
+const undoPatientConsultation = async (req, res) => {
+  try {
+    const doctor = await resolveDoctor(req, req.body.doctorId);
+    const filter = {
+      status: { $in: ['called', 'in_consultation'] },
+      ...(doctor ? { assignedDoctor: doctor._id } : {}),
+    };
+    const entry = await QueueEntry.findOne(filter).sort({ calledAt: -1 });
+
+    if (!entry) {
+      return res.status(404).json({ success: false, message: 'No active consultation found' });
+    }
+
+    entry.status = 'waiting';
+    entry.calledAt = undefined;
+    entry.completedAt = undefined;
+    await entry.save();
+
+    return res.json({ success: true, message: `Token #${entry.tokenNumber} returned to the queue` });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const callNextPatient = async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -423,6 +505,7 @@ const callNextPatient = async (req, res) => {
         checkedInTime: nextPat.slotTime || '10:30 AM',
         calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
+
       currentSessionState.metrics.currentCallingToken = nextPat.tokenNumber;
       currentSessionState.metrics.waitingCount = Math.max(0, currentSessionState.metrics.waitingCount - 1);
 
@@ -1179,7 +1262,10 @@ module.exports = {
   getReceptionDoctors: getDoctors,
   getDoctorDashboard,
   updateDoctorStatus,
+  updateDoctorHospital,
+  getDoctorHospitals,
   callNextPatient,
+  undoPatientConsultation,
   ringChime,
   callSpecificPatient,
   getDoctorSchedule,
