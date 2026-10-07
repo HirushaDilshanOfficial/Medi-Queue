@@ -44,6 +44,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   const { data, loading, error, refreshing, refresh } = useShiftSummary();
   const { isShiftClosed, setIsShiftClosed } = useShiftContext();
   const [exporting, setExporting] = useState<boolean>(false);
+  const [exportingFormat, setExportingFormat] = useState<'csv' | 'pdf' | null>(null);
   const [closingShift, setClosingShift] = useState<boolean>(false);
   const [shiftClosed, setShiftClosed] = useState<boolean>(isShiftClosed);
 
@@ -109,17 +110,172 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
   };
 
-  const handleExportDailyReport = async () => {
+  const generateShiftReportHtml = (summary: any, csvData: string, dateStr: string): string => {
+    const lines = (csvData || '').trim().split('\n');
+    const rows = lines.slice(1).map((l) => l.split(','));
+
+    const encountersHtml = rows
+      .map(
+        (cols, idx) => `
+      <tr>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; font-weight: 700; color: #006666;">${cols[0] || `OPD-${idx + 1}`}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; font-weight: 600; color: #1E293B;">${cols[1] || '---'}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; color: #64748B;">${cols[2] || '---'}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; color: #64748B;">${cols[3] || '---'}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; color: #334155;">${cols[4] || '---'}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; color: #0284C7; font-weight: 600;">${cols[5] || '---'}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; text-align: center;">
+          <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; ${
+            cols[7]?.toLowerCase().includes('done') || cols[7]?.toLowerCase().includes('checked')
+              ? 'background: #DCFCE7; color: #15803D;'
+              : cols[7]?.toLowerCase().includes('no_show')
+              ? 'background: #FEF3C7; color: #B45309;'
+              : 'background: #F1F5F9; color: #475569;'
+          }">${cols[7] || 'active'}</span>
+        </td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; color: #475569; text-align: center;">${cols[8] || '---'}</td>
+      </tr>
+    `
+      )
+      .join('');
+
+    const doctorsHtml = (summary?.doctors || [])
+      .map(
+        (doc: any) => `
+      <tr>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; font-weight: 600; color: #1E293B;">${doc.name}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; color: #64748B;">${doc.room || 'General OPD'}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; text-align: center; font-weight: 700; color: #006666;">${doc.attended} / ${doc.capacity}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; text-align: center;">
+          <span style="display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; ${
+            doc.status === 'active' ? 'background: #DCFCE7; color: #15803D;' : 'background: #FEF3C7; color: #B45309;'
+          }">${doc.status}</span>
+        </td>
+      </tr>
+    `
+      )
+      .join('');
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Medi-Queue Daily Shift Summary Report - ${dateStr}</title>
+  <style>
+    @media print {
+      body { margin: 0; padding: 12mm; background: #fff !important; }
+      .no-print { display: none !important; }
+      @page { size: A4; margin: 10mm; }
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1E293B; margin: 0; padding: 24px; background: #F8FAFC; }
+    .report-wrap { max-width: 900px; margin: 0 auto; background: #ffffff; border: 1px solid #E2E8F0; border-radius: 12px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .header-bar { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #006666; padding-bottom: 18px; margin-bottom: 24px; }
+    .hospital-title { font-size: 22px; font-weight: 800; color: #006666; margin: 0 0 4px 0; }
+    .report-title { font-size: 14px; font-weight: 600; color: #64748B; margin: 0; }
+    .meta-box { text-align: right; font-size: 12px; color: #64748B; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .kpi-card { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px 14px; }
+    .kpi-num { font-size: 22px; font-weight: 800; color: #0F172A; margin-top: 4px; }
+    .kpi-lbl { font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; }
+    .section-title { font-size: 15px; font-weight: 700; color: #0F172A; margin: 24px 0 10px 0; border-left: 4px solid #006666; padding-left: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px; }
+    th { background: #F1F5F9; color: #475569; text-align: left; padding: 8px 10px; font-weight: 700; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #CBD5E1; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #E2E8F0; font-size: 11px; color: #94A3B8; display: flex; justify-content: space-between; }
+    .print-btn-bar { margin-bottom: 20px; text-align: right; }
+    .print-btn { background: #006666; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="print-btn-bar no-print">
+    <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+  </div>
+  <div class="report-wrap">
+    <div class="header-bar">
+      <div>
+        <h1 class="hospital-title">Medi-Queue Healthcare System</h1>
+        <p class="report-title">End-of-Day Shift Audit & Encounter Report</p>
+      </div>
+      <div class="meta-box">
+        <div><strong>Date:</strong> ${dateStr}</div>
+        <div><strong>Shift:</strong> 08:00 - 16:30 (Counter 01)</div>
+        <div><strong>Generated:</strong> ${new Date().toLocaleTimeString()}</div>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-lbl">Total Registered</div>
+        <div class="kpi-num">${summary?.totalRegistered || rows.length}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">Attended Patients</div>
+        <div class="kpi-num" style="color: #15803D;">${summary?.attended || 0}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">No-Shows</div>
+        <div class="kpi-num" style="color: #B45309;">${summary?.noShows || 0}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">Throughput Rate</div>
+        <div class="kpi-num" style="color: #0284C7;">${summary?.throughputPercent !== undefined ? summary.throughputPercent : 0}%</div>
+      </div>
+    </div>
+
+    ${
+      summary?.doctors && summary.doctors.length > 0
+        ? `
+      <div class="section-title">Physician Clinic Utilization</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Consulting Doctor</th>
+            <th>Room</th>
+            <th style="text-align: center;">Attended / Capacity</th>
+            <th style="text-align: center;">Status</th>
+          </tr>
+        </thead>
+        <tbody>${doctorsHtml}</tbody>
+      </table>
+    `
+        : ''
+    }
+
+    <div class="section-title">Patient Encounter & Token Audit Log</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Token</th>
+          <th>Patient Name</th>
+          <th>NIC</th>
+          <th>Phone</th>
+          <th>Doctor</th>
+          <th>Dept</th>
+          <th style="text-align: center;">Status</th>
+          <th style="text-align: center;">Slot</th>
+        </tr>
+      </thead>
+      <tbody>${
+        encountersHtml ||
+        '<tr><td colspan="8" style="text-align: center; padding: 16px; color: #94A3B8;">No encounter records recorded for this shift.</td></tr>'
+      }</tbody>
+    </table>
+
+    <div class="footer">
+      <span>Medi-Queue Official Audit Log • Confidential Medical Record</span>
+      <span>Verified Counter 01 Reception Desk</span>
+    </div>
+  </div>
+</body>
+</html>`;
+  };
+
+  const handleExportDailyReport = async (format: 'csv' | 'pdf' = 'pdf') => {
     if (exporting) return;
     try {
       setExporting(true);
+      setExportingFormat(format);
       const targetDate = data?.date;
       const csvData = await downloadDailyReport(targetDate);
-
-      if (!csvData || typeof csvData !== 'string' || !csvData.trim()) {
-        showToast(t('No report data available to export for today'), 'warning');
-        return;
-      }
 
       const dateStr =
         targetDate ||
@@ -130,53 +286,105 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           day: '2-digit',
         }).format(new Date());
 
-      const fileName = `daily_report_${dateStr}.csv`;
+      if (format === 'pdf') {
+        const reportHtml = generateShiftReportHtml(data, csvData, dateStr);
+        const fileName = `daily_shift_report_${dateStr}.html`;
 
-      if (Platform.OS === 'web') {
-        // Web browser direct file download
-        const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', fileName);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showToast(t('Daily report downloaded successfully'), 'success');
+        if (Platform.OS === 'web') {
+          try {
+            const printWindow = window.open('', '_blank', 'width=950,height=850');
+            if (printWindow) {
+              printWindow.document.open();
+              printWindow.document.write(reportHtml);
+              printWindow.document.close();
+              printWindow.focus();
+              setTimeout(() => {
+                try {
+                  printWindow.print();
+                } catch (e) {}
+              }, 500);
+            }
+          } catch (e) {
+            console.log('Print window error:', e);
+          }
+
+          const blob = new Blob([reportHtml], { type: 'text/html;charset=utf-8;' });
+          const link = document.createElement('a');
+          const url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', fileName);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showToast(t('Daily PDF report generated successfully'), 'success');
+        } else {
+          const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+          if (!baseDir) {
+            showToast(t('Device storage is not accessible'), 'error');
+            return;
+          }
+          const fileUri = `${baseDir}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, reportHtml, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+
+          const isSharingAvailable = await Sharing.isAvailableAsync();
+          if (isSharingAvailable) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'text/html',
+              dialogTitle: 'Export Daily Shift Report',
+            });
+          }
+          showToast(t('Daily report generated successfully'), 'success');
+        }
       } else {
-        // Mobile FileSystem + Sharing
-        const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-        if (!baseDir) {
-          showToast(t('Device storage is not accessible'), 'error');
+        if (!csvData || typeof csvData !== 'string' || !csvData.trim()) {
+          showToast(t('No report data available to export for today'), 'warning');
           return;
         }
 
-        const fileUri = `${baseDir}${fileName}`;
+        const fileName = `daily_report_${dateStr}.csv`;
 
-        await FileSystem.writeAsStringAsync(fileUri, csvData, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
+        if (Platform.OS === 'web') {
+          const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          const url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', fileName);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showToast(t('Daily CSV report downloaded successfully'), 'success');
+        } else {
+          const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+          if (!baseDir) {
+            showToast(t('Device storage is not accessible'), 'error');
+            return;
+          }
+          const fileUri = `${baseDir}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, csvData, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
 
-        const isSharingAvailable = await Sharing.isAvailableAsync();
-        if (!isSharingAvailable) {
-          showToast(t('Sharing is unavailable on this device. File saved to storage.'), 'warning');
-          return;
+          const isSharingAvailable = await Sharing.isAvailableAsync();
+          if (isSharingAvailable) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'text/csv',
+              dialogTitle: 'Export Daily Shift Report',
+              UTI: 'public.comma-separated-values-text',
+            });
+          }
+          showToast(t('Daily report exported successfully'), 'success');
         }
-
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Export Daily Shift Report',
-          UTI: 'public.comma-separated-values-text',
-        });
-
-        showToast(t('Daily report exported successfully'), 'success');
       }
     } catch (err: any) {
       const msg = getErrorMessage(err) || 'Failed to export daily report';
       showToast(msg, 'error');
     } finally {
       setExporting(false);
+      setExportingFormat(null);
     }
   };
 
@@ -636,35 +844,64 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                     <Ionicons name="document-text" size={24} color={Colors.primary} />
                   </View>
                   <View style={styles.exportHeaderTextWrap}>
-                    <Text style={styles.exportCardTitle}>{t("Daily Shift CSV Audit Log")}</Text>
+                    <Text style={styles.exportCardTitle}>{t("Daily Shift Audit Log & Reports")}</Text>
                     <Text style={styles.exportCardSubtitle}>
-                      {t("Export complete encounter list, token history, and clinic status.")}</Text>
+                      {t("Generate official PDF summary report or export complete CSV audit encounter log.")}</Text>
                   </View>
                 </View>
 
-                <TouchableOpacity
-                  style={[
-                    styles.exportButton,
-                    (exporting || loading) && styles.exportButtonDisabled,
-                  ]}
-                  onPress={handleExportDailyReport}
-                  disabled={exporting || loading}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("Generate and export daily report")}
-                >
-                  {exporting ? (
-                    <View style={styles.exportBtnInner}>
-                      <ActivityIndicator size="small" color={Colors.white} style={{ marginRight: 10 }} />
-                      <Text style={styles.exportButtonText}>{t("Exporting CSV Report...")}</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.exportBtnInner}>
-                      <Ionicons name="share-outline" size={20} color={Colors.white} style={{ marginRight: 8 }} />
-                      <Text style={styles.exportButtonText}>{t("Generate & Export Daily Report")}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
+                {/* Action Buttons: Generate PDF + Export CSV */}
+                <View style={styles.exportButtonsRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.exportButton,
+                      styles.pdfExportButton,
+                      (exporting || loading) && styles.exportButtonDisabled,
+                    ]}
+                    onPress={() => handleExportDailyReport('pdf')}
+                    disabled={exporting || loading}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("Generate and print daily PDF report")}
+                  >
+                    {exporting && exportingFormat === 'pdf' ? (
+                      <View style={styles.exportBtnInner}>
+                        <ActivityIndicator size="small" color={Colors.white} style={{ marginRight: 8 }} />
+                        <Text style={styles.exportButtonText}>{t("Generating PDF...")}</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.exportBtnInner}>
+                        <Ionicons name="print-outline" size={18} color={Colors.white} style={{ marginRight: 6 }} />
+                        <Text style={styles.exportButtonText}>{t("Generate & Print PDF")}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.exportButton,
+                      styles.csvExportButton,
+                      (exporting || loading) && styles.exportButtonDisabled,
+                    ]}
+                    onPress={() => handleExportDailyReport('csv')}
+                    disabled={exporting || loading}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("Export CSV encounter log")}
+                  >
+                    {exporting && exportingFormat === 'csv' ? (
+                      <View style={styles.exportBtnInner}>
+                        <ActivityIndicator size="small" color={Colors.white} style={{ marginRight: 8 }} />
+                        <Text style={styles.exportButtonText}>{t("Exporting CSV...")}</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.exportBtnInner}>
+                        <Ionicons name="share-outline" size={18} color={Colors.white} style={{ marginRight: 6 }} />
+                        <Text style={styles.exportButtonText}>{t("Export CSV Log")}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
@@ -1263,9 +1500,22 @@ const styles = StyleSheet.create({
   },
   exportButtonText: {
     color: Colors.white,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  exportButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  pdfExportButton: {
+    flex: 1,
+    backgroundColor: '#006666',
+  },
+  csvExportButton: {
+    flex: 1,
+    backgroundColor: '#0284C7',
   },
   /* ── Close Shift Card Styles ── */
   closeShiftCard: {
