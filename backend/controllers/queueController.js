@@ -6,6 +6,7 @@ const OpdQueueEntry = require('../models/OpdQueueEntry');
 const { nextTokenNumber, releaseTokenNumber } = require('../models/OpdQueueCounter');
 const { today, buildLiveState, buildBoard, ACTIVE_STATUSES } = require('../utils/opdQueue');
 const { relativeDate, humanDate, isValidObjectId } = require('../utils/opdAppointment');
+const Policy = require('../models/Policy');
 
 const APPOINTMENT_ACTIVE = OpdAppointment.ACTIVE_STATUSES;
 
@@ -109,7 +110,8 @@ const checkIn = async (req, res, next) => {
     }
 
     const doctor = await Doctor.findById(appointment.doctor).select('avgConsultMinutes room').lean();
-    const avgConsultMinutes = Number(doctor && doctor.avgConsultMinutes) || 10;
+    const policy = await Policy.findOne() || { targetWaitTime: 10 };
+    const avgConsultMinutes = Number(doctor && doctor.avgConsultMinutes) || policy.targetWaitTime;
 
     const tokenNumber = await nextTokenNumber(appointment.department, todayKey);
 
@@ -325,13 +327,15 @@ const getQueue = asyncHandler(async (req, res) => {
     (t) => t.appointment && t.appointment.type === 'pre_booked'
   ).length;
 
+  const policy = await Policy.findOne() || { targetWaitTime: 10 };
+
   let totalConsultMinutes = 0;
   for (const token of queue) {
-    const consult = token.assignedDoctor?.avgConsultMinutes || 10;
+    const consult = token.assignedDoctor?.avgConsultMinutes || policy.targetWaitTime;
     totalConsultMinutes += consult;
   }
   const avgConsultMinutes =
-    inQueue > 0 ? Math.round(totalConsultMinutes / inQueue) : 10;
+    inQueue > 0 ? Math.round(totalConsultMinutes / inQueue) : policy.targetWaitTime;
   const avgWaitMinutes = inQueue > 0 ? inQueue * avgConsultMinutes : 0;
 
   res.json({

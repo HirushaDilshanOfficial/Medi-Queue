@@ -20,6 +20,7 @@ import { Colors } from '../../constants/Colors';
 import { BASE_URL } from '../../config';
 
 import { getAuthToken } from '../../services/http';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function EditProfileScreen() {
   const { t } = useLanguage();
@@ -123,7 +124,7 @@ export default function EditProfileScreen() {
             {/* Full Name */}
             <Text style={styles.fieldLabel}>{t("Full Name")}</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>👤</Text>
+              <Ionicons name="person" size={20} color={Colors.primary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder={t("Enter full name")}
@@ -136,7 +137,7 @@ export default function EditProfileScreen() {
             {/* Email */}
             <Text style={styles.fieldLabel}>{t("Email Address")}</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>✉️</Text>
+              <Ionicons name="mail" size={20} color={Colors.primary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder={t("Enter email address")}
@@ -151,7 +152,7 @@ export default function EditProfileScreen() {
             {/* Phone */}
             <Text style={styles.fieldLabel}>{t("Contact Number")}</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>📞</Text>
+              <Ionicons name="call" size={20} color={Colors.primary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder={t("Enter contact number")}

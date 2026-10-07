@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function ReportsScreen() {
   const { t } = useLanguage();
@@ -156,7 +157,7 @@ export default function ReportsScreen() {
           <Text style={styles.sectionTitle}>{t("AI System Insights")}</Text>
           <View style={[styles.card, { backgroundColor: '#E0F7FA', borderColor: Colors.primary, borderWidth: 1 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-              <Text style={{ marginRight: 10, fontSize: 18 }}>💡</Text>
+              <Ionicons name="bulb" size={24} color={Colors.primary} style={{ marginRight: 10 }} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.insightTitle}>{t("Resource Allocation Strategy")}</Text>
                 <Text style={styles.insightText}>

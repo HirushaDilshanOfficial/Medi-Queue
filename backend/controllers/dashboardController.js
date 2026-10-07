@@ -4,11 +4,11 @@ const { getOrderedQueue } = require('../services/queueService');
 const Appointment = require('../models/Appointment');
 const Doctor = require('../models/Doctor');
 const QueueToken = require('../models/QueueToken');
+const Policy = require('../models/Policy');
 
 // QueueToken statuses meaning "the patient is in the room with the doctor".
 // callNext marks tokens "called"; "serving" is honoured for legacy/fixture rows.
 const IN_CONSULTATION_STATUSES = ['called', 'serving'];
-const DEFAULT_AVG_CONSULT_MINUTES = 10;
 
 /**
  * @desc    Reception dashboard for a single day: intake split, live queue counts,
@@ -47,10 +47,13 @@ const getReceptionDashboard = asyncHandler(async (req, res) => {
     Doctor.find({ status: { $in: ['active', 'on_break'] } }).lean(),
   ]);
 
+  const policy = await Policy.findOne() || { targetWaitTime: 10 };
+
   // ── 3. Waiting queue: count, mean estimated wait, next token per doctor ──
   const { avgWaitMinutes, nextTokenByDoctor } = summarizeWaitingQueue(
     waitingTokens,
-    inConsultationTokens
+    inConsultationTokens,
+    policy.targetWaitTime
   );
 
   const servingDoctorIds = new Set(
@@ -105,7 +108,7 @@ function shapeIntake(rows) {
 
 // Waiting tokens arrive already ordered (urgent > senior > normal, then tokenNumber),
 // so each doctor's subsequence preserves their real place in line.
-function summarizeWaitingQueue(waitingTokens, inConsultationTokens) {
+function summarizeWaitingQueue(waitingTokens, inConsultationTokens, defaultWaitTime = 10) {
   const inConsultationByDoctor = new Map();
   for (const token of inConsultationTokens) {
     const key = doctorKey(token);
@@ -130,7 +133,7 @@ function summarizeWaitingQueue(waitingTokens, inConsultationTokens) {
       : inConsultationTokens.length + position;
 
     totalEstimateMinutes +=
-      ahead * (token.assignedDoctor?.avgConsultMinutes || DEFAULT_AVG_CONSULT_MINUTES);
+      ahead * (token.assignedDoctor?.avgConsultMinutes || defaultWaitTime);
   }
 
   return {
