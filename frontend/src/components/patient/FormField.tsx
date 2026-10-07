@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, TextInput, Switch, Pressable, type TextInputProps } from 'react-native';
+import { View, StyleSheet, TextInput, Switch, Pressable, type TextInputProps } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 
 // Form primitives for the profile editor. They exist so every field in the
@@ -33,11 +35,12 @@ export function FormField({
   maxLength,
   optional,
 }: FieldProps) {
+  const { t } = useLanguage();
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
         <Text style={styles.label}>{label}</Text>
-        {optional ? <Text style={styles.optional}>Optional</Text> : null}
+        {optional ? <Text style={styles.optional}>{t("Optional")}</Text> : null}
       </View>
       <TextInput
         value={value}
@@ -56,7 +59,7 @@ export function FormField({
         accessibilityHint={hint}
       />
       {error ? (
-        <Text style={styles.error}>{error}</Text>
+        <Text style={styles.error}>{t(error)}</Text>
       ) : hint ? (
         <Text style={styles.hint}>{hint}</Text>
       ) : null}
@@ -88,11 +91,12 @@ export function ChipGroup<T extends string>({
   onChange,
   optional,
 }: ChipGroupProps<T>) {
+  const { t } = useLanguage();
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
         <Text style={styles.label}>{label}</Text>
-        {optional ? <Text style={styles.optional}>Optional</Text> : null}
+        {optional ? <Text style={styles.optional}>{t("Optional")}</Text> : null}
       </View>
       <View style={styles.chipRow}>
         {options.map((option) => {
@@ -110,7 +114,7 @@ export function ChipGroup<T extends string>({
               ]}
             >
               <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
-                {option.label}
+                {t(option.label)}
               </Text>
             </Pressable>
           );

@@ -1,3 +1,4 @@
+import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
@@ -34,6 +35,7 @@ const CATEGORIES = [
 ];
 
 export function AddReportScreen() {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -191,8 +193,8 @@ export function AddReportScreen() {
   if ((history.loading && !history.data) || (reportId && existing.loading && !existing.data)) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
-        <ScreenHeader title={reportId ? 'Edit report' : 'Lodge a report'} showBack />
-        <ScreenLoader label={reportId ? 'Loading your report' : 'Loading your visits'} />
+        <ScreenHeader title={reportId ? t('Edit report') : t('Lodge a report')} showBack />
+        <ScreenLoader label={reportId ? 'Loading your report' : t('Loading your visits')} />
       </View>
     );
   }
@@ -200,16 +202,16 @@ export function AddReportScreen() {
   if (reportId && existing.error) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
-        <ScreenHeader title="Edit report" showBack />
+        <ScreenHeader title={t("Edit report")} showBack />
         <View style={styles.loadError}>
-          <Text style={styles.loadErrorTitle}>Could not load this report</Text>
+          <Text style={styles.loadErrorTitle}>{t("Could not load this report")}</Text>
           <Text style={styles.loadErrorText}>{existing.error}</Text>
           <Pressable
             accessibilityRole="button"
             onPress={existing.reload}
             style={styles.retryButton}
           >
-            <Text style={styles.retryLabel}>Try again</Text>
+            <Text style={styles.retryLabel}>{t("Try again")}</Text>
           </Pressable>
         </View>
       </View>
@@ -223,7 +225,7 @@ export function AddReportScreen() {
     >
       <View style={{ paddingTop: insets.top + PatientTheme.spaceSm }}>
         <ScreenHeader
-          title={reportId ? 'Edit report' : 'Lodge a report'}
+          title={reportId ? t('Edit report') : t('Lodge a report')}
           subtitle={reportId ? 'Update the details for your doctor' : 'Tell your doctor what to look for'}
           showBack
         />
@@ -235,22 +237,22 @@ export function AddReportScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.group}>
-          <Text style={styles.groupTitle}>The report</Text>
+          <Text style={styles.groupTitle}>{t("The report")}</Text>
           <FormField
-            label="Title"
+            label={t("Title")}
             value={title}
             onChangeText={setTitle}
             placeholder="Full blood count"
-            hint="How your doctor will recognise it"
+            hint={t("How your doctor will recognise it")}
             maxLength={120}
           />
           <ChipGroup
-            label="Category"
+            label={t("Category")}
             value={category}
             options={CATEGORIES}
             onChange={(value) => setCategory(value ?? 'General')}
           />
-          <Text style={styles.dateLabel}>Report date <Text style={styles.optional}>(Optional)</Text></Text>
+          <Text style={styles.dateLabel}>{t("Report date")}{' '}<Text style={styles.optional}>{t("(Optional)")}</Text></Text>
           {Platform.OS === 'web' ? (
             <View style={styles.dateButton}>
               <input
@@ -273,13 +275,13 @@ export function AddReportScreen() {
               </Text>
             </Pressable>
           )}
-          <Text style={styles.dateHint}>The date printed on the report, not today</Text>
+          <Text style={styles.dateHint}>{t("The date printed on the report, not today")}</Text>
           <FormField
-            label="File name"
+            label={t("File name")}
             value={fileName}
             onChangeText={setFileName}
             placeholder="blood-count-march.pdf"
-            hint="The attached file name is filled in automatically"
+            hint={t("The attached file name is filled in automatically")}
             optional
             maxLength={160}
           />
@@ -294,10 +296,10 @@ export function AddReportScreen() {
             </Pressable>
           ) : null}
           <FormField
-            label="Notes"
+            label={t("Notes")}
             value={notes}
             onChangeText={setNotes}
-            placeholder="Anything your doctor should know before reading it"
+            placeholder={t("Anything your doctor should know before reading it")}
             multiline
             optional
             maxLength={500}
@@ -306,10 +308,9 @@ export function AddReportScreen() {
 
         {linkableVisits.length ? (
           <View style={styles.group}>
-            <Text style={styles.groupTitle}>Link to a visit</Text>
+            <Text style={styles.groupTitle}>{t("Link to a visit")}</Text>
             <Text style={styles.groupHint}>
-              Optional. Links this report to a visit you already had.
-            </Text>
+              {t("Optional. Links this report to a visit you already had.")}</Text>
             <Pressable
               onPress={() => setAppointmentId(null)}
               accessibilityRole="radio"
@@ -326,8 +327,7 @@ export function AddReportScreen() {
                   appointmentId === null && styles.visitTitleActive,
                 ]}
               >
-                Not linked to a visit
-              </Text>
+                {t("Not linked to a visit")}</Text>
             </Pressable>
 
             {linkableVisits.map((visit) => {
@@ -360,8 +360,7 @@ export function AddReportScreen() {
 
         {history.error ? (
           <Text style={styles.inlineError}>
-            Could not load your visits, so the report will not be linked to one.
-          </Text>
+            {t("Could not load your visits, so the report will not be linked to one.")}</Text>
         ) : null}
 
         {error ? <Text style={styles.inlineError}>{error}</Text> : null}
@@ -371,9 +370,9 @@ export function AddReportScreen() {
         <View style={styles.dateModalBackdrop}>
           <View style={styles.dateModal}>
             <View style={styles.dateModalActions}>
-              <Pressable onPress={() => setDatePickerOpen(false)}><Text style={styles.dateAction}>Cancel</Text></Pressable>
+              <Pressable onPress={() => setDatePickerOpen(false)}><Text style={styles.dateAction}>{t("Cancel")}</Text></Pressable>
               <Pressable onPress={() => Platform.OS === 'web' ? setDatePickerOpen(false) : selectReportDate(pickerDate)}>
-                <Text style={styles.dateAction}>Done</Text>
+                <Text style={styles.dateAction}>{t("Done")}</Text>
               </Pressable>
             </View>
             {Platform.OS === 'web' ? (
@@ -406,14 +405,14 @@ export function AddReportScreen() {
           onPress={onSubmit}
           disabled={saving}
           accessibilityRole="button"
-          accessibilityLabel="Save report"
+          accessibilityLabel={t("Save report")}
           style={({ pressed }) => [
             styles.save,
             pressed && styles.pressed,
             saving && styles.saveDisabled,
           ]}
         >
-          <Text style={styles.saveLabel}>{saving ? 'Saving...' : 'Save report'}</Text>
+          <Text style={styles.saveLabel}>{saving ? t('Saving...') : t('Save report')}</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>

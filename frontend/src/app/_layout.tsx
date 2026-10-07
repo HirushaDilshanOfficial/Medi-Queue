@@ -1,9 +1,10 @@
 import { Stack } from 'expo-router';
+import { LanguageProvider } from '../i18n/LanguageContext';
 
 // Root layout - Expo Router ලේ Stack use කරනවා (SDK 57+)
 export default function RootLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <LanguageProvider><Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)/welcome" />
       <Stack.Screen name="(auth)/login" />
@@ -18,6 +19,6 @@ export default function RootLayout() {
       <Stack.Screen name="(doctor)/prescription" />
       <Stack.Screen name="(doctor)/records" />
       <Stack.Screen name="schedule" />
-    </Stack>
+    </Stack></LanguageProvider>
   );
 }

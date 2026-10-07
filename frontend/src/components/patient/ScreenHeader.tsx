@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage } from './DesignImage';
@@ -14,6 +16,7 @@ type Props = {
 // Header for the Part 2/3 screens, which are pushed without the native stack
 // header so they can keep the dashboard's flat, borderless look.
 export function ScreenHeader({ title, subtitle, showBack = false, action }: Props) {
+  const { t } = useLanguage();
   const router = useRouter();
 
   return (
@@ -22,7 +25,7 @@ export function ScreenHeader({ title, subtitle, showBack = false, action }: Prop
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/(patient)/doctors'))}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel={t("Go back")}
           hitSlop={8}
           style={({ pressed }) => [styles.back, pressed && styles.pressed]}
         >

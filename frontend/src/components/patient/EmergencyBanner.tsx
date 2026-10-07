@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
+import { View, StyleSheet, Pressable, Linking } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage } from './DesignImage';
 
@@ -8,6 +10,7 @@ type Props = {
 };
 
 export function EmergencyBanner({ helpline }: Props) {
+  const { t } = useLanguage();
   const call = () => {
     Linking.openURL(`tel:${helpline}`).catch(() => {
       // A device without telephony throws; the banner stays tappable either way.
@@ -25,8 +28,8 @@ export function EmergencyBanner({ helpline }: Props) {
           <DesignImage name="medical" size={20} color={PatientTheme.emergency} />
       </View>
       <View style={styles.text}>
-        <Text style={styles.title}>24/7 Emergency &amp; Helpline</Text>
-        <Text style={styles.subtitle}>Accident, emergency and ambulance services</Text>
+        <Text style={styles.title}>{t("24/7 Emergency & Helpline")}</Text>
+        <Text style={styles.subtitle}>{t("Accident, emergency and ambulance services")}</Text>
       </View>
       <View style={styles.callPill}>
         <Text style={styles.callText}>{helpline}</Text>

@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 
 type Props = {
@@ -8,6 +10,7 @@ type Props = {
 };
 
 export function SectionHeader({ title, onSeeAllPress }: Props) {
+  const { t } = useLanguage();
   return (
     <View style={styles.root}>
       <Text style={styles.title}>{title}</Text>
@@ -17,7 +20,7 @@ export function SectionHeader({ title, onSeeAllPress }: Props) {
         accessibilityLabel={`See all ${title}`}
         hitSlop={8}
       >
-        <Text style={styles.seeAll}>See All</Text>
+        <Text style={styles.seeAll}>{t("See All")}</Text>
       </Pressable>
     </View>
   );

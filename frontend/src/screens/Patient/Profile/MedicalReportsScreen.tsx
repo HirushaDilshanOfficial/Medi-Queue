@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../../i18n/LocalizedText';
+import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, Pressable, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { PatientTheme } from '../../../constants/PatientTheme';
@@ -11,6 +13,7 @@ import { ScreenLoader, MessageState } from '../../../components/patient/ScreenSt
 import { ReportRow } from '../../../components/patient/ReportRow';
 
 export function MedicalReportsScreen() {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -32,7 +35,7 @@ export function MedicalReportsScreen() {
         [
           { text: 'Keep it', style: 'cancel' },
           {
-            text: 'Remove',
+            text: t('Remove'),
             style: 'destructive',
             onPress: async () => {
               setDeleting(report.id);
@@ -42,7 +45,7 @@ export function MedicalReportsScreen() {
               } catch (error) {
                 Alert.alert(
                   'Could not remove',
-                  error instanceof Error ? error.message : 'Please try again.',
+                  error instanceof Error ? error.message : t('Please try again.'),
                 );
               } finally {
                 setDeleting(null);
@@ -52,7 +55,7 @@ export function MedicalReportsScreen() {
         ],
       );
     },
-    [reports],
+    [reports, t],
   );
 
   const items = reports.data?.reports ?? [];
@@ -61,17 +64,17 @@ export function MedicalReportsScreen() {
     <View style={styles.root}>
       <View style={{ paddingTop: insets.top + PatientTheme.spaceSm }}>
         <ScreenHeader
-          title="Medical reports"
-          subtitle="Results you have lodged with the clinic"
+          title={t("Medical reports")}
+          subtitle={t("Results you have lodged with the clinic")}
           showBack
           action={
             <Pressable
               onPress={() => router.push('/(patient)/profile/report/new')}
               accessibilityRole="button"
-              accessibilityLabel="Lodge a report"
+              accessibilityLabel={t("Lodge a report")}
               style={({ pressed }) => [styles.add, pressed && styles.pressed]}
             >
-              <Text style={styles.addLabel}>Add</Text>
+              <Text style={styles.addLabel}>{t("Add")}</Text>
             </Pressable>
           }
         />
@@ -89,9 +92,7 @@ export function MedicalReportsScreen() {
         ListHeaderComponent={
           <View style={styles.notice}>
             <Text style={styles.noticeText}>
-              Add the details of a report here so your doctor can find it before your
-              next visit. You can attach a PDF or image up to 10 MB.
-            </Text>
+              {t("Add the details of a report here so your doctor can find it before your next visit. You can attach a PDF or image up to 10 MB.")}</Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -103,27 +104,27 @@ export function MedicalReportsScreen() {
         )}
         ListEmptyComponent={
           reports.loading ? (
-            <ScreenLoader label="Loading your reports" />
+            <ScreenLoader label={t("Loading your reports")} />
           ) : reports.error ? (
             <MessageState
               icon="help"
-              title="Could not load your reports"
+              title={t("Could not load your reports")}
               description={reports.error}
-              actionLabel="Try again"
+              actionLabel={t("Try again")}
               onAction={reports.reload}
             />
           ) : (
             <MessageState
               icon="clipboard"
-              title="No reports yet"
-              description="Add a lab result, scan or referral and it will show up here for your doctor to review."
-              actionLabel="Lodge a report"
+              title={t("No reports yet")}
+              description={t("Add a lab result, scan or referral and it will show up here for your doctor to review.")}
+              actionLabel={t("Lodge a report")}
               onAction={() => router.push('/(patient)/profile/report/new')}
             />
           )
         }
         ListFooterComponent={
-          deleting ? <Text style={styles.working}>Removing your report...</Text> : null
+          deleting ? <Text style={styles.working}>{t("Removing your report...")}</Text> : null
         }
       />
     </View>

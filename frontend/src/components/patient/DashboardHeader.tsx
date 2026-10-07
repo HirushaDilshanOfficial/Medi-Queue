@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage } from './DesignImage';
 
@@ -16,12 +18,13 @@ export function DashboardHeader({
   onProfilePress,
   avatarInitial,
 }: Props) {
+  const { t } = useLanguage();
   return (
     <View style={styles.root}>
       <DesignImage name="medical" size={30} color={PatientTheme.accent} style={styles.logo} />
       <View style={styles.titles}>
-        <Text style={styles.eyebrow}>NATIONAL OPD</Text>
-        <Text style={styles.title}>Home Dashboard</Text>
+        <Text style={styles.eyebrow}>{t("NATIONAL OPD")}</Text>
+        <Text style={styles.title}>{t("Home Dashboard")}</Text>
       </View>
 
       <View style={styles.actions}>
@@ -33,7 +36,7 @@ export function DashboardHeader({
         <Pressable
           onPress={onBellPress}
           accessibilityRole="button"
-          accessibilityLabel="Notifications"
+          accessibilityLabel={t("Notifications")}
           hitSlop={8}
           style={styles.iconButton}
         >
@@ -43,7 +46,7 @@ export function DashboardHeader({
         <Pressable
           onPress={onProfilePress}
           accessibilityRole="button"
-          accessibilityLabel="Open profile"
+          accessibilityLabel={t("Open profile")}
           hitSlop={8}
           style={styles.avatar}
         >

@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage, type DesignImageName } from './DesignImage';
 import type { MedicalReport, ReportStatus } from '../../types/patient';
@@ -19,6 +21,7 @@ const STATUS_TEXT: Record<ReportStatus, string> = {
 };
 
 export function ReportRow({ report, onPress, onDelete }: Props) {
+  const { t } = useLanguage();
   const dated = timestampLabel(report.reportDate ?? report.createdAt);
 
   return (
@@ -72,7 +75,7 @@ export function ReportRow({ report, onPress, onDelete }: Props) {
           hitSlop={8}
           style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
         >
-          <Text style={styles.deleteLabel}>Remove</Text>
+          <Text style={styles.deleteLabel}>{t("Remove")}</Text>
         </Pressable>
       ) : null}
     </View>

@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage } from './DesignImage';
@@ -28,6 +30,7 @@ export function QueueCard({
   onPress,
   hasPass = true,
 }: Props) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
@@ -46,7 +49,7 @@ export function QueueCard({
         <View style={styles.headerRow}>
           <DesignImage name="ticket" size={20} color={PatientTheme.accent} />
           <View style={styles.headerText}>
-            <Text style={styles.label}>{hasPass ? 'ACTIVE QUEUE' : 'LIVE QUEUE'}</Text>
+            <Text style={styles.label}>{hasPass ? 'ACTIVE QUEUE' : t('LIVE QUEUE')}</Text>
             <Text style={styles.clinic} numberOfLines={1}>
               {hasPass ? clinicName : 'No active pass today'}
             </Text>
@@ -63,7 +66,7 @@ export function QueueCard({
           <>
             <View style={styles.numberRow}>
               <View>
-                <Text style={styles.numberLabel}>Queue</Text>
+                <Text style={styles.numberLabel}>{t("Queue")}</Text>
                 <Text style={styles.number}>{tokenNumber}</Text>
               </View>
               <View style={styles.roomBlock}>
@@ -79,7 +82,7 @@ export function QueueCard({
           </>
         ) : (
           <View style={styles.checkInRow}>
-            <Text style={styles.checkInLabel}>Open the queue to check in</Text>
+            <Text style={styles.checkInLabel}>{t("Open the queue to check in")}</Text>
             <DesignImage name="arrow" size={16} color={PatientTheme.accent} style={styles.checkInArrow} />
           </View>
         )}

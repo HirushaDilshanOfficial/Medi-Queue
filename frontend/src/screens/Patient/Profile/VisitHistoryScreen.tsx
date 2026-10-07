@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../../i18n/LocalizedText';
+import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   RefreshControl,
@@ -34,6 +35,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export function VisitHistoryScreen() {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -54,8 +56,8 @@ export function VisitHistoryScreen() {
     <View style={styles.root}>
       <View style={{ paddingTop: insets.top + PatientTheme.spaceSm }}>
         <ScreenHeader
-          title="Visit history"
-          subtitle="Every appointment you have booked"
+          title={t("Visit history")}
+          subtitle={t("Every appointment you have booked")}
           showBack
         />
       </View>
@@ -73,9 +75,9 @@ export function VisitHistoryScreen() {
           <View style={styles.header}>
             {summary ? (
               <View style={styles.summaryRow}>
-                <SummaryTile value={summary.totalVisits} label="Seen" />
-                <SummaryTile value={summary.noShow} label="Missed" />
-                <SummaryTile value={summary.cancelled} label="Cancelled" />
+                <SummaryTile value={summary.totalVisits} label={t("Seen")} />
+                <SummaryTile value={summary.noShow} label={t("Missed")} />
+                <SummaryTile value={summary.cancelled} label={t("Cancelled")} />
               </View>
             ) : null}
 
@@ -84,7 +86,7 @@ export function VisitHistoryScreen() {
                 of it. */}
             {reports.length ? (
               <View style={styles.looseReports}>
-                <Text style={styles.looseTitle}>Reports not linked to a visit</Text>
+                <Text style={styles.looseTitle}>{t("Reports not linked to a visit")}</Text>
                 {reports.map((report) => (
                   <ReportRow key={report.id} report={report} />
                 ))}
@@ -95,21 +97,21 @@ export function VisitHistoryScreen() {
         renderItem={({ item }) => <VisitCard visit={item} />}
         ListEmptyComponent={
           history.loading ? (
-            <ScreenLoader label="Loading your visits" />
+            <ScreenLoader label={t("Loading your visits")} />
           ) : history.error ? (
             <MessageState
               icon="help"
-              title="Could not load your visits"
+              title={t("Could not load your visits")}
               description={history.error}
-              actionLabel="Try again"
+              actionLabel={t("Try again")}
               onAction={history.reload}
             />
           ) : (
             <MessageState
               icon="calendar"
-              title="No visits yet"
-              description="Once you have booked and seen a doctor at the clinic, the visit will appear here."
-              actionLabel="Book a doctor"
+              title={t("No visits yet")}
+              description={t("Once you have booked and seen a doctor at the clinic, the visit will appear here.")}
+              actionLabel={t("Book a doctor")}
               onAction={() => router.push('/(patient)/doctors')}
             />
           )
@@ -129,6 +131,7 @@ function SummaryTile({ value, label }: { value: number; label: string }) {
 }
 
 function VisitCard({ visit }: { visit: VisitRecord }) {
+  const { t } = useLanguage();
   const tone = STATUS_TONE[visit.status] ?? 'neutral';
   const label = STATUS_LABEL[visit.status] ?? visit.status;
 
@@ -158,7 +161,7 @@ function VisitCard({ visit }: { visit: VisitRecord }) {
           ) : null}
         </View>
 
-        <Badge label={label} tone={tone} />
+        <Badge label={t(label)} tone={tone} />
       </View>
 
       {visit.reportCount > 0 ? (

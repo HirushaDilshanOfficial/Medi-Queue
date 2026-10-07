@@ -1,5 +1,7 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { PatientTheme } from '../../constants/PatientTheme';
 import { DesignImage } from './DesignImage';
 
@@ -10,24 +12,22 @@ type Props = {
 };
 
 export function BookingBanner({ metaPrimary, metaSecondary, onPress }: Props) {
+  const { t } = useLanguage();
   return (
     <View style={styles.root}>
       <View style={styles.topRow}>
           <DesignImage name="hourglass" size={14} color={PatientTheme.warning} />
         <Text style={styles.kicker} numberOfLines={1}>
-          Instant OPD Slot Reservation
-        </Text>
+          {t("Instant OPD Slot Reservation")}</Text>
         <View style={styles.livePill}>
           <View style={styles.liveDot} />
-          <Text style={styles.liveText}>Live Slots</Text>
+          <Text style={styles.liveText}>{t("Live Slots")}</Text>
         </View>
       </View>
 
-      <Text style={styles.title}>Book Doctor Appointment</Text>
+      <Text style={styles.title}>{t("Book Doctor Appointment")}</Text>
       <Text style={styles.body}>
-        Skip waiting lines. Choose your specialist, OPD clinic &amp; preferred time slot
-        instantly.
-      </Text>
+        {t("Skip waiting lines. Choose your specialist, OPD clinic & preferred time slot instantly.")}</Text>
 
       <View style={styles.footer}>
         <View style={styles.chip}>
@@ -44,10 +44,10 @@ export function BookingBanner({ metaPrimary, metaSecondary, onPress }: Props) {
         <Pressable
           onPress={onPress}
           accessibilityRole="button"
-          accessibilityLabel="Book slot now"
+          accessibilityLabel={t("Book slot now")}
           style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
         >
-          <Text style={styles.buttonText}>Book Slot Now</Text>
+          <Text style={styles.buttonText}>{t("Book Slot Now")}</Text>
         </Pressable>
       </View>
     </View>
