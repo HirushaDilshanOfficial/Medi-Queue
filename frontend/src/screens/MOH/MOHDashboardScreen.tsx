@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View,
   Text,
   StyleSheet,
@@ -7,20 +7,37 @@ import { View,
   SafeAreaView,
   TextInput,
   Platform,
-  StatusBar, RefreshControl } from 'react-native';
+  StatusBar, RefreshControl, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { fetchMohDashboard } from '../../services/mohService';
 
 // MOH Dashboard - Expo Router version matching the premium UI design
 export default function MOHDashboardScreen() {
-  const [refreshing, setRefreshing] = React.useState(false);
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    
-    setTimeout(() => {
+  const [refreshing, setRefreshing] = useState(false);
+  const [totalQueues, setTotalQueues] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+
+  const loadDashboardData = async () => {
+    try {
+      const data = await fetchMohDashboard();
+      setTotalQueues(data.totalQueues || 0);
+    } catch (error) {
+      console.log('Error fetching MOH dashboard:', error);
+    } finally {
+      setLoading(false);
       setRefreshing(false);
-    }, 1500);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadDashboardData();
   }, []);
 
   const quickActions = [
@@ -99,7 +116,9 @@ export default function MOHDashboardScreen() {
             <View style={styles.queueCardBody}>
               <View>
                 <Text style={styles.queueNumberLabel}>TOTAL QUEUES</Text>
-                <Text style={styles.queueNumber}>2,456</Text>
+                <Text style={styles.queueNumber}>
+                  {loading ? <ActivityIndicator size="small" color={Colors.primaryDark} /> : totalQueues.toLocaleString()}
+                </Text>
                 <View style={styles.queueTimeRow}>
                   <Ionicons name="time-outline" size={14} color={Colors.textMedium} style={{ marginRight: 4 }} />
                   <Text style={styles.queueTimeText}>Updated: Just now</Text>
