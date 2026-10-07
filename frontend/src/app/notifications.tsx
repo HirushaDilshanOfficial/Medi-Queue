@@ -36,7 +36,12 @@ export default function NotificationsScreen() {
       if (response.ok) {
         const data = await response.json();
         setNotifications(data);
-        await AsyncStorage.setItem('last_notification_read_time', new Date().toISOString());
+        if (data && data.length > 0) {
+          // Save the latest notification's time to avoid client/server clock skew
+          await AsyncStorage.setItem('last_notification_read_time', data[0].createdAt);
+        } else {
+          await AsyncStorage.setItem('last_notification_read_time', new Date().toISOString());
+        }
       }
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
