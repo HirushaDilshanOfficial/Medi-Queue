@@ -1,5 +1,3 @@
-const crypto = require('crypto');
-
 const Doctor = require('../models/Doctor');
 const OpdAppointment = require('../models/OpdAppointment');
 const OpdQueueEntry = require('../models/OpdQueueEntry');
@@ -7,22 +5,13 @@ const { nextTokenNumber, releaseTokenNumber } = require('../models/OpdQueueCount
 const { today, buildLiveState, buildBoard, ACTIVE_STATUSES } = require('../utils/opdQueue');
 const { relativeDate, humanDate, isValidObjectId } = require('../utils/opdAppointment');
 const Policy = require('../models/Policy');
+const { generatePassCode } = require('../utils/queuePass');
+const { ensureBookingQueueEntry } = require('../utils/ensureBookingQueueEntry');
 
 const APPOINTMENT_ACTIVE = OpdAppointment.ACTIVE_STATUSES;
 
 // Short, unambiguous alphabet: no I/O/0/1, so a code read aloud or copied off a
 // blurry print still scans.
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-function generatePassCode() {
-  const bytes = crypto.randomBytes(24);
-  let out = '';
-  for (const byte of bytes) {
-    out += CODE_ALPHABET[byte % CODE_ALPHABET.length];
-  }
-  return out;
-}
-
 // The pass QR carries a URL so a scanner at the clinic door can validate the pass
 // instead of showing a dead string. Only the code travels; no patient identity.
 function passQrValue(entry) {
@@ -61,6 +50,13 @@ async function activePassFor(profileId) {
     profile: profileId,
     status: { $in: ACTIVE_STATUSES },
   }).sort({ checkedInAt: -1 });
+}
+
+async function activePassesFor(profileId) {
+  return OpdQueueEntry.find({
+    profile: profileId,
+    status: { $in: ACTIVE_STATUSES },
+  }).sort({ queueDate: 1, checkedInAt: 1 });
 }
 
 // @desc    Check in for today's appointment and collect a queue token
@@ -164,22 +160,25 @@ const checkIn = async (req, res, next) => {
 const myPass = async (req, res, next) => {
   try {
     const todayKey = today();
-    const entry = await activePassFor(req.patientProfile._id);
+    let entries = await activePassesFor(req.patientProfile._id);
+    const upcoming = await OpdAppointment.find({
+        profile: req.patientProfile._id,
+        status: 'booked',
+        date: { $gte: todayKey },
+      }).sort({ date: 1, slotTime: 1 });
+    for (const appointment of upcoming) {
+      await ensureBookingQueueEntry(appointment);
+    }
+    entries = await activePassesFor(req.patientProfile._id);
 
-    if (!entry) {
-      return res.json({ pass: null, message: 'You do not have an active queue pass' });
+    if (!entries.length) {
+      return res.json({ pass: null, passes: [], message: 'You do not have an active queue pass' });
     }
 
-    const live = await buildLiveState(entry);
-
-    // Keep the linked appointment in step with the queue so the bookings list and
-    // the pass card never disagree about whether the patient is checked in.
-    await OpdAppointment.updateOne(
-      { _id: entry.appointment, profile: req.patientProfile._id, status: 'booked' },
-      { $set: { status: 'checked_in', isActive: true, queueEntry: entry._id, tokenNumber: entry.tokenNumber } },
-    );
-
-    return res.json({ pass: mapPass(entry, { todayKey, live }) });
+    const passes = await Promise.all(entries.map(async (entry) => (
+      mapPass(entry, { todayKey, live: await buildLiveState(entry) })
+    )));
+    return res.json({ pass: passes[0], passes });
   } catch (error) {
     return next(error);
   }

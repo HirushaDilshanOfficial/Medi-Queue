@@ -1,6 +1,7 @@
 const Staff = require('../models/Staff');
 const User = require('../models/User');
 const Doctor = require('../models/Doctor');
+const { provisionDoctorBookingSlots } = require('../utils/doctorScheduleProvisioning');
 
 // Add a new staff member
 exports.addStaff = async (req, res) => {
@@ -35,13 +36,16 @@ exports.addStaff = async (req, res) => {
     const newStaff = await Staff.create(staffData);
 
     if (String(role).toLowerCase() === 'doctor') {
-      await Doctor.create({
+      const doctor = await Doctor.create({
         staffId: newStaff._id,
         name: fullName,
         specialization: req.body.specialization,
         department: req.body.department,
+        hospital: newStaff.hospital,
+        hospitalName: newStaff.hospitalName,
         status: 'active',
       });
+      await provisionDoctorBookingSlots(doctor);
     }
 
     res.status(201).json({ message: 'Staff created successfully', staff: newStaff });
@@ -90,15 +94,18 @@ exports.updateStaff = async (req, res) => {
     }
 
     if (String(updatedStaff.role).toLowerCase() === 'doctor') {
-      await Doctor.findOneAndUpdate(
+      const doctor = await Doctor.findOneAndUpdate(
         { staffId: updatedStaff._id },
         {
           name: updatedStaff.fullName,
           specialization: updatedStaff.specialization,
           department: updatedStaff.department,
+          hospital: updatedStaff.hospital,
+          hospitalName: updatedStaff.hospitalName,
         },
         { new: true, upsert: true, setDefaultsOnInsert: true },
       );
+      await provisionDoctorBookingSlots(doctor);
     }
 
     res.status(200).json({ message: 'Staff updated successfully', staff: updatedStaff });

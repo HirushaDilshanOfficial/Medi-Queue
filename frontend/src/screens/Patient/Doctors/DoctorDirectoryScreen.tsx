@@ -196,7 +196,14 @@ export function DoctorDirectoryScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.chips}
             >
-              <Chip label={t("All")} active={!department} onPress={() => setDepartment(null)} />
+              <Chip
+                label={t("All")}
+                active={!department && !hospitalId}
+                onPress={() => {
+                  setDepartment(null);
+                  setHospitalId(null);
+                }}
+              />
               {(showAllClinics ? clinics.data?.clinics ?? [] : (clinics.data?.clinics ?? []).slice(0, 16)).map((clinic: Clinic) => (
                 <Chip
                   key={clinic._id}
@@ -259,8 +266,12 @@ export function DoctorDirectoryScreen() {
                 ? t('Try a different name or speciality.')
                 : t('The clinic has not published its doctor list yet.')
             }
-            actionLabel={search || department ? t('Clear filters') : undefined}
-            onAction={search || department ? () => { setSearch(''); setDepartment(null); } : undefined}
+            actionLabel={search || department || hospitalId ? t('Clear filters') : undefined}
+            onAction={search || department || hospitalId ? () => {
+              setSearch('');
+              setDepartment(null);
+              setHospitalId(null);
+            } : undefined}
           />
         )
       }

@@ -3,7 +3,8 @@ const Slot = require('../models/Slot');
 const Schedule = require('../models/Schedule');
 const OpdAppointment = require('../models/OpdAppointment');
 const OpdQueueEntry = require('../models/OpdQueueEntry');
-const { releaseTokenNumber } = require('../models/OpdQueueCounter');
+const { nextTokenNumber, releaseTokenNumber } = require('../models/OpdQueueCounter');
+const { ensureBookingQueueEntry } = require('../utils/ensureBookingQueueEntry');
 const { localDate } = require('../models/receptionistFields');
 const { today, buildLiveState } = require('../utils/opdQueue');
 const { mapAppointment, clockLabel, isValidObjectId } = require('../utils/opdAppointment');
@@ -89,12 +90,17 @@ async function findSlot(doctorId, date, slotTime) {
 // @route   POST /api/v1/bookings
 // @access  Private/Patient
 const createBooking = async (req, res, next) => {
+  let allocatedToken = null;
+  let allocatedDepartment = '';
+  let appointment = null;
+  let queueEntry = null;
   try {
     const { doctorId, date, slotTime, reason, type } = req.body;
     if (!validateRequest(res, { doctorId, date, slotTime })) return undefined;
 
     const doctor = await Doctor.findById(doctorId).lean();
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+    allocatedDepartment = doctor.department;
 
     const profileId = req.patientProfile._id;
 
@@ -132,16 +138,9 @@ const createBooking = async (req, res, next) => {
       });
     }
 
-    const { getNextToken } = require('../utils/tokenGenerator');
-    let tokenNumber = null;
-    let tokenLabel = null;
-    try {
-      const tok = await getNextToken(String(date));
-      tokenNumber = tok.tokenNumber;
-      tokenLabel = tok.tokenLabel;
-    } catch (e) {}
+    allocatedToken = await nextTokenNumber(doctor.department, String(date));
 
-    const appointment = await OpdAppointment.create({
+    appointment = await OpdAppointment.create({
       profile: profileId,
       doctor: doctor._id,
       doctorName: doctor.name,
@@ -151,33 +150,35 @@ const createBooking = async (req, res, next) => {
       slotTime: String(slotTime),
       endsAt: match.slot.endsAt || null,
       type: type === 'walk_in' ? 'walk_in' : 'pre_booked',
-      tokenNumber,
+      tokenNumber: allocatedToken,
       reason: reason ? String(reason).trim() : undefined,
     });
 
-    if (tokenNumber && tokenLabel) {
-      try {
-        const QueueToken = require('../models/QueueToken');
-        await QueueToken.create({
-          appointment: appointment._id,
-          patient: profileId,
-          department: doctor.department,
-          date: String(date),
-          tokenNumber,
-          tokenLabel,
-          status: 'waiting',
-          priority: 'normal',
-          assignedDoctor: doctor._id,
-        });
-      } catch (e) {}
-    }
+    queueEntry = await ensureBookingQueueEntry(appointment);
+    appointment.queueEntry = queueEntry._id;
+    await appointment.save();
 
     return res.status(201).json({
       appointment: mapAppointment(appointment, { todayKey: today() }),
-      tokenLabel,
-      tokenNumber,
+      tokenLabel: `A-${String(allocatedToken).padStart(3, '0')}`,
+      tokenNumber: allocatedToken,
+      queueNumber: allocatedToken,
+      queueEntryId: String(queueEntry._id),
     });
   } catch (error) {
+    if (appointment && !queueEntry) {
+      await OpdAppointment.deleteOne({ _id: appointment._id }).catch(() => {});
+    }
+    if (queueEntry) {
+      await OpdQueueEntry.deleteOne({ _id: queueEntry._id }).catch(() => {});
+    }
+    if (allocatedToken !== null) {
+      await releaseTokenNumber(
+        appointment?.department || allocatedDepartment,
+        String(req.body?.date || ''),
+        allocatedToken,
+      ).catch(() => {});
+    }
     return forwardConflict(error, res, next);
   }
 };
@@ -224,7 +225,12 @@ const listMyBookings = async (req, res, next) => {
       .sort({ date: 1, slotTime: 1 })
       .lean();
 
-    return res.json({ appointments: await attachLive(appointments, todayKey), scope });
+    await Promise.all(appointments.map((appointment) => ensureBookingQueueEntry(appointment)));
+    const repairedAppointments = await OpdAppointment.find(filter)
+      .sort({ date: 1, slotTime: 1 })
+      .lean();
+
+    return res.json({ appointments: await attachLive(repairedAppointments, todayKey), scope });
   } catch (error) {
     return next(error);
   }

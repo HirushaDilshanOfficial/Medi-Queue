@@ -38,9 +38,13 @@ export function LiveQueueScreen() {
   const upcoming = useAsyncResource(() => bookingApi.list('upcoming'), []);
   const profile = useAsyncResource(() => patientApi.getProfile(), []);
   const activePass = pass.data?.pass ?? null;
+  const activePasses = pass.data?.passes ?? (activePass ? [activePass] : []);
+  const [selectedPassId, setSelectedPassId] = useState<string | null>(null);
+  const [doctorMenuOpen, setDoctorMenuOpen] = useState(false);
+  const selectedPass = activePasses.find((item) => item.id === selectedPassId) ?? activePasses[0] ?? null;
   const activePassId = activePass?.id;
   const todaysAppointment = upcoming.data?.appointments.find(appointment => appointment.date === todayKey());
-  const linkedAppointment = upcoming.data?.appointments.find(appointment => appointment.id === activePass?.appointmentId);
+  const linkedAppointment = upcoming.data?.appointments.find(appointment => appointment.id === selectedPass?.appointmentId);
   const doctorId = linkedAppointment?.doctorId;
   const doctor = useAsyncResource(() => doctorId ? doctorApi.getById(doctorId) : Promise.resolve(null), [doctorId]);
   const [checkingIn, setCheckingIn] = useState(false);
@@ -113,8 +117,8 @@ export function LiveQueueScreen() {
     finally { setLeaving(false); }
   };
   const share = async () => {
-    if (!activePass) return;
-    const text = `Medi-Queue pass\n${activePass.department}\nQueue ${activePass.tokenNumber}\n${activePass.dateLong || activePass.queueDate}\n${activePass.room ?? 'Room assigned at clinic'}\nPass code: ${activePass.passCode}`;
+    if (!selectedPass) return;
+    const text = `Medi-Queue pass\n${selectedPass.department}\nQueue ${selectedPass.tokenNumber}\n${selectedPass.dateLong || selectedPass.queueDate}\n${selectedPass.room ?? 'Room assigned at clinic'}\nPass code: ${selectedPass.passCode}`;
     try {
       if (Platform.OS === 'web') {
         if (navigator.share) await navigator.share({ title: 'Medi-Queue pass', text });
@@ -142,13 +146,22 @@ export function LiveQueueScreen() {
         <Svg pointerEvents="none" style={styles.heroWaveLeft} viewBox="0 0 200 120" fill="none" stroke={C.aqua} opacity={0.15}><Path d="M-10 20 C50 80 140 10 220 90" strokeWidth={2} /></Svg>
         <View style={styles.heroRow}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("Go back home")} onPress={home} style={({ pressed }) => [styles.lightButton, pressed && styles.pressed]}><ProfileIcon name="back" color={C.surface} /></Pressable>
-          <View style={styles.grow}><Text style={styles.heroTitle}>{t("Queue Details")}</Text><Text numberOfLines={1} style={styles.heroSubtitle}>{activePass ? t("Ticket ID: {value0}", { value0: String(activePass.passCode) }) : t('Your position updates automatically')}</Text></View>
+          <View style={styles.grow}><Text style={styles.heroTitle}>{t("Queue Details")}</Text><Text numberOfLines={1} style={styles.heroSubtitle}>{selectedPass ? t("Ticket ID: {value0}", { value0: String(selectedPass.passCode) }) : t('Your position updates automatically')}</Text></View>
           <Pressable accessibilityRole="button" accessibilityLabel={t("Queue options")} onPress={() => { setActionError(null); setSheet('options'); }} style={({ pressed }) => [styles.lightButton, pressed && styles.pressed]}><ProfileIcon name="more" color={C.surface} /></Pressable>
         </View>
       </View>
       <View style={styles.stack}>
+        {activePasses.length > 1 ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.small}>{t('Select doctor booking')}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('Select doctor booking')} onPress={() => setDoctorMenuOpen(true)} style={styles.doctorSelect}>
+              <Text numberOfLines={1} style={styles.doctorSelectText}>{selectedPass?.doctorName ?? t('Choose a doctor')}</Text>
+              <ProfileIcon name="chevronDown" size={18} color={C.primary} />
+            </Pressable>
+          </View>
+        ) : null}
         {pass.error ? <View style={styles.stateCard}><Text style={styles.title}>{t("Could not reach the queue")}</Text><Text style={styles.error}>{pass.error}</Text><Pressable accessibilityRole="button" onPress={reloadPass} style={styles.walletButton}><Text style={styles.actionLabel}>{t("Try again")}</Text></Pressable></View> : null}
-        {activePass ? <QueuePassContent pass={activePass} patientName={profile.data?.patient.fullName ?? '—'} doctor={doctor.data?.doctor}
+        {selectedPass ? <QueuePassContent pass={selectedPass} patientName={profile.data?.patient.fullName ?? '—'} doctor={doctor.data?.doctor}
           countdown={countdown} liveError={liveError} onHome={home} onShare={share}
           onWallet={() => message(t('Add to Wallet'), t('Apple Wallet and Google Wallet integration is not available yet. Keep this live pass open at check-in, or use Share ticket to share your pass details.'))}
           onContact={() => message(t('Clinic contact'), t('Ask at the clinic reception desk for assistance with your queue or consulting room. A clinic phone number has not been provided.'))} /> :
@@ -163,6 +176,23 @@ export function LiveQueueScreen() {
         {!activePass && Boolean(upcoming.data?.appointments.length) ? <View style={{ gap: 12 }}><Text style={styles.title}>{t("Your bookings")}</Text>{upcoming.data?.appointments.slice(0, 3).map(appointment => <AppointmentCard key={appointment.id} appointment={appointment} />)}</View> : null}
       </View>
     </ScrollView>
+    <Modal transparent visible={doctorMenuOpen} animationType="fade" onRequestClose={() => setDoctorMenuOpen(false)}>
+      <View style={styles.modalOverlay}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('Close doctor selection')} onPress={() => setDoctorMenuOpen(false)} style={StyleSheet.absoluteFill} />
+        <View style={styles.doctorMenu}>
+          <Text style={styles.title}>{t('Select doctor booking')}</Text>
+          {activePasses.map((queuePass) => (
+            <Pressable key={queuePass.id} onPress={() => { setSelectedPassId(queuePass.id); setDoctorMenuOpen(false); }} style={styles.doctorOption}>
+              <View style={styles.grow}>
+                <Text style={styles.actionLabel}>{queuePass.doctorName ?? t('Assigned doctor')}</Text>
+                <Text style={styles.small}>{queuePass.department} · {queuePass.tokenLabel} · {queuePass.dateLong}</Text>
+              </View>
+              {queuePass.id === selectedPass?.id ? <ProfileIcon name="check" size={18} color={C.secondary} /> : null}
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </Modal>
     <Modal transparent visible={sheet !== null} animationType="slide" onRequestClose={() => { if (!leaving) setSheet(null); }}>
       <View style={styles.modalOverlay}>
         <Pressable accessibilityRole="button" accessibilityLabel={t("Close dialog")} disabled={leaving} onPress={() => setSheet(null)} style={StyleSheet.absoluteFill} />

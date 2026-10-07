@@ -78,10 +78,24 @@ export function DoctorBookingScreen() {
     submissionPending.current = true;
     setSubmitting(true);
     try {
+      let bookingResult: Awaited<ReturnType<typeof bookingApi.create>> | null = null;
       if (rescheduling) await bookingApi.reschedule(rescheduling, date, time);
-      else await bookingApi.create({ doctorId, date, slotTime: time, reason: reason.trim() || undefined });
-      Alert.alert(rescheduling ? t('Appointment updated') : t('Appointment confirmed'), t("{value0} at {value1}", { value0: String(longDayLabel(date, locale)), value1: String(time) }));
-      router.back();
+      else bookingResult = await bookingApi.create({ doctorId, date, slotTime: time, reason: reason.trim() || undefined });
+      if (rescheduling) {
+        Alert.alert(t('Appointment updated'), t("{value0} at {value1}", { value0: String(longDayLabel(date, locale)), value1: String(time) }));
+        router.back();
+      } else {
+        Alert.alert(
+          t('Appointment confirmed'),
+          t("{value0} at {value1}\n\nQueue number: {value2}\nToken: {value3}", {
+            value0: String(longDayLabel(date, locale)),
+            value1: String(time),
+            value2: String(bookingResult?.queueNumber ?? bookingResult?.tokenNumber ?? '—'),
+            value3: String(bookingResult?.tokenLabel ?? '—'),
+          }),
+          [{ text: t('View queue pass'), onPress: () => router.replace('/(patient)/queue') }],
+        );
+      }
     } catch (error) {
       Alert.alert(t('Could not confirm appointment'), error instanceof HttpError ? error.message : t('Please try again.'));
       // Refresh capacity after a conflict so a sold-out slot cannot be retried.

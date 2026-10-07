@@ -6,6 +6,7 @@ const Appointment = require('../models/Appointment');
 const { localDate } = require('../models/receptionistFields');
 const { today } = require('../utils/opdQueue');
 const { clockLabel, isValidObjectId } = require('../utils/opdAppointment');
+const { provisionDoctorBookingSlots } = require('../utils/doctorScheduleProvisioning');
 
 const ACTIVE_STATUSES = OpdAppointment.ACTIVE_STATUSES;
 
@@ -95,6 +96,11 @@ const listDoctorDays = async (req, res, next) => {
     const doctor = await validateDoctor(res, req.params.id);
     if (!doctor) return undefined;
 
+    // Reception calculates availability from the doctor's working hours.
+    // Keep the patient booking records in sync, including for older doctors
+    // that already have schedules but are missing their Slot rows.
+    await provisionDoctorBookingSlots(doctor);
+
     const fromKey = today();
     const keys = horizonKeys(fromKey);
 
@@ -154,6 +160,8 @@ const listDoctorSlots = async (req, res, next) => {
     if (!isWithinHorizon(date, fromKey)) {
       return res.status(400).json({ message: 'That date is too far ahead to book' });
     }
+
+    await provisionDoctorBookingSlots(doctor);
 
     const slots = await Slot.find({
       schedule: { $in: await scheduleIds(doctor._id) },

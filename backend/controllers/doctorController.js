@@ -4,6 +4,7 @@ const Appointment = require('../models/Appointment');
 const { asyncHandler } = require('../utils/errorHandler');
 const QueueEntry = require('../models/QueueEntry');
 const Patient = require('../models/Patient');
+const Staff = require('../models/Staff');
 
 const ACTIVE_STATUSES = ['booked', 'checked_in', 'in_consultation'];
 
@@ -31,7 +32,15 @@ const getDoctors = asyncHandler(async (req, res) => {
     };
   }
   if (hospitalId && mongoose.isValidObjectId(hospitalId)) {
-    doctorFilter.hospital = hospitalId;
+    const staffAtHospital = await Staff.find({
+      hospital: hospitalId,
+      role: { $regex: /^doctor$/i },
+      isDeleted: false,
+    }).distinct('_id');
+    doctorFilter.$or = [
+      { hospital: hospitalId },
+      { staffId: { $in: staffAtHospital } },
+    ];
   }
 
   // Fetch doctors and active appointments count for targetDate in parallel
@@ -1479,4 +1488,3 @@ module.exports = {
   referPatient,
   getPatientRecords,
 };
-
