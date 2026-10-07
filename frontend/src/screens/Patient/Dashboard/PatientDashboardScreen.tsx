@@ -9,6 +9,9 @@ import { patientApi } from '../../../services/patientApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import { ACTION_TILES, EVENTS, SPECIALTIES } from './dashboardContent';
 import { C, styles } from './dashboardStyles';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuthToken } from '../../../services/http';
+import { BASE_URL } from '../../../config';
 
 function StatCard({ value, label, icon, onPress }: { value: number | null | undefined; label: string; icon: DesignImageName; onPress: () => void }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value ?? 'unavailable'}`} onPress={onPress} style={({ pressed }) => [styles.stat, pressed && styles.pressed]}>
@@ -37,10 +40,33 @@ export function PatientDashboardScreen() {
   const hasFocused = useRef(false);
   const [now, setNow] = useState(() => new Date());
   const [sheet, setSheet] = useState<{ title: string; body: string } | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(timer); }, []);
+
+  const checkUnreadNotifications = async () => {
+    try {
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch(`${BASE_URL}/api/v1/notifications`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const lastReadTime = await AsyncStorage.getItem('last_notification_read_time');
+        const lastReadDate = lastReadTime ? new Date(lastReadTime) : new Date(0);
+        const unread = data.filter((n: any) => new Date(n.createdAt) > lastReadDate).length;
+        setUnreadCount(unread);
+      }
+    } catch (e) {
+      console.log('Failed to fetch notifications', e);
+    }
+  };
+
   useFocusEffect(useCallback(() => {
     if (hasFocused.current) reload();
     hasFocused.current = true;
+    checkUnreadNotifications();
   }, [reload]));
 
   const data = dashboard.data;
@@ -61,7 +87,7 @@ export function PatientDashboardScreen() {
   const reports = () => router.push('/(patient)/profile/reports');
   const history = () => router.push('/(patient)/profile/history');
   const showMessage = (title: string, body: string) => setSheet({ title, body });
-  const notifications = () => showMessage('Appointment reminders', !data ? 'Your appointment information is currently unavailable. Refresh the dashboard to try again.' : next ? `${next.doctorName}\n${next.department}\n${next.dateLabel ?? next.date} at ${next.slotTime}` : 'You have no upcoming appointments. Open Doctors to book a visit.');
+  const notifications = () => router.push('/notifications');
   const help = () => showMessage('How can we help?', 'Book a slot in Doctors, then open Queue on the day of your appointment to check in and follow your turn. Your visit history and medical reports are available in Profile.');
 
   if (!fontsLoaded && !fontError) return <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator color={C.primary} accessibilityLabel="Loading dashboard" /></View>;
@@ -70,7 +96,17 @@ export function PatientDashboardScreen() {
     <View style={[styles.headerSafe, { paddingTop: insets.top }]}><View style={styles.header}>
       <View style={styles.logo}><DesignImage name="medical" size={22} color="#fff" /></View>
       <View style={styles.grow}><Text style={styles.eyebrow}>MEDI-QUEUE</Text><Text style={styles.headerTitle}>Home Dashboard</Text></View>
-      <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={notifications} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}><DesignImage name="bell" size={20} color={C.primary} /></Pressable>
+      <View style={{ position: 'relative' }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={notifications} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}><DesignImage name="bell" size={20} color={C.primary} /></Pressable>
+        {unreadCount > 0 && (
+          <View style={{
+            position: 'absolute', top: -2, right: -2, backgroundColor: 'red', borderRadius: 10,
+            width: 18, height: 18, justifyContent: 'center', alignItems: 'center', zIndex: 10
+          }}>
+            <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+          </View>
+        )}
+      </View>
       <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={profile} style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}><DesignImage name="profile" size={20} color={C.primary} /></Pressable>
     </View></View>
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}

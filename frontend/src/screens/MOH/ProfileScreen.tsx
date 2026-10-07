@@ -5,6 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { BASE_URL } from '../../config';
 
+import { getAuthToken, clearAuthToken } from '../../services/http';
+
 export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [userData, setUserData] = useState<any>(null);
@@ -13,26 +15,42 @@ export default function ProfileScreen() {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      
+      const token = await getAuthToken();
+      const userStr = await AsyncStorage.getItem('user');
+
       if (!token) {
-        router.replace('/(auth)/login');
+        setUserData({ fullName: 'NO TOKEN FOUND' });
+        setLoading(false);
         return;
       }
 
-      const response = await fetch(`${BASE_URL}/api/users/profile`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setUserData(user);
+      } else {
+        // Try fetching if user data is missing in storage
+        const response = await fetch(`${BASE_URL}/api/users/profile`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setUserData(data);
+          await AsyncStorage.setItem('user', JSON.stringify(data));
+        } else {
+          setUserData({ fullName: 'FETCH FAILED: ' + response.status });
         }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setUserData(data);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch profile', error);
+      setUserData({
+        fullName: 'ERROR: ' + error.message,
+      });
     } finally {
       setLoading(false);
     }
@@ -50,7 +68,7 @@ export default function ProfileScreen() {
   }, []);
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem('token');
+    await clearAuthToken();
     await AsyncStorage.removeItem('user');
     router.replace('/(auth)/login');
   };

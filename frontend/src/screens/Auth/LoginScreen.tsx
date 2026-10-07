@@ -11,8 +11,11 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { AppIcon } from '../../components/AppIcon';
+import { login } from '../../services/authService';
 
 // LoginScreen - user login කිරීමේ screen
 // Navigation: Login සාර්ථකව ගිය ගමන් role අනුව dashboard එකට
@@ -31,11 +34,25 @@ export default function LoginScreen({ navigation }: any) {
 
     setIsLoading(true);
 
-    // TODO: API call - authService.login(email, password)
-    setTimeout(() => {
+    try {
+      const data = await login(email, password);
+      
+      await AsyncStorage.setItem('token', data.token);
+      // The backend returns user fields directly on 'data'
+      await AsyncStorage.setItem('user', JSON.stringify(data));
+      
+      if (data.role === 'MOH') {
+        router.replace('/(moh)/dashboard');
+      } else if (data.role === 'DOCTOR' || data.role === 'Doctor') {
+        router.replace('/(doctor)/dashboard');
+      } else {
+        router.replace('/(patient)/dashboard'); // Default patient route
+      }
+    } catch (error: any) {
+      Alert.alert('Login Failed', error.message || 'Invalid credentials');
+    } finally {
       setIsLoading(false);
-      Alert.alert('Success', 'Logged in!');
-    }, 1500);
+    }
   };
 
   return (

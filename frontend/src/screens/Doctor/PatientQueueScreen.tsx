@@ -17,6 +17,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   fetchDoctorDashboard,
   callNextPatientApi,
+  undoPatientApi,
+  getCatalogPatient,
   ringRoomChimeApi,
   callSpecificTokenApi,
   DoctorDashboardData,
@@ -30,6 +32,7 @@ export default function PatientQueueScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'priority' | 'walkin'>('all');
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('queue');
+  const [patientUndoHistory, setPatientUndoHistory] = useState<any[]>([]);
 
   const advanceQueueLocally = useCallback((targetTokenNumber?: number) => {
     setData((prev) => {
@@ -39,6 +42,7 @@ export default function PatientQueueScreen() {
           specialization: 'Consultant Physician',
           department: 'OPD Clinic',
           room: 'Room 101',
+          hospitalName: 'Colombo Teaching Hospital 1',
           status: 'active' as const,
           dailyCapacity: 30,
           avgConsultMinutes: 15,
@@ -230,6 +234,9 @@ export default function PatientQueueScreen() {
   // 1. Complete & Call Next Token
   const handleCompleteAndCallNext = async () => {
     setIsProcessing(true);
+    if (data?.currentPatient) {
+      setPatientUndoHistory((prev) => [...prev, { ...data.currentPatient }]);
+    }
     try {
       const res = await callNextPatientApi();
       if (res && res.data) {
@@ -244,6 +251,82 @@ export default function PatientQueueScreen() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Undo previous patient
+  const handleUndoPatient = async () => {
+    if (!data?.currentPatient) return;
+    const currentToken = data.currentPatient.tokenNumber;
+
+    if (currentToken <= 1) {
+      Alert.alert('First Patient Reached', 'You are already at Token #001 (the 1st patient). Cannot undo further.');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const res = await undoPatientApi();
+      if (res && res.success && res.data) {
+        setData(res.data);
+        Alert.alert('Action Undone', res.message || 'Reverted to previous patient.');
+        setIsProcessing(false);
+        return;
+      }
+    } catch (err) {
+      console.log('Error calling undo API:', err);
+    }
+
+    // Local client-side fallback down to Token #001
+    setData((prev) => {
+      if (!prev || !prev.currentPatient) return prev;
+      const curr = prev.currentPatient;
+      const targetToken = curr.tokenNumber - 1;
+
+      let prevPatientData: any = null;
+      if (patientUndoHistory.length > 0) {
+        const historyCopy = [...patientUndoHistory];
+        prevPatientData = historyCopy.pop();
+        setPatientUndoHistory(historyCopy);
+      } else {
+        prevPatientData = getCatalogPatient(targetToken);
+      }
+
+      const currAsQueueItem: PatientQueueItem = {
+        tokenNumber: curr.tokenNumber,
+        patientName: curr.patientName,
+        age: curr.age,
+        gender: curr.gender,
+        priority: curr.priority === 'urgent' ? 'urgent' : 'normal',
+        category: 'all',
+        status: 'next',
+        reason: curr.reason || 'General OPD Consultation',
+        slotTime: (curr as any).slotTime || curr.checkedInTime || '10:30 AM',
+      };
+
+      const updatedQueue = [
+        currAsQueueItem,
+        ...(prev.upcomingQueue || []).filter((q) => q.tokenNumber !== curr.tokenNumber),
+      ];
+
+      return {
+        ...prev,
+        metrics: {
+          ...prev.metrics,
+          completedCount: Math.max(0, (prev.metrics?.completedCount || 1) - 1),
+          waitingCount: (prev.metrics?.waitingCount || 0) + 1,
+          currentCallingToken: prevPatientData.tokenNumber,
+        },
+        currentPatient: {
+          ...prevPatientData,
+          status: 'in_consultation',
+          calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+        upcomingQueue: updatedQueue,
+      };
+    });
+
+    Alert.alert('Action Undone', `Reverted back to Token #${String(currentToken - 1).padStart(3, '0')}.`);
+    setIsProcessing(false);
   };
 
   // 2. Recall / Ring Room Chime
@@ -434,7 +517,7 @@ export default function PatientQueueScreen() {
           <View style={styles.bannerSubtitleRow}>
             <Ionicons name="business-outline" size={16} color="#cffafe" style={{ marginRight: 6 }} />
             <Text style={styles.bannerSubtitleText}>
-              {doctor?.room || 'Room 3B'} • {metrics?.waitingCount ?? 14} Patients Waiting
+              {doctor?.hospitalName || 'Colombo Teaching Hospital 1'} • {doctor?.room || 'Room 101'} • {metrics?.waitingCount ?? 14} Waiting
             </Text>
           </View>
 
@@ -541,11 +624,49 @@ export default function PatientQueueScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Action 2: Recall / Ring Room Chime */}
-          <TouchableOpacity style={styles.recallChimeBtn} onPress={handleRingRoomChime} activeOpacity={0.85}>
-            <Ionicons name="volume-medium-outline" size={19} color="#0d6371" style={{ marginRight: 8 }} />
-            <Text style={styles.recallChimeBtnText}>Recall / Ring Room Chime</Text>
-          </TouchableOpacity>
+          {/* Action Row: Recall & Undo */}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+            {/* Action 2: Recall / Ring Room Chime */}
+            <TouchableOpacity
+              style={[styles.recallChimeBtn, { flex: 1, marginTop: 0 }]}
+              onPress={handleRingRoomChime}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="volume-medium-outline" size={18} color="#0d6371" style={{ marginRight: 6 }} />
+              <Text style={styles.recallChimeBtnText}>Recall Chime</Text>
+            </TouchableOpacity>
+
+            {/* Action 3: Undo Previous Patient */}
+            <TouchableOpacity
+              style={[
+                styles.recallChimeBtn,
+                {
+                  flex: 1,
+                  marginTop: 0,
+                  backgroundColor: (!data?.currentPatient || data.currentPatient.tokenNumber <= 1) ? '#f8fafc' : '#effbfa',
+                  borderColor: (!data?.currentPatient || data.currentPatient.tokenNumber <= 1) ? '#e2e8f0' : '#b2ebf2',
+                },
+              ]}
+              onPress={handleUndoPatient}
+              disabled={isProcessing || !data?.currentPatient || data.currentPatient.tokenNumber <= 1}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="arrow-undo"
+                size={18}
+                color={(!data?.currentPatient || data.currentPatient.tokenNumber <= 1) ? '#94a3b8' : '#0d6371'}
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={[
+                  styles.recallChimeBtnText,
+                  (!data?.currentPatient || data.currentPatient.tokenNumber <= 1) && { color: '#94a3b8' },
+                ]}
+              >
+                Undo Previous
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ---- CATEGORY FILTER PILLS ---- */}
