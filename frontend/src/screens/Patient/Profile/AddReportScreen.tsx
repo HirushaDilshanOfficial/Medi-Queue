@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,8 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
 import { PatientTheme } from '../../../constants/PatientTheme';
 import { patientApi } from '../../../services/patientApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
@@ -33,9 +34,15 @@ const CATEGORIES = [
 export function AddReportScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const reportId = Array.isArray(id) ? id[0] : id;
 
   // Only visits can be linked, so the picker lists history rather than bookings.
   const history = useAsyncResource(() => patientApi.getHistory(), []);
+  const existing = useAsyncResource(
+    () => reportId ? patientApi.getReport(reportId) : Promise.resolve({ report: null }),
+    [reportId],
+  );
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('General');
@@ -45,6 +52,18 @@ export function AddReportScreen() {
   const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+
+  useEffect(() => {
+    const report = existing.data?.report;
+    if (!report) return;
+    setTitle(report.title);
+    setCategory(report.category);
+    setReportDate(report.reportDate ? report.reportDate.slice(0, 10) : '');
+    setFileName(report.fileName ?? '');
+    setNotes(report.notes ?? '');
+    setAppointmentId(report.appointmentId);
+  }, [existing.data]);
 
   const linkableVisits = useMemo(
     () => (history.data?.visits ?? []).slice(0, 20),
@@ -86,7 +105,29 @@ export function AddReportScreen() {
 
     setSaving(true);
     try {
-      await patientApi.createReport(draft);
+      if (selectedFile && (selectedFile.size ?? 0) > 10 * 1024 * 1024) {
+        setError('The report file must be 10 MB or smaller.');
+        return;
+      }
+      if (selectedFile || reportId) {
+        const form = new FormData();
+        Object.entries(draft).forEach(([key, value]) => {
+          if (value !== undefined) form.append(key, value === null ? '' : String(value));
+        });
+        if (selectedFile?.file) {
+          form.append('file', selectedFile.file);
+        } else if (selectedFile) {
+          form.append('file', {
+            uri: selectedFile.uri,
+            name: selectedFile.name || 'report',
+            type: selectedFile.mimeType || 'application/octet-stream',
+          } as unknown as Blob);
+        }
+        if (reportId) await patientApi.updateReport(reportId, form);
+        else await patientApi.uploadReport(form);
+      } else {
+        await patientApi.createReport(draft);
+      }
       router.back();
     } catch (submitError) {
       setError(
@@ -95,13 +136,49 @@ export function AddReportScreen() {
     } finally {
       setSaving(false);
     }
-  }, [appointmentId, category, fileName, notes, reportDate, router, title]);
+  }, [appointmentId, category, fileName, notes, reportDate, reportId, router, selectedFile, title]);
 
-  if (history.loading && !history.data) {
+  const chooseFile = useCallback(async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (result.canceled) return;
+    const file = result.assets[0];
+    if ((file.size ?? 0) > 10 * 1024 * 1024) {
+      setError('The report file must be 10 MB or smaller.');
+      return;
+    }
+    setError(null);
+    setSelectedFile(file);
+    setFileName(file.name);
+  }, []);
+
+  if ((history.loading && !history.data) || (reportId && existing.loading && !existing.data)) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
-        <ScreenHeader title="Lodge a report" showBack />
-        <ScreenLoader label="Loading your visits" />
+        <ScreenHeader title={reportId ? 'Edit report' : 'Lodge a report'} showBack />
+        <ScreenLoader label={reportId ? 'Loading your report' : 'Loading your visits'} />
+      </View>
+    );
+  }
+
+  if (reportId && existing.error) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
+        <ScreenHeader title="Edit report" showBack />
+        <View style={styles.loadError}>
+          <Text style={styles.loadErrorTitle}>Could not load this report</Text>
+          <Text style={styles.loadErrorText}>{existing.error}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={existing.reload}
+            style={styles.retryButton}
+          >
+            <Text style={styles.retryLabel}>Try again</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -113,8 +190,8 @@ export function AddReportScreen() {
     >
       <View style={{ paddingTop: insets.top + PatientTheme.spaceSm }}>
         <ScreenHeader
-          title="Lodge a report"
-          subtitle="Tell your doctor what to look for"
+          title={reportId ? 'Edit report' : 'Lodge a report'}
+          subtitle={reportId ? 'Update the details for your doctor' : 'Tell your doctor what to look for'}
           showBack
         />
       </View>
@@ -154,10 +231,14 @@ export function AddReportScreen() {
             value={fileName}
             onChangeText={setFileName}
             placeholder="blood-count-march.pdf"
-            hint="Optional. Helps staff match it to the record they hold"
+            hint="The attached file name is filled in automatically"
             optional
             maxLength={160}
           />
+          <Pressable onPress={chooseFile} style={styles.fileButton} accessibilityRole="button">
+            <Text style={styles.fileButtonLabel}>{selectedFile ? 'Change attached file' : 'Attach PDF or image'}</Text>
+            <Text style={styles.fileButtonHint}>{selectedFile?.name ?? 'Maximum 10 MB'}</Text>
+          </Pressable>
           <FormField
             label="Notes"
             value={notes}
@@ -260,6 +341,42 @@ const styles = StyleSheet.create({
     paddingBottom: PatientTheme.spaceXxl,
     gap: PatientTheme.spaceLg,
   },
+  fileButton: {
+    borderWidth: 1,
+    borderColor: PatientTheme.border,
+    borderRadius: PatientTheme.radiusMd,
+    padding: PatientTheme.spaceMd,
+    marginTop: PatientTheme.spaceSm,
+    backgroundColor: PatientTheme.surface,
+  },
+  fileButtonLabel: { color: PatientTheme.brand, fontWeight: '700' },
+  fileButtonHint: { color: PatientTheme.textSecondary, marginTop: 4 },
+  loadError: {
+    margin: PatientTheme.spaceLg,
+    padding: PatientTheme.spaceLg,
+    borderRadius: PatientTheme.radiusMd,
+    backgroundColor: PatientTheme.surface,
+    borderWidth: 1,
+    borderColor: PatientTheme.border,
+  },
+  loadErrorTitle: {
+    fontSize: PatientTheme.designType.section,
+    fontWeight: '800',
+    color: PatientTheme.textPrimary,
+  },
+  loadErrorText: {
+    marginTop: PatientTheme.spaceSm,
+    color: PatientTheme.textSecondary,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    marginTop: PatientTheme.spaceMd,
+    paddingHorizontal: PatientTheme.spaceMd,
+    paddingVertical: PatientTheme.spaceSm,
+    borderRadius: PatientTheme.radiusPill,
+    backgroundColor: PatientTheme.brand,
+  },
+  retryLabel: { color: PatientTheme.surface, fontWeight: '700' },
   group: {
     paddingHorizontal: PatientTheme.spaceLg,
     gap: PatientTheme.spaceMd,

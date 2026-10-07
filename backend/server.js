@@ -62,13 +62,15 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/hospitals', hospitalRoutes);
 app.use('/api/v1/staff', staffRoutes);
 app.use('/api/v1/alerts', alertRoutes);
+// Patient self-service routes must be mounted before the legacy receptionist
+// routes because both routers share the `/api/v1/patients` prefix.
+app.use('/api/v1/patients', patientRoutes);
 app.use('/api/v1/patients', v1PatientRoutes);
 app.use('/api/v1/policies', policyRoutes);
 app.use('/api/v1/public', publicRoutes);
 app.use('/api/v1/doctor', v1DoctorRoutes);
 
 // Patient module
-app.use('/api/v1/patients', patientRoutes);
 app.use('/api/v1/doctors', doctorRoutes);
 app.use('/api/v1/bookings', bookingRoutes);
 app.use('/api/v1/queue', queueRoutes);

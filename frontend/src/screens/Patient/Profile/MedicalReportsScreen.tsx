@@ -90,13 +90,16 @@ export function MedicalReportsScreen() {
           <View style={styles.notice}>
             <Text style={styles.noticeText}>
               Add the details of a report here so your doctor can find it before your
-              next visit. The report itself stays in the clinic&amp;apos;s records
-              system.
+              next visit. You can attach a PDF or image up to 10 MB.
             </Text>
           </View>
         }
         renderItem={({ item }) => (
-          <ReportRow report={item} onDelete={deleting === item.id ? undefined : () => remove(item)} />
+          <ReportRow
+            report={item}
+            onPress={() => router.push(`/(patient)/profile/report/${item.id}`)}
+            onDelete={deleting === item.id ? undefined : () => remove(item)}
+          />
         )}
         ListEmptyComponent={
           reports.loading ? (

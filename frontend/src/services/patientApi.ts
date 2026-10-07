@@ -20,8 +20,17 @@ export const patientApi = {
 
   getReports: () => http.get<{ reports: MedicalReport[] }>('/patients/me/reports'),
 
+  getReport: (id: string) =>
+    http.get<{ report: MedicalReport }>(`/patients/me/reports/${id}`),
+
   createReport: (draft: ReportDraft) =>
     http.post<{ report: MedicalReport }>('/patients/me/reports', draft),
+
+  uploadReport: (form: FormData) =>
+    http.postForm<{ report: MedicalReport }>('/patients/me/reports', form),
+
+  updateReport: (id: string, form: FormData) =>
+    http.patchForm<{ report: MedicalReport }>(`/patients/me/reports/${id}`, form),
 
   deleteReport: (id: string) => http.delete<{ message: string }>(`/patients/me/reports/${id}`),
 };
