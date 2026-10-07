@@ -932,25 +932,25 @@ let aureliaPrescriptionSessionState = {
       id: 'rx-aur-1',
       name: 'Paracetamol 500mg',
       type: 'TABLET',
-      dosage: '1 tablet',
-      frequency: 'BD (2x daily)',
-      frequencyCode: 'BD',
+      dosage: '500 mg',
+      frequency: 'Every 6 hours, as needed',
+      frequencyCode: 'TDS',
       duration: '5 days',
       durationDays: 5,
-      instructions: 'After food',
+      instructions: 'Since Nov 04',
       tagType: 'food',
     },
     {
       id: 'rx-aur-2',
-      name: 'Ibuprofen 400mg',
-      type: 'TABLET',
-      dosage: '1 tablet',
-      frequency: 'BD (2x daily)',
+      name: 'Salbutamol Inhaler 100mcg',
+      type: 'INHALER',
+      dosage: '100 mcg',
+      frequency: '2 puffs as needed for wheeze',
       frequencyCode: 'BD',
-      duration: '3 days',
-      durationDays: 3,
-      instructions: 'After food',
-      tagType: 'food',
+      duration: 'As needed',
+      durationDays: 30,
+      instructions: 'Since Aug 12',
+      tagType: 'indication',
     },
   ],
   referrals: [],
@@ -962,7 +962,7 @@ let aureliaPrescriptionSessionState = {
 const getPrescriptionDetails = async (req, res) => {
   try {
     const { tokenNumber, patientName } = req.query;
-    if (Number(tokenNumber) === 29 || (patientName && String(patientName).includes('Aurelia'))) {
+    if (!tokenNumber || Number(tokenNumber) === 29 || (patientName && String(patientName).includes('Aurelia'))) {
       return res.status(200).json({
         success: true,
         data: aureliaPrescriptionSessionState,
@@ -983,10 +983,10 @@ const getPrescriptionDetails = async (req, res) => {
 const savePrescription = async (req, res) => {
   try {
     const { diagnoses, clinicalNotes, prescriptions, tokenNumber } = req.body;
-    const target = Number(tokenNumber) === 29 ? aureliaPrescriptionSessionState : prescriptionSessionState;
-    if (diagnoses) target.diagnoses = diagnoses;
+    const target = (!tokenNumber || Number(tokenNumber) === 29) ? aureliaPrescriptionSessionState : prescriptionSessionState;
+    if (diagnoses !== undefined) target.diagnoses = diagnoses;
     if (clinicalNotes !== undefined) target.clinicalNotes = clinicalNotes;
-    if (prescriptions) target.prescriptions = prescriptions;
+    if (prescriptions !== undefined) target.prescriptions = prescriptions;
 
     return res.status(200).json({
       success: true,

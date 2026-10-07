@@ -6,3 +6,7 @@ export * from './SectionHeader';
 export * from './PatientCard';
 export * from './LoadingState';
 export * from './ErrorState';
+export * from './Toast';
+export * from './DoctorPickerModal';
+export * from './EditPatientModal';
+export * from './ReceptionistRoleGuard';

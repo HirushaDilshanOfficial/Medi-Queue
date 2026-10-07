@@ -12,11 +12,13 @@ import {
   ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { AppIcon } from '../../components/AppIcon';
 import { login } from '../../services/authService';
-import { setAuthToken } from '../../services/http';
+import { setAuthToken as setHttpAuthToken } from '../../services/http';
+import { setAuthToken as setApiAuthToken } from '../../services/api';
 
 // Actual Login Form - Email & Password
 export default function LoginScreen() {
@@ -35,23 +37,25 @@ export default function LoginScreen() {
 
     try {
       const userData = await login(email, password);
-      // Persist the JWT for the role dashboards that need it (patient module reads
-      // the same key via services/http.ts).
-      await setAuthToken(userData.token);
+      // Persist JWT token to AsyncStorage for all modules and API services
+      await AsyncStorage.setItem('token', userData.token);
+      await AsyncStorage.setItem('jwt', userData.token);
       await AsyncStorage.setItem('user', JSON.stringify(userData));
+      setHttpAuthToken(userData.token);
+      setApiAuthToken(userData.token);
 
       // Successfully logged in
       Alert.alert('Success', `Welcome back, ${userData.fullName}!`);
 
       // Navigate based on role
       if (userData.role === 'MOH') {
-        router.replace('/(moh)/dashboard');
+        router.replace('/(moh)/dashboard' as any);
       } else if (userData.role === 'Patient') {
-        router.replace('/(patient)');
+        router.replace('/(patient)' as any);
       } else if (String(userData.role || '').toLowerCase() === 'receptionist') {
-        router.replace('/(reception)/dashboard');
+        router.replace('/(reception)/dashboard' as any);
       } else if (String(userData.role || '').toLowerCase() === 'doctor') {
-        router.replace('/(doctor)/dashboard');
+        router.replace('/(doctor)/dashboard' as any);
       } else {
         Alert.alert('Notice', `Logged in as ${userData.role}, but dashboard is not created yet.`);
       }
@@ -79,7 +83,16 @@ export default function LoginScreen() {
           <View style={styles.circleBottomLeft} />
 
           {/* Back Button */}
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/');
+              }
+            }}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>Back</Text></View>
           </TouchableOpacity>
 

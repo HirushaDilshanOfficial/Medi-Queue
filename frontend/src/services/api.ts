@@ -1,7 +1,5 @@
-/**
- * API service configuration and typed receptionist endpoint functions.
- * Reads backend API URL from EXPO_PUBLIC_API_URL. Never uses localhost.
- */
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   Patient,
@@ -12,17 +10,29 @@ import {
   ShiftSummary,
 } from '../types';
 
-const FALLBACK_IP_URL = 'http://10.240.7.66:5001';
+const FALLBACK_IP_URL =
+  Platform.OS === 'web' ? 'http://localhost:5001' : 'http://192.168.1.2:5001';
 
-export const API_BASE_URL: string =
-  process.env.EXPO_PUBLIC_API_URL || FALLBACK_IP_URL;
+export const getApiBaseUrl = (): string => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+    const hostname = window.location.hostname;
+    return `http://${hostname === 'localhost' || hostname === '127.0.0.1' ? 'localhost' : hostname}:5001`;
+  }
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && !envUrl.includes('192.168.56.')) {
+    return envUrl.includes(':5001') ? envUrl : `${envUrl.replace(/\/+$/, '')}:5001`;
+  }
+  return FALLBACK_IP_URL;
+};
+
+export const API_BASE_URL: string = getApiBaseUrl();
 
 // Helper to normalize path and prepend API_BASE_URL
 const resolveUrl = (path: string): string => {
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path;
   }
-  const base = API_BASE_URL.replace(/\/+$/, '');
+  const base = getApiBaseUrl().replace(/\/+$/, '');
   const endpoint = path.startsWith('/') ? path : `/${path}`;
   return `${base}${endpoint}`;
 };
@@ -55,11 +65,30 @@ export const getErrorMessage = (error: unknown): string => {
   return 'An unexpected error occurred. Please try again.';
 };
 
-const getHeaders = (
+const getHeaders = async (
   customHeaders?: HeadersInit,
   explicitToken?: string
-): HeadersInit => {
-  const token = explicitToken || storedAuthToken;
+): Promise<HeadersInit> => {
+  let token = explicitToken || storedAuthToken;
+  if (!token) {
+    try {
+      token =
+        (await AsyncStorage.getItem('token')) ||
+        (await AsyncStorage.getItem('jwt'));
+      if (!token) {
+        const userStr = await AsyncStorage.getItem('user');
+        if (userStr) {
+          try {
+            const parsed = JSON.parse(userStr);
+            token = parsed.token || null;
+          } catch {}
+        }
+      }
+      if (token) {
+        storedAuthToken = token;
+      }
+    } catch {}
+  }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...((customHeaders as Record<string, string>) || {}),
@@ -107,7 +136,7 @@ export const api = {
     options?: ApiRequestOptions
   ): Promise<T> => {
     const targetUrl = resolveUrl(url);
-    const headers = getHeaders(options?.headers, options?.token);
+    const headers = await getHeaders(options?.headers, options?.token);
     const response = await fetch(targetUrl, {
       method: 'GET',
       headers,
@@ -121,7 +150,7 @@ export const api = {
     options?: ApiRequestOptions
   ): Promise<T> => {
     const targetUrl = resolveUrl(url);
-    const headers = getHeaders(options?.headers, options?.token);
+    const headers = await getHeaders(options?.headers, options?.token);
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers,
@@ -136,7 +165,7 @@ export const api = {
     options?: ApiRequestOptions
   ): Promise<T> => {
     const targetUrl = resolveUrl(url);
-    const headers = getHeaders(options?.headers, options?.token);
+    const headers = await getHeaders(options?.headers, options?.token);
     const response = await fetch(targetUrl, {
       method: 'PATCH',
       headers,
@@ -150,7 +179,7 @@ export const api = {
     options?: ApiRequestOptions
   ): Promise<T> => {
     const targetUrl = resolveUrl(url);
-    const headers = getHeaders(options?.headers, options?.token);
+    const headers = await getHeaders(options?.headers, options?.token);
     const response = await fetch(targetUrl, {
       method: 'DELETE',
       headers,
@@ -210,10 +239,11 @@ export interface WalkInResponse {
   };
   doctor: {
     name: string;
-    department: string;
+    department?: string;
     room?: string;
   };
   estimatedWaitMinutes?: number;
+  patientsAhead?: number;
 }
 
 export interface GetQueueParams {
@@ -221,14 +251,21 @@ export interface GetQueueParams {
   department?: string;
   doctorId?: string;
   status?: string;
+  type?: 'all' | 'walk_in' | 'pre_booked' | string;
 }
 
 export interface QueueResponse {
   date: string;
-  total: number;
-  waiting: number;
-  serving: number;
+  total?: number;
+  waiting?: number;
+  serving?: number;
   queue: QueueToken[];
+  totals?: {
+    inQueue: number;
+    walkIns: number;
+    preBooked: number;
+    avgWaitMinutes: number;
+  };
   lastUpdated: string;
 }
 
@@ -307,14 +344,19 @@ export const createWalkIn = async (
  * Get the live ordered queue with totals and wait times.
  */
 export const getQueue = async (
-  params?: GetQueueParams,
+  params?: GetQueueParams | 'all' | 'walk_in' | 'pre_booked',
   token?: string
 ): Promise<QueueResponse> => {
   const query = new URLSearchParams();
-  if (params?.date) query.append('date', params.date);
-  if (params?.department) query.append('department', params.department);
-  if (params?.doctorId) query.append('doctorId', params.doctorId);
-  if (params?.status) query.append('status', params.status);
+  if (typeof params === 'string') {
+    if (params && params !== 'all') query.append('type', params);
+  } else if (params) {
+    if (params.date) query.append('date', params.date);
+    if (params.department) query.append('department', params.department);
+    if (params.doctorId) query.append('doctorId', params.doctorId);
+    if (params.status) query.append('status', params.status);
+    if (params.type && params.type !== 'all') query.append('type', params.type);
+  }
   const qs = query.toString() ? `?${query.toString()}` : '';
   return api.get<QueueResponse>(`/api/reception/queue${qs}`, { token });
 };
@@ -503,4 +545,31 @@ export const downloadDailyReport = async (
   });
 };
 
+/**
+ * Get Auto-Advance queue setting.
+ */
+export const getAutoAdvance = async (
+  token?: string
+): Promise<{ success: boolean; enabled: boolean }> => {
+  return api.get<{ success: boolean; enabled: boolean }>(
+    '/api/reception/queue/auto-advance',
+    { token }
+  );
+};
+
+/**
+ * Update Auto-Advance queue setting.
+ */
+export const updateAutoAdvance = async (
+  enabled: boolean,
+  token?: string
+): Promise<{ success: boolean; enabled: boolean }> => {
+  return api.patch<{ success: boolean; enabled: boolean }>(
+    '/api/reception/queue/auto-advance',
+    { enabled },
+    { token }
+  );
+};
+
 export default api;
+
