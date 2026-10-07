@@ -38,11 +38,18 @@ export default function AddStaffScreen() {
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showGenderDropdown, setShowGenderDropdown] = useState(false);
   const [showHospitalDropdown, setShowHospitalDropdown] = useState(false);
+  const [showSpecializationDropdown, setShowSpecializationDropdown] = useState(false);
   
   const [hospitals, setHospitals] = useState<any[]>([]);
 
   const roles = ['Doctor', 'Nurse', 'Receptionist', 'Pharmacist', 'Lab Technician', 'Other'];
   const genders = ['Male', 'Female', 'Other'];
+  const specializations = [
+    'Eye', 'General Medicine', 'General Surgery', 'Cardiology', 
+    'Chest', 'Psychiatry', 'Nephrology', 'Gynaecology', 'ENT', 
+    'Diabetes', 'Dental', 'Paediatric', 'Dermatology', 'Urology',
+    'Orthopedics', 'Neurology', 'Oncology', 'Other'
+  ];
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -478,12 +485,21 @@ export default function AddStaffScreen() {
             </View>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>{t("Specialization*")}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t("e.g. Cardiologist")}
-                value={formData.specialization}
-                onChangeText={(text) => setFormData({ ...formData, specialization: text })}
-              />
+              <TouchableOpacity
+                style={[styles.dropdownSelector, {
+                  borderColor: formData.specialization ? Colors.primary : Colors.border,
+                  backgroundColor: formData.specialization ? '#F5F9FF' : Colors.white
+                }]}
+                onPress={() => setShowSpecializationDropdown(true)}
+              >
+                <Text style={{ 
+                  color: formData.specialization ? Colors.textDark : Colors.textLight,
+                  flex: 1 
+                }}>
+                  {formData.specialization ? t(formData.specialization) : t('Select Specialization')}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color={formData.specialization ? Colors.primary : Colors.textLight} />
+              </TouchableOpacity>
             </View>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>{t("Qualification*")}</Text>
@@ -553,6 +569,7 @@ export default function AddStaffScreen() {
       {/* Modals */}
       {renderDropdownModal(showRoleDropdown, setShowRoleDropdown, roles, handleRoleSelect, 'Select Role')}
       {renderDropdownModal(showGenderDropdown, setShowGenderDropdown, genders, (item) => setFormData({ ...formData, gender: item }), 'Select Gender')}
+      {renderDropdownModal(showSpecializationDropdown, setShowSpecializationDropdown, specializations, (item) => setFormData({ ...formData, specialization: item }), 'Select Specialization')}
       {renderDropdownModal(
         showHospitalDropdown, 
         setShowHospitalDropdown, 

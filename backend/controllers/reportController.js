@@ -3,11 +3,7 @@ const QueueToken = require('../models/QueueToken');
 const { isValidDate } = require('../utils/validators');
 const { asyncHandler, createError } = require('../utils/errorHandler');
 
-/**
- * Escape a CSV value according to RFC 4180:
- * - Wrap in quotes if it contains comma, double-quote, or newline
- * - Escape double-quotes by doubling them (" -> "")
- */
+
 function escapeCsvValue(val) {
   if (val === null || val === undefined) {
     return '';
