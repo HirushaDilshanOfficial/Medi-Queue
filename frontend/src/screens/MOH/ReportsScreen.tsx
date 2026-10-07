@@ -65,6 +65,13 @@ export default function ReportsScreen() {
   const activeAlerts = stats?.statusStats?.find((s: any) => s._id === 'Active')?.count || 0;
   const resolvedAlerts = stats?.statusStats?.find((s: any) => s._id === 'Acknowledged' || s._id === 'Resolved')?.count || 0;
 
+  let insightText = "Not enough data to generate AI insights at the moment.";
+  if (stats && stats.hospitalStats && stats.categoryStats && stats.hospitalStats.length > 0 && stats.categoryStats.length > 0) {
+    const topHospital = stats.hospitalStats[0]._id;
+    const topCategory = stats.categoryStats[0]._id;
+    insightText = `Data suggests a consistent spike in "${topCategory}" bottlenecks at ${topHospital}. Recommend reviewing resource allocation and transferring support staff to ${topHospital} to balance the load over the next period.`;
+  }
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={{ backgroundColor: Colors.white }} />
@@ -151,7 +158,7 @@ export default function ReportsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.insightTitle}>Resource Allocation Strategy</Text>
                 <Text style={styles.insightText}>
-                  Data suggests a consistent spike in Orthopedic OPD bottlenecks at Colombo National Hospital. Recommend transferring 2 Medical Officers from Gampaha District to Colombo to balance the patient-to-doctor ratio over the next 3 months.
+                  {insightText}
                 </Text>
               </View>
             </View>
