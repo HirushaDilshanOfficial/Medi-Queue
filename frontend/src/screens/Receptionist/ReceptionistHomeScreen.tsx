@@ -40,7 +40,7 @@ import {
 
 export interface ReceptionistHomeScreenProps {
   navigation?: any;
-  onNavigate?: (route: string) => void;
+  onNavigate?: (route: string, params?: any) => void;
 }
 
 export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
@@ -149,11 +149,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   };
 
   // Helper to handle navigation whether in React Navigation stack or Expo Router
-  const handleNav = (target: string) => {
+  const handleNav = (target: string, params?: any) => {
     if (onNavigate) {
-      onNavigate(target);
+      onNavigate(target, params);
     } else if (navigation?.navigate) {
-      navigation.navigate(target);
+      navigation.navigate(target, params);
     }
   };
 
@@ -227,13 +227,47 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   };
 
   const handleScanForVerify = (scannedValue: string) => {
-    let code = scannedValue.trim();
-    const passUrl = code.match(/(?:\/pass\/|\/queue-pass\/)([^/?#\s]+)/i);
-    const passCode = passUrl?.[1]
-      ? decodeURIComponent(passUrl[1]).toUpperCase()
-      : /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/i.test(code)
-        ? code.toUpperCase()
-        : null;
+    const raw = (scannedValue || '').trim();
+    if (!raw) return;
+
+    let passCode: string | null = null;
+    let code = raw;
+
+    const passUrlMatch = raw.match(/(?:\/queue-pass\/|\/pass\/)([^/?#\s]+)/i);
+    if (passUrlMatch?.[1]) {
+      passCode = decodeURIComponent(passUrlMatch[1]).trim().toUpperCase();
+      code = passCode;
+    }
+
+    if (!passCode && (raw.includes('?') || raw.includes('&'))) {
+      const pParam = raw.match(/[?&]passCode=([^&#\s]+)/i);
+      if (pParam?.[1]) {
+        passCode = decodeURIComponent(pParam[1]).trim().toUpperCase();
+        code = passCode;
+      }
+      const nicParam = raw.match(/[?&]nic=([^&#\s]+)/i);
+      if (nicParam?.[1]) {
+        code = decodeURIComponent(nicParam[1]).trim().toUpperCase();
+      }
+    }
+
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.passCode) {
+          passCode = String(parsed.passCode).trim().toUpperCase();
+          code = passCode;
+        } else if (parsed.nic) code = String(parsed.nic).trim().toUpperCase();
+        else if (parsed.bookingRef) code = String(parsed.bookingRef).trim();
+        else if (parsed.phone) code = String(parsed.phone).trim();
+      } catch {}
+    }
+
+    if (!passCode && /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/i.test(raw)) {
+      passCode = raw.toUpperCase();
+      code = passCode;
+    }
+
     if (passCode) {
       setVerifyNicQuery(passCode);
       setVerifyNicLoading(true);
@@ -255,12 +289,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         .finally(() => setVerifyNicLoading(false));
       return;
     }
-    try {
-      const parsed = JSON.parse(scannedValue);
-      if (parsed.nic) code = parsed.nic;
-      else if (parsed.bookingRef) code = parsed.bookingRef;
-      else if (parsed.phone) code = parsed.phone;
-    } catch {}
+
     setVerifyNicQuery(code);
     executeSearchForVerify(code);
     showToast(t("Scanned: {value0}", { value0: String(code) }), 'success');
@@ -1224,7 +1253,16 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                     style={styles.verifyNicIntakeBtn}
                     onPress={() => {
                       setVerifyNicModalVisible(false);
-                      handleNav('RegisterTab');
+                      handleNav('RegisterTab', {
+                        patient: verifyNicResult.patient,
+                        existingPatientId: verifyNicResult.patient?._id || verifyNicResult.patient?.id,
+                        fullName: verifyNicResult.patient?.fullName,
+                        name: verifyNicResult.patient?.fullName,
+                        nic: verifyNicResult.patient?.nic,
+                        phone: verifyNicResult.patient?.phone,
+                        gender: verifyNicResult.patient?.gender,
+                        age: verifyNicResult.patient?.age,
+                      });
                     }}
                   >
                     <Text style={styles.verifyNicIntakeBtnText}>{t('New Intake')}</Text>

@@ -258,8 +258,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                         'qr',
                         'code128',
                         'code39',
+                        'code93',
+                        'codabar',
                         'ean13',
+                        'ean8',
                         'upc_a',
+                        'upc_e',
+                        'itf14',
+                        'pdf417',
+                        'datamatrix',
+                        'aztec',
                       ],
                     }}
                     onBarcodeScanned={(result) => {
