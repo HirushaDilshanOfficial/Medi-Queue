@@ -1,5 +1,9 @@
 // English | Sinhala | Tamil. Proper names, codes and clinical data are not catalogued.
 const copy = `
+Clinic Registration|සායන ලියාපදිංචිය|மருத்துவமனைப் பதிவு
+Doctor Schedule|වෛද්‍ය කාලසටහන|மருத்துவர் அட்டவணை
+Select a doctor to view available dates and times|ලබා ගත හැකි දින සහ වේලාවන් බැලීමට වෛද්‍යවරයෙකු තෝරන්න|கிடைக்கும் தேதிகளையும் நேரங்களையும் பார்க்க ஒரு மருத்துவரைத் தேர்ந்தெடுக்கவும்
+Submit prescription|බෙහෙත් වට්ටෝරුව ඉදිරිපත් කරන්න|மருந்துச் சீட்டைச் சமர்ப்பிக்கவும்
 Error|දෝෂයක්|பிழை
 Success|සාර්ථකයි|வெற்றி
 Notice|දැනුම්දීම|அறிவிப்பு

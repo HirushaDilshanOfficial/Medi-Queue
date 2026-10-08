@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { PatientTheme } from '../../../constants/PatientTheme';
@@ -38,8 +38,9 @@ export function AddReportScreen() {
   const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, category: requestedCategory } = useLocalSearchParams<{ id?: string; category?: string }>();
   const reportId = Array.isArray(id) ? id[0] : id;
+  const prescriptionSubmission = !reportId && requestedCategory === 'Prescription';
 
   // Only visits can be linked, so the picker lists history rather than bookings.
   const history = useAsyncResource(() => patientApi.getHistory(), []);
@@ -49,7 +50,7 @@ export function AddReportScreen() {
   );
 
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('General');
+  const [category, setCategory] = useState(prescriptionSubmission ? 'Prescription' : 'General');
   const [reportDate, setReportDate] = useState('');
   const [fileName, setFileName] = useState('');
   const [notes, setNotes] = useState('');
@@ -60,6 +61,10 @@ export function AddReportScreen() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [pickerDate, setPickerDate] = useState(() => new Date());
   const [openingFile, setOpeningFile] = useState(false);
+
+  useFocusEffect(useCallback(() => {
+    if (prescriptionSubmission) setCategory('Prescription');
+  }, [prescriptionSubmission]));
 
   useEffect(() => {
     const report = existing.data?.report;
@@ -193,7 +198,7 @@ export function AddReportScreen() {
   if ((history.loading && !history.data) || (reportId && existing.loading && !existing.data)) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
-        <ScreenHeader title={reportId ? t('Edit report') : t('Lodge a report')} showBack />
+        <ScreenHeader title={reportId ? t('Edit report') : prescriptionSubmission ? t('Submit prescription') : t('Lodge a report')} showBack />
         <ScreenLoader label={reportId ? t('Loading your report') : t('Loading your visits')} />
       </View>
     );
@@ -225,7 +230,7 @@ export function AddReportScreen() {
     >
       <View style={{ paddingTop: insets.top + PatientTheme.spaceSm }}>
         <ScreenHeader
-          title={reportId ? t('Edit report') : t('Lodge a report')}
+          title={reportId ? t('Edit report') : prescriptionSubmission ? t('Submit prescription') : t('Lodge a report')}
           subtitle={reportId ? t('Update the details for your doctor') : t('Tell your doctor what to look for')}
           showBack
         />

@@ -79,11 +79,20 @@ export function PatientDashboardScreen() {
   const wide = width >= 760;
   const columns = wide ? 4 : 2;
   const specialtyWidth = (Math.min(width, 1120) - 40 - (columns - 1) * 10) / columns;
-  const doctors = () => router.push('/(patient)/doctors');
+  const openDirectory = (view = '') => router.push({ pathname: '/(patient)/doctors', params: { tab: 'directory', view, department: '', hospitalId: '', search: '' } });
+  const doctors = () => openDirectory();
+  const bookings = () => router.push({ pathname: '/(patient)/doctors', params: { tab: 'bookings' } });
   const queue = () => router.push('/(patient)/queue');
   const profile = () => router.push('/(patient)/profile');
   const reports = () => router.push('/(patient)/profile/reports');
   const history = () => router.push('/(patient)/profile/history');
+  const quickActions: Record<(typeof ACTION_TILES)[number]['key'], () => void> = {
+    'clinic-registration': () => openDirectory('registration'),
+    'doctor-schedule': () => openDirectory('schedule'),
+    'doctor-appointment': bookings,
+    'clinics-queue': queue,
+    'medicine-queue': () => router.push({ pathname: '/(patient)/profile/report/new', params: { category: 'Prescription' } }),
+  };
   const showMessage = (title: string, body: string) => setSheet({ title, body });
   const notifications = () => router.push('/notifications');
   const help = () => showMessage(t('How can we help?'), t('Book a slot in Doctors, then open Queue on the day of your appointment to check in and follow your turn. Your visit history and medical reports are available in Profile.'));
@@ -118,7 +127,7 @@ export function PatientDashboardScreen() {
       {dashboard.loading && !data ? <View style={styles.status}><ActivityIndicator color={C.primary} /><Text style={styles.statusText}>{t("Loading your dashboard…")}</Text></View> : null}
       {dashboard.error ? <View style={styles.error}><Text style={styles.errorTitle}>{t("We could not refresh your dashboard")}</Text><Text style={styles.statusText}>{dashboard.error}</Text><Pressable accessibilityRole="button" onPress={reload} style={[styles.textButton, { alignSelf: 'flex-start' }]}><Text style={styles.link}>{t("Try again")}</Text></Pressable></View> : null}
       <View style={styles.stats}>
-        <StatCard value={data?.stats.upcomingAppointments} label={t("Upcoming visits")} icon="calendar" onPress={doctors} />
+        <StatCard value={data?.stats.upcomingAppointments} label={t("Upcoming visits")} icon="calendar" onPress={bookings} />
         <StatCard value={data?.stats.completedVisits} label={t("Completed visits")} icon="medical" onPress={history} />
         <StatCard value={data?.stats.reports} label={t("Medical reports")} icon="clipboard" onPress={reports} />
       </View>
@@ -135,7 +144,7 @@ export function PatientDashboardScreen() {
             <View style={styles.cardTop}><Text style={styles.cardType}>{t("NEXT APPOINTMENT")}</Text><View style={styles.badge}><Text style={styles.badgeLabel}>{next ? t('Upcoming') : data ? t('Not booked') : t('Loading')}</Text></View></View>
             <View style={{ gap: 6 }}><Text style={styles.careHeading}>{next ? next.doctorName : data ? t('Plan your next visit') : t('Your next visit')}</Text><Text style={styles.careDescription}>{next ? next.department : data ? t('Book a consultation when you need care.') : t('Your appointment details will appear here.')}</Text></View>
             <View style={styles.cardMeta}><DesignImage name="calendar" size={14} color={C.secondary} /><Text style={styles.careDescription}>{next ? `${next.dateLabel ?? next.date} · ${next.slotTime}` : t('Choose your preferred date and time')}</Text></View>
-            <Pressable accessibilityRole="button" onPress={next ? notifications : doctors} style={({ pressed }) => [styles.cardFooter, pressed && styles.pressed]}><Text style={styles.link}>{next ? t('View appointment') : t('Find a doctor')}</Text><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
+            <Pressable accessibilityRole="button" onPress={next ? bookings : doctors} style={({ pressed }) => [styles.cardFooter, pressed && styles.pressed]}><Text style={styles.link}>{next ? t('View appointment') : t('Find a doctor')}</Text><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
           </View>
           <View style={[styles.careCard, wide && styles.wideCard]}>
             <View style={styles.cardTop}><Text style={styles.cardType}>{t("LIVE QUEUE")}</Text><View style={styles.badge}><Text style={styles.badgeLabel}>{pass ? called ? t('Your turn') : t('Active') : data ? t('No active pass') : t('Loading')}</Text></View></View>
@@ -155,7 +164,7 @@ export function PatientDashboardScreen() {
       <View style={styles.section}>
         <SectionHeading title={t("Quick actions")} action={t("Help")} onPress={help} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionScroll} contentContainerStyle={styles.actionContent}>
-          {ACTION_TILES.map(tile => <Pressable key={tile.key} accessibilityRole="button" accessibilityLabel={`${t(tile.label)} ${t(tile.caption)}`} onPress={tile.key === 'clinics-queue' || tile.key === 'medicine-queue' ? queue : doctors} style={({ pressed }) => [styles.action, pressed && styles.pressed]}><View style={styles.actionIcon}><DesignImage name={tile.icon} size={20} color={C.secondary} /></View><Text style={styles.actionLabel}>{t(tile.label)}{'\n'}{t(tile.caption)}</Text></Pressable>)}
+          {ACTION_TILES.map(tile => <Pressable key={tile.key} accessibilityRole="button" accessibilityLabel={`${t(tile.label)} ${t(tile.caption)}`} onPress={quickActions[tile.key]} style={({ pressed }) => [styles.action, pressed && styles.pressed]}><View style={styles.actionIcon}><DesignImage name={tile.icon} size={20} color={C.secondary} /></View><Text style={styles.actionLabel}>{t(tile.label)}{'\n'}{t(tile.caption)}</Text></Pressable>)}
         </ScrollView>
       </View>
       <View style={styles.section}>
@@ -170,7 +179,7 @@ export function PatientDashboardScreen() {
         ) : clinics.error ? (
           <View style={styles.error}><Text style={styles.errorTitle}>{t("Could not load clinics")}</Text><Text style={styles.statusText}>{clinics.error}</Text><Pressable onPress={clinics.reload} style={styles.textButton}><Text style={styles.link}>{t("Try again")}</Text></Pressable></View>
         ) : clinics.data?.clinics.length ? (
-          <View style={styles.specialties}>{(showAllClinics ? clinics.data.clinics : clinics.data.clinics.slice(0, 16)).map((clinic) => <Pressable key={clinic._id} accessibilityRole="button" accessibilityLabel={clinic.name} onPress={() => router.push({ pathname: '/(patient)/doctors', params: { department: clinic.department, hospitalId: clinic.hospital?._id } })} style={({ pressed }) => [styles.specialty, { width: specialtyWidth }, pressed && styles.pressed]}><View style={styles.specialtyIcon}><DesignImage name="stethoscope" size={20} color={C.secondary} /></View><Text style={styles.specialtyLabel}>{clinic.name.replace(/ Clinic$/, '')}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable>)}</View>
+          <View style={styles.specialties}>{(showAllClinics ? clinics.data.clinics : clinics.data.clinics.slice(0, 16)).map((clinic) => <Pressable key={clinic._id} accessibilityRole="button" accessibilityLabel={clinic.name} onPress={() => router.push({ pathname: '/(patient)/doctors', params: { tab: 'directory', view: '', search: '', department: clinic.department, hospitalId: clinic.hospital?._id ?? '' } })} style={({ pressed }) => [styles.specialty, { width: specialtyWidth }, pressed && styles.pressed]}><View style={styles.specialtyIcon}><DesignImage name="stethoscope" size={20} color={C.secondary} /></View><Text style={styles.specialtyLabel}>{clinic.name.replace(/ Clinic$/, '')}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable>)}</View>
         ) : (
           <View style={styles.emptyActivity}><Text style={styles.activityTitle}>{t("No clinics available")}</Text><Text style={styles.sectionCaption}>{t("Your hospital has not enabled any clinics yet.")}</Text></View>
         )}

@@ -46,14 +46,16 @@ export function DoctorBookingScreen() {
   const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { id, rescheduleId } = useLocalSearchParams<{ id: string; rescheduleId?: string }>();
+  const { id, rescheduleId, section } = useLocalSearchParams<{ id: string; rescheduleId?: string; section?: string }>();
   const doctorId = Array.isArray(id) ? id[0] : id;
   const rescheduling = Array.isArray(rescheduleId) ? rescheduleId[0] : rescheduleId;
   const [chosenDate, setChosenDate] = useState<string | null>(null);
   const [time, setTime] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [reason, setReason] = useState('');
-  const [tab, setTab] = useState<BookingTab>('Appointment');
+  const requestedSection = Array.isArray(section) ? section[0] : section;
+  const tab: BookingTab = requestedSection === 'Schedule' || requestedSection === 'About' ? requestedSection : 'Appointment';
+  const setTab = (next: BookingTab) => router.setParams({ section: next });
   const [mode, setMode] = useState<'Hospital' | 'Online'>('Hospital');
   const [selectedDocument, setSelectedDocument] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const [bookingPass, setBookingPass] = useState<QueuePass | null>(null);
