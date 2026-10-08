@@ -22,6 +22,9 @@ import Svg, { Path, Circle, Rect, Line, Polyline, Polygon } from 'react-native-s
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { notificationApi } from '../../services/notificationApi';
+import { getAuthToken } from '../../services/http';
+import { BASE_URL } from '../../config';
+import EmergencyBanner from '../../components/EmergencyBanner';
 import {
   fetchDoctorDashboard,
   updateDoctorStatusApi,
@@ -760,6 +763,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         barStyle="light-content"
         backgroundColor="#0B4F59"
       />
+      <EmergencyBanner />
 
       {/* CENTERED RESPONSIVE WRAPPER (MAX 420px) */}
       <View style={styles.centerAlignWrapper}>
