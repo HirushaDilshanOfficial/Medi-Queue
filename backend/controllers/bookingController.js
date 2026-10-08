@@ -20,6 +20,15 @@ const ACTIVE_STATUSES = OpdAppointment.ACTIVE_STATUSES;
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_KEY = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+function isCalendarDate(value) {
+  if (!DATE_KEY.test(String(value))) return false;
+  const [year, month, day] = String(value).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
+
 function slotTakenError(res) {
   return res.status(409).json({ message: 'That slot has just been taken. Please choose another.' });
 }
@@ -43,7 +52,7 @@ function validateRequest(res, { doctorId, date, slotTime }) {
     res.status(400).json({ message: 'Invalid doctor id' });
     return false;
   }
-  if (!DATE_KEY.test(String(date))) {
+  if (!isCalendarDate(date)) {
     res.status(400).json({ message: 'A valid date is required (YYYY-MM-DD)' });
     return false;
   }
@@ -295,7 +304,7 @@ const rescheduleBooking = async (req, res, next) => {
     if (!date || !slotTime) {
       return res.status(400).json({ message: 'date and slotTime are required' });
     }
-    if (!DATE_KEY.test(String(date)) || !TIME_KEY.test(String(slotTime))) {
+    if (!isCalendarDate(date) || !TIME_KEY.test(String(slotTime))) {
       return res.status(400).json({ message: 'A valid date and time are required' });
     }
 

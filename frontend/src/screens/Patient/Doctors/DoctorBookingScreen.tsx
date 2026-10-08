@@ -14,7 +14,7 @@ import { bookingApi } from '../../../services/bookingApi';
 import { HttpError } from '../../../services/http';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import type { SlotOption } from '../../../types/patient';
-import { longDayLabel, shortDayParts } from '../../../utils/opdDates';
+import { addDaysKey, isPastDateKey, longDayLabel, shortDayParts, todayKey } from '../../../utils/opdDates';
 import { DesignImage } from '../../../components/patient/DesignImage';
 
 const C = {
@@ -57,14 +57,19 @@ export function DoctorBookingScreen() {
 
   const doctor = useAsyncResource(() => doctorApi.getById(doctorId), [doctorId]);
   const days = useAsyncResource(() => bookingApi.bookableDays(doctorId), [doctorId]);
-  const date = chosenDate ?? days.data?.days[0]?.date ?? null;
+  const hospitalToday = todayKey();
+  const maxDateKey = addDaysKey(hospitalToday, 14);
+  const availableDays = (days.data?.days ?? []).filter((day) => !isPastDateKey(day.date, hospitalToday) && day.date <= maxDateKey);
+  const date = chosenDate ?? availableDays[0]?.date ?? null;
   const slots = useAsyncResource(
     () => date ? bookingApi.slots(doctorId, date) : Promise.resolve<{ date: string; slots: SlotOption[] }>({ date: '', slots: [] }),
     [doctorId, date],
   );
   // A previous day's cached slots must never remain selectable during a reload.
   const currentSlots = slots.data?.date === date ? slots.data.slots : [];
+  const dateIsValid = Boolean(date && /^\d{4}-\d{2}-\d{2}$/.test(date) && !isPastDateKey(date, hospitalToday) && date <= maxDateKey);
   const canSubmit = mode === 'Hospital' && !!date && !!time && !submitting
+    && dateIsValid
     && !days.loading && !days.error && !slots.loading && !slots.error
     && currentSlots.some(slot => slot.time === time && slot.available);
 
@@ -75,6 +80,11 @@ export function DoctorBookingScreen() {
 
   const submit = async () => {
     if (!canSubmit || !date || !time || submissionPending.current) return;
+    if (!dateIsValid) {
+      Alert.alert(t('Invalid appointment date'), t('Please choose a date from today through the next 14 days.'));
+      setTime(null);
+      return;
+    }
     submissionPending.current = true;
     setSubmitting(true);
     try {
@@ -218,13 +228,13 @@ export function DoctorBookingScreen() {
                   {date && <Text style={styles.dateContext}>{new Date(`${date}T12:00:00Z`).toLocaleDateString(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' })}</Text>}
                   {days.loading ? <ActivityIndicator style={styles.loading} color={C.primary} /> : days.error ? (
                     <View style={styles.notice}><Text style={styles.hint}>{days.error}</Text><Pressable accessibilityRole="button" onPress={days.reload}><Text style={styles.link}>{t("Try again")}</Text></Pressable></View>
-                  ) : !days.data?.days.length ? <Text style={styles.hint}>
+                  ) : !availableDays.length ? <Text style={styles.hint}>
                     {days.data?.scheduleConfigured === false
                       ? t('This doctor has no clinic schedule configured yet. Please check again later.')
                       : t('No available dates. Please check again later.')}
                   </Text> : (
                     <ScrollView ref={dateStrip} horizontal showsHorizontalScrollIndicator={false} style={styles.dateStrip} contentContainerStyle={styles.dateContent}>
-                      {days.data.days.map(day => {
+                      {availableDays.map(day => {
                         const parts = shortDayParts(day.date, locale);
                         const selected = day.date === date;
                         return <Pressable key={day.date} accessibilityRole="button" accessibilityLabel={t("{value0}, {value1} slots available", { value0: String(longDayLabel(day.date, locale)), value1: String(day.slotsRemaining) })} accessibilityState={{ selected }} onPress={() => selectDate(day.date)} style={({ pressed }) => [styles.day, selected && styles.dayActive, pressed && styles.pressed]}>
@@ -279,10 +289,10 @@ export function DoctorBookingScreen() {
           <View style={[styles.calendarSheet, { paddingBottom: Math.max(insets.bottom, 24) }]} accessibilityViewIsModal>
             <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{t("Choose an available date")}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("Close date picker")} onPress={() => setCalendarOpen(false)} style={styles.calendarButton}><Text style={styles.link}>{t("Done")}</Text></Pressable></View>
             <ScrollView contentContainerStyle={styles.calendarDays}>
-              {(days.data?.days ?? []).map((day, index) => <Pressable key={day.date} accessibilityRole="button" accessibilityState={{ selected: date === day.date }} onPress={() => { selectDate(day.date); setCalendarOpen(false); dateStrip.current?.scrollTo({ x: index * 64, animated: true }); }} style={[styles.calendarDay, date === day.date && styles.modeActive]}>
+              {availableDays.map((day, index) => <Pressable key={day.date} accessibilityRole="button" accessibilityState={{ selected: date === day.date }} onPress={() => { selectDate(day.date); setCalendarOpen(false); dateStrip.current?.scrollTo({ x: index * 64, animated: true }); }} style={[styles.calendarDay, date === day.date && styles.modeActive]}>
                 <Text style={[styles.fieldLabel, date === day.date && styles.whiteText]}>{longDayLabel(day.date, locale)}</Text><Text style={[styles.hint, date === day.date && styles.whiteText]}>{day.slotsRemaining} {t("slots available")}</Text>
               </Pressable>)}
-              {!days.data?.days.length && <Text style={styles.hint}>
+              {!availableDays.length && <Text style={styles.hint}>
                 {days.data?.scheduleConfigured === false
                   ? t('This doctor has no clinic schedule configured yet.')
                   : t('No available dates to display.')}

@@ -27,6 +27,15 @@ function isWithinHorizon(dateKey, fromKey) {
   return dateKey >= fromKey && dateKey <= addDays(fromKey, BOOKING_HORIZON_DAYS);
 }
 
+function isCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return false;
+  const [year, month, day] = String(value).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
+
 async function scheduleIds(doctorId) {
   const schedules = await Schedule.find({ doctor: doctorId, status: 'scheduled' })
     .select('_id')
@@ -151,7 +160,7 @@ const listDoctorSlots = async (req, res, next) => {
     const date = String(req.query.date || '');
     const fromKey = today();
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!isCalendarDate(date)) {
       return res.status(400).json({ message: 'A valid date query is required (YYYY-MM-DD)' });
     }
     if (date < fromKey) {
