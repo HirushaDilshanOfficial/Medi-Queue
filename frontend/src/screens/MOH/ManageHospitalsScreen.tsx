@@ -15,6 +15,7 @@ import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 import { API_URL } from '../../config';
+import Toast from 'react-native-toast-message';
 
 export default function ManageHospitalsScreen() {
   const { clinicFilter } = useLocalSearchParams();
@@ -64,10 +65,23 @@ export default function ManageHospitalsScreen() {
       if (response.ok) {
         fetchHospitals();
         setShowManageModal(false);
+        Toast.show({
+          type: 'success',
+          text1: t('Status Updated'),
+          text2: t('Hospital status changed successfully.'),
+          position: 'top',
+          topOffset: 60,
+        });
       }
     } catch (error) {
       console.error('Error toggling status:', error);
-      Alert.alert(t('Error'), t('Could not update status'));
+      Toast.show({
+        type: 'error',
+        text1: t('Error'),
+        text2: t('Could not update status'),
+        position: 'top',
+        topOffset: 60,
+      });
     }
   };
 
@@ -88,10 +102,23 @@ export default function ManageHospitalsScreen() {
               if (response.ok) {
                 fetchHospitals();
                 setShowManageModal(false);
+                Toast.show({
+                  type: 'success',
+                  text1: t('Hospital Deleted'),
+                  text2: t('The hospital has been deleted from the system.'),
+                  position: 'top',
+                  topOffset: 60,
+                });
               }
             } catch (error) {
               console.error('Error deleting hospital:', error);
-              Alert.alert(t('Error'), t('Could not delete hospital'));
+              Toast.show({
+                type: 'error',
+                text1: t('Error'),
+                text2: t('Could not delete hospital'),
+                position: 'top',
+                topOffset: 60,
+              });
             }
           }
         }
@@ -121,8 +148,8 @@ export default function ManageHospitalsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-      <SafeAreaView style={{ flex: 1 }}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
+        
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
@@ -321,7 +348,6 @@ export default function ManageHospitalsScreen() {
         </Modal>
 
         <MOHBottomNav activeRoute="hospitals" />
-      </SafeAreaView>
     </View>
   );
 }
@@ -332,27 +358,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    paddingVertical: 20,
+    backgroundColor: Colors.primaryDark,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
+    marginBottom: 10,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.background,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   backButtonText: {
     fontSize: 20,
-    color: Colors.textDark,
+    color: Colors.white,
+    fontWeight: 'bold',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.primaryDark,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.white,
   },
   scrollContent: {
     padding: 20,

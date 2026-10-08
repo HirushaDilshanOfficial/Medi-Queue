@@ -78,7 +78,6 @@ export default function SendNotificationScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
-      <SafeAreaView style={{ flex: 0, backgroundColor: Colors.primaryDark }} />
       
       <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
         {/* Header */}

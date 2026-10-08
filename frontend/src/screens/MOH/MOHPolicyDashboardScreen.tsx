@@ -82,7 +82,6 @@ export default function MOHPolicyDashboardScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
-      <SafeAreaView style={{ flex: 0, backgroundColor: Colors.primaryDark }} />
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Header Section */}

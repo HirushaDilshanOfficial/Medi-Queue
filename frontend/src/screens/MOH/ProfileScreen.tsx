@@ -9,6 +9,7 @@ import { BASE_URL } from '../../config';
 
 import { getAuthToken, clearAuthToken } from '../../services/http';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
+import Toast from 'react-native-toast-message';
 
 export default function ProfileScreen() {
   const { t } = useLanguage();
@@ -74,6 +75,13 @@ export default function ProfileScreen() {
   const handleLogout = async () => {
     await clearAuthToken();
     await AsyncStorage.removeItem('user');
+    Toast.show({
+      type: 'info',
+      text1: t('Logged Out'),
+      text2: t('You have been successfully logged out.'),
+      position: 'top',
+      topOffset: 60,
+    });
     router.replace('/(auth)/login');
   };
 

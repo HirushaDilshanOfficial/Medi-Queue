@@ -33,16 +33,17 @@ export function LanguageSwitcher() {
   }
 
   return <>
-    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.toolbar, { backgroundColor: bgColor }]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('Change language')}
-        accessibilityState={{ disabled: !ready, expanded: open }} disabled={!ready}
-        onPress={() => { setSelected(language); setError(false); setOpen(true); }} style={styles.control}>
-        <ProfileIcon name="language" size={18} color={textColor} />
-        <Text style={[styles.controlLabel, { color: textColor }]}>{t('Language')}</Text>
-        <Text style={[styles.nativeLabel, { color: textColor }]}>{LANGUAGES.find(item => item.code === language)!.name}</Text>
-        <ProfileIcon name="arrow" size={14} color={textColor} />
-      </Pressable>
-    </SafeAreaView>
+    <Pressable accessibilityRole="button" accessibilityLabel={t('Change language')}
+      accessibilityState={{ disabled: !ready, expanded: open }} disabled={!ready}
+      onPress={() => { setSelected(language); setError(false); setOpen(true); }} style={styles.control}>
+      <View style={[styles.pillContainer, isDark ? styles.pillDark : styles.pillLight]}>
+        <ProfileIcon name="language" size={14} color={textColor} />
+        <Text style={[styles.nativeLabel, { color: textColor }]}>{language.toUpperCase()}</Text>
+        <View style={{ transform: [{ rotate: '90deg' }] }}>
+          <ProfileIcon name="arrow" size={12} color={textColor} />
+        </View>
+      </View>
+    </Pressable>
     <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
       <View style={[styles.overlay, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
         <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel={t('Close dialog')}
@@ -76,10 +77,23 @@ export function LanguageSwitcher() {
 }
 
 const styles = StyleSheet.create({
-  toolbar: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#d5e5ed', alignItems: 'flex-end' },
-  control: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  controlLabel: { fontSize: 12 },
-  nativeLabel: { fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif', fontSize: 15, lineHeight: 26 },
+  toolbar: { alignItems: 'flex-end', paddingTop: 10, paddingRight: 10 },
+  control: { paddingHorizontal: 10, paddingVertical: 6 },
+  pillContainer: { 
+    flexDirection: 'row', alignItems: 'center', gap: 4, 
+    paddingHorizontal: 8, paddingVertical: 4, 
+    borderRadius: 20, 
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  pillDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  pillLight: {
+    backgroundColor: 'rgba(0, 76, 91, 0.08)',
+    borderColor: 'rgba(0, 76, 91, 0.15)',
+  },
+  nativeLabel: { fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif', fontSize: 13, fontWeight: '600' },
   overlay: { flex: 1, backgroundColor: 'rgba(36,51,57,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   dialog: { width: '100%', maxWidth: 440, maxHeight: '100%', borderRadius: 24, padding: 24, backgroundColor: '#fff', gap: 12 },
   heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
