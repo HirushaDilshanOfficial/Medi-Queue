@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -100,7 +101,11 @@ export default function LoginScreen() {
 
           {/* Small Logo */}
           <View style={styles.logoSmall}>
-            <AppIcon name="medical" size={28} color={Colors.primaryDark} />
+            <Image 
+              source={require('../../../assets/images/logo.png')} 
+              style={{ width: 40, height: 40 }} 
+              resizeMode="contain" 
+            />
           </View>
 
           <Text style={styles.headerTitle}>{t("Welcome Back")}</Text>

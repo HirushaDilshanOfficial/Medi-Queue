@@ -12,6 +12,7 @@ import { View,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../../config';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 
@@ -27,6 +28,7 @@ export default function ManageStaffScreen() {
   }, []);
 
   const [activeFilter, setActiveFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
@@ -100,9 +102,13 @@ export default function ManageStaffScreen() {
     );
   };
 
-  const filteredStaff = activeFilter === 'All' 
-    ? staff 
-    : staff.filter(s => s.role === activeFilter);
+  const filteredStaff = staff.filter(s => {
+    const matchesFilter = activeFilter === 'All' || s.role === activeFilter;
+    const matchesSearch = s.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          s.role?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          s._id?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFilter && (searchQuery === '' || matchesSearch);
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -134,11 +140,13 @@ export default function ManageStaffScreen() {
           </View>
 
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons name="search-outline" size={20} color={Colors.textMedium} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
               placeholder={t("Search by name, role or employee ID...")}
               placeholderTextColor={Colors.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </View>
 

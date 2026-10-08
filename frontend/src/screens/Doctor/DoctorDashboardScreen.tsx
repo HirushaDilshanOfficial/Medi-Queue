@@ -299,7 +299,9 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       });
       if (res.ok) {
         const data = await res.json();
-        const lastReadTime = await AsyncStorage.getItem('last_notification_read_time');
+        const userStr = await AsyncStorage.getItem('user');
+        const userId = userStr ? JSON.parse(userStr)._id : '';
+        const lastReadTime = await AsyncStorage.getItem(`last_notification_read_time_${userId}`);
         const lastReadDate = lastReadTime ? new Date(lastReadTime) : new Date(0);
         const unread = data.filter((n: any) => new Date(n.createdAt) > lastReadDate).length;
         setUnreadCount(Math.max(3, unread));

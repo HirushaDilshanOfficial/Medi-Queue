@@ -23,6 +23,9 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<'All' | 'Today' | 'Past 7 Days'>('All');
+  const [clearedAt, setClearedAt] = useState<Date | null>(null);
+  const [userId, setUserId] = useState<string>('');
 
   const fetchNotifications = async () => {
     try {
@@ -38,11 +41,20 @@ export default function NotificationsScreen() {
       if (response.ok) {
         const data = await response.json();
         setNotifications(data);
+        const userStr = await AsyncStorage.getItem('user');
+        const uid = userStr ? JSON.parse(userStr)._id : '';
+        setUserId(uid);
+        
+        const clearedTime = await AsyncStorage.getItem(`notifications_cleared_at_${uid}`);
+        if (clearedTime) {
+          setClearedAt(new Date(clearedTime));
+        }
+
         if (data && data.length > 0) {
           // Save the latest notification's time to avoid client/server clock skew
-          await AsyncStorage.setItem('last_notification_read_time', data[0].createdAt);
+          await AsyncStorage.setItem(`last_notification_read_time_${uid}`, data[0].createdAt);
         } else {
-          await AsyncStorage.setItem('last_notification_read_time', new Date().toISOString());
+          await AsyncStorage.setItem(`last_notification_read_time_${uid}`, new Date().toISOString());
         }
       }
     } catch (error) {
@@ -61,6 +73,30 @@ export default function NotificationsScreen() {
     setRefreshing(true);
     fetchNotifications();
   };
+
+  const handleClearAll = async () => {
+    const now = new Date();
+    setClearedAt(now);
+    await AsyncStorage.setItem(`notifications_cleared_at_${userId}`, now.toISOString());
+  };
+
+  const filteredNotifications = notifications.filter((n) => {
+    const nDate = new Date(n.createdAt);
+    if (clearedAt && nDate < clearedAt) return false;
+    
+    if (filter === 'Today') {
+      const today = new Date();
+      return nDate.getDate() === today.getDate() && 
+             nDate.getMonth() === today.getMonth() && 
+             nDate.getFullYear() === today.getFullYear();
+    }
+    if (filter === 'Past 7 Days') {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return nDate >= sevenDaysAgo;
+    }
+    return true;
+  });
 
   const renderItem = ({ item }: { item: any }) => {
     const date = new Date(item.createdAt).toLocaleDateString();
@@ -91,7 +127,24 @@ export default function NotificationsScreen() {
           <Ionicons name="arrow-back" size={24} color={Colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t("Notifications")}</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity onPress={handleClearAll}>
+          <Text style={{ color: Colors.white, fontSize: 14 }}>{t("Clear All")}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Filters */}
+      <View style={styles.filterContainer}>
+        {['All', 'Today', 'Past 7 Days'].map((f) => (
+          <TouchableOpacity 
+            key={f} 
+            style={[styles.filterChip, filter === f && styles.filterChipActive]}
+            onPress={() => setFilter(f as any)}
+          >
+            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
+              {t(f)}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* List */}
@@ -99,14 +152,14 @@ export default function NotificationsScreen() {
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      ) : notifications.length === 0 ? (
+      ) : filteredNotifications.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="notifications-off-outline" size={64} color={Colors.textLight} />
           <Text style={styles.emptyText}>{t("No notifications yet")}</Text>
         </View>
       ) : (
         <FlatList
-          data={notifications}
+          data={filteredNotifications}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContainer}
@@ -144,6 +197,32 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
+    color: Colors.white,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+    marginRight: 10,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterText: {
+    fontSize: 14,
+    color: Colors.textMedium,
+    fontWeight: '500',
+  },
+  filterTextActive: {
     color: Colors.white,
   },
   listContainer: {

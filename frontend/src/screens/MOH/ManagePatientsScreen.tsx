@@ -12,7 +12,9 @@ import { View,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../../config';
+import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 
 export default function ManagePatientsScreen() {
   const { t } = useLanguage();
@@ -26,6 +28,7 @@ export default function ManagePatientsScreen() {
   }, []);
 
   const [activeFilter, setActiveFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
@@ -129,9 +132,13 @@ export default function ManagePatientsScreen() {
     );
   };
 
-  const filteredPatients = activeFilter === 'All' 
-    ? patients 
-    : patients.filter(p => p.gender === activeFilter);
+  const filteredPatients = patients.filter(p => {
+    const matchesFilter = activeFilter === 'All' || p.gender === activeFilter;
+    const matchesSearch = p.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          p.nic?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          p.patientNo?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFilter && (searchQuery === '' || matchesSearch);
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -155,11 +162,13 @@ export default function ManagePatientsScreen() {
           </View>
 
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons name="search-outline" size={20} color={Colors.textMedium} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
               placeholder={t("Search by name, NIC or Patient ID...")}
               placeholderTextColor={Colors.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </View>
 
@@ -337,6 +346,7 @@ export default function ManagePatientsScreen() {
         </Modal>
 
       </SafeAreaView>
+      <MOHBottomNav activeRoute="home" />
     </View>
   );
 }

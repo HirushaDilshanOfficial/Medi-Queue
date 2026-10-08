@@ -36,11 +36,17 @@ const createNotification = async (req, res) => {
 const getNotifications = async (req, res) => {
   try {
     const userRole = req.user.role;
-    let query = {};
+    
+    // Calculate date 30 days ago
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    let query = { createdAt: { $gte: thirtyDaysAgo } };
 
     if (userRole === 'MOH') {
       // MOH sees all notifications they sent, plus any targeted at 'All' or 'MOH'
       query = {
+        ...query,
         $or: [
           { sender: req.user._id },
           { targetRole: { $in: ['All', 'MOH'] } }
@@ -48,7 +54,7 @@ const getNotifications = async (req, res) => {
       };
     } else {
       // Others see notifications targeted to 'All' or their specific role
-      query = { targetRole: { $in: ['All', userRole] } };
+      query.targetRole = { $in: ['All', userRole] };
     }
 
     const notifications = await Notification.find(query).sort({ createdAt: -1 });

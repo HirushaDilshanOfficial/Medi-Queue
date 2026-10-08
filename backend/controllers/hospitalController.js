@@ -4,7 +4,7 @@ const { provisionHospitalClinics } = require('./clinicController');
 // Add a new hospital
 exports.addHospital = async (req, res) => {
   try {
-    const { name, code, type, contact, location, departments } = req.body;
+    const { name, code, type, contact, email, location, departments } = req.body;
 
     // Check if hospital code already exists
     const existingHospital = await Hospital.findOne({ code });
@@ -25,6 +25,7 @@ exports.addHospital = async (req, res) => {
       code,
       type,
       contact,
+      email,
       location,
       departments: deptArray,
       status: 'Active'
@@ -60,7 +61,7 @@ exports.getAllHospitals = async (req, res) => {
 exports.updateHospital = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, code, type, contact, location, departments } = req.body;
+    const { name, code, type, contact, email, location, departments } = req.body;
 
     let deptArray = [];
     if (typeof departments === 'string') {
@@ -71,7 +72,7 @@ exports.updateHospital = async (req, res) => {
 
     const updatedHospital = await Hospital.findByIdAndUpdate(
       id,
-      { name, code, type, contact, location, departments: deptArray },
+      { name, code, type, contact, email, location, departments: deptArray },
       { new: true }
     );
 
