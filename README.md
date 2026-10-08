@@ -95,7 +95,7 @@ Press `w` in terminal for Web, `a` for Android emulator, `i` for iOS simulator, 
 
 | Role | Email | Password | Details |
 | :--- | :--- | :--- | :--- |
-| **Receptionist** | `reception@mediqueue.lk` | `Test@1234` | Full access to Receptionist desk, patient registration, live queue & daily reports |
+| **Receptionist** | `dinusha@gmail.lk` | `Admin@123` | Full access to Receptionist desk, patient registration, live queue & daily reports |
 | **Doctor (Orthopedic)** | `doctor.aruna@mediqueue.lk` | `Test@1234` | Doctor Room 3B |
 | **Doctor (General OPD)** | `doctor.chathura@mediqueue.lk` | `Test@1234` | Doctor Room 2A |
 | **Doctor (Pediatrics)** | `doctor.dilani@mediqueue.lk` | `Test@1234` | Doctor Room 1C |
