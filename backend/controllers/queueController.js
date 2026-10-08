@@ -67,6 +67,7 @@ function mapPass(entry, { todayKey, live } = {}) {
     tokenLabel: `A-${String(entry.tokenNumber).padStart(3, '0')}`,
     passCode: entry.passCode,
     qrValue: passQrValue(entry),
+    doctorId: entry.doctor ? String(entry.doctor) : null,
     doctorName: entry.doctorName || null,
     room: entry.room || null,
     priority: entry.priority,

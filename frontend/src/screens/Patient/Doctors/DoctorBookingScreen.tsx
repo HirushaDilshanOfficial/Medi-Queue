@@ -8,9 +8,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as DocumentPicker from 'expo-document-picker';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { doctorApi } from '../../../services/doctorApi';
 import { bookingApi } from '../../../services/bookingApi';
+import { patientApi } from '../../../services/patientApi';
 import { HttpError } from '../../../services/http';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import type { SlotOption } from '../../../types/patient';
@@ -51,6 +53,7 @@ export function DoctorBookingScreen() {
   const [reason, setReason] = useState('');
   const [tab, setTab] = useState<BookingTab>('Appointment');
   const [mode, setMode] = useState<'Hospital' | 'Online'>('Hospital');
+  const [selectedDocument, setSelectedDocument] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const dateStrip = useRef<ScrollView>(null);
   const submissionPending = useRef(false);
@@ -95,15 +98,59 @@ export function DoctorBookingScreen() {
         Alert.alert(t('Appointment updated'), t("{value0} at {value1}", { value0: String(longDayLabel(date, locale)), value1: String(time) }));
         router.back();
       } else {
+        let documentUploadFailed = false;
+        let documentUploadError = '';
+        if (selectedDocument && bookingResult?.appointment.id) {
+          const form = new FormData();
+          form.append('title', selectedDocument.name || 'Medical document');
+          form.append('category', 'General');
+          form.append('reportDate', date);
+          form.append('appointmentId', bookingResult.appointment.id);
+          if (selectedDocument.file) {
+            form.append('file', selectedDocument.file);
+          } else {
+            form.append('file', {
+              uri: selectedDocument.uri,
+              name: selectedDocument.name || 'medical-document',
+              type: selectedDocument.mimeType || 'application/octet-stream',
+            } as unknown as Blob);
+          }
+          try {
+            await patientApi.uploadReport(form);
+          } catch (error) {
+            documentUploadFailed = true;
+            documentUploadError = error instanceof HttpError
+              ? error.message
+              : t('Please add the document from your reports page.');
+          }
+        }
         Alert.alert(
           t('Appointment confirmed'),
-          t("{value0} at {value1}\n\nQueue number: {value2}\nToken: {value3}", {
+          t("{value0} at {value1}\n\nQueue number: {value2}\nToken: {value3}{value4}", {
             value0: String(longDayLabel(date, locale)),
             value1: String(time),
-            value2: String(bookingResult?.queueNumber ?? bookingResult?.tokenNumber ?? '—'),
-            value3: String(bookingResult?.tokenLabel ?? '—'),
+            value2: String(
+              bookingResult?.queueNumber
+                ?? bookingResult?.tokenNumber
+                ?? bookingResult?.appointment.tokenNumber
+                ?? '—',
+            ),
+            value3: String(
+              bookingResult?.tokenLabel
+                ?? (bookingResult?.appointment.tokenNumber
+                  ? `A-${String(bookingResult.appointment.tokenNumber).padStart(3, '0')}`
+                  : '—'),
+            ),
+            value4: documentUploadFailed
+              ? `\n\n${t('The medical document could not be uploaded.')}\n${documentUploadError}`
+              : '',
           }),
-          [{ text: t('View queue pass'), onPress: () => router.replace('/(patient)/queue') }],
+          [
+            ...(documentUploadFailed
+              ? [{ text: t('View reports'), onPress: () => router.replace('/(patient)/profile/reports') }]
+              : []),
+            { text: t('View queue pass'), onPress: () => router.replace('/(patient)/queue') },
+          ],
         );
       }
     } catch (error) {
@@ -120,15 +167,20 @@ export function DoctorBookingScreen() {
     }
   };
 
-  const showReports = () => Alert.alert(
-    t('Medical documents'),
-    t('Add or view a medical report in your patient profile. Files cannot be attached directly to this booking yet.'),
-    [
-      { text: t('Cancel'), style: 'cancel' },
-      { text: 'View reports', onPress: () => router.push('/(patient)/profile/reports') },
-      { text: t('Add report'), onPress: () => router.push('/(patient)/profile/report/new') },
-    ],
-  );
+  const chooseDocument = useCallback(async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (result.canceled) return;
+    const file = result.assets[0];
+    if ((file.size ?? 0) > 10 * 1024 * 1024) {
+      Alert.alert(t('Medical document'), t('The report file must be 10 MB or smaller.'));
+      return;
+    }
+    setSelectedDocument(file);
+  }, [t]);
   const showOptions = () => Alert.alert(t('Appointment options'), t('Choose an action'), [
     { text: t('Cancel'), style: 'cancel' },
     { text: 'About this doctor', onPress: () => setTab('About') },
@@ -264,9 +316,9 @@ export function DoctorBookingScreen() {
                     </View>
                     <View>
                       <Text style={styles.fieldLabel}>{t("Medical Document")}{' '}<Text style={styles.optional}>{t("(Optional)")}</Text></Text>
-                      <Pressable accessibilityRole="button" accessibilityLabel={t("Add or view medical reports")} onPress={showReports} style={({ pressed }) => [styles.uploadCard, pressed && styles.pressed]}>
+                      <Pressable accessibilityRole="button" accessibilityLabel={t("Attach a medical document")} onPress={chooseDocument} style={({ pressed }) => [styles.uploadCard, pressed && styles.pressed]}>
                         <View style={styles.uploadIcon}><BookingIcon name="upload" color={C.secondary} /></View>
-                        <View style={styles.uploadCopy}><Text style={styles.uploadTitle}>{t("Attach reports or scans")}</Text><Text style={styles.uploadHint} numberOfLines={1}>{t("Example: latest medical check and referral document")}</Text></View>
+                        <View style={styles.uploadCopy}><Text style={styles.uploadTitle}>{selectedDocument?.name || t("Attach reports or scans")}</Text><Text style={styles.uploadHint} numberOfLines={1}>{selectedDocument ? t("This document will be attached to the appointment") : t("PDF, JPEG, PNG or WebP up to 10 MB")}</Text></View>
                         <BookingIcon name="plus" color={C.outline} size={20} />
                       </Pressable>
                     </View>

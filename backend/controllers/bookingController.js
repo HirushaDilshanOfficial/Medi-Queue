@@ -169,9 +169,9 @@ const createBooking = async (req, res, next) => {
 
     return res.status(201).json({
       appointment: mapAppointment(appointment, { todayKey: today() }),
-      tokenLabel: `A-${String(allocatedToken).padStart(3, '0')}`,
-      tokenNumber: allocatedToken,
-      queueNumber: allocatedToken,
+      tokenLabel: `A-${String(queueEntry.tokenNumber).padStart(3, '0')}`,
+      tokenNumber: queueEntry.tokenNumber,
+      queueNumber: queueEntry.tokenNumber,
       queueEntryId: String(queueEntry._id),
     });
   } catch (error) {

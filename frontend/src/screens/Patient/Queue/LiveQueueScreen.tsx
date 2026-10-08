@@ -39,10 +39,17 @@ export function LiveQueueScreen() {
   const profile = useAsyncResource(() => patientApi.getProfile(), []);
   const activePass = pass.data?.pass ?? null;
   const activePasses = pass.data?.passes ?? (activePass ? [activePass] : []);
+  const doctorPasses = activePasses.filter((queuePass, index, passes) => {
+    const doctorKey = queuePass.doctorId
+      ?? `${queuePass.doctorName ?? 'assigned-doctor'}|${queuePass.department}`;
+    return passes.findIndex((candidate) => (
+      (candidate.doctorId
+        ?? `${candidate.doctorName ?? 'assigned-doctor'}|${candidate.department}`) === doctorKey
+    )) === index;
+  });
   const [selectedPassId, setSelectedPassId] = useState<string | null>(null);
   const [doctorMenuOpen, setDoctorMenuOpen] = useState(false);
-  const selectedPass = activePasses.find((item) => item.id === selectedPassId) ?? activePasses[0] ?? null;
-  const activePassId = activePass?.id;
+  const selectedPass = doctorPasses.find((item) => item.id === selectedPassId) ?? doctorPasses[0] ?? null;
   const todaysAppointment = upcoming.data?.appointments.find(appointment => appointment.date === todayKey());
   const linkedAppointment = upcoming.data?.appointments.find(appointment => appointment.id === selectedPass?.appointmentId);
   const doctorId = linkedAppointment?.doctorId;
@@ -59,7 +66,7 @@ export function LiveQueueScreen() {
   const { reload: reloadProfile } = profile;
   const hasFocused = useRef(false);
   const buzzedPass = useRef<string | null>(null);
-  const pollingEnabled = isFocused && Boolean(activePass) && !['completed', 'cancelled', 'no_show'].includes(activePass?.status ?? '');
+  const pollingEnabled = isFocused && activePasses.length > 0 && !activePasses.every((item) => ['completed', 'cancelled', 'no_show'].includes(item.status));
 
   useFocusEffect(useCallback(() => {
     if (hasFocused.current) { reloadPass(); reloadUpcoming(); reloadProfile(); }
@@ -69,24 +76,18 @@ export function LiveQueueScreen() {
   // Preserve the QR and ticket ID while updating position and status.
   const poll = useCallback(async () => {
     try {
-      const result = await queueApi.live();
-      const livePass = result.pass;
-      if (!livePass) {
-        setPass(current => current?.pass?.id === activePassId ? { pass: null } : current);
+      const result = await queueApi.myPass();
+      if (!result.pass) {
+        setPass({ pass: null, passes: [] });
         reloadUpcoming();
       }
-      else if (activePassId !== livePass.id) { reloadPass(); reloadUpcoming(); }
-      else setPass(current => {
-        if (!current?.pass || current.pass.id !== livePass.id) return current;
-        return { ...current, pass: { ...current.pass, live: result.live,
-          status: livePass.status as typeof current.pass.status, calledAt: livePass.calledAt } };
-      });
+      else setPass(result);
       setLastUpdate(Date.now()); setLiveError(null);
     } catch (error) {
       setLiveError('Live updates are temporarily unavailable. Showing the last known position and retrying.');
       throw error;
     }
-  }, [setPass, reloadPass, reloadUpcoming, activePassId]);
+  }, [setPass, reloadUpcoming]);
   usePolling(poll, POLL_INTERVAL_MS, { enabled: pollingEnabled });
 
   useEffect(() => {
@@ -178,7 +179,7 @@ export function LiveQueueScreen() {
         </View>
       </View>
       <View style={styles.stack}>
-        {activePasses.length > 1 ? (
+        {doctorPasses.length > 1 ? (
           <View style={styles.stateCard}>
             <Text style={styles.small}>{t('Select doctor booking')}</Text>
             <Pressable accessibilityRole="button" accessibilityLabel={t('Select doctor booking')} onPress={() => setDoctorMenuOpen(true)} style={styles.doctorSelect}>
@@ -200,7 +201,7 @@ export function LiveQueueScreen() {
             <Pressable accessibilityRole="button" disabled={checkingIn} accessibilityState={{ disabled: checkingIn }} onPress={() => checkIn(todaysAppointment)} style={[styles.homeButton, checkingIn && styles.disabled]}><Text style={styles.homeLabel}>{checkingIn ? t('Checking in…') : t('Check in for my token')}</Text></Pressable>
           </View> : <View style={styles.stateCard}><ProfileIcon name="ticket" size={32} /><Text style={styles.title}>{t("No queue pass yet")}</Text><Text style={styles.caption}>{t("Check in on the day of your appointment to collect your queue number.")}</Text><Pressable accessibilityRole="button" onPress={() => router.push('/(patient)/doctors')} style={styles.homeButton}><Text style={styles.homeLabel}>{t("Book a clinic visit")}</Text></Pressable></View>}
         {upcoming.error && !activePass ? <View style={styles.stateCard}><Text style={styles.error}>{t("Your bookings could not be loaded.")}</Text><Pressable accessibilityRole="button" onPress={reloadUpcoming} style={styles.menuButton}><Text style={styles.actionLabel}>{t("Retry bookings")}</Text></Pressable></View> : null}
-        {Boolean(upcoming.data?.appointments.length) ? <View style={{ gap: 12 }}><Text style={styles.title}>{t("Your bookings")}</Text>{upcoming.data?.appointments.slice(0, 3).map(appointment => <AppointmentCard key={appointment.id} appointment={appointment} onCheckIn={checkIn} onCancel={cancelAppointment} />)}</View> : null}
+        {Boolean(upcoming.data?.appointments.length) ? <View style={{ gap: 12 }}><Text style={styles.title}>{t("Your bookings")}</Text>{upcoming.data?.appointments.map(appointment => <AppointmentCard key={appointment.id} appointment={appointment} onCheckIn={checkIn} onCancel={cancelAppointment} />)}</View> : null}
       </View>
     </ScrollView>
     <Modal transparent visible={doctorMenuOpen} animationType="fade" onRequestClose={() => setDoctorMenuOpen(false)}>
@@ -208,7 +209,7 @@ export function LiveQueueScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel={t('Close doctor selection')} onPress={() => setDoctorMenuOpen(false)} style={StyleSheet.absoluteFill} />
         <View style={styles.doctorMenu}>
           <Text style={styles.title}>{t('Select doctor booking')}</Text>
-          {activePasses.map((queuePass) => (
+          {doctorPasses.map((queuePass) => (
             <Pressable key={queuePass.id} onPress={() => { setSelectedPassId(queuePass.id); setDoctorMenuOpen(false); }} style={styles.doctorOption}>
               <View style={styles.grow}>
                 <Text style={styles.actionLabel}>{queuePass.doctorName ?? t('Assigned doctor')}</Text>
