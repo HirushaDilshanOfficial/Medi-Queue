@@ -194,7 +194,11 @@ export default function MOHDashboardScreen() {
 
           <View style={styles.clinicsGrid}>
             {hospitalClinics.map((clinic) => (
-              <TouchableOpacity key={clinic.id} style={styles.clinicCard}>
+              <TouchableOpacity 
+                key={clinic.id} 
+                style={styles.clinicCard}
+                onPress={() => router.push({ pathname: '/(moh)/manage-hospitals', params: { clinicFilter: clinic.name } })}
+              >
                 <View style={styles.clinicIconContainer}>
                   {clinic.icon}
                 </View>

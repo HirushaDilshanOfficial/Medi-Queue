@@ -10,13 +10,14 @@ import { View,
   TextInput,
   Modal,
   Alert, RefreshControl } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 import { API_URL } from '../../config';
 
 export default function ManageHospitalsScreen() {
+  const { clinicFilter } = useLocalSearchParams();
   const { t } = useLanguage();
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(() => {
@@ -100,12 +101,22 @@ export default function ManageHospitalsScreen() {
 
   const filteredHospitals = hospitals.filter(h => {
     const matchesFilter = activeFilter === 'All' || h.type === activeFilter;
+    
+    // Clinic filter logic (checks if any department partially matches the clinicFilter)
+    let matchesClinic = true;
+    if (clinicFilter) {
+      matchesClinic = h.departments && h.departments.some((dept: string) => 
+        dept.toLowerCase().includes((clinicFilter as string).toLowerCase())
+      );
+    }
+
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = 
       h.name?.toLowerCase().includes(searchLower) || 
       h.code?.toLowerCase().includes(searchLower) ||
       h.location?.toLowerCase().includes(searchLower);
-    return matchesFilter && matchesSearch;
+      
+    return matchesFilter && matchesSearch && matchesClinic;
   });
 
   return (
@@ -145,6 +156,17 @@ export default function ManageHospitalsScreen() {
               onChangeText={setSearchQuery}
             />
           </View>
+
+          {clinicFilter && (
+            <View style={{ paddingHorizontal: 20, marginBottom: 15, flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, color: Colors.textMedium, marginRight: 10 }}>
+                {t("Filtering by Clinic:")} <Text style={{ fontWeight: 'bold', color: Colors.primary }}>{clinicFilter}</Text>
+              </Text>
+              <TouchableOpacity onPress={() => router.setParams({ clinicFilter: '' })}>
+                <Ionicons name="close-circle" size={20} color={Colors.error} />
+              </TouchableOpacity>
+            </View>
+          )}
 
           <ScrollView 
             horizontal 
