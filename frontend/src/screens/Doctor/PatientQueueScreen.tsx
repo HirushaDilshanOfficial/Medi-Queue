@@ -6,14 +6,12 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   RefreshControl,
   ActivityIndicator,
   Alert,
   StatusBar,
-  Image,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -23,9 +21,22 @@ import {
   getCatalogPatient,
   ringRoomChimeApi,
   callSpecificTokenApi,
+  getDoctorDashboardForHospital,
   DoctorDashboardData,
   PatientQueueItem,
 } from '../../services/doctorService';
+import {
+  DOCTOR_TOKENS as C,
+  DoctorTopBar,
+  DoctorBottomNav,
+  DoctorDarkHighlightBox,
+  DarkStrongPill,
+  DarkOutlineButton,
+  StatusPill,
+  ChipButton,
+  PrimaryButton,
+  SecondaryButton,
+} from '../../components/doctor';
 
 export default function PatientQueueScreen() {
   const { t } = useLanguage();
@@ -34,7 +45,6 @@ export default function PatientQueueScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'priority' | 'walkin'>('all');
-  const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('queue');
   const [patientUndoHistory, setPatientUndoHistory] = useState<any[]>([]);
 
   const advanceQueueLocally = useCallback((targetTokenNumber?: number) => {
@@ -158,7 +168,6 @@ export default function PatientQueueScreen() {
         }
       }
 
-      // Replenish upcoming queue if low so testing is unlimited
       if (queue.length < 3) {
         const highestToken = Math.max(
           nextPat.tokenNumber,
@@ -207,11 +216,26 @@ export default function PatientQueueScreen() {
     });
   }, []);
 
+  const [currentHospital, setCurrentHospital] = useState('Colombo Teaching Hospital 1');
+
   const loadData = useCallback(async () => {
     try {
-      const res = await fetchDoctorDashboard();
+      let savedHosp = await AsyncStorage.getItem('doctor_current_hospital');
+      if (!savedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
+        savedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
+      }
+      const activeHosp = savedHosp || currentHospital || 'Colombo Teaching Hospital 1';
+      if (activeHosp !== currentHospital) {
+        setCurrentHospital(activeHosp);
+      }
+      const res = await fetchDoctorDashboard(undefined, activeHosp);
       if (res) {
         setData(res);
+        if (res.doctor?.hospitalName) {
+          setCurrentHospital(res.doctor.hospitalName);
+        }
+      } else {
+        setData(getDoctorDashboardForHospital(activeHosp));
       }
     } catch (err) {
       console.log('Error loading patient queue:', err);
@@ -219,18 +243,36 @@ export default function PatientQueueScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [currentHospital]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          let storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
+          if (!storedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
+            storedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
+          }
+          if (storedHosp && storedHosp !== currentHospital) {
+            setCurrentHospital(storedHosp);
+            const res = await fetchDoctorDashboard(undefined, storedHosp);
+            if (res) setData(res);
+            else setData(getDoctorDashboardForHospital(storedHosp));
+          }
+        } catch (e) {}
+      })();
+    }, [currentHospital])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
   };
 
-  // 1. Complete & Call Next Token
   const handleCompleteAndCallNext = async () => {
     setIsProcessing(true);
     if (data?.currentPatient) {
@@ -252,7 +294,6 @@ export default function PatientQueueScreen() {
     }
   };
 
-  // Undo previous patient
   const handleUndoPatient = async () => {
     if (!data?.currentPatient) return;
     const currentToken = data.currentPatient.tokenNumber;
@@ -275,7 +316,6 @@ export default function PatientQueueScreen() {
       console.log('Error calling undo API:', err);
     }
 
-    // Local client-side fallback down to Token #001
     setData((prev) => {
       if (!prev || !prev.currentPatient) return prev;
       const curr = prev.currentPatient;
@@ -328,10 +368,9 @@ export default function PatientQueueScreen() {
     setIsProcessing(false);
   };
 
-  // 2. Recall / Ring Room Chime
   const handleRingRoomChime = async () => {
     const token = data?.currentPatient?.tokenNumber || 28;
-    const room = data?.doctor?.room || 'Room 3B';
+    const room = data?.doctor?.room || 'Room 101';
     try {
       const res = await ringRoomChimeApi(token, room);
       Alert.alert(t('Chime & Room Speaker'), res?.message || t("Chime broadcast: Token #{value0}, please enter {value1}", { value0: String(token), value1: String(room) }));
@@ -340,7 +379,6 @@ export default function PatientQueueScreen() {
     }
   };
 
-  // 3. Call into Room directly for NEXT token (e.g. #029)
   const handleCallIntoRoom = async (tokenNumber: number, patientName: string) => {
     setIsProcessing(true);
     try {
@@ -359,7 +397,6 @@ export default function PatientQueueScreen() {
     }
   };
 
-  // 4. Navigate to Patient Records
   const handleViewPatientRecords = async (patient: PatientQueueItem) => {
     try {
       await AsyncStorage.setItem('active_record_patient_token', String(patient.tokenNumber));
@@ -381,89 +418,13 @@ export default function PatientQueueScreen() {
     }
   };
 
-  // 4b. Patient card long press or full action
-  const handlePatientAction = (patient: PatientQueueItem) => {
-    Alert.alert(
-      t("Token #{value0} - {value1}", { value0: String(String(patient.tokenNumber).padStart(3, '0')), value1: String(patient.patientName) }),
-      t("Age: {value0}y, {value1}\nReason: {value2}\nStatus: {value3}", { value0: String(patient.age), value1: String(patient.gender), value2: String(patient.reason || 'Consultation'), value3: String(patient.status) }),
-      [
-        {
-          text: 'Call Into Room',
-          onPress: () => handleCallIntoRoom(patient.tokenNumber, patient.patientName),
-        },
-        { text: t('View Records'), onPress: () => handleViewPatientRecords(patient) },
-        { text: t('Cancel'), style: 'cancel' },
-      ]
-    );
-  };
-
-  // Navigation tab press
-  const handleTabPress = (tab: 'home' | 'queue' | 'records' | 'schedule' | 'rx') => {
-    setActiveTab(tab);
-    if (tab === 'home') {
-      try {
-        router.push('/(doctor)/dashboard' as any);
-      } catch (e) {
-        router.push('/dashboard' as any);
-      }
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          router.push('/(doctor)/dashboard' as any);
-        }, 120);
-      }
-    } else if (tab === 'records') {
-      const activeP = data?.currentPatient;
-      if (activeP) {
-        try {
-          router.push({
-            pathname: '/(doctor)/records' as any,
-            params: {
-              patientId: (activeP as any).patientId || '',
-              patientName: activeP.patientName,
-              tokenNumber: String(activeP.tokenNumber),
-            },
-          });
-        } catch (e) {
-          router.push('/(doctor)/records' as any);
-        }
-      } else {
-        try {
-          router.push('/(doctor)/records' as any);
-        } catch (e) {
-          router.push('/records' as any);
-        }
-      }
-    } else if (tab === 'schedule') {
-      try {
-        router.push('/(doctor)/schedule' as any);
-      } catch (e) {
-        router.push('/schedule' as any);
-      }
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          router.push('/(doctor)/schedule' as any);
-        }, 120);
-      }
-    } else if (tab === 'rx') {
-      try {
-        router.push('/(doctor)/prescription' as any);
-      } catch (e) {
-        router.push('/prescription' as any);
-      }
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          router.push('/(doctor)/prescription' as any);
-        }, 120);
-      }
-    }
-  };
-
   if (loading && !data) {
     return (
-      <SafeAreaView style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#0d6371" />
+      <View style={[styles.container, styles.center]}>
+        <StatusBar barStyle="light-content" backgroundColor={C.teal} />
+        <ActivityIndicator size="large" color={C.teal} />
         <Text style={styles.loadingText}>{t("Loading Live Patient Queue...")}</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -472,7 +433,6 @@ export default function PatientQueueScreen() {
   const currentPatient = data?.currentPatient;
   const upcomingQueue = data?.upcomingQueue || [];
 
-  // Filter items based on active pill
   const filteredQueue = upcomingQueue.filter((item) => {
     if (activeFilter === 'priority') {
       return item.priority === 'elderly' || item.priority === 'urgent' || item.category === 'priority';
@@ -480,453 +440,293 @@ export default function PatientQueueScreen() {
     if (activeFilter === 'walkin') {
       return item.priority === 'walkin' || item.category === 'walkin';
     }
-    return true; // 'all'
+    return true;
   });
 
-  // Next patient is the very first one in the queue
   const nextPatient = upcomingQueue[0];
-  const nextTokenDisplay = nextPatient ? `#${String(nextPatient.tokenNumber).padStart(3, '0')}` : '#029';
+  const nextTokenDisplay = nextPatient ? `#${String(nextPatient.tokenNumber).padStart(3, '0')}` : '#801';
+  const fallbackHospData = getDoctorDashboardForHospital(currentHospital);
+  const hospitalName = doctor?.hospitalName || currentHospital || 'Colombo Teaching Hospital 1';
+  const roomName = doctor?.room || fallbackHospData.doctor.room || 'Room 101';
+  const avgWait = doctor?.avgConsultMinutes || metrics?.avgWaitMinutes || 15;
+  const waitingCount = metrics?.waitingCount ?? upcomingQueue.length ?? fallbackHospData.metrics.waitingCount ?? 0;
+
+  const currentTokenStr = currentPatient?.tokenNumber
+    ? String(currentPatient.tokenNumber).padStart(3, '0')
+    : String(fallbackHospData.currentPatient?.tokenNumber || '028').padStart(3, '0');
+  const currentNic = (currentPatient as any)?.nic || currentPatient?.fileRecord || fallbackHospData.currentPatient?.fileRecord || 'NIC 199892084778';
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={C.teal} />
 
-      {/* ---- TOP DOCTOR PROFILE BAR ---- */}
-      <View style={styles.topProfileBar}>
-        <View style={styles.profileLeft}>
-          <View style={styles.avatarWrapper}>
-            <Image
-              source={{
-                uri: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
-              }}
-              style={styles.avatarImg}
-            />
-            <View style={styles.onlineStatusDotOnAvatar} />
-          </View>
-          <View style={styles.profileTextWrap}>
-            <Text style={styles.profileName}>{doctor?.name || 'Dr. Emilia Emelson'}</Text>
-            <View style={styles.onlineBadgeRow}>
-              <View style={styles.onlineGreenDot} />
-              <Text style={styles.onlineBadgeText}>{doctor?.room || 'Room 3B'} {t("Online")}</Text>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.bellBtn}
-          onPress={() => Alert.alert(t('Notifications'), t('No new queue emergencies at this moment.'))}
-        >
-          <Ionicons name="notifications-outline" size={22} color="#1e293b" />
-          <View style={styles.redBadgeDot} />
-        </TouchableOpacity>
-      </View>
+      {/* 1. SHARED TOP BAR */}
+      <DoctorTopBar
+        doctorName={doctor?.name || 'Dr. Palitha Perera'}
+        roomSubtitle={`${roomName} · ${t('Online')}`}
+        unreadCount={2}
+      />
 
       <ScrollView
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0d6371']} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[C.teal]} />}
       >
-        {/* ---- TEAL HERO BANNER WITH BADGES & TITLE ---- */}
-        <View style={styles.tealBanner}>
-          {/* Top badges row */}
-          <View style={styles.bannerBadgesRow}>
-            <TouchableOpacity
-              onPress={() => router.push('/(doctor)/dashboard' as any)}
-              style={styles.homeBackBtn}
-              activeOpacity={0.7}
-              accessibilityLabel={t("Back to Home")}
-              accessibilityRole="button"
-            >
-              <Ionicons name="home" size={18} color="#ffffff" />
-            </TouchableOpacity>
-            <View style={styles.opdLiveBadge}>
-              <View style={styles.mintDot} />
-              <Text style={styles.opdLiveText}>{t("OPD CLINIC LIVE")}</Text>
-            </View>
-
-            <View style={styles.avgTimeBadge}>
-              <Ionicons name="time-outline" size={14} color="#d1fae5" style={{ marginRight: 4 }} />
-              <Text style={styles.avgTimeText}>{t("Avg.")}{' '}{doctor?.avgConsultMinutes || 9}{t("m / patient")}</Text>
-            </View>
-          </View>
-
-          {/* Banner Title */}
-          <Text style={styles.bannerTitle}>{t("Live Patient Queue")}</Text>
-
-          {/* Subtitle with Room and Patients Waiting */}
-          <View style={styles.bannerSubtitleRow}>
-            <Ionicons name="business-outline" size={16} color="#cffafe" style={{ marginRight: 6 }} />
-            <Text style={styles.bannerSubtitleText}>
-              {doctor?.hospitalName || 'Colombo Teaching Hospital 1'} • {doctor?.room || 'Room 101'} • {metrics?.waitingCount ?? 14} {t("Waiting")}</Text>
-          </View>
-
-          {/* Quick Doctor Schedule Link Button */}
-          <TouchableOpacity
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: 'rgba(255, 255, 255, 0.22)',
-              paddingHorizontal: 12,
-              paddingVertical: 7,
-              borderRadius: 20,
-              alignSelf: 'flex-start',
-              marginTop: 10,
-              borderWidth: 1,
-              borderColor: 'rgba(255, 255, 255, 0.4)',
-            }}
-            onPress={() => handleTabPress('schedule')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="calendar-outline" size={15} color="#ffffff" style={{ marginRight: 6 }} />
-            <Text style={{ fontSize: 12, color: '#ffffff', fontWeight: '700' }}>
-              {t("Open Doctor Schedule (Timeline) →")}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ---- FLOATING "NOW IN CONSULTATION" CARD ---- */}
-        <View style={styles.consultationCard}>
-          {/* Top Row: Pill & Timer */}
-          <View style={styles.cardTopRow}>
-            <View style={styles.inConsultationPill}>
-              <View style={styles.tealPulseDot} />
-              <Text style={styles.inConsultationText}>{t("NOW IN CONSULTATION")}</Text>
-            </View>
-
-            <View style={styles.timerPill}>
-              <Ionicons name="time-outline" size={14} color="#0d6371" style={{ marginRight: 4 }} />
-              <Text style={styles.timerText}>{currentPatient?.calledAtTime || '08:47'}</Text>
-            </View>
-          </View>
-
-          {/* Patient Details & Token #028 */}
-          <View style={styles.patientInfoRow}>
-            <View style={styles.patientDetailsCol}>
-              <Text style={styles.patientName}>{currentPatient?.patientName || 'Kamal Gunaratne'}</Text>
-              <View style={styles.complaintRow}>
-                <MaterialCommunityIcons
-                  name="stethoscope"
-                  size={15}
-                  color="#0d6371"
-                  style={{ marginRight: 5, marginTop: 1 }}
-                />
-                <Text style={styles.complaintText}>
-                  {currentPatient?.reason || t('Spine Checkup')} • {t(currentPatient?.gender ?? '') || t('Male')},{' '}
-                  {currentPatient?.age || 48}y
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.tokenContainer}>
-              <Text style={styles.tokenLabel}>{t("TOKEN")}</Text>
-              <Text style={styles.tokenNumber}>
-                #{currentPatient?.tokenNumber ? String(currentPatient.tokenNumber).padStart(3, '0') : '028'}
+        {/* 2. DARK HIGHLIGHT BOX */}
+        <DoctorDarkHighlightBox style={styles.highlightCard}>
+          <View style={styles.highlightTopRow}>
+            <DarkStrongPill label={t("Clinic live")} pulse />
+            <View style={styles.avgTimeBadgeDark}>
+              <Ionicons name="time-outline" size={15} color="#FFFFFF" style={{ marginRight: 5 }} />
+              <Text style={styles.avgTimeTextDark}>
+                {t("Avg {value0} min / patient", { value0: String(avgWait) })}
               </Text>
             </View>
           </View>
 
-          {/* 3-Column Vitals Box */}
-          <View style={styles.vitalsBox}>
-            {/* Blood Pressure */}
-            <View style={styles.vitalCol}>
-              <Text style={styles.vitalLabel}>{t("Blood Pressure")}</Text>
-              <Text style={styles.vitalValueDark}>{currentPatient?.bloodPressure || '124/82'}</Text>
-            </View>
+          <Text style={styles.highlightTitleDark}>{t("Live patient queue")}</Text>
 
-            {/* Heart Rate */}
-            <View style={styles.vitalCol}>
-              <Text style={styles.vitalLabel}>{t("Heart Rate")}</Text>
-              <Text style={styles.vitalValueTeal}>{currentPatient?.heartRate || '76 bpm'}</Text>
-            </View>
+          <View style={styles.hospitalInfoRow}>
+            <Ionicons name="business-outline" size={16} color={C.white80} style={{ marginRight: 6, marginTop: 2 }} />
+            <Text style={styles.hospitalInfoTextDark}>
+              {hospitalName} · {roomName} ·{' '}
+              <Text style={styles.waitingCountHighlightDark}>
+                {waitingCount} {t("waiting")}
+              </Text>
+            </Text>
+          </View>
 
-            {/* File REC */}
-            <View style={styles.vitalCol}>
-              <Text style={styles.vitalLabel}>{t("File")}</Text>
-              <Text style={styles.vitalValueNavy}>{currentPatient?.fileRecord || 'REC-841'}</Text>
+          <View style={{ marginTop: 4 }}>
+            <DarkOutlineButton
+              title={t("Open doctor schedule")}
+              icon={<Ionicons name="calendar-outline" size={17} color="#FFFFFF" />}
+              rightIcon={<Ionicons name="chevron-forward" size={17} color="#FFFFFF" />}
+              onPress={() => router.push('/(doctor)/schedule' as any)}
+            />
+          </View>
+        </DoctorDarkHighlightBox>
+
+        {/* 3. NOW IN CONSULTATION CARD (White, 4px teal left border) */}
+        <View style={styles.consultationCard}>
+          {/* Status pill & time pill */}
+          <View style={styles.cardPillsRow}>
+            <StatusPill label={t("Now in consultation")} />
+            <View style={styles.timePill}>
+              <Ionicons name="time-outline" size={13} color={C.sub} style={{ marginRight: 4 }} />
+              <Text style={styles.timePillText}>
+                {currentPatient?.calledAtTime || '08:47 AM'}
+              </Text>
             </View>
           </View>
 
-          {/* Action 1: Complete & Call Token #029 */}
-          <TouchableOpacity
-            style={styles.completeCallBtn}
-            onPress={handleCompleteAndCallNext}
-            disabled={isProcessing}
-            activeOpacity={0.88}
-          >
-            {isProcessing ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <>
-                <Ionicons name="notifications" size={18} color="#ffffff" style={{ marginRight: 8 }} />
-                <Text style={styles.completeCallBtnText}>{t("Complete & Call Token")}{' '}{nextTokenDisplay}</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {/* Patient name & Token tile */}
+          <View style={styles.patientRow}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={styles.patientName} numberOfLines={1}>
+                {currentPatient?.patientName || 'Kamal Gunaratne'}
+              </Text>
+              <View style={styles.reasonRow}>
+                <MaterialCommunityIcons
+                  name="stethoscope"
+                  size={15}
+                  color={C.sub}
+                  style={{ marginRight: 5, marginTop: 1 }}
+                />
+                <Text style={styles.reasonText} numberOfLines={2}>
+                  {currentPatient?.reason || t('General OPD consultation')} ·{' '}
+                  {t(currentPatient?.gender ?? 'Male')}, {currentPatient?.age || 28}y
+                </Text>
+              </View>
+            </View>
 
-          {/* Action Row: Recall & Undo */}
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-            {/* Action 2: Recall / Ring Room Chime */}
-            <TouchableOpacity
-              style={[styles.recallChimeBtn, { flex: 1, marginTop: 0 }]}
+            <View style={styles.tokenBox}>
+              <Text style={styles.tokenLabel}>{t("Token")}</Text>
+              <Text style={styles.tokenNumber}>#{currentTokenStr}</Text>
+            </View>
+          </View>
+
+          {/* Fact Tiles: Blood pressure, Heart rate in teal, NIC (safely wraps, never cut off) */}
+          <View style={styles.factsRow}>
+            <View style={styles.factTile}>
+              <Text style={styles.factLabel}>{t("Blood pressure")}</Text>
+              <Text style={styles.factValueDark}>
+                {currentPatient?.bloodPressure || '120/80'}
+              </Text>
+            </View>
+
+            <View style={styles.factTile}>
+              <Text style={styles.factLabel}>{t("Heart rate")}</Text>
+              <Text style={styles.factValueTeal}>
+                {currentPatient?.heartRate || '76 bpm'}
+              </Text>
+            </View>
+
+            <View style={[styles.factTile, { flex: 1.15 }]}>
+              <Text style={styles.factLabel}>{t("NIC")}</Text>
+              <Text style={styles.factValueNic} numberOfLines={2}>
+                {currentNic}
+              </Text>
+            </View>
+          </View>
+
+          {/* Primary Action Button (Only ONE per card) */}
+          <View style={{ marginTop: 14 }}>
+            <PrimaryButton
+              title={`${t("Complete & call token")} ${nextTokenDisplay}`}
+              icon={<Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />}
+              onPress={handleCompleteAndCallNext}
+              loading={isProcessing}
+            />
+          </View>
+
+          {/* Secondary Action Buttons side by side: Recall chime & Undo previous */}
+          <View style={styles.actionRowSecondary}>
+            <SecondaryButton
+              title={t("Recall chime")}
+              icon={<Ionicons name="volume-medium-outline" size={18} color={C.tealDeep} />}
               onPress={handleRingRoomChime}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="volume-medium-outline" size={18} color="#0d6371" style={{ marginRight: 6 }} />
-              <Text style={styles.recallChimeBtnText}>{t("Recall Chime")}</Text>
-            </TouchableOpacity>
-
-            {/* Action 3: Undo Previous Patient */}
-            <TouchableOpacity
-              style={[
-                styles.recallChimeBtn,
-                {
-                  flex: 1,
-                  marginTop: 0,
-                  backgroundColor: (!data?.currentPatient || data.currentPatient.tokenNumber <= 1) ? '#f8fafc' : '#effbfa',
-                  borderColor: (!data?.currentPatient || data.currentPatient.tokenNumber <= 1) ? '#e2e8f0' : '#b2ebf2',
-                },
-              ]}
+              style={{ flex: 1 }}
+            />
+            <SecondaryButton
+              title={t("Undo previous")}
+              icon={<Ionicons name="arrow-undo-outline" size={18} color={C.tealDeep} />}
               onPress={handleUndoPatient}
               disabled={isProcessing || !data?.currentPatient || data.currentPatient.tokenNumber <= 1}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="arrow-undo"
-                size={18}
-                color={(!data?.currentPatient || data.currentPatient.tokenNumber <= 1) ? '#94a3b8' : '#0d6371'}
-                style={{ marginRight: 6 }}
-              />
-              <Text
-                style={[
-                  styles.recallChimeBtnText,
-                  (!data?.currentPatient || data.currentPatient.tokenNumber <= 1) && { color: '#94a3b8' },
-                ]}
-              >
-                {t("Undo Previous")}</Text>
-            </TouchableOpacity>
+              style={{ flex: 1 }}
+            />
           </View>
         </View>
 
-        {/* ---- CATEGORY FILTER PILLS ---- */}
+        {/* 4. CATEGORY FILTER PILLS */}
         <View style={styles.filterPillsRow}>
-          {/* All (14) */}
           <TouchableOpacity
             style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
             onPress={() => setActiveFilter('all')}
+            activeOpacity={0.75}
           >
             <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive]}>
-              {t("All (")}{upcomingQueue.length || 14})
+              {t("All ({value0})", { value0: String(upcomingQueue.length || 14) })}
             </Text>
           </TouchableOpacity>
 
-          {/* Priority / Elderly (3) */}
           <TouchableOpacity
             style={[styles.filterPill, activeFilter === 'priority' && styles.filterPillActive]}
             onPress={() => setActiveFilter('priority')}
+            activeOpacity={0.75}
           >
             <Text style={[styles.filterPillText, activeFilter === 'priority' && styles.filterPillTextActive]}>
-              {t("Priority / Elderly (3)")}</Text>
+              {t("Priority / Elderly (3)")}
+            </Text>
           </TouchableOpacity>
 
-          {/* Walk-ins (5) */}
           <TouchableOpacity
             style={[styles.filterPill, activeFilter === 'walkin' && styles.filterPillActive]}
             onPress={() => setActiveFilter('walkin')}
+            activeOpacity={0.75}
           >
             <Text style={[styles.filterPillText, activeFilter === 'walkin' && styles.filterPillTextActive]}>
-              {t("Walk-ins (5)")}</Text>
+              {t("Walk-ins (5)")}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* ---- UPCOMING QUEUE SECTION HEADER ---- */}
+        {/* 5. UPCOMING QUEUE HEADER */}
         <View style={styles.queueHeaderRow}>
-          <Text style={styles.queueHeaderTitle}>{t("Upcoming Queue")}</Text>
-          <Text style={styles.estimatedWaitText}>
-            {t("Estimated wait:")}{' '}{metrics?.estimatedWaitTime || '~42m'}
-          </Text>
+          <Text style={styles.queueHeaderTitle}>{t("Upcoming queue")}</Text>
+          <View style={styles.estimatedWaitRow}>
+            <Ionicons name="hourglass-outline" size={13} color={C.sub} style={{ marginRight: 4 }} />
+            <Text style={styles.estimatedWaitText}>
+              {t("Est. wait: {value0}", { value0: metrics?.estimatedWaitTime || '~42 min' })}
+            </Text>
+          </View>
         </View>
 
-        {/* ---- UPCOMING QUEUE LIST ---- */}
+        {/* 6. UPCOMING QUEUE LIST */}
         <View style={styles.queueListContainer}>
           {filteredQueue.map((item, index) => {
             const isNext = index === 0 && activeFilter === 'all';
 
-            // High-priority NEXT Card (#029 - Aurelia Sisca)
-            if (isNext) {
-              return (
-                <View key={item.tokenNumber} style={styles.nextPatientCard}>
-                  {/* Card Main Info Row */}
-                  <TouchableOpacity
-                    style={styles.nextCardMainRow}
-                    onPress={() => handleViewPatientRecords(item)}
-                    activeOpacity={0.75}
-                  >
-                    {/* Left Token Box */}
-                    <View style={styles.nextBadgeBox}>
-                      <Text style={styles.nextBadgeLabel}>{t("NEXT")}</Text>
-                      <Text style={styles.nextBadgeNumber}>
-                        #{String(item.tokenNumber).padStart(3, '0')}
-                      </Text>
-                    </View>
-
-                    {/* Middle Info */}
-                    <View style={styles.nextCardMiddle}>
-                      <View style={styles.nameWithBadgeRow}>
-                        <Text style={styles.nextPatientName}>{item.patientName}</Text>
-                        <View style={styles.nextSmallPill}>
-                          <Text style={styles.nextSmallPillText}>{t("Next")}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.nextSubText}>
-                        {t(item.gender ?? '')}, {item.age} {t("yrs •")}{' '}{item.reason || t('Post-op Inspection')}
-                      </Text>
-                    </View>
-
-                    {/* Right Arrived / Lobby */}
-                    <View style={styles.nextCardRight}>
-                      <Text style={styles.readyLobbyText}>{item.location || t('Ready at Lobby')}</Text>
-                      <Text style={styles.arrivedTimeText}>{t("Arrived")}{' '}{item.arrivedTime || '10:14'}</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Card Bottom: Vitals Verified & Call into Room */}
-                  <View style={styles.nextCardBottomRow}>
-                    <View style={styles.vitalsVerifiedRow}>
-                      <Ionicons name="shield-checkmark" size={16} color="#0d9488" style={{ marginRight: 5 }} />
-                      <Text style={styles.vitalsVerifiedText}>{t("Vitals Verified")}</Text>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.callIntoRoomBtn}
-                      onPress={() => handleCallIntoRoom(item.tokenNumber, item.patientName)}
-                      disabled={isProcessing}
-                      activeOpacity={0.85}
-                    >
-                      <Ionicons name="enter-outline" size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                      <Text style={styles.callIntoRoomBtnText}>{t("Call into Room")}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            }
-
-            // Standard Patient Cards (#030 Rohan Mendis, #031 Dilshan Madushanka, #032 Sanduni Perera, etc.)
             return (
-              <TouchableOpacity
+              <View
                 key={item.tokenNumber}
-                style={styles.standardCard}
-                onPress={() => handleViewPatientRecords(item)}
-                activeOpacity={0.7}
+                style={[
+                  styles.patientItemCard,
+                  isNext && styles.patientItemCardNext,
+                ]}
               >
-                {/* Left Token Box */}
-                <View style={styles.standardTokenBox}>
-                  <Text style={styles.standardTokenLabel}>{t("TOKEN")}</Text>
-                  <Text style={styles.standardTokenNumber}>
-                    #{String(item.tokenNumber).padStart(3, '0')}
-                  </Text>
-                </View>
-
-                {/* Middle Patient Info */}
-                <View style={styles.standardMiddle}>
-                  <Text style={styles.standardPatientName}>{item.patientName}</Text>
-                  <Text style={styles.standardSubText}>
-                    {t(item.gender ?? '')}, {item.age} {t("yrs •")}{' '}{item.reason || t('Follow-up')}
-                  </Text>
-
-                  {/* Badges based on token */}
-                  {item.tokenNumber === 30 || item.status === 'Checked In • Ready' ? (
-                    <View style={styles.statusBadgeRow}>
-                      <View style={styles.greenDotSmall} />
-                      <Text style={styles.statusBadgeText}>{t("Checked In • Ready")}</Text>
-                    </View>
-                  ) : item.tokenNumber === 31 || item.status === 'X-Ray Ready' ? (
-                    <View style={styles.xrayPill}>
-                      <Ionicons name="document-text-outline" size={12} color="#0d9488" style={{ marginRight: 4 }} />
-                      <Text style={styles.xrayPillText}>{t("X-Ray Ready")}</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.waitingPillRow}>
-                      <Ionicons name="time-outline" size={13} color="#64748b" style={{ marginRight: 4 }} />
-                      <Text style={styles.waitingPillText}>{t(item.status ?? '') || t('Waiting (18m)')}</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Right Arrow Action */}
                 <TouchableOpacity
-                  style={styles.arrowCircleBtn}
+                  style={styles.patientItemMainRow}
                   onPress={() => handleViewPatientRecords(item)}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  activeOpacity={0.75}
                 >
-                  <Ionicons name="chevron-forward" size={18} color="#0284c7" />
+                  {/* Left Token Tile */}
+                  <View style={[styles.itemTokenTile, isNext && styles.itemTokenTileNext]}>
+                    <Text style={[styles.itemTokenLabel, isNext && { color: C.tealDeep }]}>
+                      {isNext ? t("Next") : t("Token")}
+                    </Text>
+                    <Text style={[styles.itemTokenNum, isNext && { color: C.tealDeep }]}>
+                      #{String(item.tokenNumber).padStart(3, '0')}
+                    </Text>
+                  </View>
+
+                  {/* Middle Info */}
+                  <View style={styles.itemMiddle}>
+                    <View style={styles.itemNameRow}>
+                      <Text style={styles.itemPatientName} numberOfLines={1}>
+                        {item.patientName}
+                      </Text>
+                      {isNext && (
+                        <View style={styles.nextTag}>
+                          <Text style={styles.nextTagText}>{t("Next")}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.itemSubText} numberOfLines={1}>
+                      {t(item.gender ?? '')}, {item.age} {t("yrs")} · {item.reason || t('General OPD review')}
+                    </Text>
+                    <View style={styles.itemFooterRow}>
+                      <Ionicons name="location-outline" size={12} color={C.sub} style={{ marginRight: 3 }} />
+                      <Text style={styles.itemLocationText}>
+                        {item.location || t('Waiting area')} · {item.slotTime || '11:15 AM'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Right Arrow */}
+                  <Ionicons name="chevron-forward" size={18} color={C.sub} style={{ marginLeft: 6 }} />
                 </TouchableOpacity>
-              </TouchableOpacity>
+
+                {/* Optional Action Bar for the very next patient */}
+                {isNext && (
+                  <View style={styles.nextActionBar}>
+                    <View style={styles.verifiedRow}>
+                      <Ionicons name="shield-checkmark" size={14} color={C.ok} style={{ marginRight: 4 }} />
+                      <Text style={styles.verifiedText}>{t("Vitals verified")}</Text>
+                    </View>
+                    <ChipButton
+                      label={t("Call into room")}
+                      icon={<Ionicons name="enter-outline" size={14} color={C.tealDeep} />}
+                      onPress={() => handleCallIntoRoom(item.tokenNumber, item.patientName)}
+                    />
+                  </View>
+                )}
+              </View>
             );
           })}
         </View>
       </ScrollView>
 
-      {/* ---- BOTTOM NAVIGATION BAR (5 TABS) ---- */}
-      <View style={styles.bottomTabBar}>
-        {/* Home */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('home')}>
-          <Ionicons name="home-outline" size={22} color={activeTab === 'home' ? '#0d6371' : '#64748b'} />
-          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>{t("Home")}</Text>
-        </TouchableOpacity>
-
-        {/* Queue (Active) */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('queue')}>
-          <MaterialCommunityIcons
-            name="ticket-confirmation-outline"
-            size={23}
-            color={activeTab === 'queue' ? '#0d6371' : '#64748b'}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>{t("Queue")}</Text>
-        </TouchableOpacity>
-
-        {/* Records */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('records')}>
-          <MaterialCommunityIcons
-            name="folder-account-outline"
-            size={22}
-            color={activeTab === 'records' ? '#0d6371' : '#64748b'}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>{t("Records")}</Text>
-        </TouchableOpacity>
-
-        {/* Schedule */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('schedule')}>
-          <MaterialCommunityIcons
-            name="calendar-month-outline"
-            size={22}
-            color={activeTab === 'schedule' ? '#0d6371' : '#64748b'}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>{t("Schedule")}</Text>
-        </TouchableOpacity>
-
-        {/* Prescription */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('rx')}>
-          <MaterialCommunityIcons
-            name="clipboard-edit-outline"
-            size={22}
-            color={activeTab === 'rx' ? '#0d6371' : '#64748b'}
-          />
-          <Text
-            numberOfLines={1}
-            style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}
-          >
-            {t("Prescription")}</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      {/* 7. SHARED BOTTOM NAVIGATION BAR */}
+      <DoctorBottomNav activeTab="queue" />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f6fafd',
+    backgroundColor: C.bg,
   },
   center: {
     justifyContent: 'center',
@@ -935,623 +735,327 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#0d6371',
+    color: C.tealDeep,
     fontWeight: '600',
   },
   scrollArea: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 24,
-  },
-
-  // 1. TOP PROFILE BAR
-  topProfileBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  profileLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarWrapper: {
-    position: 'relative',
-  },
-  avatarImg: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#e2e8f0',
-  },
-  onlineStatusDotOnAvatar: {
-    position: 'absolute',
-    bottom: 1,
-    right: 1,
-    width: 11,
-    height: 11,
-    borderRadius: 5.5,
-    backgroundColor: '#10b981',
-    borderWidth: 2,
-    borderColor: '#ffffff',
-  },
-  profileTextWrap: {
-    marginLeft: 11,
-  },
-  profileName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  onlineBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  onlineGreenDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#10b981',
-    marginRight: 5,
-  },
-  onlineBadgeText: {
-    fontSize: 12,
-    color: '#0d7685',
-    fontWeight: '600',
-  },
-  bellBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    position: 'relative',
-  },
-  redBadgeDot: {
-    position: 'absolute',
-    top: 9,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ef4444',
-    borderWidth: 1.5,
-    borderColor: '#ffffff',
+    paddingTop: 14,
+    paddingBottom: 110, // Ensure content isn't cut off by bottom nav
   },
 
-  // 2. TEAL BANNER
-  tealBanner: {
-    backgroundColor: '#0f5b66',
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 48,
+  // Highlight Card
+  highlightCard: {
+    marginBottom: 14,
   },
-  homeBackBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  bannerBadgesRow: {
+  highlightTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  opdLiveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 16,
-  },
-  mintDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#34d399',
-    marginRight: 6,
-  },
-  opdLiveText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#a7f3d0',
-    letterSpacing: 0.5,
-  },
-  avgTimeBadge: {
+  avgTimeBadgeDark: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  avgTimeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#e0f2fe',
-  },
-  bannerTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#ffffff',
-    marginTop: 14,
-    letterSpacing: -0.4,
-  },
-  bannerSubtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  bannerSubtitleText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#cffafe',
-  },
-
-  // 3. FLOATING NOW IN CONSULTATION CARD
-  consultationCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 22,
-    padding: 18,
-    marginHorizontal: 16,
-    marginTop: -30,
-    elevation: 4,
-    shadowColor: 'rgba(15, 23, 42, 0.09)',
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    borderWidth: 1,
-    borderColor: '#e8f0f3',
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  inConsultationPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ccfbf1',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  tealPulseDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#0d9488',
-    marginRight: 6,
-  },
-  inConsultationText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0f766e',
-    letterSpacing: 0.5,
-  },
-  timerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e0f7fa',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  timerText: {
-    fontSize: 12,
+  avgTimeTextDark: {
+    fontSize: 12.5,
+    color: '#FFFFFF',
     fontWeight: '700',
-    color: '#0d6371',
   },
-  patientInfoRow: {
+  highlightTitleDark: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  hospitalInfoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  patientDetailsCol: {
+  hospitalInfoTextDark: {
     flex: 1,
-    paddingRight: 10,
-  },
-  patientName: {
-    fontSize: 21,
-    fontWeight: '800',
-    color: '#0f172a',
-    letterSpacing: -0.3,
-  },
-  complaintRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  complaintText: {
     fontSize: 13,
-    color: '#475569',
+    color: C.white80,
+    lineHeight: 18,
     fontWeight: '500',
   },
-  tokenContainer: {
-    alignItems: 'flex-end',
-  },
-  tokenLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748b',
-    letterSpacing: 0.5,
-  },
-  tokenNumber: {
-    fontSize: 27,
-    fontWeight: '900',
-    color: '#0d6371',
-    lineHeight: 30,
-    marginTop: 2,
-  },
-  vitalsBox: {
-    backgroundColor: '#f1f8fa',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 14,
-  },
-  vitalCol: {
-    flex: 1,
-  },
-  vitalLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-  vitalValueDark: {
-    fontSize: 15,
+  waitingCountHighlightDark: {
     fontWeight: '800',
-    color: '#0f172a',
-    marginTop: 2,
-  },
-  vitalValueTeal: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0d9488',
-    marginTop: 2,
-  },
-  vitalValueNavy: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0f5b66',
-    marginTop: 2,
-  },
-  completeCallBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0d6371',
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginTop: 16,
-    elevation: 2,
-  },
-  completeCallBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  recallChimeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e0f2f7',
-    borderRadius: 14,
-    paddingVertical: 13,
-    marginTop: 10,
-  },
-  recallChimeBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0d6371',
+    color: '#FFFFFF',
   },
 
-  // 4. FILTER PILLS
+  // "Now in consultation" card
+  consultationCard: {
+    backgroundColor: C.card,
+    borderRadius: C.radiusCard,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderLeftWidth: 4,
+    borderLeftColor: C.teal,
+    ...C.shadow,
+    marginBottom: 14,
+  },
+  cardPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  timePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.bg,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: C.radiusPill,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  timePillText: {
+    fontSize: 12,
+    color: C.sub,
+    fontWeight: '600',
+  },
+  patientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  patientName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: C.ink,
+    letterSpacing: -0.3,
+  },
+  reasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  reasonText: {
+    fontSize: 13,
+    color: C.sub,
+    lineHeight: 18,
+  },
+  tokenBox: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  tokenLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: C.sub,
+    marginBottom: 1,
+  },
+  tokenNumber: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: C.teal,
+    letterSpacing: -0.5,
+  },
+
+  // Facts Row
+  factsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  factTile: {
+    flex: 1,
+    backgroundColor: C.bg,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  factLabel: {
+    fontSize: 11,
+    color: C.sub,
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  factValueDark: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: C.ink,
+  },
+  factValueTeal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: C.teal,
+  },
+  factValueNic: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.ink,
+    lineHeight: 16,
+    flexWrap: 'wrap',
+  },
+
+  // Action secondary row
+  actionRowSecondary: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+
+  // Category filter pills
   filterPillsRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
     gap: 8,
-    marginTop: 20,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   filterPill: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#e8eff3',
+    borderRadius: C.radiusPill,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.line,
   },
   filterPillActive: {
-    backgroundColor: '#0d6371',
+    backgroundColor: C.tint,
+    borderColor: C.tintBorder,
   },
   filterPillText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#475569',
+    color: C.sub,
   },
   filterPillTextActive: {
-    color: '#ffffff',
+    color: C.tealDeep,
     fontWeight: '700',
   },
 
-  // 5. QUEUE HEADER
+  // Queue Header
   queueHeaderRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   queueHeaderTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
-    color: '#0f172a',
+    color: C.ink,
+  },
+  estimatedWaitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   estimatedWaitText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#0d9488',
+    color: C.sub,
+    fontWeight: '600',
   },
 
-  // 6. QUEUE LIST
+  // Queue List items
   queueListContainer: {
-    paddingHorizontal: 16,
     gap: 10,
   },
-
-  // Highlighted NEXT Patient Card (#029)
-  nextPatientCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#0d6371',
-    borderLeftWidth: 4,
-    borderLeftColor: '#0d6371',
-    elevation: 2,
-    shadowColor: 'rgba(15, 23, 42, 0.05)',
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  nextCardMainRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  nextBadgeBox: {
-    backgroundColor: '#ccfbf1',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 62,
-    marginRight: 12,
-  },
-  nextBadgeLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#0f766e',
-  },
-  nextBadgeNumber: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0d6371',
-    marginTop: 2,
-  },
-  nextCardMiddle: {
-    flex: 1,
-  },
-  nameWithBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  nextPatientName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  nextSmallPill: {
-    backgroundColor: '#e0f2fe',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 6,
-  },
-  nextSmallPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#0369a1',
-  },
-  nextSubText: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 3,
-    fontWeight: '500',
-  },
-  nextCardRight: {
-    alignItems: 'flex-end',
-  },
-  readyLobbyText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0f766e',
-  },
-  arrivedTimeText: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  nextCardBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-  },
-  vitalsVerifiedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  vitalsVerifiedText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0d9488',
-  },
-  callIntoRoomBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0d6371',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  callIntoRoomBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-
-  // Standard patient cards
-  standardCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
+  patientItemCard: {
+    backgroundColor: C.card,
+    borderRadius: C.radiusTile,
+    padding: 12,
     borderWidth: 1,
-    borderColor: '#eef2f6',
-    elevation: 1,
+    borderColor: C.line,
+    ...C.shadow,
   },
-  standardTokenBox: {
-    backgroundColor: '#f1f5f9',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+  patientItemCardNext: {
+    borderLeftWidth: 3,
+    borderLeftColor: C.teal,
+  },
+  patientItemMainRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+  itemTokenTile: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.line,
     justifyContent: 'center',
-    minWidth: 60,
+    alignItems: 'center',
     marginRight: 12,
   },
-  standardTokenLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#94a3b8',
+  itemTokenTileNext: {
+    backgroundColor: C.tint,
+    borderColor: C.tintBorder,
   },
-  standardTokenNumber: {
-    fontSize: 17,
+  itemTokenLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: C.sub,
+  },
+  itemTokenNum: {
+    fontSize: 15,
     fontWeight: '800',
-    color: '#1e293b',
-    marginTop: 2,
+    color: C.ink,
+    marginTop: 1,
   },
-  standardMiddle: {
+  itemMiddle: {
     flex: 1,
   },
-  standardPatientName: {
+  itemNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  itemPatientName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0f172a',
+    color: C.ink,
+    marginRight: 6,
   },
-  standardSubText: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
-    fontWeight: '500',
+  nextTag: {
+    backgroundColor: C.tint,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
   },
-  statusBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  greenDotSmall: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10b981',
-    marginRight: 5,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#0d7685',
-  },
-  xrayPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e0f7fa',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  xrayPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0d9488',
-  },
-  waitingPillRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  waitingPillText: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  arrowCircleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#e0f2fe',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
-  },
-
-  // 7. BOTTOM NAVIGATION BAR
-  bottomTabBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5edf2',
-    paddingVertical: 10,
-    elevation: 8,
-    shadowColor: 'rgba(0, 0, 0, 0.05)',
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: -2 },
-  },
-  tabItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  tabLabel: {
+  nextTagText: {
     fontSize: 10,
-    fontWeight: '600',
-    color: '#64748b',
-    marginTop: 4,
-  },
-  tabLabelActive: {
-    color: '#0d6371',
     fontWeight: '700',
+    color: C.tealDeep,
+  },
+  itemSubText: {
+    fontSize: 12,
+    color: C.sub,
+    marginBottom: 3,
+  },
+  itemFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  itemLocationText: {
+    fontSize: 11,
+    color: C.sub,
+  },
+  nextActionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: C.line,
+  },
+  verifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  verifiedText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.ok,
   },
 });

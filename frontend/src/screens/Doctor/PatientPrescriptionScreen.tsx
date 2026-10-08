@@ -17,9 +17,10 @@ import {
   Platform,
   useColorScheme,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DoctorTopBar } from '../../components/doctor';
 import { fetchDoctorDashboard } from '../../services/doctorService';
 import {
   fetchPrescriptionDetails,
@@ -167,24 +168,59 @@ export default function PatientPrescriptionScreen() {
       let patientName = params?.patientName;
       let patientId = params?.patientId;
 
-      if (!tokenNum && !patientName && !patientId) {
-        try {
-          const dash = await fetchDoctorDashboard();
-          if (dash?.currentPatient) {
+      // Check current doctor dashboard to identify active consultation patient
+      try {
+        const dash = await fetchDoctorDashboard();
+        if (dash?.currentPatient) {
+          if (!tokenNum && !patientName && !patientId) {
             tokenNum = dash.currentPatient.tokenNumber;
             patientName = dash.currentPatient.patientName;
             patientId = dash.currentPatient.patientId;
           }
-        } catch (e) {}
+          // Immediately sync patient card header if current data has a placeholder or mismatched patient
+          setData((prev) => {
+            const isOutdatedOrPlaceholder =
+              !prev?.patient?.name ||
+              prev.patient.name === 'Patient Normal' ||
+              prev.patient.name.toLowerCase().includes('walkin') ||
+              (dash.currentPatient && prev.patient.name !== dash.currentPatient.patientName && !params?.patientName);
 
-        if (!tokenNum && !patientName && !patientId) {
-          try {
-            const cachedToken = await AsyncStorage.getItem('active_record_patient_token');
-            if (cachedToken) tokenNum = parseInt(cachedToken, 10);
-            const cachedName = await AsyncStorage.getItem('active_record_patient_name');
-            if (cachedName && !patientName) patientName = cachedName;
-          } catch (e) {}
+            if (isOutdatedOrPlaceholder && dash.currentPatient) {
+              const cp = dash.currentPatient;
+              const nameParts = (cp.patientName || 'Patient').split(' ');
+              const initials = nameParts.map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'PT';
+              return {
+                ...prev,
+                patient: {
+                  ...prev.patient,
+                  id: cp.patientId || prev.patient.id,
+                  name: cp.patientName,
+                  tokenNumber: cp.tokenNumber,
+                  tokenFormatted: `Token #${String(cp.tokenNumber).padStart(3, '0')}`,
+                  initials,
+                  gender: cp.gender || prev.patient.gender,
+                  age: cp.age || prev.patient.age,
+                  opdId: (cp as any)?.nic ? `ID #${(cp as any).nic}` : (cp.fileRecord || prev.patient.opdId),
+                  vitals: {
+                    bloodPressure: cp.bloodPressure || '120/80',
+                    pulseRate: cp.heartRate || '74 bpm',
+                    weight: prev.patient.vitals?.weight || '-- kg',
+                  },
+                },
+              };
+            }
+            return prev;
+          });
         }
+      } catch (e) {}
+
+      if (!tokenNum && !patientName && !patientId) {
+        try {
+          const cachedToken = await AsyncStorage.getItem('active_record_patient_token');
+          if (cachedToken) tokenNum = parseInt(cachedToken, 10);
+          const cachedName = await AsyncStorage.getItem('active_record_patient_name');
+          if (cachedName && !patientName) patientName = cachedName;
+        } catch (e) {}
       }
 
       const cacheKey = tokenNum ? `@medi_queue_prescription_${tokenNum}` : '@medi_queue_prescription_active';
@@ -197,7 +233,7 @@ export default function PatientPrescriptionScreen() {
         }
       } catch (hospErr) {}
 
-      // 1. Immediately read local cache if available
+      // 1. Read local cache if available (skip stale mock walk-ins)
       try {
         let raw = await AsyncStorage.getItem(cacheKey);
         if (!raw && typeof window !== 'undefined' && window.localStorage) {
@@ -206,9 +242,13 @@ export default function PatientPrescriptionScreen() {
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && Array.isArray(parsed.diagnoses) && Array.isArray(parsed.prescriptions)) {
-            setData(parsed);
-            if (parsed.clinicalNotes !== undefined) {
-              setClinicalNotes(parsed.clinicalNotes);
+            const cachedPName = parsed.patient?.name || '';
+            const isStaleWalkin = cachedPName.toLowerCase().includes('walkin') || cachedPName === 'Patient Normal';
+            if (!isStaleWalkin) {
+              setData(parsed);
+              if (parsed.clinicalNotes !== undefined) {
+                setClinicalNotes(parsed.clinicalNotes);
+              }
             }
           }
         }
@@ -218,7 +258,7 @@ export default function PatientPrescriptionScreen() {
 
       // 2. Fetch from backend API
       const res = await fetchPrescriptionDetails(tokenNum, patientName, patientId);
-      if (res) {
+      if (res && res.patient) {
         setData(res);
         setClinicalNotes(res.clinicalNotes || '');
         await AsyncStorage.setItem(cacheKey, JSON.stringify(res));
@@ -236,6 +276,12 @@ export default function PatientPrescriptionScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   // Tab Navigation Handler
   const handleTabPress = (tab: 'home' | 'queue' | 'records' | 'schedule' | 'rx') => {
@@ -738,8 +784,15 @@ export default function PatientPrescriptionScreen() {
   const doctor = data.doctor;
 
   return (
-    <SafeAreaView style={styles.safeContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f4f9fc" />
+    <View style={styles.safeContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#0E7C86" />
+
+      {/* SHARED TOP BAR */}
+      <DoctorTopBar
+        doctorName={doctor.name || 'Dr. Palitha Perera'}
+        room={doctor.room || 'Room 101'}
+        unreadCount={4}
+      />
 
       <KeyboardAvoidingView
         style={styles.keyboardWrap}
@@ -752,57 +805,12 @@ export default function PatientPrescriptionScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* ========================================================= */}
-          {/* 1. TOP PROFILE BAR                                        */}
-          {/* ========================================================= */}
-          <View style={styles.topProfileBar}>
-            <TouchableOpacity
-              onPress={() => router.push('/(doctor)/dashboard' as any)}
-              style={styles.homeBackBtn}
-              activeOpacity={0.7}
-              accessibilityLabel={t("Back to Home")}
-              accessibilityRole="button"
-            >
-              <Ionicons name="home" size={18} color="#0D9488" />
-            </TouchableOpacity>
-            <View style={styles.profileLeft}>
-              <View style={styles.avatarContainer}>
-                <Image
-                  source={{
-                    uri:
-                      doctor.avatarUrl ||
-                      'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
-                  }}
-                  style={styles.avatarImg}
-                />
-                <View style={styles.onlineDotOnAvatar} />
-              </View>
-
-              <View style={styles.profileTextWrap}>
-                <Text style={styles.profileName}>{doctor.name}</Text>
-                <View style={styles.onlineBadgeRow}>
-                  <View style={styles.onlineGreenDot} />
-                  <Text style={styles.onlineBadgeText}>{doctor.room} {t("Online")}</Text>
-                </View>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.bellBtn}
-              onPress={() => Alert.alert(t('Notifications'), t('No pending clinical alerts.'))}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="notifications-outline" size={21} color="#334155" />
-              <View style={styles.redBadgeDot} />
-            </TouchableOpacity>
-          </View>
-
-          {/* ========================================================= */}
           {/* 2. PAGE TITLE & OUTPATIENT CONSULTATION HEADER             */}
           {/* ========================================================= */}
           <View style={styles.headerTitleSection}>
-            <Text style={styles.kickerText}>{t("OUTPATIENT CONSULTATION")}</Text>
+            <Text style={styles.kickerText}>{t("Outpatient consultation")}</Text>
             <View style={styles.titleRow}>
-              <Text style={styles.mainTitle}>{t("Prescription & Details")}</Text>
+              <Text style={styles.mainTitle}>{t("Prescription & details")}</Text>
               <View style={styles.roomPillBadge}>
                 <View style={styles.roomPillDot} />
                 <Text style={styles.roomPillText}>{doctor.room}</Text>
@@ -2200,7 +2208,7 @@ export default function PatientPrescriptionScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
