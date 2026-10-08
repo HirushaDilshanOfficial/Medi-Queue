@@ -14,12 +14,21 @@ import { Colors } from '../../constants/Colors';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchMohDashboard } from '../../services/mohService';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
+
 // MOH Dashboard - Expo Router version matching the premium UI design
 export default function MOHDashboardScreen() {
   const { t } = useLanguage();
   const [refreshing, setRefreshing] = useState(false);
   const [totalQueues, setTotalQueues] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return t("Good Morning,");
+    if (hour < 18) return t("Good Afternoon,");
+    return t("Good Evening,");
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -61,8 +70,6 @@ export default function MOHDashboardScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.white }}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
-      {/* Top Safe Area for Notch */}
-      <SafeAreaView style={{ flex: 0, backgroundColor: Colors.primaryDark }} />
       
       {/* Main Safe Area */}
       <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -80,7 +87,7 @@ export default function MOHDashboardScreen() {
                 <View style={styles.onlineDot} />
               </TouchableOpacity>
               <View>
-                <Text style={styles.greetingText}>{t("Good Morning,")}</Text>
+                <Text style={styles.greetingText}>{getGreeting()}</Text>
                 <Text style={styles.userNameText}>{t("Ministry of Health")}</Text>
               </View>
             </View>
@@ -88,9 +95,7 @@ export default function MOHDashboardScreen() {
               <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
                 <Ionicons name="notifications" size={20} color={Colors.white} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton} onPress={() => router.replace('/(auth)/login')}>
-                <Ionicons name="log-out" size={20} color={Colors.white} />
-              </TouchableOpacity>
+              <LanguageSwitcher />
             </View>
           </View>
 
@@ -231,7 +236,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 30,
   },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  profileSection: { flexDirection: 'row', alignItems: 'center' },
+  profileSection: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 15 },
   avatarPlaceholder: {
     width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center', alignItems: 'center', marginRight: 12, position: 'relative'

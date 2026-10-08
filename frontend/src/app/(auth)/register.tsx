@@ -10,6 +10,7 @@ import { Colors } from '../../constants/Colors';
 import { AppIcon } from '../../components/AppIcon';
 import { registerPatient } from '../../services/authService';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import Toast from 'react-native-toast-message';
 
 // Register Screen - Expo Router version
 export default function RegisterScreen() {
@@ -61,36 +62,36 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!fullName || !nic || !birthday || !phone || !email || !password || !confirmPassword) {
-      Alert.alert(t('Error'), t('Please fill in all fields'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Please fill in all fields'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!validateName(fullName)) {
-      Alert.alert(t('Error'), t('Full Name can only contain letters and spaces.'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Full Name can only contain letters and spaces.'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!validateNIC(nic)) {
-      Alert.alert(t('Error'), t('Please enter a valid NIC (e.g. 123456789V or 123456789012).'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Please enter a valid NIC (e.g. 123456789V or 123456789012).'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!validatePhone(phone)) {
-      Alert.alert(t('Error'), t('Mobile number must be 10 digits starting with 0.'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Mobile number must be 10 digits starting with 0.'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!validateEmail(email)) {
-      Alert.alert(t('Error'), t('Please enter a valid email address.'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Please enter a valid email address.'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert(t('Error'), t('Passwords do not match'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Passwords do not match'), position: 'top', topOffset: 60 });
       return;
     }
     if (password.length < 6) {
-      Alert.alert(t('Error'), t('Password must be at least 6 characters'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Password must be at least 6 characters'), position: 'top', topOffset: 60 });
       return;
     }
 
@@ -100,11 +101,10 @@ export default function RegisterScreen() {
       const patientData = { fullName, nic, birthday, gender, phone, email, password, bloodGroup };
       await registerPatient(patientData);
       
-      Alert.alert(t('Success'), t('Account created! Please login.'), [
-        { text: 'OK', onPress: () => router.replace('/(auth)/login') },
-      ]);
+      Toast.show({ type: 'success', text1: t('Success'), text2: t('Account created! Please login.'), position: 'top', topOffset: 60 });
+      setTimeout(() => router.replace('/(auth)/login'), 1500);
     } catch (error: any) {
-      Alert.alert(t('Registration Failed'), error.message);
+      Toast.show({ type: 'error', text1: t('Registration Failed'), text2: error.message, position: 'top', topOffset: 60 });
     } finally {
       setIsLoading(false);
     }
@@ -309,22 +309,29 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
   header: {
-    backgroundColor: Colors.primary, paddingTop: 60, paddingBottom: 40,
+    backgroundColor: Colors.primary, paddingTop: 60, paddingBottom: 60,
     paddingHorizontal: 24, overflow: 'hidden', position: 'relative',
+    borderBottomLeftRadius: 40, borderBottomRightRadius: 40,
   },
   circleTopRight: {
-    position: 'absolute', top: -40, right: -40, width: 160, height: 160,
-    borderRadius: 80, backgroundColor: Colors.primaryLight, opacity: 0.3,
+    position: 'absolute', top: -40, right: -40, width: 180, height: 180,
+    borderRadius: 90, backgroundColor: Colors.primaryLight, opacity: 0.3,
   },
   circleBottomLeft: {
-    position: 'absolute', bottom: -30, left: -50, width: 140, height: 140,
-    borderRadius: 70, backgroundColor: Colors.primaryLight, opacity: 0.2,
+    position: 'absolute', bottom: -20, left: -50, width: 160, height: 160,
+    borderRadius: 80, backgroundColor: Colors.primaryLight, opacity: 0.2,
   },
   backButton: { marginBottom: 20 },
   backButtonText: { color: Colors.white, fontSize: 15, fontWeight: '600', opacity: 0.9 },
   headerTitle: { fontSize: 28, fontWeight: '800', color: Colors.white },
   headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 6 },
-  formContainer: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 50 },
+  formContainer: { 
+    paddingHorizontal: 20, paddingTop: 30, paddingBottom: 50, 
+    backgroundColor: Colors.white, marginHorizontal: 20, marginTop: -40, 
+    borderRadius: 24, elevation: 8, shadowColor: Colors.shadow, 
+    shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, 
+    marginBottom: 40 
+  },
   sectionLabel: {
     fontSize: 13, fontWeight: '700', color: Colors.textMedium,
     marginBottom: 8, marginTop: 4, letterSpacing: 0.3,

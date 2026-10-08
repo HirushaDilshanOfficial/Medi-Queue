@@ -16,6 +16,7 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -25,9 +26,6 @@ import { CurrentlyServingToken, QueueToken } from '../../types';
 import { useAuth, useDashboard } from '../../hooks';
 import { useShiftContext } from '../../context/ShiftContext';
 import {
-  callNext,
-  recallToken,
-  markNoShow,
   getErrorMessage,
   searchPatients,
   validateQueuePass,
@@ -194,74 +192,6 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     []
   );
 
-  // Action: Call Next
-  const handleCallNext = async () => {
-    if (actionLoading || isShiftClosed) return;
-    try {
-      setActionLoading(true);
-      const res = await callNext();
-      const calledToken = res?.tokenLabel || res?.tokenNumber || 'Next patient';
-      showToast(t("Called token {value0}. Patient display & doctor queue updated.", { value0: String(calledToken) }), 'success');
-      await refresh(false);
-    } catch (err: any) {
-      const msg = getErrorMessage(err);
-      showToast(msg || t("Failed to call next patient. Queue may be empty."), 'error');
-    } finally {
-      if (isMounted.current) {
-        setActionLoading(false);
-      }
-    }
-  };
-
-  // Action: Recall Token
-  const handleRecall = async (tokenLabel: string) => {
-    if (!tokenLabel || actionLoading) return;
-    try {
-      setActionLoading(true);
-      await recallToken(tokenLabel);
-      showToast(t("Chime sound triggered! Token {value0} recalled to counter", { value0: String(tokenLabel) }), 'info');
-      await refresh(false);
-    } catch (err: any) {
-      const msg = getErrorMessage(err);
-      showToast(msg || t("Chime broadcast completed"), 'info');
-    } finally {
-      if (isMounted.current) {
-        setActionLoading(false);
-      }
-    }
-  };
-
-  // Action: No Show
-  const handleNoShow = (tokenLabel: string) => {
-    if (!tokenLabel || actionLoading) return;
-    Alert.alert(
-      'Mark as No-Show',
-      `Are you sure you want to mark token ${tokenLabel} as No-Show? This patient will be removed from the active queue.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm No-Show',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setActionLoading(true);
-              await markNoShow(tokenLabel);
-              showToast(t("Token {value0} marked as No-Show", { value0: String(tokenLabel) }), 'warning');
-              await refresh(false);
-            } catch (err: any) {
-              const msg = getErrorMessage(err);
-              showToast(msg || t("Unable to mark token as no-show."), 'error');
-            } finally {
-              if (isMounted.current) {
-                setActionLoading(false);
-              }
-            }
-          },
-        },
-      ]
-    );
-  };
-
   // Action: Verify NIC Quick Lookup
   const handleVerifyNicSearch = async () => {
     executeSearchForVerify(verifyNicQuery);
@@ -336,21 +266,6 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     showToast(t("Scanned: {value0}", { value0: String(code) }), 'success');
   };
 
-  if (loading && !data) {
-    return <LoadingState fullscreen message={`Loading ${activeCounter}...`} />;
-  }
-
-  if (error && !data) {
-    return (
-      <ErrorState
-        fullscreen
-        title={t("Dashboard Error")}
-        message={error}
-        onRetry={() => refresh(false)}
-      />
-    );
-  }
-
   // Live data from database
   const serving: CurrentlyServingToken | null = data?.currentlyServing || null;
 
@@ -382,6 +297,33 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   const nextTokenLabel = topWaiting?.tokenLabel
     ? (topWaiting.tokenLabel.startsWith('#') ? `OPD-0${topWaiting.tokenLabel.replace('#', '')}` : topWaiting.tokenLabel)
     : (topWaiting?.tokenNumber ? `OPD-${String(topWaiting.tokenNumber).padStart(3, '0')}` : '');
+
+  // Helper to cleanly format room label without duplicate "Room Room"
+  const cleanRoomDisplay = (room?: string | null): string => {
+    if (!room) return 'Room 1A';
+    const trimmed = String(room).trim();
+    if (/^room\s+/i.test(trimmed)) {
+      return trimmed.replace(/^room\s+/i, 'Room ');
+    }
+    return `Room ${trimmed}`;
+  };
+
+
+  // Render loading or error states after all hooks have been invoked
+  if (loading && !data) {
+    return <LoadingState fullscreen message={`Loading ${activeCounter}...`} />;
+  }
+
+  if (error && !data) {
+    return (
+      <ErrorState
+        fullscreen
+        title={t("Dashboard Error")}
+        message={error}
+        onRetry={() => refresh(false)}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -558,16 +500,19 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
           </View>
         </View>
 
-        {/* ── NOW SERVING AT COUNTER (HERO CARD) ── */}
+        {/* ── OPD PATIENT QUEUE MONITOR (HERO CARD) ── */}
         <View style={styles.heroServingCard}>
           {serving ? (
             <>
               {/* Top Tag Row */}
               <View style={styles.heroServingHeader}>
                 <View style={styles.nowServingBadge}>
-                  <Text style={styles.nowServingBadgeText}>{t('NOW SERVING AT')} {activeCounter.toUpperCase()}</Text>
+                  <Text style={styles.nowServingBadgeText}>{t('CURRENTLY IN OPD CONSULTATION')}</Text>
                 </View>
-                <Text style={styles.tokenCallCountText}>{t('Active Consultation')}</Text>
+                <View style={styles.liveConsultationBadge}>
+                  <Animated.View style={[styles.liveConsultationDot, { opacity: pulseAnim }]} />
+                  <Text style={styles.liveConsultationText}>{t('ACTIVE WITH DOCTOR')}</Text>
+                </View>
               </View>
 
               {/* Token Header Row */}
@@ -577,7 +522,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                   <Text style={styles.heroTokenText}>{serving.tokenLabel}</Text>
                 </View>
                 <View style={styles.walkInTypePill}>
-                  <Text style={styles.walkInTypePillText}>{t('Active Patient')}</Text>
+                  <Text style={styles.walkInTypePillText}>{t('In Consultation')}</Text>
                 </View>
               </View>
 
@@ -606,79 +551,36 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                       {servingDocName || t('Assigned Specialist')}
                     </Text>
                     <Text style={styles.innerDoctorDept}>
-                      {servingDocDept || t('Consultant')} • {t('Room')} {serving.room || '1A'}
+                      {servingDocDept || t('Consultant')} • {cleanRoomDisplay(serving.room)}
                     </Text>
                   </View>
                 </View>
 
-                {/* Primary Action: Call Next Patient */}
-                <TouchableOpacity
-                  style={[
-                    styles.primaryCallNextBtn,
-                    (actionLoading || isShiftClosed || !nextTokenLabel) && styles.btnDisabled,
-                  ]}
-                  onPress={handleCallNext}
-                  disabled={actionLoading || isShiftClosed || !nextTokenLabel}
-                  activeOpacity={0.8}
-                  accessibilityLabel={`Call Next Patient ${nextTokenLabel}`}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="megaphone" size={18} color={Colors.white} style={{ marginRight: 8 }} />
-                  <Text style={styles.primaryCallNextBtnText}>
-                    {isShiftClosed
-                      ? t('Shift Closed (Intake Disabled)')
-                      : nextTokenLabel
-                      ? `${t('Call Next Patient')} (${nextTokenLabel})`
-                      : t('Queue Completed')}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Secondary Action Row: Chime/Recall & Mark No-Show */}
-                <View style={styles.secondaryActionRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.secondaryBtn,
-                      styles.chimeBtn,
-                      actionLoading && styles.btnDisabled,
-                    ]}
-                    onPress={() => handleRecall(serving.tokenLabel)}
-                    disabled={actionLoading}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Chime or Recall"
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="notifications-outline" size={16} color={Colors.textDark} style={{ marginRight: 6 }} />
-                    <Text style={styles.chimeBtnText}>{t('Chime / Recall')}</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.secondaryBtn,
-                      styles.noShowBtn,
-                      actionLoading && styles.btnDisabled,
-                    ]}
-                    onPress={() => handleNoShow(serving.tokenLabel)}
-                    disabled={actionLoading}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Mark No Show"
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="close-circle-outline" size={16} color="#DC2626" style={{ marginRight: 6 }} />
-                    <Text style={styles.noShowBtnText}>{t('Mark No-Show')}</Text>
-                  </TouchableOpacity>
+                {/* Informative Status Strip (View Only) */}
+                <View style={styles.opdConsultationStatusBox}>
+                  <View style={styles.opdStatusPill}>
+                    <Animated.View style={[styles.opdStatusDot, { opacity: pulseAnim }]} />
+                    <Text style={styles.opdStatusPillText}>{t('IN OPD CONSULTATION')}</Text>
+                  </View>
+                  <View style={styles.opdRoomBadge}>
+                    <Ionicons name="location-outline" size={12} color="#0F766E" style={{ marginRight: 3 }} />
+                    <Text style={styles.opdRoomBadgeText}>{cleanRoomDisplay(serving.room)}</Text>
+                  </View>
                 </View>
               </View>
             </>
           ) : topWaiting ? (
             <>
-              {/* Ready to call top waiting patient */}
+              {/* Ready / Next in OPD Queue */}
               <View style={styles.heroServingHeader}>
                 <View style={[styles.nowServingBadge, { backgroundColor: 'rgba(245, 158, 11, 0.25)', borderColor: '#F59E0B' }]}>
                   <Text style={[styles.nowServingBadgeText, { color: '#FDE68A' }]}>
-                    {t('NEXT TO CALL • WAITING IN QUEUE')}
+                    {t('NEXT PATIENT IN OPD QUEUE')}
                   </Text>
                 </View>
-                <Text style={styles.tokenCallCountText}>{inWaiting} {t('Waiting')}</Text>
+                <View style={[styles.liveConsultationBadge, { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
+                  <Text style={[styles.liveConsultationText, { color: '#FDE68A' }]}>{t('WAITING IN LOBBY')}</Text>
+                </View>
               </View>
 
               {/* Token Header Row */}
@@ -704,7 +606,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                   <Text style={styles.innerPatientName}>
                     {topWaitingPatient.fullName || topWaitingPatient.name || t('Waiting Patient')}
                   </Text>
-                  <Text style={[styles.innerPatientTime, { color: '#D97706', fontWeight: '700' }]}>{t('Ready')}</Text>
+                  <Text style={[styles.innerPatientTime, { color: '#D97706', fontWeight: '700' }]}>{t('Waiting')}</Text>
                 </View>
 
                 <Text style={styles.innerPatientMeta}>
@@ -723,30 +625,22 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                       {topWaitingDoctor.name || t('Assigned Specialist')}
                     </Text>
                     <Text style={styles.innerDoctorDept}>
-                      {t(topWaitingDoctor.department || 'General OPD')} • {t('Room')} {topWaitingDoctor.room || '1A'}
+                      {t(topWaitingDoctor.department || 'General OPD')} • {cleanRoomDisplay(topWaitingDoctor.room)}
                     </Text>
                   </View>
                 </View>
 
-                {/* Primary Action: Call Next Patient */}
-                <TouchableOpacity
-                  style={[
-                    styles.primaryCallNextBtn,
-                    (actionLoading || isShiftClosed) && styles.btnDisabled,
-                  ]}
-                  onPress={handleCallNext}
-                  disabled={actionLoading || isShiftClosed}
-                  activeOpacity={0.8}
-                  accessibilityLabel={`Call Next Patient ${nextTokenLabel}`}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="megaphone" size={18} color={Colors.white} style={{ marginRight: 8 }} />
-                  <Text style={styles.primaryCallNextBtnText}>
-                    {isShiftClosed
-                      ? t('Shift Closed (Intake Disabled)')
-                      : `${t('Call to Counter')} (${nextTokenLabel})`}
-                  </Text>
-                </TouchableOpacity>
+                {/* Informative Status Badge for Receptionist View */}
+                <View style={styles.opdWaitingStatusBox}>
+                  <View style={styles.opdWaitingPill}>
+                    <Ionicons name="time" size={13} color="#D97706" style={{ marginRight: 4 }} />
+                    <Text style={styles.opdWaitingPillText}>{t('WAITING FOR CALL')}</Text>
+                  </View>
+                  <View style={styles.opdWaitingRoomBadge}>
+                    <Ionicons name="medical-outline" size={12} color="#B45309" style={{ marginRight: 3 }} />
+                    <Text style={styles.opdWaitingRoomBadgeText}>{cleanRoomDisplay(topWaitingDoctor.room)}</Text>
+                  </View>
+                </View>
               </View>
             </>
           ) : (
@@ -755,7 +649,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <View style={styles.heroServingHeader}>
                 <View style={[styles.nowServingBadge, { backgroundColor: 'rgba(16, 185, 129, 0.2)', borderColor: '#10B981' }]}>
                   <Text style={[styles.nowServingBadgeText, { color: '#A7F3D0' }]}>
-                    {t('COUNTER READY • QUEUE CLEAR')}
+                    {t('OPD QUEUE CLEAR • ALL ATTENDED')}
                   </Text>
                 </View>
                 <Text style={styles.tokenCallCountText}>{activeCounter}</Text>
@@ -1056,7 +950,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 {serving?.patient?.name || topWaitingPatient.fullName || topWaitingPatient.name || t('Registered Patient')}
               </Text>
               <Text style={styles.slipMeta}>
-                {serving?.room ? `Room ${serving.room} · ` : ''}{servingDocDept || topWaitingDoctor.department || 'General OPD'} · {currentTime}
+                {serving?.room ? `${cleanRoomDisplay(serving.room)} · ` : ''}{servingDocDept || topWaitingDoctor.department || 'General OPD'} · {currentTime}
               </Text>
             </View>
 
@@ -1113,7 +1007,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <View key={idx} style={styles.rosterItem}>
                   <View>
                     <Text style={styles.rosterDocName}>{doc.doctor}</Text>
-                    <Text style={styles.rosterDocDept}>{t(doc.department || 'OPD')}{' '}{t("· Room")}{' '}{doc.room}</Text>
+                    <Text style={styles.rosterDocDept}>{t(doc.department || 'OPD')}{' · '}{cleanRoomDisplay(doc.room)}</Text>
                   </View>
                   <View style={styles.rosterDocHours}>
                     <Text style={styles.rosterDocHoursText}>08:00 - 16:30</Text>
@@ -1887,37 +1781,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: Colors.white,
-  },
-  secondaryActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  secondaryBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 40,
-    borderRadius: 10,
-  },
-  chimeBtn: {
-    backgroundColor: '#F1F5F9',
-    marginRight: 8,
-  },
-  chimeBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textDark,
-  },
-  noShowBtn: {
-    backgroundColor: '#FEE2E2',
-  },
-  noShowBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#DC2626',
   },
   sectionWrap: {
     marginBottom: 20,
@@ -2866,6 +2729,119 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textLight,
     textAlign: 'center',
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // OPD Consultation & Queue Monitoring Styles (View Only)
+  // ─────────────────────────────────────────────────────────
+
+  liveConsultationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  liveConsultationDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#34D399',
+    marginRight: 5,
+  },
+  liveConsultationText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#34D399',
+    letterSpacing: 0.5,
+  },
+  opdConsultationStatusBox: {
+    marginTop: 14,
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#99F6E4',
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  opdStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  opdStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0D9488',
+    marginRight: 5,
+  },
+  opdStatusPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F766E',
+    letterSpacing: 0.3,
+  },
+  opdRoomBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+  },
+  opdRoomBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  opdWaitingStatusBox: {
+    marginTop: 14,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  opdWaitingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  opdWaitingPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#B45309',
+    letterSpacing: 0.3,
+  },
+  opdWaitingRoomBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  opdWaitingRoomBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
   },
 });
 

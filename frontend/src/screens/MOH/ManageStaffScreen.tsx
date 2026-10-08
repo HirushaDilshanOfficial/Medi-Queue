@@ -15,6 +15,7 @@ import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../../config';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
+import Toast from 'react-native-toast-message';
 
 export default function ManageStaffScreen() {
   const { t } = useLanguage();
@@ -67,10 +68,23 @@ export default function ManageStaffScreen() {
       if (response.ok) {
         fetchStaff();
         setShowManageModal(false);
+        Toast.show({
+          type: 'success',
+          text1: t('Status Updated'),
+          text2: t('The staff member status has been changed successfully.'),
+          position: 'top',
+          topOffset: 60,
+        });
       }
     } catch (error) {
       console.error('Error toggling status:', error);
-      Alert.alert(t('Error'), t('Could not update status'));
+      Toast.show({
+        type: 'error',
+        text1: t('Error'),
+        text2: t('Could not update status'),
+        position: 'top',
+        topOffset: 60,
+      });
     }
   };
 
@@ -91,10 +105,23 @@ export default function ManageStaffScreen() {
               if (response.ok) {
                 fetchStaff();
                 setShowManageModal(false);
+                Toast.show({
+                  type: 'success',
+                  text1: t('Staff Removed'),
+                  text2: t('The staff member has been deleted from the system.'),
+                  position: 'top',
+                  topOffset: 60,
+                });
               }
             } catch (error) {
               console.error('Error deleting staff:', error);
-              Alert.alert(t('Error'), t('Could not delete staff'));
+              Toast.show({
+                type: 'error',
+                text1: t('Error'),
+                text2: t('Could not delete staff'),
+                position: 'top',
+                topOffset: 60,
+              });
             }
           }
         }
@@ -112,8 +139,7 @@ export default function ManageStaffScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-      <SafeAreaView style={{ flex: 1 }}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
         
         {/* Header */}
         <View style={styles.header}>
@@ -344,7 +370,6 @@ export default function ManageStaffScreen() {
         </Modal>
 
         <MOHBottomNav activeRoute="staff" />
-      </SafeAreaView>
     </View>
   );
 }
@@ -355,24 +380,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 20,
+    backgroundColor: Colors.primaryDark,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
+    marginBottom: 10,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonText: {
     fontSize: 20,
-    color: Colors.textDark,
+    color: Colors.white,
+    fontWeight: 'bold',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textDark,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.white,
   },
   scrollContent: {
     paddingBottom: 100,

@@ -142,8 +142,7 @@ export default function ManagePatientsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-      <SafeAreaView style={{ flex: 1 }}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
         
         {/* Header */}
         <View style={styles.header}>
@@ -344,8 +343,6 @@ export default function ManagePatientsScreen() {
             </View>
           </TouchableOpacity>
         </Modal>
-
-      </SafeAreaView>
       <MOHBottomNav activeRoute="home" />
     </View>
   );
@@ -357,24 +354,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 20,
+    backgroundColor: Colors.primaryDark,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
+    marginBottom: 10,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonText: {
     fontSize: 20,
-    color: Colors.textDark,
+    color: Colors.white,
+    fontWeight: 'bold',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textDark,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.white,
   },
   scrollContent: {
     paddingBottom: 40,

@@ -24,6 +24,7 @@ const {
   getQueue,
   getNextInQueue,
   callNext,
+  completeToken,
   recallToken,
   markNoShow,
   moveBackToken,
@@ -47,6 +48,12 @@ router.patch('/auto-advance', ...receptionAuth, updateAutoAdvance);
 
 // POST /api/reception/queue/call-next -> call next waiting patient
 router.post('/call-next', ...receptionAuth, callNext);
+
+// POST /api/reception/queue/complete -> complete active serving token
+router.post('/complete', ...receptionAuth, completeToken);
+
+// POST /api/reception/queue/:id/complete -> complete specified serving token
+router.post('/:id/complete', ...receptionAuth, completeToken);
 
 // PATCH /api/reception/queue/:id/assign-doctor -> assign doctor to token and appointment
 router.patch('/:id/assign-doctor', ...receptionAuth, assignDoctor);
