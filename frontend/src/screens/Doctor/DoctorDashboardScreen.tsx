@@ -16,15 +16,12 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-<<<<<<< HEAD
 import AsyncStorage from '@react-native-async-storage/async-storage';
-=======
 import { Colors } from '../../constants/Colors';
 import { notificationApi } from '../../services/notificationApi';
 import { getAuthToken } from '../../services/http';
 import { BASE_URL } from '../../config';
 import EmergencyBanner from '../../components/EmergencyBanner';
->>>>>>> origin/dev
 import {
   fetchDoctorDashboard,
   callNextPatientApi,
@@ -141,19 +138,8 @@ export default function DoctorDashboardScreen() {
         ],
       };
 
-<<<<<<< HEAD
       const queue = [...(base.upcomingQueue || [])];
       let nextPat: PatientQueueItem;
-=======
-  const checkUnreadNotifications = async () => {
-    setUnreadCount(0);
-    try {
-      setUnreadCount(await notificationApi.unreadCount());
-    } catch (e) {
-      console.log('Failed to fetch notifications', e);
-    }
-  };
->>>>>>> origin/dev
 
       if (queue.length > 0) {
         nextPat = queue.shift()!;
@@ -700,7 +686,7 @@ export default function DoctorDashboardScreen() {
       />
       <EmergencyBanner />
 
-<<<<<<< HEAD
+
       {/* SCROLLABLE BODY */}
       <ScrollView
         style={styles.scrollView}
@@ -722,353 +708,7 @@ export default function DoctorDashboardScreen() {
             <View style={styles.darkGreetingRow}>
               <Ionicons name={greetingIcon} size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text style={styles.darkGreetingText}>{greetingText}</Text>
-=======
-      {/* CENTERED RESPONSIVE WRAPPER (MAX 420px) */}
-      <View style={styles.centerAlignWrapper}>
-        <View style={[styles.mobileContainer, { backgroundColor: colors.bgPage }]}>
-
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0E8F9A']} />}
-          >
-            {/* ========================================================= */}
-            {/* SECTION 1: HEADER (DIAGONAL GRADIENT AREA #0B4F59 -> #0E8F9A) */}
-            {/* ========================================================= */}
-            <LinearGradient
-              colors={['#0B4F59', '#0E8F9A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.gradientHeader}
-            >
-              {/* Top Row: Avatar, Doctor Name, Online Badge, Language & Bell Buttons */}
-              <View style={styles.headerTopRow}>
-                <View style={styles.doctorProfileWrap}>
-                  <View style={styles.avatarCircle}>
-                    <Text style={styles.avatarInitials}>{doctorInitials}</Text>
-                  </View>
-                  <View style={styles.doctorInfoCol}>
-                    <Text style={styles.doctorName}>{doctorDisplayName}</Text>
-                    <View style={styles.onlineBadgeRow}>
-                      <View style={styles.greenOnlineDot} />
-                      <Text style={styles.onlineBadgeText}>{t(`${data?.doctor?.room || 'Room 101'} Online`)}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.headerActionsWrap}>
-                  {/* Notification Bell with Badge '3' */}
-                  <TouchableOpacity
-                    style={styles.headerIconBtn}
-                    onPress={() => router.push('/notifications')}
-                    activeOpacity={0.75}
-                    accessibilityLabel={t('Notifications')}
-                  >
-                    <LineBell color="#FFFFFF" size={18} />
-                    <View style={styles.bellBadge}>
-                      <Text style={styles.bellBadgeText}>{unreadCount}</Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Greeting & Shift/Break Status Pill */}
-              <View style={styles.greetingHeaderRow}>
-                <View style={styles.greetingWrap}>
-                  <Text style={styles.greetingSmall}>{t('Good morning,')}</Text>
-                  <Text style={styles.greetingDoctor}>
-                    {doctorDisplayName.startsWith('Dr.') ? doctorDisplayName : `Dr. ${doctorDisplayName}`}
-                  </Text>
-                </View>
-
-                {/* Shift / Break status badge button */}
-                <TouchableOpacity
-                  style={[
-                    styles.shiftStatusBadge,
-                    (activeBreak || data?.doctor?.status === 'on_break') && styles.shiftStatusBadgeBreak,
-                  ]}
-                  onPress={handleTake15mBreak}
-                  activeOpacity={0.8}
-                >
-                  <View
-                    style={[
-                      styles.shiftStatusDot,
-                      (activeBreak || data?.doctor?.status === 'on_break') && styles.shiftStatusDotBreak,
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.shiftStatusText,
-                      (activeBreak || data?.doctor?.status === 'on_break') && styles.shiftStatusTextBreak,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {activeBreak
-                      ? `${t(activeBreak.label || 'Tea Break')} (${activeBreak.duration})`
-                      : data?.doctor?.status === 'on_break'
-                      ? t('On Break')
-                      : t('Active Shift')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Location Pill */}
-              <View style={styles.locationPill}>
-                <View style={styles.locationLeft}>
-                  <LineBuilding color="#FFFFFF" size={17} />
-                  <Text style={styles.locationText} numberOfLines={1}>
-                    {currentHospital} · OPD
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.locationSwitchBtn}
-                  onPress={() => setIsHospitalModalOpen(true)}
-                  activeOpacity={0.8}
-                >
-                  <LineSwap color="#FFFFFF" size={13} />
-                  <Text style={styles.locationSwitchText}>{t('Switch')}</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Three Equal Stat Tiles */}
-              <View style={styles.statTilesRow}>
-                {/* 1. Waiting: 14 with "+3" */}
-                <View style={styles.statTile}>
-                  <Text style={styles.statLabel}>{t('Waiting')}</Text>
-                  <View style={styles.statValueRow}>
-                    <Text style={styles.statNumber}>{waitingCount}</Text>
-                    <Text style={styles.statSuffix}>+3</Text>
-                  </View>
-                </View>
-
-                {/* 2. Done: 18 with "/ 32" */}
-                <View style={styles.statTile}>
-                  <Text style={styles.statLabel}>{t('Done')}</Text>
-                  <View style={styles.statValueRow}>
-                    <Text style={styles.statNumber}>{completedCount}</Text>
-                    <Text style={styles.statSuffix}>/ {totalCapacity}</Text>
-                  </View>
-                </View>
-
-                {/* 3. Avg wait: 9 with "min" */}
-                <View style={styles.statTile}>
-                  <Text style={styles.statLabel}>{t('Avg wait')}</Text>
-                  <View style={styles.statValueRow}>
-                    <Text style={styles.statNumber}>{avgWaitMinutes}</Text>
-                    <Text style={styles.statSuffix}>{t('min')}</Text>
-                  </View>
-                </View>
-              </View>
-            </LinearGradient>
-
-            {/* ========================================================= */}
-            {/* PROMINENT ACTIVE BREAK ALERT CARD (IF ON BREAK) */}
-            {/* ========================================================= */}
-            {activeBreak && (
-              <View style={styles.dashboardBreakCard}>
-                <View style={styles.dashboardBreakLeft}>
-                  <View style={styles.dashboardBreakIconWrap}>
-                    <Ionicons
-                      name={
-                        activeBreak.type === 'lunch' || activeBreak.type === 'dinner'
-                          ? 'restaurant'
-                          : 'cafe'
-                      }
-                      size={22}
-                      color="#b45309"
-                    />
-                  </View>
-                  <View style={styles.dashboardBreakTextWrap}>
-                    <View style={styles.dashboardBreakTitleRow}>
-                      <Text style={styles.dashboardBreakTitle}>{t(activeBreak.label || 'Tea Break')}</Text>
-                      <View style={styles.dashboardBreakLivePill}>
-                        <View style={styles.dashboardBreakLiveDot} />
-                        <Text style={styles.dashboardBreakLiveText}>{t('On Break')}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.dashboardBreakSub} numberOfLines={1}>
-                      {activeBreak.duration} • {activeBreak.shiftName || 'Morning Shift'}
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={styles.dashboardEndBreakBtn}
-                  onPress={handleEndActiveBreakFromDashboard}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.dashboardEndBreakBtnText}>{t('End Break')}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* ========================================================= */}
-            {/* SECTION 2: NOW SERVING CARD (OVERLAPS HEADER BY 50PX) */}
-            {/* ========================================================= */}
-            <View style={[styles.nowServingContainer, activeBreak && { marginTop: 0 }]}>
-              {currentPatient ? (
-                <View style={[styles.nowServingCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle }, colors.cardShadow]}>
-
-                  {/* Top Row: Pulsing Dot + "NOW SERVING" and Tinted Live Timer */}
-                  <View style={styles.nowServingTopRow}>
-                    <View style={styles.pulsingTitleWrap}>
-                      <View style={styles.pulseDotOuter}>
-                        <View style={styles.pulseDotRing} />
-                        <View style={styles.pulseDotCore} />
-                      </View>
-                      <Text style={styles.nowServingLabel}>{t('NOW SERVING')}</Text>
-                    </View>
-
-                    {/* Tinted Pill with Clock Icon and Live Running Timer */}
-                    <View style={[styles.timerPill, { backgroundColor: colors.tealTint }]}>
-                      <LineClock color={colors.tealDeep} size={14} />
-                      <Text style={[styles.timerText, { color: colors.tealDeep }]}>
-                        {formatTimer(timerSeconds)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Patient Row: Dark Teal Token Badge (70px) + Patient Info */}
-                  <View style={styles.patientRow}>
-                    <View style={styles.tokenBadgeDark}>
-                      <Text style={styles.tokenBadgeLabel}>{t('TOKEN')}</Text>
-                      <Text style={styles.tokenBadgeNumber}>
-                        {String(currentPatient.tokenNumber).padStart(3, '0')}
-                      </Text>
-                    </View>
-
-                    <View style={styles.patientDetailsCol}>
-                      <Text style={[styles.patientNameText, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {currentPatient.patientName}
-                      </Text>
-                      <Text style={[styles.patientSubtitleText, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {t(currentPatient.reason || 'OPD Consultation')} • {currentPatient.age || 35} {t('yrs')}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Vitals Chips Row */}
-                  <View style={styles.vitalsChipsRow}>
-                    <View style={[styles.vitalChip, { backgroundColor: colors.chipGrey }]}>
-                      <Text style={[styles.vitalChipLabel, { color: colors.textSecondary }]}>BP: </Text>
-                      <Text style={[styles.vitalChipVal, { color: colors.textPrimary }]}>{currentPatient.bloodPressure || '120/80'}</Text>
-                    </View>
-                    <View style={[styles.vitalChip, { backgroundColor: colors.chipGrey }]}>
-                      <Text style={[styles.vitalChipLabel, { color: colors.textSecondary }]}>HR: </Text>
-                      <Text style={[styles.vitalChipVal, { color: colors.textPrimary }]}>{currentPatient.heartRate || '76 bpm'}</Text>
-                    </View>
-                  </View>
-
-                  {/* Dynamic Allergy Alert Banner */}
-                  {currentPatient.allergy ? (
-                    <View style={[styles.allergyBanner, { backgroundColor: colors.alertBg }]}>
-                      <LineAlertTriangle color={colors.alertText} size={18} />
-                      <Text style={[styles.allergyText, { color: colors.alertText }]} numberOfLines={1}>
-                        {t('Allergy:')} {currentPatient.allergy}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={[styles.allergyBanner, { backgroundColor: isDarkMode ? '#132e27' : '#ecfdf5', borderColor: isDarkMode ? '#065f46' : '#a7f3d0', borderWidth: 1 }]}>
-                      <Ionicons name="shield-checkmark" size={17} color="#10b981" style={{ marginRight: 6 }} />
-                      <Text style={[styles.allergyText, { color: isDarkMode ? '#6ee7b7' : '#047857' }]}>
-                        {t('No Known Drug Allergies (NKDA)')}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Action Row: Three Buttons with PERFECT single-line fit */}
-                  <View style={styles.actionRow}>
-                    {/* 1. Square Icon-only Undo Button (tinted) */}
-                    <TouchableOpacity
-                      style={[styles.actionBtnUndo, { backgroundColor: colors.tealTint }]}
-                      onPress={handleUndoPatient}
-                      disabled={isProcessing}
-                      activeOpacity={0.75}
-                      accessibilityLabel={t('Undo')}
-                    >
-                      <LineUndo color={colors.tealDeep} size={18} />
-                    </TouchableOpacity>
-
-                    {/* 2. Tinted "Rx Prescribe" Button with document icon */}
-                    <TouchableOpacity
-                      style={[styles.actionBtnRx, { backgroundColor: colors.tealTint }]}
-                      onPress={() => {
-                        if (currentPatient) {
-                          try {
-                            router.push({
-                              pathname: '/(doctor)/prescription' as any,
-                              params: {
-                                tokenNumber: String(currentPatient.tokenNumber),
-                                patientName: currentPatient.patientName,
-                                patientId: (currentPatient as any).patientId || '',
-                              },
-                            });
-                          } catch (e) {
-                            handleTabPress('rx');
-                          }
-                        } else {
-                          handleTabPress('rx');
-                        }
-                      }}
-                      activeOpacity={0.75}
-                    >
-                      <LineDocument color={colors.tealDeep} size={16} />
-                      <Text style={[styles.actionBtnRxText, { color: colors.tealDeep }]} numberOfLines={1}>
-                        {t('Rx Prescribe')}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* 3. Wide Primary Dark-teal Button "Complete & Next" - perfectly single line */}
-                    <TouchableOpacity
-                      style={styles.actionBtnComplete}
-                      onPress={handleCompleteAndNext}
-                      disabled={isProcessing}
-                      activeOpacity={0.82}
-                    >
-                      {isProcessing ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <>
-                          <LineCheckCircle color="#FFFFFF" size={16} />
-                          <Text style={styles.actionBtnCompleteText} numberOfLines={1} ellipsizeMode="tail">
-                            {t('Complete & Next')}
-                          </Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-
-                </View>
-              ) : (
-                <View style={[styles.nowServingCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle, alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 }, colors.cardShadow]}>
-                  <View style={[styles.quickActionCircle, { backgroundColor: colors.tealTint, width: 52, height: 52, borderRadius: 26, marginBottom: 10, alignItems: 'center', justifyContent: 'center' }]}>
-                    <LineSpeaker color={colors.tealDeep} size={24} />
-                  </View>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textPrimary, marginBottom: 4, textAlign: 'center' }}>
-                    {t('No Patient in Consultation')}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginBottom: 14 }}>
-                    {displayQueue.length > 0
-                      ? t('{value0} patient(s) waiting in queue', { value0: String(displayQueue.length) })
-                      : t('Queue is clear. New walk-in patients will appear here.')}
-                  </Text>
-                  {displayQueue.length > 0 && (
-                    <TouchableOpacity
-                      style={[styles.actionBtnComplete, { alignSelf: 'stretch', justifyContent: 'center' }]}
-                      onPress={handleCallNext}
-                      disabled={isProcessing}
-                      activeOpacity={0.82}
-                    >
-                      <Ionicons name="notifications" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                      <Text style={styles.actionBtnCompleteText}>
-                        {t('Call Next Patient (#{value0})', { value0: String(displayQueue[0].tokenNumber).padStart(3, '0') })}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
->>>>>>> origin/dev
-            </View>
+</View>
             <DarkStrongPill
               label={getBreakPillLabel()}
               pulse
@@ -1331,8 +971,7 @@ export default function DoctorDashboardScreen() {
         >
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-<<<<<<< HEAD
-              <Text style={styles.modalTitleText}>{t('Switch OPD Hospital')}</Text>
+<Text style={styles.modalTitleText}>{t('Switch OPD Hospital')}</Text>
               <TouchableOpacity onPress={() => setIsHospitalModalOpen(false)}>
                 <Ionicons name="close" size={22} color={C.ink} />
               </TouchableOpacity>
@@ -1371,60 +1010,7 @@ export default function DoctorDashboardScreen() {
                 )}
               </TouchableOpacity>
             ))}
-=======
-              <View style={styles.modalHeaderTitleRow}>
-                <MaterialCommunityIcons name="hospital-building" size={22} color="#0B4F59" style={{ marginRight: 8 }} />
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t("Select Hospital Duty")}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsHospitalModalOpen(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
 
-            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-              {t("Select the hospital you are currently stationed at for OPD patient consultations.")}
-            </Text>
-
-            <View style={styles.modalHospitalList}>
-              {availableHospitals.map((hosp, idx) => {
-                const isSelected = currentHospital === hosp;
-                return (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[
-                      styles.modalHospitalItem,
-                      isSelected && { borderColor: '#0B4F59', backgroundColor: colors.tealTint },
-                    ]}
-                    onPress={() => handleSelectHospital(hosp)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.modalHospitalItemLeft}>
-                      <View style={[styles.modalItemIconCircle, isSelected && { backgroundColor: '#0B4F59' }]}>
-                        <Ionicons
-                          name="business"
-                          size={18}
-                          color={isSelected ? '#FFFFFF' : '#64748b'}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.modalHospitalItemName, { color: colors.textPrimary }]} numberOfLines={1}>
-                          {hosp}
-                        </Text>
-                        <Text style={[styles.modalHospitalItemSub, { color: colors.textSecondary }]}>
-                          {isSelected ? 'Currently Stationed • Active' : 'Tap to switch location'}
-                        </Text>
-                      </View>
-                    </View>
-                    {isSelected ? (
-                      <Ionicons name="checkmark-circle" size={22} color="#0B4F59" />
-                    ) : (
-                      <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
->>>>>>> origin/dev
           </View>
         </TouchableOpacity>
       </Modal>
