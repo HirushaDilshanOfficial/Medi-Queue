@@ -2,13 +2,9 @@ import { Stack, useSegments } from 'expo-router';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import { ThemeProvider } from '../theme/ThemeContext';
 import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
-<<<<<<< HEAD
-import { ThemeProvider } from '../theme/ThemeContext';
-import { View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-=======
 import { View, Text } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+// @ts-ignore
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -65,9 +61,9 @@ const toastConfig = {
 
 function GlobalSafeArea() {
   const segments = useSegments();
-  const firstSeg = segments[0] as string | undefined;
+  const firstSeg = (segments as any)?.[0] as string | undefined;
   
-  if (firstSeg === '(auth)' || firstSeg === 'index' || segments.length === 0 || firstSeg === '(doctor)') {
+  if (firstSeg === '(auth)' || firstSeg === 'index' || !(segments as any)?.length || firstSeg === '(doctor)') {
     return null;
   }
   
@@ -76,7 +72,6 @@ function GlobalSafeArea() {
 
   return <SafeAreaView edges={['top']} style={{ flex: 0, backgroundColor: bgColor }} />;
 }
->>>>>>> origin/dev
 
 // Root layout - Expo Router
 export default function RootLayout() {
@@ -85,38 +80,29 @@ export default function RootLayout() {
       <ThemeProvider>
         <LanguageProvider>
           <View style={{ flex: 1 }}>
-<<<<<<< HEAD
-          <LanguageSwitcher />
-=======
-          <GlobalSafeArea />
->>>>>>> origin/dev
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)/welcome" />
-            <Stack.Screen name="(auth)/login" />
-            <Stack.Screen name="(auth)/register" />
-            <Stack.Screen name="(moh)/dashboard" />
-            <Stack.Screen name="(patient)" />
-            <Stack.Screen name="(reception)" />
-            <Stack.Screen name="(doctor)" />
-            <Stack.Screen name="(doctor)/dashboard" />
-            <Stack.Screen name="(doctor)/queue" />
-            <Stack.Screen name="(doctor)/schedule" />
-            <Stack.Screen name="(doctor)/prescription" />
-            <Stack.Screen name="(doctor)/records" />
-            <Stack.Screen name="(doctor)/ehr" />
-            <Stack.Screen name="schedule" />
-          </Stack>
-          <Toast config={toastConfig} />
-        </View>
-<<<<<<< HEAD
-      </LanguageProvider>
-    </ThemeProvider>
-  </SafeAreaProvider>
-=======
+            <LanguageSwitcher />
+            <GlobalSafeArea />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(auth)/welcome" />
+              <Stack.Screen name="(auth)/login" />
+              <Stack.Screen name="(auth)/register" />
+              <Stack.Screen name="(moh)/dashboard" />
+              <Stack.Screen name="(patient)" />
+              <Stack.Screen name="(reception)" />
+              <Stack.Screen name="(doctor)" />
+              <Stack.Screen name="(doctor)/dashboard" />
+              <Stack.Screen name="(doctor)/queue" />
+              <Stack.Screen name="(doctor)/schedule" />
+              <Stack.Screen name="(doctor)/prescription" />
+              <Stack.Screen name="(doctor)/records" />
+              <Stack.Screen name="(doctor)/ehr" />
+              <Stack.Screen name="schedule" />
+            </Stack>
+            <Toast config={toastConfig} />
+          </View>
         </LanguageProvider>
       </ThemeProvider>
     </SafeAreaProvider>
->>>>>>> origin/dev
   );
 }
