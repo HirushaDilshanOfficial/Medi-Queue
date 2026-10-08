@@ -18,6 +18,8 @@ import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import type { SlotOption } from '../../../types/patient';
 import { addDaysKey, isPastDateKey, longDayLabel, shortDayParts, todayKey } from '../../../utils/opdDates';
 import { DesignImage } from '../../../components/patient/DesignImage';
+import { PassQr } from '../../../components/patient/PassQr';
+import type { QueuePass } from '../../../types/patient';
 
 const C = {
   background: '#f3faff', primary: '#004c5b', secondary: '#00696e',
@@ -54,6 +56,11 @@ export function DoctorBookingScreen() {
   const [tab, setTab] = useState<BookingTab>('Appointment');
   const [mode, setMode] = useState<'Hospital' | 'Online'>('Hospital');
   const [selectedDocument, setSelectedDocument] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [bookingPass, setBookingPass] = useState<QueuePass | null>(null);
+  const [bookedTime, setBookedTime] = useState<string | null>(null);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [bookingConfirmed, setBookingConfirmed] = useState(false);
+  const [documentUploadError, setDocumentUploadError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const dateStrip = useRef<ScrollView>(null);
   const submissionPending = useRef(false);
@@ -71,7 +78,7 @@ export function DoctorBookingScreen() {
   // A previous day's cached slots must never remain selectable during a reload.
   const currentSlots = slots.data?.date === date ? slots.data.slots : [];
   const dateIsValid = Boolean(date && /^\d{4}-\d{2}-\d{2}$/.test(date) && !isPastDateKey(date, hospitalToday) && date <= maxDateKey);
-  const canSubmit = mode === 'Hospital' && !!date && !!time && !submitting
+  const canSubmit = mode === 'Hospital' && !!date && !!time && !submitting && !bookingConfirmed
     && dateIsValid
     && !days.loading && !days.error && !slots.loading && !slots.error
     && currentSlots.some(slot => slot.time === time && slot.available);
@@ -98,60 +105,42 @@ export function DoctorBookingScreen() {
         Alert.alert(t('Appointment updated'), t("{value0} at {value1}", { value0: String(longDayLabel(date, locale)), value1: String(time) }));
         router.back();
       } else {
+        // A successful booking is final even if an optional document upload fails.
+        // Display the issued pass immediately instead of waiting for the upload.
+        setBookingConfirmed(true);
+        setBookedTime(bookingResult!.appointment.slotTime);
+        setDocumentUploadError(null);
+        setBookingPass(bookingResult!.pass);
         let documentUploadFailed = false;
         let documentUploadError = '';
         if (selectedDocument && bookingResult?.appointment.id) {
-          const form = new FormData();
-          form.append('title', selectedDocument.name || 'Medical document');
-          form.append('category', 'General');
-          form.append('reportDate', date);
-          form.append('appointmentId', bookingResult.appointment.id);
-          if (selectedDocument.file) {
-            form.append('file', selectedDocument.file);
-          } else {
-            form.append('file', {
-              uri: selectedDocument.uri,
-              name: selectedDocument.name || 'medical-document',
-              type: selectedDocument.mimeType || 'application/octet-stream',
-            } as unknown as Blob);
-          }
+          setUploadingDocument(true);
           try {
+            const form = new FormData();
+            form.append('title', selectedDocument.name || 'Medical document');
+            form.append('category', 'General');
+            form.append('reportDate', date);
+            form.append('appointmentId', bookingResult.appointment.id);
+            if (selectedDocument.file) {
+              form.append('file', selectedDocument.file);
+            } else {
+              form.append('file', {
+                uri: selectedDocument.uri,
+                name: selectedDocument.name || 'medical-document',
+                type: selectedDocument.mimeType || 'application/octet-stream',
+              } as unknown as Blob);
+            }
             await patientApi.uploadReport(form);
           } catch (error) {
             documentUploadFailed = true;
             documentUploadError = error instanceof HttpError
               ? error.message
               : t('Please add the document from your reports page.');
+          } finally {
+            setUploadingDocument(false);
           }
         }
-        Alert.alert(
-          t('Appointment confirmed'),
-          t("{value0} at {value1}\n\nQueue number: {value2}\nToken: {value3}{value4}", {
-            value0: String(longDayLabel(date, locale)),
-            value1: String(time),
-            value2: String(
-              bookingResult?.queueNumber
-                ?? bookingResult?.tokenNumber
-                ?? bookingResult?.appointment.tokenNumber
-                ?? '—',
-            ),
-            value3: String(
-              bookingResult?.tokenLabel
-                ?? (bookingResult?.appointment.tokenNumber
-                  ? `A-${String(bookingResult.appointment.tokenNumber).padStart(3, '0')}`
-                  : '—'),
-            ),
-            value4: documentUploadFailed
-              ? `\n\n${t('The medical document could not be uploaded.')}\n${documentUploadError}`
-              : '',
-          }),
-          [
-            ...(documentUploadFailed
-              ? [{ text: t('View reports'), onPress: () => router.replace('/(patient)/profile/reports') }]
-              : []),
-            { text: t('View queue pass'), onPress: () => router.replace('/(patient)/queue') },
-          ],
-        );
+        setDocumentUploadError(documentUploadFailed ? documentUploadError : null);
       }
     } catch (error) {
       Alert.alert(t('Could not confirm appointment'), error instanceof HttpError ? error.message : t('Please try again.'));
@@ -187,6 +176,11 @@ export function DoctorBookingScreen() {
     { text: 'Refresh availability', onPress: () => { setTime(null); days.reload(); slots.reload(); } },
   ]);
   const profile = doctor.data?.doctor;
+  const viewBookedPass = () => {
+    if (submissionPending.current) return;
+    setBookingPass(null);
+    router.replace('/(patient)/queue');
+  };
   const services = profile?.department.toLowerCase().includes('orthop')
     ? ['Consultation', 'Diagnostics', 'Surgery', 'Rehabilitation', 'Physical Therapy']
     : ['Consultation', 'Diagnostics'];
@@ -353,6 +347,28 @@ export function DoctorBookingScreen() {
           </View>
         </View>
       </Modal>
+      <Modal visible={Boolean(bookingPass)} transparent animationType="fade" onRequestClose={viewBookedPass}>
+        <View style={[styles.confirmationBackdrop, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
+          <ScrollView style={styles.confirmationScroll} contentContainerStyle={styles.confirmationCard}>
+            <View accessibilityViewIsModal style={styles.confirmationContent}>
+            <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={styles.confirmationTitle}>{t('Appointment confirmed')}</Text>
+            <Text style={styles.confirmationSubtitle}>{t('Your queue and token details are ready.')}</Text>
+            <Text style={styles.confirmationSubtitle}>{t('Show this QR code to the staff at your appointment.')}</Text>
+            {bookingPass ? <PassQr value={bookingPass.qrValue} size={190} /> : null}
+            {bookingPass ? <Text style={styles.confirmationToken}>{bookingPass.tokenLabel}</Text> : null}
+            {bookingPass ? <Text style={styles.confirmationQueue}>{t('Queue number: {value0}', { value0: String(bookingPass.tokenNumber) })}</Text> : null}
+            {bookingPass ? <Text style={styles.confirmationMeta}>{bookingPass.doctorName || bookingPass.department} · {longDayLabel(bookingPass.queueDate, locale)}</Text> : null}
+            {bookedTime ? <Text style={styles.confirmationMeta}>{t('Appointment time: {time}', { time: bookedTime })}</Text> : null}
+            {uploadingDocument ? <View style={styles.confirmationUploading}><ActivityIndicator color={C.primary} /><Text accessibilityLiveRegion="polite" style={styles.confirmationSubtitle}>{t('Uploading your medical document...')}</Text></View> : null}
+            {documentUploadError ? <Text accessibilityRole="alert" style={styles.confirmationError}>{t('The medical document could not be uploaded.')}{'\n'}{documentUploadError}</Text> : null}
+            <View style={styles.confirmationActions}>
+              {documentUploadError ? <Pressable accessibilityRole="button" onPress={() => { setBookingPass(null); router.replace('/(patient)/profile/reports'); }} style={styles.confirmationSecondary}><Text style={styles.confirmationSecondaryText}>{t('View reports')}</Text></Pressable> : null}
+              <Pressable accessibilityRole="button" accessibilityState={{ disabled: submitting }} disabled={submitting} onPress={viewBookedPass} style={[styles.confirmationPrimary, submitting && styles.ctaDisabled]}><Text style={styles.confirmationPrimaryText}>{t('View queue pass')}</Text></Pressable>
+            </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -424,6 +440,22 @@ const styles = StyleSheet.create({
   uploadCopy: { flex: 1, minWidth: 0 },
   uploadTitle: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: C.text },
   uploadHint: { fontSize: 12, lineHeight: 16, color: C.outline, marginTop: 2 },
+  confirmationBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: 'rgba(14,30,35,0.55)' },
+  confirmationScroll: { width: '100%', maxWidth: 420, flexGrow: 0, borderRadius: 24, backgroundColor: C.white },
+  confirmationCard: { padding: 24 },
+  confirmationContent: { alignItems: 'center', gap: 10 },
+  confirmationUploading: { alignItems: 'center', gap: 8 },
+  confirmationTitle: { color: C.text, fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  confirmationSubtitle: { color: C.muted, fontSize: 14, textAlign: 'center' },
+  confirmationToken: { color: C.primary, fontSize: 30, fontWeight: '800' },
+  confirmationQueue: { color: C.text, fontSize: 18, fontWeight: '700' },
+  confirmationMeta: { color: C.muted, fontSize: 13, textAlign: 'center' },
+  confirmationError: { color: '#a12626', fontSize: 12, textAlign: 'center' },
+  confirmationActions: { width: '100%', gap: 8, marginTop: 6 },
+  confirmationPrimary: { minHeight: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: C.primary },
+  confirmationPrimaryText: { color: C.white, fontSize: 14, fontWeight: '700' },
+  confirmationSecondary: { minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.primary },
+  confirmationSecondaryText: { color: C.primary, fontSize: 14, fontWeight: '700' },
   footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: C.background, boxShadow: '0 -4px 20px -2px rgba(14,30,35,0.06)' },
   cta: { minHeight: 52, borderRadius: 30, backgroundColor: C.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
   ctaDisabled: { opacity: 0.45 },

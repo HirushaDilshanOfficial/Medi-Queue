@@ -1,5 +1,5 @@
 import { http } from './http';
-import type { Appointment, BookableDay, BookingSummary, SlotOption } from '../types/patient';
+import type { Appointment, BookableDay, BookingSummary, QueuePass, SlotOption } from '../types/patient';
 
 export type BookingScope = 'upcoming' | 'past' | 'all';
 
@@ -26,6 +26,7 @@ export const bookingApi = {
       queueNumber: number;
       tokenLabel: string;
       queueEntryId: string;
+      pass: QueuePass;
     }>('/bookings', input),
 
   cancel: (id: string, reason?: string) =>

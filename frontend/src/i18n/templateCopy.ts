@@ -117,6 +117,13 @@ Blood: {group}|රුධිර කාණ්ඩය: {group}|இரத்த வ�
 fully booked|සියලු වේලාවන් වෙන්කර ඇත|அனைத்து நேரங்களும் முன்பதிவு செய்யப்பட்டுள்ளன
 OPD visit summary|බාහිර රෝගී පැමිණීමේ සාරාංශය|வெளிநோயாளர் வருகைச் சுருக்கம்
 Medi-Queue · OPD visit summary|Medi-Queue · බාහිර රෝගී පැමිණීමේ සාරාංශය|Medi-Queue · வெளிநோயாளர் வருகைச் சுருக்கம்
+Your queue and token details are ready.|ඔබේ පෝලිම් අංකය සහ ප්‍රවේශපත් විස්තර සූදානම්.|உங்கள் வரிசை எண் மற்றும் சீட்டு விவரங்கள் தயாராக உள்ளன.
+Show this QR code to the staff at your appointment.|ඔබේ හමුවීමේදී මෙම QR කේතය කාර්ය මණ්ඩලයට පෙන්වන්න.|உங்கள் சந்திப்பின்போது இந்த QR குறியீட்டை ஊழியர்களிடம் காட்டவும்.
+Queue number: {value0}|පෝලිම් අංකය: {value0}|வரிசை எண்: {value0}
+Appointment time: {time}|හමුවීමේ වේලාව: {time}|சந்திப்பு நேரம்: {time}
+Uploading your medical document...|ඔබේ වෛද්‍ය ලේඛනය උඩුගත කරමින්...|உங்கள் மருத்துவ ஆவணம் பதிவேற்றப்படுகிறது...
+The medical document could not be uploaded.|වෛද්‍ය ලේඛනය උඩුගත කළ නොහැකි විය.|மருத்துவ ஆவணத்தைப் பதிவேற்ற முடியவில்லை.
+Please add the document from your reports page.|කරුණාකර ඔබේ වාර්තා පිටුවෙන් ලේඛනය එක් කරන්න.|உங்கள் அறிக்கைகள் பக்கத்திலிருந்து ஆவணத்தைச் சேர்க்கவும்.
 `;
 
 export const templateCopy: Record<string, readonly [string, string]> = Object.fromEntries(

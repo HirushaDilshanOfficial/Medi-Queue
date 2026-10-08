@@ -20,6 +20,12 @@ const ACTIVE_STATUSES = OpdAppointment.ACTIVE_STATUSES;
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_KEY = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+function passQrValue(entry) {
+  const base = process.env.PUBLIC_WEB_URL || 'http://10.240.7.66:5001';
+  const passPath = process.env.PUBLIC_WEB_URL ? '/pass/' : '/api/v1/public/queue-pass/';
+  return `${base.replace(/\/+$/, '')}${passPath}${entry.passCode}`;
+}
+
 function isCalendarDate(value) {
   if (!DATE_KEY.test(String(value))) return false;
   const [year, month, day] = String(value).split('-').map(Number);
@@ -173,6 +179,26 @@ const createBooking = async (req, res, next) => {
       tokenNumber: queueEntry.tokenNumber,
       queueNumber: queueEntry.tokenNumber,
       queueEntryId: String(queueEntry._id),
+      pass: {
+        id: String(queueEntry._id),
+        appointmentId: String(appointment._id),
+        department: queueEntry.department,
+        queueDate: queueEntry.queueDate,
+        dateLabel: 'Upcoming',
+        dateLong: queueEntry.queueDate,
+        tokenNumber: queueEntry.tokenNumber,
+        tokenLabel: `A-${String(queueEntry.tokenNumber).padStart(3, '0')}`,
+        passCode: queueEntry.passCode,
+        qrValue: passQrValue(queueEntry),
+        doctorId: queueEntry.doctor ? String(queueEntry.doctor) : null,
+        doctorName: queueEntry.doctorName || null,
+        room: queueEntry.room || null,
+        priority: queueEntry.priority,
+        status: queueEntry.status,
+        checkedInAt: queueEntry.checkedInAt ? queueEntry.checkedInAt.toISOString() : null,
+        calledAt: null,
+        live: null,
+      },
     });
   } catch (error) {
     if (appointment && !queueEntry) {
