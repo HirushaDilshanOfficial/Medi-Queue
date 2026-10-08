@@ -108,10 +108,22 @@ test('clock label is zero padded and rejects junk', () => {
   assert.equal(clockLabel('not a date'), null);
 });
 
-test('the QR value carries only the opaque code', () => {
+test('the QR value carries only the opaque code when no public URL is configured', () => {
+  const originalPublicUrl = process.env.PUBLIC_WEB_URL;
+  delete process.env.PUBLIC_WEB_URL;
   const value = passQrValue({ passCode: 'ABCDEFGHJKLMNPQRSTUVWXYZ' });
-  assert.match(value, /\/pass\/ABCDEFGHJKLMNPQRSTUVWXYZ$/);
-  assert.ok(!value.includes('token'), 'the token must not travel in the QR');
+  assert.equal(value, 'http://10.240.7.66:5001/api/v1/public/queue-pass/ABCDEFGHJKLMNPQRSTUVWXYZ');
+  if (originalPublicUrl === undefined) delete process.env.PUBLIC_WEB_URL;
+  else process.env.PUBLIC_WEB_URL = originalPublicUrl;
+});
+
+test('the QR value uses the configured public URL when provided', () => {
+  const originalPublicUrl = process.env.PUBLIC_WEB_URL;
+  process.env.PUBLIC_WEB_URL = 'https://queue.example.test/';
+  const value = passQrValue({ passCode: 'ABCDEFGHJKLMNPQRSTUVWXYZ' });
+  assert.equal(value, 'https://queue.example.test/pass/ABCDEFGHJKLMNPQRSTUVWXYZ');
+  if (originalPublicUrl === undefined) delete process.env.PUBLIC_WEB_URL;
+  else process.env.PUBLIC_WEB_URL = originalPublicUrl;
 });
 
 function validEntry(passCode, tokenNumber = 1) {

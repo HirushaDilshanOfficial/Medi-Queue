@@ -820,6 +820,10 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
 
   const handleScanSuccess = (scannedValue: string) => {
     let codeToSearch = scannedValue.trim();
+    const passUrl = codeToSearch.match(/\/pass\/([^/?#\s]+)/i);
+    if (passUrl?.[1]) {
+      codeToSearch = decodeURIComponent(passUrl[1]);
+    }
     try {
       const parsed = JSON.parse(scannedValue);
       if (parsed.nic) codeToSearch = parsed.nic;

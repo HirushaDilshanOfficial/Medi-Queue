@@ -26,6 +26,7 @@ import {
   markNoShow,
   getErrorMessage,
   searchPatients,
+  validateQueuePass,
 } from '../../services/api';
 import {
   LoadingState,
@@ -271,6 +272,33 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
 
   const handleScanForVerify = (scannedValue: string) => {
     let code = scannedValue.trim();
+    const passUrl = code.match(/(?:\/pass\/|\/queue-pass\/)([^/?#\s]+)/i);
+    const passCode = passUrl?.[1]
+      ? decodeURIComponent(passUrl[1]).toUpperCase()
+      : /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/i.test(code)
+        ? code.toUpperCase()
+        : null;
+    if (passCode) {
+      setVerifyNicQuery(passCode);
+      setVerifyNicLoading(true);
+      setVerifyNicResult(null);
+      validateQueuePass(passCode)
+        .then((result) => {
+          setVerifyNicResult({
+            found: Boolean(result.patient),
+            patient: result.patient,
+            pass: result.pass,
+            isQueuePass: true,
+          });
+          showToast(`Queue pass verified: ${result.pass.tokenLabel}`, 'success');
+        })
+        .catch((error) => {
+          setVerifyNicResult({ found: false, isQueuePass: true });
+          showToast(getErrorMessage(error), 'error');
+        })
+        .finally(() => setVerifyNicLoading(false));
+      return;
+    }
     try {
       const parsed = JSON.parse(scannedValue);
       if (parsed.nic) code = parsed.nic;
@@ -1074,6 +1102,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <Text style={styles.verifyNicPatientPhone}>
                   📞 {verifyNicResult.patient.phone || 'No phone recorded'}
                 </Text>
+                {verifyNicResult.isQueuePass && verifyNicResult.pass ? (
+                  <Text style={styles.verifyNicPatientMeta}>
+                    Queue: {verifyNicResult.pass.tokenLabel} • {verifyNicResult.pass.department} • {verifyNicResult.pass.status}
+                  </Text>
+                ) : null}
 
                 <View style={styles.verifyNicActionsRow}>
                   <TouchableOpacity

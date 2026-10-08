@@ -56,10 +56,10 @@ export function PassQr({ value, size = 168 }: Props) {
           value={value}
           size={size - 24}
           backgroundColor="#FFFFFF"
-          color={PatientTheme.textPrimary}
+          color="#000000"
           // Raised error correction: hospital passes get scanned off cracked
           // screens and smudged printouts.
-          ecl="H"
+          ecl="Q"
         />
       </View>
     </QrBoundary>

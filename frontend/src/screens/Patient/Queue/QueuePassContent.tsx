@@ -55,7 +55,7 @@ export function QueuePassContent({ pass, patientName, doctor, countdown, liveErr
     <View style={styles.guidance}><ProfileIcon name="info" color={C.secondary} /><Text accessibilityLiveRegion="polite" style={styles.guidanceBody}>{guidance(pass, t)}</Text></View>
     {liveError ? <View style={styles.guidance}><ProfileIcon name="refresh" color={C.error} /><Text accessibilityLiveRegion="polite" style={styles.error}>{t(liveError)}</Text></View> : null}
     <View style={styles.qrCard}>
-      {finished ? <Text style={styles.title}>{t("Pass closed")}</Text> : <View style={styles.qrFrame}><QRCode value={pass.qrValue} size={qrSize} color={C.text} backgroundColor={C.surface} quietZone={8} /><View style={styles.scanDot} /></View>}
+      {finished ? <Text style={styles.title}>{t("Pass closed")}</Text> : <View style={styles.qrFrame}><QRCode value={pass.qrValue} size={qrSize} color="#000000" backgroundColor="#FFFFFF" quietZone={12} /></View>}
       <View style={styles.timer}><ProfileIcon name="refresh" size={16} color={C.secondary} /><Text style={styles.small}>{liveError ? t('Reconnecting to live queue…') : finished ? t('Live updates paused') : countdown > 0 ? <>{t("Queue refreshes in")}{' '}<Text style={styles.timerStrong}>{countdown}s</Text></> : t('Refreshing queue…')}</Text></View>
       <View style={styles.metadata}>
         <View style={styles.metaItem}><Text style={styles.metaLabel}>{t("Patient Name")}</Text><Text numberOfLines={1} style={styles.metaValue}>{patientName}</Text></View>

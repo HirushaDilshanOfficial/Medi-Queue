@@ -202,6 +202,29 @@ export const api = {
   },
 };
 
+export const validateQueuePass = (passCode: string) =>
+  api.get<{
+    pass: {
+      id: string;
+      passCode: string;
+      tokenNumber: number;
+      tokenLabel: string;
+      department: string;
+      doctorName: string | null;
+      room: string | null;
+      queueDate: string;
+      status: string;
+    };
+    patient: {
+      id: string;
+      fullName: string;
+      nic: string | null;
+      phone: string | null;
+      email: string | null;
+      gender: string | null;
+    } | null;
+  }>(`/api/v1/queue/pass/${encodeURIComponent(passCode)}`);
+
 // ─────────────────────────────────────────────────────────
 // Payload & Response Types for Receptionist API
 // ─────────────────────────────────────────────────────────
@@ -688,4 +711,3 @@ export const updateAutoAdvance = async (
 };
 
 export default api;
-
