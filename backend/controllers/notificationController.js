@@ -2,12 +2,12 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const mongoose = require('mongoose');
 
-const ROLES = ['All', 'Patient', 'Doctor', 'Receptionist', 'MOH'];
+const ROLES = ['All', 'Patient', 'Doctor', 'Receptionist', 'MOH', 'Admin'];
 const canonicalRole = role => ROLES.find(value => value.toLowerCase() === String(role).toLowerCase()) || role;
 
 // @desc    Create a new notification
 // @route   POST /api/v1/notifications
-// @access  Private (MOH only)
+// @access  Private (MOH / Admin)
 const createNotification = async (req, res) => {
   try {
     const { title, message, targetRole, recipient, kind, isEmergency } = req.body;
@@ -16,8 +16,9 @@ const createNotification = async (req, res) => {
       return res.status(400).json({ message: 'Title and message are required' });
     }
 
-    // Ensure only MOH can send
-    if (canonicalRole(req.user.role) !== 'MOH') {
+    // Ensure authorized sender (MOH, Admin)
+    const allowedSenders = ['MOH', 'Admin'];
+    if (!allowedSenders.includes(canonicalRole(req.user.role))) {
       return res.status(403).json({ message: 'Not authorized to send notifications' });
     }
 
@@ -76,8 +77,8 @@ const getNotifications = async (req, res) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     let query = { createdAt: { $gte: thirtyDaysAgo } };
 
-    if (userRole === 'MOH') {
-      // MOH sees all notifications they sent, plus any targeted at 'All' or 'MOH'
+    if (userRole === 'MOH' || userRole === 'Admin') {
+      // MOH / Admin sees all notifications they sent, plus any targeted at 'All', 'MOH', or 'Admin'
       query = {
         ...query,
         $or: [

@@ -29,7 +29,7 @@ export default function SendNotificationScreen() {
   const [isEmergency, setIsEmergency] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const roles = ['All', 'Patient', 'Doctor', 'Receptionist'];
+  const roles = ['All', 'Patient', 'Doctor', 'Receptionist', 'MOH'];
 
   const handleSend = async () => {
     if (!title || !message) {

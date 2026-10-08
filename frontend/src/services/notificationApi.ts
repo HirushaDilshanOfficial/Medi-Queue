@@ -9,6 +9,8 @@ export type NotificationItem = {
   createdAt: string;
   recipient?: string | null;
   kind?: 'personal' | 'announcement';
+  targetRole?: string;
+  isEmergency?: boolean;
 };
 
 export type NotificationInbox = { userId: string; items: NotificationItem[]; token: string };

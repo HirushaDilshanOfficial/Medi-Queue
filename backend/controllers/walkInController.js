@@ -5,6 +5,7 @@ const Appointment = require('../models/Appointment');
 const QueueToken = require('../models/QueueToken');
 const OpdAppointment = require('../models/OpdAppointment');
 const OpdPatientProfile = require('../models/OpdPatientProfile');
+const OpdQueueEntry = require('../models/OpdQueueEntry');
 const { ensurePatientForProfile } = require('../utils/patientSync');
 const { normalizePhone, isValidDate, isValidSlot } = require('../utils/validators');
 const { findOrCreatePatient } = require('../services/patientService');
@@ -17,6 +18,17 @@ const {
 } = require('../utils/notifier');
 
 const { asyncHandler, createError } = require('../utils/errorHandler');
+
+function ageFrom(birthday) {
+  if (!(birthday instanceof Date) || Number.isNaN(birthday.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - birthday.getFullYear();
+  const monthDiff = now.getMonth() - birthday.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthday.getDate())) {
+    age -= 1;
+  }
+  return age >= 0 ? age : null;
+}
 
 // Active in-memory OTP store for patient phone verification: Map<phone, { otp, expiresAt, verified, patientName }>
 const patientOtpStore = new Map();
@@ -121,9 +133,178 @@ const searchPatients = asyncHandler(async (req, res) => {
 
   const query = q.trim();
 
+  // 1. Check if query is or contains a 24-character passCode / Queue Pass URL
+  let passCode = null;
+  const passUrlMatch = query.match(/(?:\/queue-pass\/|\/pass\/)([A-Z0-9]+)/i);
+  if (passUrlMatch?.[1]) {
+    passCode = passUrlMatch[1].toUpperCase();
+  } else if (/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/i.test(query)) {
+    passCode = query.toUpperCase();
+  }
+
+  if (passCode) {
+    const queueEntry = await OpdQueueEntry.findOne({ passCode })
+      .populate('profile')
+      .populate('appointment')
+      .populate('doctor', 'name specialization department room')
+      .lean();
+
+    if (queueEntry) {
+      let patient = null;
+      if (queueEntry.profile?.patient) {
+        patient = await Patient.findById(queueEntry.profile.patient).lean();
+      } else if (queueEntry.profile?.nic) {
+        patient = await Patient.findOne({ nic: queueEntry.profile.nic }).lean();
+      } else if (queueEntry.appointment?.patient) {
+        patient = await Patient.findById(queueEntry.appointment.patient).lean();
+      }
+
+      if (!patient && queueEntry.profile) {
+        patient = {
+          _id: queueEntry.profile._id,
+          fullName: queueEntry.profile.fullName,
+          nic: queueEntry.profile.nic || null,
+          phone: queueEntry.profile.phone || null,
+          gender: queueEntry.profile.gender || null,
+          age: queueEntry.profile.birthday ? ageFrom(new Date(queueEntry.profile.birthday)) : null,
+          dob: queueEntry.profile.birthday || null,
+          bloodGroup: queueEntry.profile.bloodGroup || null,
+          registeredVia: 'app',
+        };
+      }
+
+      if (patient) {
+        const passDetails = {
+          tokenNumber: queueEntry.tokenNumber,
+          tokenLabel: `A-${String(queueEntry.tokenNumber).padStart(3, '0')}`,
+          department: queueEntry.department,
+          doctorName: queueEntry.doctorName || queueEntry.doctor?.name || null,
+          room: queueEntry.room || queueEntry.doctor?.room || null,
+          queueDate: queueEntry.queueDate,
+          status: queueEntry.status,
+          passCode: queueEntry.passCode,
+        };
+
+        return res.json({
+          found: true,
+          patients: [{
+            ...patient,
+            passDetails,
+            latestDoctorName: passDetails.doctorName,
+            latestDepartment: passDetails.department,
+            latestTokenNumber: passDetails.tokenNumber,
+            latestStatus: passDetails.status,
+          }],
+        });
+      }
+    }
+  }
+
+  // 2. Check if query is a Booking Reference (e.g. APT-... or OPD-...)
+  const appt = await Appointment.findOne({ bookingRef: new RegExp(`^${query}$`, 'i') })
+    .populate('patient')
+    .populate('doctor', 'name department room')
+    .lean();
+  if (appt?.patient) {
+    return res.json({
+      found: true,
+      patients: [{
+        ...appt.patient,
+        latestType: appt.type || 'pre_booked',
+        latestVisitDate: appt.date,
+        latestVisitSlotTime: appt.slotTime,
+        latestDoctorName: appt.doctor?.name,
+        latestDepartment: appt.department,
+      }],
+    });
+  }
+
+  const opdAppt = await OpdAppointment.findOne({ bookingRef: new RegExp(`^${query}$`, 'i') })
+    .populate('patient')
+    .populate('profile')
+    .populate('doctor', 'name department room')
+    .lean();
+  if (opdAppt) {
+    const p = opdAppt.patient || (opdAppt.profile ? {
+      _id: opdAppt.profile._id,
+      fullName: opdAppt.profile.fullName,
+      nic: opdAppt.profile.nic || null,
+      phone: opdAppt.profile.phone || null,
+      gender: opdAppt.profile.gender || null,
+      registeredVia: 'app',
+    } : null);
+    if (p) {
+      return res.json({
+        found: true,
+        patients: [{
+          ...p,
+          latestType: 'pre_booked',
+          latestVisitDate: opdAppt.date,
+          latestVisitSlotTime: opdAppt.slotTime,
+          latestDoctorName: opdAppt.doctor?.name || opdAppt.doctorName,
+          latestDepartment: opdAppt.department,
+        }],
+      });
+    }
+  }
+
+  // 3. Check if query matches a Queue Token (e.g. OPD-014, A-014, or number)
+  const tokenMatch = await QueueToken.findOne({
+    $or: [
+      { tokenLabel: new RegExp(`^${query}$`, 'i') },
+      ...(Number.isInteger(Number(query)) && Number(query) > 0 ? [{ tokenNumber: Number(query) }] : []),
+    ],
+  })
+    .populate('patient')
+    .populate('assignedDoctor', 'name department')
+    .sort({ createdAt: -1 })
+    .lean();
+  if (tokenMatch?.patient) {
+    return res.json({
+      found: true,
+      patients: [{
+        ...tokenMatch.patient,
+        latestTokenNumber: tokenMatch.tokenNumber,
+        latestStatus: tokenMatch.status,
+        latestDoctorName: tokenMatch.assignedDoctor?.name,
+        latestDepartment: tokenMatch.department,
+      }],
+    });
+  }
+
+  // 4. Check if query is a valid MongoDB ObjectId
+  if (mongoose.Types.ObjectId.isValid(query)) {
+    const directPatient = await Patient.findById(query).lean();
+    if (directPatient) {
+      return res.json({
+        found: true,
+        patients: [directPatient],
+      });
+    }
+    const directProfile = await OpdPatientProfile.findById(query).populate('patient').lean();
+    if (directProfile) {
+      const p = directProfile.patient || {
+        _id: directProfile._id,
+        fullName: directProfile.fullName,
+        nic: directProfile.nic || null,
+        phone: directProfile.phone || null,
+        gender: directProfile.gender || null,
+        dob: directProfile.birthday || null,
+        age: directProfile.birthday ? ageFrom(new Date(directProfile.birthday)) : null,
+        registeredVia: 'app',
+      };
+      return res.json({
+        found: true,
+        patients: [p],
+      });
+    }
+  }
+
+  // 5. Standard Search by NIC, phone, fullName
   const conditions = [
     { nic: { $regex: query, $options: 'i' } },
     { phone: { $regex: query, $options: 'i' } },
+    { fullName: { $regex: query, $options: 'i' } },
   ];
 
   const normalized = normalizePhone(query);
@@ -131,10 +312,35 @@ const searchPatients = asyncHandler(async (req, res) => {
     conditions.push({ phone: { $regex: normalized, $options: 'i' } });
   }
 
-  const patients = await Patient.find({ $or: conditions })
-    .select('fullName nic phone age gender dob bloodGroup nicVerified')
-    .limit(10)
+  let patients = await Patient.find({
+    $or: conditions,
+    isDeleted: { $ne: true },
+  })
+    .select('fullName nic phone age gender dob bloodGroup nicVerified district address')
+    .limit(20)
     .lean();
+
+  if (patients.length === 0) {
+    const profiles = await OpdPatientProfile.find({ $or: conditions })
+      .populate('patient')
+      .limit(10)
+      .lean();
+
+    patients = profiles.map((prof) => {
+      if (prof.patient) return prof.patient;
+      return {
+        _id: prof._id,
+        fullName: prof.fullName,
+        nic: prof.nic || null,
+        phone: prof.phone || null,
+        gender: prof.gender || null,
+        dob: prof.birthday || null,
+        age: prof.birthday ? ageFrom(new Date(prof.birthday)) : null,
+        bloodGroup: prof.bloodGroup || null,
+        registeredVia: 'app',
+      };
+    });
+  }
 
   res.json({
     found: patients.length > 0,

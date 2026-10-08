@@ -23,6 +23,10 @@ export default function HomeScreen() {
       case 'reports':
         router.push('/(reception)/reports');
         break;
+      case 'Notifications':
+      case 'notifications':
+        router.push('/notifications');
+        break;
       case 'Login':
       case 'login':
         router.replace('/(auth)/login');

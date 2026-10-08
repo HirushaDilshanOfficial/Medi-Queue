@@ -12,7 +12,7 @@ const notificationSchema = new mongoose.Schema(
     },
     targetRole: {
       type: String,
-      enum: ['All', 'Patient', 'Doctor', 'Receptionist', 'MOH'],
+      enum: ['All', 'Patient', 'Doctor', 'Receptionist', 'MOH', 'Admin'],
       required: true,
       default: 'All',
     },

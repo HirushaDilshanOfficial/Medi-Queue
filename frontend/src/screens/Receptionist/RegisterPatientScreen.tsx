@@ -20,6 +20,7 @@ import { Colors } from '../../constants/Colors';
 import { useWalkInForm } from '../../hooks/useWalkInForm';
 import {
   searchPatients,
+  validateQueuePass,
   getErrorMessage,
   getDoctors,
   getSlots,
@@ -47,6 +48,17 @@ export interface DepartmentItem {
   name: string;
   icon: keyof typeof Ionicons.glyphMap;
   defaultWait: string;
+}
+
+export interface ScannedPassInfo {
+  tokenNumber?: number;
+  tokenLabel?: string;
+  department?: string;
+  doctorName?: string | null;
+  room?: string | null;
+  queueDate?: string;
+  status?: string;
+  passCode?: string;
 }
 
 export const DEPARTMENTS: DepartmentItem[] = [
@@ -152,6 +164,8 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   const [selectedPreBooking, setSelectedPreBooking] = useState<PreBookedAppointment | null>(null);
   const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
   const [scannerModalVisible, setScannerModalVisible] = useState<boolean>(false);
+  const [scannedPassInfo, setScannedPassInfo] = useState<ScannedPassInfo | null>(null);
+  const [scannedSource, setScannedSource] = useState<'qr_pass' | 'nic_barcode' | 'booking_ref' | 'search' | null>(null);
 
   const [showStaffSuccessModal, setShowStaffSuccessModal] = useState<boolean>(false);
 
@@ -465,6 +479,12 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
           setMatchedPatient(patient);
           setSearchStatus('found');
 
+          if ((patient as any).passDetails) {
+            setScannedPassInfo((patient as any).passDetails);
+          } else {
+            setScannedPassInfo(null);
+          }
+
           // Auto-fill form and record existing patient ID
           form.setExistingPatient(patient._id, {
             fullName: patient.fullName || '',
@@ -487,6 +507,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
           showToast(t("Existing patient record found & auto-filled"), 'success');
         } else {
           setMatchedPatient(null);
+          setScannedPassInfo(null);
           setSearchStatus('not_found');
           form.setExistingPatient(null);
 
@@ -523,6 +544,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     } else {
       setSearchStatus('idle');
       setMatchedPatient(null);
+      setScannedPassInfo(null);
       setSearching(false);
     }
   };
@@ -534,6 +556,8 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setSearchQuery('');
     setSearchStatus('idle');
     setMatchedPatient(null);
+    setScannedPassInfo(null);
+    setScannedSource(null);
     setSearching(false);
     form.reset();
   };
@@ -547,6 +571,9 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
           const p = res.patients[0];
           setMatchedPatient(p);
           setSearchStatus('found');
+          if ((p as any).passDetails) {
+            setScannedPassInfo((p as any).passDetails);
+          }
           form.setExistingPatient(p._id, {
             fullName: p.fullName,
             nic: p.nic || nicVal,
@@ -572,6 +599,8 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setSearchQuery('');
     setSearchStatus('idle');
     setMatchedPatient(null);
+    setScannedPassInfo(null);
+    setScannedSource(null);
     setSearching(false);
     setSlots([]);
     setSlotsError(null);
@@ -832,26 +861,226 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setScannerModalVisible(true);
   };
 
-  const handleScanSuccess = (scannedValue: string) => {
-    let codeToSearch = scannedValue.trim();
-    const passUrl = codeToSearch.match(/\/pass\/([^/?#\s]+)/i);
-    if (passUrl?.[1]) {
-      codeToSearch = decodeURIComponent(passUrl[1]);
+  const handleScanSuccess = async (scannedValue: string) => {
+    const raw = (scannedValue || '').trim();
+    if (!raw) return;
+
+    let passCode: string | null = null;
+    let codeToSearch = raw;
+    let jsonPatient: any = null;
+
+    // Check URL for /queue-pass/ or /pass/
+    const passUrlMatch = raw.match(/(?:\/queue-pass\/|\/pass\/)([^/?#\s]+)/i);
+    if (passUrlMatch?.[1]) {
+      passCode = decodeURIComponent(passUrlMatch[1]).trim().toUpperCase();
+      codeToSearch = passCode;
     }
-    try {
-      const parsed = JSON.parse(scannedValue);
-      if (parsed.nic) codeToSearch = parsed.nic;
-      else if (parsed.bookingRef) codeToSearch = parsed.bookingRef;
-      else if (parsed.phone) codeToSearch = parsed.phone;
-      else if (parsed.patientId) codeToSearch = parsed.patientId;
-      else if (parsed.id) codeToSearch = parsed.id;
-    } catch {
-      // Direct raw barcode string
+
+    // Check URL query parameters (?passCode=..., ?nic=..., ?code=..., ?phone=..., ?bookingRef=...)
+    if (!passCode && (raw.includes('?') || raw.includes('&'))) {
+      const pParam = raw.match(/[?&]passCode=([^&#\s]+)/i);
+      if (pParam?.[1]) {
+        passCode = decodeURIComponent(pParam[1]).trim().toUpperCase();
+        codeToSearch = passCode;
+      }
+      const nicParam = raw.match(/[?&]nic=([^&#\s]+)/i);
+      if (nicParam?.[1]) {
+        codeToSearch = decodeURIComponent(nicParam[1]).trim().toUpperCase();
+      }
+      const refParam = raw.match(/[?&](?:bookingRef|ref)=([^&#\s]+)/i);
+      if (refParam?.[1]) {
+        codeToSearch = decodeURIComponent(refParam[1]).trim();
+      }
+      const phoneParam = raw.match(/[?&]phone=([^&#\s]+)/i);
+      if (phoneParam?.[1]) {
+        codeToSearch = decodeURIComponent(phoneParam[1]).trim();
+      }
     }
+
+    // Check JSON payload
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(raw);
+        jsonPatient = parsed;
+        if (parsed.passCode) {
+          passCode = String(parsed.passCode).trim().toUpperCase();
+          codeToSearch = passCode;
+        } else if (parsed.nic) codeToSearch = String(parsed.nic).trim().toUpperCase();
+        else if (parsed.bookingRef) codeToSearch = String(parsed.bookingRef).trim();
+        else if (parsed.phone) codeToSearch = String(parsed.phone).trim();
+        else if (parsed.patientId || parsed.id || parsed._id) codeToSearch = String(parsed.patientId || parsed.id || parsed._id).trim();
+      } catch {
+        // Not JSON
+      }
+    }
+
+    // Check 24-char passCode regex
+    if (!passCode && /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/i.test(raw)) {
+      passCode = raw.toUpperCase();
+      codeToSearch = passCode;
+    }
+
     setSearchQuery(codeToSearch);
     form.setField('query', codeToSearch);
-    executeSearch(codeToSearch);
-    showToast(t("Scanned: {value0}", { value0: String(codeToSearch) }), 'success');
+    setSearching(true);
+    setSearchStatus('idle');
+
+    // Case 1: If passCode was found (Queue Pass QR)
+    if (passCode) {
+      setScannedSource('qr_pass');
+      try {
+        const passResult = await validateQueuePass(passCode);
+        if (passResult && passResult.pass) {
+          setScannedPassInfo(passResult.pass);
+          if (passResult.patient) {
+            const p = passResult.patient;
+            const fullPatient: Patient = {
+              _id: p.id,
+              fullName: p.fullName || 'Patient',
+              nic: p.nic || undefined,
+              phone: p.phone || '',
+              gender: (p.gender as any) || undefined,
+              registeredVia: 'app',
+            };
+            setMatchedPatient(fullPatient);
+            setSearchStatus('found');
+
+            form.setExistingPatient(p.id, {
+              fullName: p.fullName,
+              nic: p.nic || '',
+              phone: p.phone || '',
+              gender: (p.gender as any) || '',
+            });
+
+            if (passResult.pass.department) {
+              const matchedDept = ['General OPD', 'Orthopedic', 'Pediatrics', 'Cardiology', 'ENT Clinic'].find(
+                (d) => d.toLowerCase().replace(/\s+/g, '') === passResult.pass.department.toLowerCase().replace(/\s+/g, '')
+              );
+              if (matchedDept) {
+                form.setField('department', matchedDept);
+              }
+            }
+
+            if (passResult.pass.doctorName && allDoctors.length > 0) {
+              const matchedDoc = allDoctors.find(
+                (d) => d.name.toLowerCase().includes(passResult.pass.doctorName!.toLowerCase())
+              );
+              if (matchedDoc) {
+                form.setField('doctorId', matchedDoc._id);
+              }
+            }
+
+            showToast(t("Queue Pass Verified: {value0} ({value1})", {
+              value0: passResult.pass.tokenLabel,
+              value1: p.fullName,
+            }), 'success');
+
+            // Enrich patient in background if NIC or phone is present
+            const enrichKey = (p.nic || p.phone || '').trim();
+            if (enrichKey) {
+              searchPatients(enrichKey)
+                .then((enrichRes) => {
+                  if (enrichRes?.found && enrichRes?.patients?.length > 0) {
+                    const enriched = enrichRes.patients[0];
+                    setMatchedPatient((prev) => ({ ...(prev || {}), ...enriched }));
+                    if (enriched.age !== undefined && enriched.age !== null) {
+                      form.setField('age', String(enriched.age));
+                      if (Number(enriched.age) >= 60) {
+                        form.setField('priority', 'senior');
+                      }
+                    }
+                    if ((enriched as any).bloodGroup) {
+                      form.setField('bloodGroup', (enriched as any).bloodGroup);
+                    }
+                    if ((enriched as any).dob) {
+                      form.setField('dob', new Date((enriched as any).dob).toISOString().split('T')[0]);
+                    }
+                  }
+                })
+                .catch(() => {});
+            }
+
+            setSearching(false);
+            return;
+          }
+        }
+      } catch (err: any) {
+        console.warn('validateQueuePass failed, falling back to searchPatients', err);
+      }
+    }
+
+    // Case 2: Pre-fill from JSON fields if patient details were embedded in barcode/QR
+    if (jsonPatient && (jsonPatient.fullName || jsonPatient.name)) {
+      setScannedSource('nic_barcode');
+      form.setField('fullName', jsonPatient.fullName || jsonPatient.name || '');
+      if (jsonPatient.nic) form.setField('nic', jsonPatient.nic);
+      if (jsonPatient.phone) form.setField('phone', jsonPatient.phone);
+      if (jsonPatient.age) form.setField('age', String(jsonPatient.age));
+      if (jsonPatient.gender) form.setField('gender', jsonPatient.gender);
+      if (jsonPatient.bloodGroup) form.setField('bloodGroup', jsonPatient.bloodGroup);
+    }
+
+    // Case 3: Universal Database Search
+    if (/^\d{9}[VXvx]?$|^\d{12}$/.test(codeToSearch)) {
+      setScannedSource('nic_barcode');
+    } else if (/^(?:APT|OPD)[\w-]+$/i.test(codeToSearch)) {
+      setScannedSource('booking_ref');
+    } else {
+      setScannedSource('search');
+    }
+
+    try {
+      const res = await searchPatients(codeToSearch);
+      if (res?.found && res?.patients?.length > 0) {
+        const patient = res.patients[0];
+        setMatchedPatient(patient);
+        setSearchStatus('found');
+
+        if ((patient as any).passDetails) {
+          setScannedPassInfo((patient as any).passDetails);
+        } else {
+          setScannedPassInfo(null);
+        }
+
+        form.setExistingPatient(patient._id, {
+          fullName: patient.fullName || '',
+          nic: patient.nic || '',
+          phone: patient.phone || '',
+          dob: (patient as any).dob ? new Date((patient as any).dob).toISOString().split('T')[0] : '',
+          age: patient.age !== undefined && patient.age !== null ? String(patient.age) : '',
+          gender: (patient.gender as any) || '',
+          bloodGroup: (patient as any).bloodGroup || '',
+        });
+
+        if (patient.age !== undefined && patient.age !== null) {
+          const ageNum = Number(patient.age);
+          if (!isNaN(ageNum) && ageNum >= 60) {
+            form.setField('priority', 'senior');
+          }
+        }
+
+        showToast(t("Patient record found & details loaded: {value0}", { value0: String(patient.fullName) }), 'success');
+      } else {
+        setMatchedPatient(null);
+        setScannedPassInfo(null);
+        setSearchStatus('not_found');
+        form.setExistingPatient(null);
+
+        if (/^\d{9}[VXvx]?$|^\d{12}$/.test(codeToSearch)) {
+          form.setField('nic', codeToSearch);
+        } else if (/^(?:\+?94|0)\d+$/.test(codeToSearch)) {
+          form.setField('phone', codeToSearch);
+        }
+
+        showToast(t("Scanned: {value0} (New patient entry)", { value0: String(codeToSearch) }), 'info');
+      }
+    } catch (err: any) {
+      setSearchStatus('idle');
+      const msg = getErrorMessage(err);
+      showToast(msg || t("Search failed"), 'error');
+    } finally {
+      setSearching(false);
+    }
   };
 
   return (
@@ -1136,33 +1365,159 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     </TouchableOpacity>
                   </View>
 
-                  {/* ── SEARCH STATUS BANNERS ── */}
-                  {(searchStatus === 'found' || !!form.existingPatientId) && (matchedPatient || form.patient.fullName) && (
-                    <View style={styles.foundBanner}>
-                      <View style={styles.bannerIconCircleSuccess}>
-                        <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-                      </View>
-                      <View style={styles.bannerTextWrap}>
-                        <Text style={styles.foundBannerTitle}>{t('Existing record found (auto-filled)')}</Text>
-                        <Text style={styles.foundBannerSub}>
-                          {t('Patient:')} {matchedPatient?.fullName || form.patient.fullName}
-                          {matchedPatient?.nic || form.patient.nic ? ` • ${t('NIC')}: ${matchedPatient?.nic || form.patient.nic}` : ''}
-                        </Text>
-                      </View>
+                  {/* ── SCANNING PROGRESS INDICATOR ── */}
+                  {searching && (
+                    <View style={styles.scanningLoaderCard}>
+                      <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 10 }} />
+                      <Text style={styles.scanningLoaderText}>
+                        {t("Retrieving patient details from Medi-Queue database...")}
+                      </Text>
                     </View>
                   )}
 
+                  {/* ── HIGH-VISIBILITY SCANNED & VERIFIED PATIENT DETAILS CARD ── */}
+                  {(searchStatus === 'found' || !!form.existingPatientId) && (matchedPatient || form.patient.fullName) && (
+                    <View style={styles.scannedPatientCard}>
+                      {/* Card Header with Badges */}
+                      <View style={styles.scannedHeaderRow}>
+                        <View style={styles.verifiedHeaderBadge}>
+                          <Ionicons name="shield-checkmark" size={15} color="#059669" />
+                          <Text style={styles.verifiedHeaderText}>
+                            {scannedPassInfo ? t("VERIFIED QUEUE PASS & RECORD") : t("VERIFIED PATIENT RECORD")}
+                          </Text>
+                        </View>
+                        <View style={styles.autoFilledBadge}>
+                          <Ionicons name="checkmark-circle" size={13} color="#0284C7" />
+                          <Text style={styles.autoFilledText}>{t("Form Auto-Filled")}</Text>
+                        </View>
+                      </View>
+
+                      {/* Patient Identity Banner */}
+                      <View style={styles.scannedIdentityRow}>
+                        <View style={styles.patientAvatarWrap}>
+                          <Text style={styles.patientAvatarText}>
+                            {((matchedPatient?.fullName || form.patient.fullName || 'P').charAt(0)).toUpperCase()}
+                            {((matchedPatient?.fullName || form.patient.fullName || '').split(' ')[1]?.charAt(0) || '').toUpperCase()}
+                          </Text>
+                          <View style={styles.avatarVerifiedCheck}>
+                            <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+                          </View>
+                        </View>
+
+                        <View style={styles.patientNameMetaWrap}>
+                          <Text style={styles.patientCardFullName}>
+                            {matchedPatient?.fullName || form.patient.fullName}
+                          </Text>
+                          <Text style={styles.patientCardSubId}>
+                            {matchedPatient?._id ? `${t('ID')}: #${matchedPatient._id.slice(-6).toUpperCase()} • ` : ''}
+                            {matchedPatient?.registeredVia === 'app' ? t('Registered Patient App User') : t('Reception Registered')}
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.clearPatientBtn}
+                          onPress={handleClearForm}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="close" size={16} color={Colors.textLight} />
+                          <Text style={styles.clearPatientText}>{t("Clear")}</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Grid of Key Information Chips */}
+                      <View style={styles.patientDetailsGrid}>
+                        {/* 1. NIC */}
+                        <View style={styles.patientDetailChip}>
+                          <View style={[styles.detailIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                            <Ionicons name="id-card-outline" size={16} color="#2563EB" />
+                          </View>
+                          <View style={styles.detailChipTexts}>
+                            <Text style={styles.detailChipLabel}>{t("NIC Number")}</Text>
+                            <Text style={styles.detailChipValue}>
+                              {matchedPatient?.nic || form.patient.nic || t("Not Provided")}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* 2. Phone */}
+                        <View style={styles.patientDetailChip}>
+                          <View style={[styles.detailIconCircle, { backgroundColor: '#ECFDF5' }]}>
+                            <Ionicons name="call-outline" size={16} color="#059669" />
+                          </View>
+                          <View style={styles.detailChipTexts}>
+                            <Text style={styles.detailChipLabel}>{t("Phone Number")}</Text>
+                            <Text style={styles.detailChipValue}>
+                              {matchedPatient?.phone || form.patient.phone || t("Not Provided")}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* 3. Age & Gender */}
+                        <View style={styles.patientDetailChip}>
+                          <View style={[styles.detailIconCircle, { backgroundColor: '#F5F3FF' }]}>
+                            <Ionicons name="person-outline" size={16} color="#7C3AED" />
+                          </View>
+                          <View style={styles.detailChipTexts}>
+                            <Text style={styles.detailChipLabel}>{t("Age & Gender")}</Text>
+                            <Text style={styles.detailChipValue}>
+                              {matchedPatient?.age || form.patient.age ? `${matchedPatient?.age || form.patient.age} yrs` : '--'}
+                              {(matchedPatient?.gender || form.patient.gender) ? ` • ${t(matchedPatient?.gender || form.patient.gender)}` : ''}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* 4. Blood Group */}
+                        <View style={styles.patientDetailChip}>
+                          <View style={[styles.detailIconCircle, { backgroundColor: '#FEF2F2' }]}>
+                            <Ionicons name="water-outline" size={16} color="#DC2626" />
+                          </View>
+                          <View style={styles.detailChipTexts}>
+                            <Text style={styles.detailChipLabel}>{t("Blood Group")}</Text>
+                            <Text style={styles.detailChipValue}>
+                              {(matchedPatient as any)?.bloodGroup || form.patient.bloodGroup || t("Not Recorded")}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Optional: Queue Pass Banner if scanned from a Queue Pass QR Code */}
+                      {scannedPassInfo && (
+                        <View style={styles.scannedPassBanner}>
+                          <View style={styles.passTokenBadgeWrap}>
+                            <Text style={styles.passTokenBadgeLabel}>{t("TOKEN")}</Text>
+                            <Text style={styles.passTokenBadgeNumber}>
+                              {scannedPassInfo.tokenLabel || `A-${String(scannedPassInfo.tokenNumber).padStart(3, '0')}`}
+                            </Text>
+                          </View>
+                          <View style={styles.passDetailsColumn}>
+                            <Text style={styles.passDeptDoctor}>
+                              {scannedPassInfo.department}
+                              {scannedPassInfo.doctorName ? ` • ${scannedPassInfo.doctorName}` : ''}
+                            </Text>
+                            <Text style={styles.passRoomStatus}>
+                              {scannedPassInfo.room ? `${t("Room:")} ${scannedPassInfo.room} • ` : ''}
+                              {t("Status:")} <Text style={{ fontWeight: '700', textTransform: 'capitalize' }}>{scannedPassInfo.status || 'Active'}</Text>
+                            </Text>
+                          </View>
+                          <View style={styles.passDateBadge}>
+                            <Ionicons name="calendar-outline" size={12} color="#0369A1" />
+                            <Text style={styles.passDateBadgeText}>{scannedPassInfo.queueDate || t("Today")}</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* ── NOT FOUND BANNER ── */}
                   {searchStatus === 'not_found' && !form.existingPatientId && (
-                    <View style={styles.notFoundBanner}>
-                      <View style={styles.bannerIconCircleInfo}>
-                        <Ionicons name="person-add" size={16} color={Colors.primary} />
+                    <View style={styles.notFoundCard}>
+                      <View style={styles.notFoundHeader}>
+                        <Ionicons name="person-add-outline" size={18} color="#D97706" />
+                        <Text style={styles.notFoundCardTitle}>{t("New Patient (No Prior Record)")}</Text>
                       </View>
-                      <View style={styles.bannerTextWrap}>
-                        <Text style={styles.notFoundBannerTitle}>{t("New patient")}</Text>
-                        <Text style={styles.notFoundBannerSub}>
-                          {t("No previous record found. Please enter details below.")}
-                        </Text>
-                      </View>
+                      <Text style={styles.notFoundCardSub}>
+                        {t("No existing record matches code \"{value0}\". Details have been populated into the intake form below for new patient registration.", { value0: searchQuery })}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -2607,6 +2962,284 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#1D4ED8',
     marginTop: 2,
+  },
+  scannedPatientCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    padding: 16,
+    marginTop: 14,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  scannedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  verifiedHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#6EE7B7',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  verifiedHeaderText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#065F46',
+    marginLeft: 5,
+    letterSpacing: 0.3,
+  },
+  autoFilledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  autoFilledText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+    marginLeft: 4,
+  },
+  scannedIdentityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  patientAvatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.tint,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    position: 'relative',
+  },
+  patientAvatarText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: Colors.primary,
+  },
+  avatarVerifiedCheck: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#059669',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  patientNameMetaWrap: {
+    flex: 1,
+  },
+  patientCardFullName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  patientCardSubId: {
+    fontSize: 11,
+    color: Colors.textMedium,
+    fontWeight: '500',
+  },
+  clearPatientBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  clearPatientText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textMedium,
+    marginLeft: 3,
+  },
+  patientDetailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  patientDetailChip: {
+    width: '48.5%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 8,
+    marginBottom: 8,
+  },
+  detailIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  detailChipTexts: {
+    flex: 1,
+  },
+  detailChipLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  detailChipValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  scannedPassBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1.5,
+    borderColor: '#38BDF8',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+  },
+  passTokenBadgeWrap: {
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    minWidth: 54,
+  },
+  passTokenBadgeLabel: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#BAE6FD',
+    letterSpacing: 0.5,
+  },
+  passTokenBadgeNumber: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginTop: 1,
+  },
+  passDetailsColumn: {
+    flex: 1,
+  },
+  passDeptDoctor: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0369A1',
+  },
+  passRoomStatus: {
+    fontSize: 11,
+    color: '#0284C7',
+    marginTop: 2,
+  },
+  passDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  passDateBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0369A1',
+    marginLeft: 3,
+  },
+  cardFooterNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  cardFooterNoticeText: {
+    fontSize: 11,
+    color: '#15803D',
+    fontWeight: '600',
+    marginLeft: 6,
+    flex: 1,
+  },
+  scanningLoaderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderColor: '#93C5FD',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+  },
+  scanningLoaderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1D4ED8',
+    flex: 1,
+  },
+  notFoundCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+  },
+  notFoundHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  notFoundCardTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B45309',
+    marginLeft: 6,
+  },
+  notFoundCardSub: {
+    fontSize: 11,
+    color: '#92400E',
+    lineHeight: 16,
   },
   formCard: {
     backgroundColor: Colors.cardBackground,
