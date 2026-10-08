@@ -1,6 +1,6 @@
 import { LocalizedText as Text } from '../i18n/LocalizedText';
 import { useLanguage } from '../i18n/LanguageContext';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,60 +11,89 @@ import {
   SafeAreaView,
   StatusBar
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../constants/Colors';
-import { getAuthToken } from '../services/http';
-import { BASE_URL } from '../config';
+import { HttpError } from '../services/http';
+import { notificationApi, type NotificationItem } from '../services/notificationApi';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function NotificationsScreen() {
-  const { t } = useLanguage();
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const { t, locale } = useLanguage();
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(false);
+  const requestId = useRef(0);
+  const [filter, setFilter] = useState<'All' | 'Today' | 'Past 7 Days'>('All');
+  const [clearedAt, setClearedAt] = useState<Date | null>(null);
+  const [userId, setUserId] = useState<string>('');
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
+    const id = ++requestId.current;
+    setNotifications([]);
+    setUserId('');
+    setClearedAt(null);
+    setError(false);
+    setLoading(true);
     try {
-      const token = await getAuthToken();
-      if (!token) return;
-
-      const response = await fetch(`${BASE_URL}/api/v1/notifications`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data);
-        if (data && data.length > 0) {
-          // Save the latest notification's time to avoid client/server clock skew
-          await AsyncStorage.setItem('last_notification_read_time', data[0].createdAt);
-        } else {
-          await AsyncStorage.setItem('last_notification_read_time', new Date().toISOString());
-        }
-      }
+      const inbox = await notificationApi.list();
+      if (requestId.current !== id) return;
+      const clearedTime = await AsyncStorage.getItem(`notifications_cleared_at_${inbox.userId}`).catch(() => null);
+      if (requestId.current !== id) return;
+      setUserId(inbox.userId);
+      setClearedAt(clearedTime ? new Date(clearedTime) : null);
+      setNotifications(inbox.items);
+      // Storage failure must not hide an otherwise valid personal inbox.
+      void notificationApi.markRead(inbox).catch(() => {});
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+      if (requestId.current !== id) return;
+      setNotifications([]);
+      if (error instanceof HttpError && error.status === 401) router.replace('/(auth)/login');
+      else setError(true);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId.current === id) { setLoading(false); setRefreshing(false); }
     }
-  };
-
-  useEffect(() => {
-    fetchNotifications();
   }, []);
+
+  useFocusEffect(useCallback(() => {
+    void fetchNotifications();
+    return () => { requestId.current++; setNotifications([]); };
+  }, [fetchNotifications]));
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchNotifications();
   };
 
-  const renderItem = ({ item }: { item: any }) => {
-    const date = new Date(item.createdAt).toLocaleDateString();
-    const time = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const handleClearAll = async () => {
+    if (!userId || loading) return;
+    const now = new Date();
+    setClearedAt(now);
+    await AsyncStorage.setItem(`notifications_cleared_at_${userId}`, now.toISOString()).catch(() => {});
+  };
+
+  const filteredNotifications = notifications.filter((n) => {
+    const nDate = new Date(n.createdAt);
+    if (clearedAt && nDate < clearedAt) return false;
+
+    if (filter === 'Today') {
+      const today = new Date();
+      return nDate.getDate() === today.getDate() &&
+             nDate.getMonth() === today.getMonth() &&
+             nDate.getFullYear() === today.getFullYear();
+    }
+    if (filter === 'Past 7 Days') {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return nDate >= sevenDaysAgo;
+    }
+    return true;
+  });
+
+  const renderItem = ({ item }: { item: NotificationItem }) => {
+    const date = new Date(item.createdAt).toLocaleDateString(locale);
+    const time = new Date(item.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
     return (
       <View style={styles.notificationCard}>
@@ -72,6 +101,7 @@ export default function NotificationsScreen() {
           <Ionicons name="notifications" size={24} color={Colors.primaryDark} />
         </View>
         <View style={styles.textContainer}>
+          <Text style={styles.timestamp}>{t(item.recipient || item.kind === 'personal' ? 'Personal notification' : 'Hospital message')}</Text>
           <Text style={styles.title}>{item.title}</Text>
           <Text style={styles.message}>{item.message}</Text>
           <Text style={styles.timestamp}>{date} • {time}</Text>
@@ -91,7 +121,24 @@ export default function NotificationsScreen() {
           <Ionicons name="arrow-back" size={24} color={Colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t("Notifications")}</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity onPress={handleClearAll}>
+          <Text style={{ color: Colors.white, fontSize: 14 }}>{t("Clear All")}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Filters */}
+      <View style={styles.filterContainer}>
+        {['All', 'Today', 'Past 7 Days'].map((f) => (
+          <TouchableOpacity
+            key={f}
+            style={[styles.filterChip, filter === f && styles.filterChipActive]}
+            onPress={() => setFilter(f as any)}
+          >
+            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
+              {t(f)}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* List */}
@@ -99,14 +146,15 @@ export default function NotificationsScreen() {
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      ) : notifications.length === 0 ? (
+      ) : filteredNotifications.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="notifications-off-outline" size={64} color={Colors.textLight} />
-          <Text style={styles.emptyText}>{t("No notifications yet")}</Text>
+          <Text style={styles.emptyText}>{t(error ? 'Could not load notifications. Please try again.' : 'No notifications yet')}</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={onRefresh}><Text style={styles.emptyText}>{t('Refresh')}</Text></TouchableOpacity>
         </View>
       ) : (
         <FlatList
-          data={notifications}
+          data={filteredNotifications}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContainer}
@@ -144,6 +192,32 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
+    color: Colors.white,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+    marginRight: 10,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterText: {
+    fontSize: 14,
+    color: Colors.textMedium,
+    fontWeight: '500',
+  },
+  filterTextActive: {
     color: Colors.white,
   },
   listContainer: {

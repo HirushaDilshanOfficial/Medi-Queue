@@ -1,3 +1,4 @@
+import { useLanguage } from '../i18n/LanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -29,6 +30,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   onScan,
   initialMode = 'barcode_machine',
 }) => {
+  const { t } = useLanguage();
   const [mode, setMode] = useState<ScannerMode>(initialMode);
   const [manualCode, setManualCode] = useState<string>('');
   const [scannedRecently, setScannedRecently] = useState<boolean>(false);
@@ -147,7 +149,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   mode === 'barcode_machine' && styles.tabTextActive,
                 ]}
               >
-                Barcode Machine (Gun)
+                {t("Barcode Machine (Gun)")}
               </Text>
             </TouchableOpacity>
 
@@ -171,7 +173,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   mode === 'camera' && styles.tabTextActive,
                 ]}
               >
-                Device Camera
+                {t("Device Camera")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -180,7 +182,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           {mode === 'barcode_machine' && (
             <View style={styles.machineContent}>
               <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Scanned Barcode / QR Code Value:</Text>
+                <Text style={styles.inputLabel}>{t("Scanned Barcode / QR Code Value:")}</Text>
                 <TextInput
                   ref={inputRef}
                   style={styles.barcodeInput}
@@ -208,13 +210,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   activeOpacity={0.8}
                 >
                   <Ionicons name="checkmark-done" size={18} color={Colors.white} style={{ marginRight: 6 }} />
-                  <Text style={styles.checkBarcodeBtnText}>Check & Auto-Fill Record</Text>
+                  <Text style={styles.checkBarcodeBtnText}>{t("Check & Auto-Fill Record")}</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Demo test helper */}
               <View style={styles.testHintRow}>
-                <Text style={styles.testHintLabel}>No physical gun? Quick test:</Text>
+                <Text style={styles.testHintLabel}>{t("No physical gun? Quick test:")}</Text>
                 <TouchableOpacity
                   style={styles.testChip}
                   onPress={() => {
@@ -234,16 +236,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               {!permission?.granted ? (
                 <View style={styles.permissionBox}>
                   <Ionicons name="camera-reverse-outline" size={42} color={Colors.textLight} />
-                  <Text style={styles.permissionTitle}>Camera Access Required</Text>
+                  <Text style={styles.permissionTitle}>{t("Camera Access Required")}</Text>
                   <Text style={styles.permissionSub}>
-                    Allow camera access to scan patient appointment QR codes and digital health passes.
+                    {t("Allow camera access to scan patient appointment QR codes and digital health passes.")}
                   </Text>
                   <TouchableOpacity
                     style={styles.grantBtn}
                     onPress={requestPermission}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.grantBtnText}>Grant Camera Access</Text>
+                    <Text style={styles.grantBtnText}>{t("Grant Camera Access")}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -284,7 +286,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     </View>
                   </CameraView>
                   <Text style={styles.cameraHint}>
-                    Hold patient phone or slip steady inside frame
+                    {t("Hold patient phone or slip steady inside frame")}
                   </Text>
                 </View>
               )}
@@ -297,7 +299,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             onPress={onClose}
             activeOpacity={0.7}
           >
-            <Text style={styles.cancelBtnText}>Cancel</Text>
+            <Text style={styles.cancelBtnText}>{t("Cancel")}</Text>
           </TouchableOpacity>
         </View>
       </View>

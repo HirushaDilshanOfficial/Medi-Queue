@@ -12,10 +12,12 @@ import {
   Platform,
   ScrollView,
   StatusBar,
-  SafeAreaView
+  Switch
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 import { getAuthToken } from '../../services/http';
 import { BASE_URL } from '../../config';
 
@@ -24,6 +26,7 @@ export default function SendNotificationScreen() {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [targetRole, setTargetRole] = useState('All');
+  const [isEmergency, setIsEmergency] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const roles = ['All', 'Patient', 'Doctor', 'Receptionist'];
@@ -48,7 +51,8 @@ export default function SendNotificationScreen() {
         body: JSON.stringify({
           title,
           message,
-          targetRole
+          targetRole,
+          isEmergency
         })
       });
 
@@ -137,6 +141,20 @@ export default function SendNotificationScreen() {
             textAlignVertical="top"
           />
 
+          {/* Emergency Switch */}
+          <View style={styles.emergencyContainer}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.emergencyTitle}>{t("Set as Emergency Banner")}</Text>
+              <Text style={styles.emergencyDesc}>{t("Displays a persistent red banner at the top of the user's dashboard.")}</Text>
+            </View>
+            <Switch
+              trackColor={{ false: Colors.border, true: Colors.error }}
+              thumbColor={Colors.white}
+              onValueChange={setIsEmergency}
+              value={isEmergency}
+            />
+          </View>
+
           {/* Send Button */}
           <TouchableOpacity
             style={[styles.sendButton, isLoading && styles.sendButtonDisabled]}
@@ -151,6 +169,7 @@ export default function SendNotificationScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      <MOHBottomNav activeRoute="home" />
     </KeyboardAvoidingView>
   );
 }
@@ -282,5 +301,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  emergencyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F0',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFD6D6',
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  emergencyTitle: {
+    color: Colors.error,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  emergencyDesc: {
+    color: Colors.error + '99',
+    fontSize: 12,
+    marginTop: 4,
   },
 });

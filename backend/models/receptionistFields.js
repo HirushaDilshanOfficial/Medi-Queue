@@ -14,9 +14,14 @@ function isDateKey(value) {
 }
 const dateKey = () => ({ type: String, required: true, validate: { validator: isDateKey, message: '{PATH} must be a real YYYY-MM-DD date.' } });
 function localDate(value) {
-  return new Intl.DateTimeFormat('en-CA', {
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Colombo', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date(value));
+  }).formatToParts(new Date(value));
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  if (!year || !month || !day) throw new Error('Could not determine the hospital date');
+  return `${year}-${month}-${day}`;
 }
 function endAfterStart(value) { return this.startsAt instanceof Date && value > this.startsAt; }
 module.exports = { options, ref, text, positiveInteger, dateKey, localDate, endAfterStart };

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
@@ -46,7 +47,11 @@ export default function WelcomeScreen() {
           <View style={styles.circleBottomLeft} />
 
           <View style={styles.logoCard}>
-            <AppIcon name="medical" size={36} color={Colors.primaryDark} />
+            <Image 
+              source={require('../../../assets/images/logo.png')} 
+              style={{ width: 60, height: 60 }} 
+              resizeMode="contain" 
+            />
           </View>
 
           <View style={styles.queueBadge}>

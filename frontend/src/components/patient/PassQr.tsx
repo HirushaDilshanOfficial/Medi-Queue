@@ -12,6 +12,11 @@ type Props = {
 
 type BoundaryState = { failed: boolean };
 
+function UnavailablePass() {
+  const { t } = useLanguage();
+  return <View style={styles.fallbackBox}><Text style={styles.fallbackText}>{t('Pass code unavailable')}</Text></View>;
+}
+
 // A printed or scanned pass is the fallback when a patient cannot show their phone,
 // so a failed QR must degrade to a readable code rather than take the screen down.
 // react-native-svg is a native module, so this also covers a build that is missing
@@ -26,9 +31,7 @@ class QrBoundary extends React.Component<{ children: React.ReactNode }, Boundary
   render() {
     if (this.state.failed) {
       return (
-        <View style={styles.fallbackBox}>
-          <Text style={styles.fallbackText}>Pass code unavailable</Text>
-        </View>
+        <UnavailablePass />
       );
     }
     return this.props.children;
@@ -56,10 +59,10 @@ export function PassQr({ value, size = 168 }: Props) {
           value={value}
           size={size - 24}
           backgroundColor="#FFFFFF"
-          color={PatientTheme.textPrimary}
+          color="#000000"
           // Raised error correction: hospital passes get scanned off cracked
           // screens and smudged printouts.
-          ecl="H"
+          ecl="Q"
         />
       </View>
     </QrBoundary>

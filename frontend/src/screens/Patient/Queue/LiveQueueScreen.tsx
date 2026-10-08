@@ -1,7 +1,7 @@
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Vibration, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused, useRouter } from 'expo-router';
 import { useFonts } from 'expo-font';
@@ -12,7 +12,7 @@ import { doctorApi } from '../../../services/doctorApi';
 import { queueApi } from '../../../services/queueApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import { usePolling } from '../../../hooks/usePolling';
-import { todayKey } from '../../../utils/opdDates';
+import { longDayLabel, todayKey } from '../../../utils/opdDates';
 import { AppointmentCard } from '../../../components/patient/AppointmentCard';
 import { ProfileIcon } from '../../../components/patient/ProfileIcon';
 import type { Appointment } from '../../../types/patient';
@@ -23,7 +23,7 @@ const POLL_INTERVAL_MS = 15_000;
 type Sheet = 'options' | 'leave' | { title: string; body: string } | null;
 
 export function LiveQueueScreen() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -38,9 +38,20 @@ export function LiveQueueScreen() {
   const upcoming = useAsyncResource(() => bookingApi.list('upcoming'), []);
   const profile = useAsyncResource(() => patientApi.getProfile(), []);
   const activePass = pass.data?.pass ?? null;
-  const activePassId = activePass?.id;
+  const activePasses = pass.data?.passes ?? (activePass ? [activePass] : []);
+  const doctorPasses = activePasses.filter((queuePass, index, passes) => {
+    const doctorKey = queuePass.doctorId
+      ?? `${queuePass.doctorName ?? 'assigned-doctor'}|${queuePass.department}`;
+    return passes.findIndex((candidate) => (
+      (candidate.doctorId
+        ?? `${candidate.doctorName ?? 'assigned-doctor'}|${candidate.department}`) === doctorKey
+    )) === index;
+  });
+  const [selectedPassId, setSelectedPassId] = useState<string | null>(null);
+  const [doctorMenuOpen, setDoctorMenuOpen] = useState(false);
+  const selectedPass = doctorPasses.find((item) => item.id === selectedPassId) ?? doctorPasses[0] ?? null;
   const todaysAppointment = upcoming.data?.appointments.find(appointment => appointment.date === todayKey());
-  const linkedAppointment = upcoming.data?.appointments.find(appointment => appointment.id === activePass?.appointmentId);
+  const linkedAppointment = upcoming.data?.appointments.find(appointment => appointment.id === selectedPass?.appointmentId);
   const doctorId = linkedAppointment?.doctorId;
   const doctor = useAsyncResource(() => doctorId ? doctorApi.getById(doctorId) : Promise.resolve(null), [doctorId]);
   const [checkingIn, setCheckingIn] = useState(false);
@@ -55,7 +66,7 @@ export function LiveQueueScreen() {
   const { reload: reloadProfile } = profile;
   const hasFocused = useRef(false);
   const buzzedPass = useRef<string | null>(null);
-  const pollingEnabled = isFocused && Boolean(activePass) && !['completed', 'cancelled', 'no_show'].includes(activePass?.status ?? '');
+  const pollingEnabled = isFocused && activePasses.length > 0 && !activePasses.every((item) => ['completed', 'cancelled', 'no_show'].includes(item.status));
 
   useFocusEffect(useCallback(() => {
     if (hasFocused.current) { reloadPass(); reloadUpcoming(); reloadProfile(); }
@@ -65,24 +76,18 @@ export function LiveQueueScreen() {
   // Preserve the QR and ticket ID while updating position and status.
   const poll = useCallback(async () => {
     try {
-      const result = await queueApi.live();
-      const livePass = result.pass;
-      if (!livePass) {
-        setPass(current => current?.pass?.id === activePassId ? { pass: null } : current);
+      const result = await queueApi.myPass();
+      if (!result.pass) {
+        setPass({ pass: null, passes: [] });
         reloadUpcoming();
       }
-      else if (activePassId !== livePass.id) { reloadPass(); reloadUpcoming(); }
-      else setPass(current => {
-        if (!current?.pass || current.pass.id !== livePass.id) return current;
-        return { ...current, pass: { ...current.pass, live: result.live,
-          status: livePass.status as typeof current.pass.status, calledAt: livePass.calledAt } };
-      });
+      else setPass(result);
       setLastUpdate(Date.now()); setLiveError(null);
     } catch (error) {
       setLiveError('Live updates are temporarily unavailable. Showing the last known position and retrying.');
       throw error;
     }
-  }, [setPass, reloadPass, reloadUpcoming, activePassId]);
+  }, [setPass, reloadUpcoming]);
   usePolling(poll, POLL_INTERVAL_MS, { enabled: pollingEnabled });
 
   useEffect(() => {
@@ -106,6 +111,33 @@ export function LiveQueueScreen() {
     catch (error) { message(t('Could not check in'), error instanceof Error ? error.message : t('Please try again.')); }
     finally { setCheckingIn(false); }
   };
+  const cancelAppointment = (appointment: Appointment) => {
+    const cancel = async () => {
+      try {
+        await bookingApi.cancel(appointment.id);
+        reloadUpcoming();
+        reloadPass();
+      } catch (error) {
+        message(t('Could not cancel appointment'), error instanceof Error ? error.message : t('Please try again.'));
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(t('Cancel appointment?'))) void cancel();
+      return;
+    }
+    Alert.alert(
+      t('Cancel appointment?'),
+      t('This appointment and its queue token will be cancelled.'),
+      [
+        { text: t('Keep appointment'), style: 'cancel' },
+        {
+          text: t('Cancel appointment'),
+          style: 'destructive',
+          onPress: () => void cancel(),
+        },
+      ],
+    );
+  };
   const leave = async () => {
     setLeaving(true); setActionError(null);
     try { await queueApi.leave(); setPass({ pass: null }); reloadUpcoming(); setSheet(null); }
@@ -113,11 +145,11 @@ export function LiveQueueScreen() {
     finally { setLeaving(false); }
   };
   const share = async () => {
-    if (!activePass) return;
-    const text = `Medi-Queue pass\n${activePass.department}\nQueue ${activePass.tokenNumber}\n${activePass.dateLong || activePass.queueDate}\n${activePass.room ?? 'Room assigned at clinic'}\nPass code: ${activePass.passCode}`;
+    if (!selectedPass) return;
+    const text = [t('Medi-Queue pass'), t(selectedPass.department), t('Queue #{number}', { number: selectedPass.tokenNumber }), longDayLabel(selectedPass.queueDate, locale), selectedPass.room ?? t('Room assigned at clinic'), `${t('Pass code:')} ${selectedPass.passCode}`].join('\n');
     try {
       if (Platform.OS === 'web') {
-        if (navigator.share) await navigator.share({ title: 'Medi-Queue pass', text });
+        if (navigator.share) await navigator.share({ title: t('Medi-Queue pass'), text });
         else message(t('Share ticket'), text);
       } else await Share.share({ title: 'Medi-Queue pass', message: text });
     } catch (error) {
@@ -142,13 +174,22 @@ export function LiveQueueScreen() {
         <Svg pointerEvents="none" style={styles.heroWaveLeft} viewBox="0 0 200 120" fill="none" stroke={C.aqua} opacity={0.15}><Path d="M-10 20 C50 80 140 10 220 90" strokeWidth={2} /></Svg>
         <View style={styles.heroRow}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("Go back home")} onPress={home} style={({ pressed }) => [styles.lightButton, pressed && styles.pressed]}><ProfileIcon name="back" color={C.surface} /></Pressable>
-          <View style={styles.grow}><Text style={styles.heroTitle}>{t("Queue Details")}</Text><Text numberOfLines={1} style={styles.heroSubtitle}>{activePass ? t("Ticket ID: {value0}", { value0: String(activePass.passCode) }) : t('Your position updates automatically')}</Text></View>
+          <View style={styles.grow}><Text style={styles.heroTitle}>{t("Queue Details")}</Text><Text numberOfLines={1} style={styles.heroSubtitle}>{selectedPass ? t("Ticket ID: {value0}", { value0: String(selectedPass.passCode) }) : t('Your position updates automatically')}</Text></View>
           <Pressable accessibilityRole="button" accessibilityLabel={t("Queue options")} onPress={() => { setActionError(null); setSheet('options'); }} style={({ pressed }) => [styles.lightButton, pressed && styles.pressed]}><ProfileIcon name="more" color={C.surface} /></Pressable>
         </View>
       </View>
       <View style={styles.stack}>
+        {doctorPasses.length > 1 ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.small}>{t('Select doctor booking')}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('Select doctor booking')} onPress={() => setDoctorMenuOpen(true)} style={styles.doctorSelect}>
+              <Text numberOfLines={1} style={styles.doctorSelectText}>{selectedPass?.doctorName ?? t('Choose a doctor')}</Text>
+              <ProfileIcon name="chevronDown" size={18} color={C.primary} />
+            </Pressable>
+          </View>
+        ) : null}
         {pass.error ? <View style={styles.stateCard}><Text style={styles.title}>{t("Could not reach the queue")}</Text><Text style={styles.error}>{pass.error}</Text><Pressable accessibilityRole="button" onPress={reloadPass} style={styles.walletButton}><Text style={styles.actionLabel}>{t("Try again")}</Text></Pressable></View> : null}
-        {activePass ? <QueuePassContent pass={activePass} patientName={profile.data?.patient.fullName ?? '—'} doctor={doctor.data?.doctor}
+        {selectedPass ? <QueuePassContent pass={selectedPass} patientName={profile.data?.patient.fullName ?? '—'} doctor={doctor.data?.doctor}
           countdown={countdown} liveError={liveError} onHome={home} onShare={share}
           onWallet={() => message(t('Add to Wallet'), t('Apple Wallet and Google Wallet integration is not available yet. Keep this live pass open at check-in, or use Share ticket to share your pass details.'))}
           onContact={() => message(t('Clinic contact'), t('Ask at the clinic reception desk for assistance with your queue or consulting room. A clinic phone number has not been provided.'))} /> :
@@ -160,9 +201,26 @@ export function LiveQueueScreen() {
             <Pressable accessibilityRole="button" disabled={checkingIn} accessibilityState={{ disabled: checkingIn }} onPress={() => checkIn(todaysAppointment)} style={[styles.homeButton, checkingIn && styles.disabled]}><Text style={styles.homeLabel}>{checkingIn ? t('Checking in…') : t('Check in for my token')}</Text></Pressable>
           </View> : <View style={styles.stateCard}><ProfileIcon name="ticket" size={32} /><Text style={styles.title}>{t("No queue pass yet")}</Text><Text style={styles.caption}>{t("Check in on the day of your appointment to collect your queue number.")}</Text><Pressable accessibilityRole="button" onPress={() => router.push('/(patient)/doctors')} style={styles.homeButton}><Text style={styles.homeLabel}>{t("Book a clinic visit")}</Text></Pressable></View>}
         {upcoming.error && !activePass ? <View style={styles.stateCard}><Text style={styles.error}>{t("Your bookings could not be loaded.")}</Text><Pressable accessibilityRole="button" onPress={reloadUpcoming} style={styles.menuButton}><Text style={styles.actionLabel}>{t("Retry bookings")}</Text></Pressable></View> : null}
-        {!activePass && Boolean(upcoming.data?.appointments.length) ? <View style={{ gap: 12 }}><Text style={styles.title}>{t("Your bookings")}</Text>{upcoming.data?.appointments.slice(0, 3).map(appointment => <AppointmentCard key={appointment.id} appointment={appointment} />)}</View> : null}
+        {Boolean(upcoming.data?.appointments.length) ? <View style={{ gap: 12 }}><Text style={styles.title}>{t("Your bookings")}</Text>{upcoming.data?.appointments.map(appointment => <AppointmentCard key={appointment.id} appointment={appointment} onCheckIn={checkIn} onCancel={cancelAppointment} />)}</View> : null}
       </View>
     </ScrollView>
+    <Modal transparent visible={doctorMenuOpen} animationType="fade" onRequestClose={() => setDoctorMenuOpen(false)}>
+      <View style={styles.modalOverlay}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('Close doctor selection')} onPress={() => setDoctorMenuOpen(false)} style={StyleSheet.absoluteFill} />
+        <View style={styles.doctorMenu}>
+          <Text style={styles.title}>{t('Select doctor booking')}</Text>
+          {doctorPasses.map((queuePass) => (
+            <Pressable key={queuePass.id} onPress={() => { setSelectedPassId(queuePass.id); setDoctorMenuOpen(false); }} style={styles.doctorOption}>
+              <View style={styles.grow}>
+                <Text style={styles.actionLabel}>{queuePass.doctorName ?? t('Assigned doctor')}</Text>
+                <Text style={styles.small}>{t(queuePass.department ?? '')} · {queuePass.tokenLabel} · {longDayLabel(queuePass.queueDate, locale)}</Text>
+              </View>
+              {queuePass.id === selectedPass?.id ? <ProfileIcon name="check" size={18} color={C.secondary} /> : null}
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </Modal>
     <Modal transparent visible={sheet !== null} animationType="slide" onRequestClose={() => { if (!leaving) setSheet(null); }}>
       <View style={styles.modalOverlay}>
         <Pressable accessibilityRole="button" accessibilityLabel={t("Close dialog")} disabled={leaving} onPress={() => setSheet(null)} style={StyleSheet.absoluteFill} />

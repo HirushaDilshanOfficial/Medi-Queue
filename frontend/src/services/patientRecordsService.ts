@@ -110,6 +110,7 @@ export interface PatientRecord {
   allergies?: AllergyItem[];
   chronicConditions: string[];
   medications: MedicationItem[];
+  hasVitals?: boolean;
   vitals: PatientVitalsRecord;
   vitalsHistory: VitalHistoryReading[];
   imaging: PatientImaging;

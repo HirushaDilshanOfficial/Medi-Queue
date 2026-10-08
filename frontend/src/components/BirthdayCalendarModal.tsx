@@ -1,3 +1,4 @@
+import { useLanguage } from '../i18n/LanguageContext';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
@@ -70,6 +71,7 @@ export const BirthdayCalendarModal: React.FC<BirthdayCalendarModalProps> = ({
   onSelectDate,
   onClose,
 }) => {
+  const { t } = useLanguage();
   const today = useMemo(() => new Date(), []);
 
   // Parse initialDate or fallback to 30 years ago for realistic default birthday
@@ -170,9 +172,9 @@ export const BirthdayCalendarModal: React.FC<BirthdayCalendarModalProps> = ({
                     <Ionicons name="calendar" size={18} color={Colors.white} />
                   </View>
                   <View>
-                    <Text style={styles.headerTitle}>Select Birthday</Text>
+                    <Text style={styles.headerTitle}>{t("Select Birthday")}</Text>
                     <Text style={styles.headerSubtitle}>
-                      {formattedDateStr} • Age: {calculatedAge} yrs
+                      {formattedDateStr}{' '}{t("• Age:")}{' '}{calculatedAge}{' '}{t("yrs")}
                       {calculatedAge >= 60 ? ' (Senior)' : ''}
                     </Text>
                   </View>
@@ -256,7 +258,7 @@ export const BirthdayCalendarModal: React.FC<BirthdayCalendarModalProps> = ({
                 <View style={styles.viewContainer}>
                   {/* Decade Pills Header */}
                   <View style={styles.decadeHeader}>
-                    <Text style={styles.subSectionTitle}>Quick Decade:</Text>
+                    <Text style={styles.subSectionTitle}>{t("Quick Decade:")}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
                       {DECADES.map((dec) => {
                         const isDecadeMatch =
@@ -323,7 +325,7 @@ export const BirthdayCalendarModal: React.FC<BirthdayCalendarModalProps> = ({
               {viewMode === 'months' && (
                 <View style={styles.viewContainer}>
                   <Text style={[styles.subSectionTitle, { marginBottom: 12 }]}>
-                    Choose Month ({selectedYear}):
+                    {t("Choose Month (")}{selectedYear}):
                   </Text>
                   <View style={styles.monthsGrid}>
                     {MONTH_SHORT.map((mName, mIdx) => {
@@ -419,7 +421,7 @@ export const BirthdayCalendarModal: React.FC<BirthdayCalendarModalProps> = ({
                   onPress={onClose}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                  <Text style={styles.cancelButtonText}>{t("Cancel")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -434,7 +436,7 @@ export const BirthdayCalendarModal: React.FC<BirthdayCalendarModalProps> = ({
                     style={{ marginRight: 6 }}
                   />
                   <Text style={styles.confirmButtonText}>
-                    Set: {formattedDateStr}
+                    {t("Set:")}{' '}{formattedDateStr}
                   </Text>
                 </TouchableOpacity>
               </View>

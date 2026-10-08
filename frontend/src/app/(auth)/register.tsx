@@ -3,7 +3,7 @@ import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
 import {
   View, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal,
+  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal, Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
@@ -153,6 +153,13 @@ export default function RegisterScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><AppIcon name="back" size={18} color={Colors.white} /><Text style={styles.backButtonText}>{t("Back")}</Text></View>
           </TouchableOpacity>
+          <View style={{ width: 40, height: 40, backgroundColor: Colors.white, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+            <Image 
+              source={require('../../../assets/images/logo.png')} 
+              style={{ width: 30, height: 30 }} 
+              resizeMode="contain" 
+            />
+          </View>
           <Text style={styles.headerTitle}>{t("Create Account")}</Text>
           <Text style={styles.headerSubtitle}>{t("Register as a new patient")}</Text>
         </View>

@@ -33,13 +33,20 @@ export default function AddHospitalScreen() {
     'Divisional Hospital'
   ];
 
+  const predefinedClinics = [
+    'General Medical', 'General Surgery', 'Orthopaedic', 'ENT', 'Eye', 
+    'Cardiology', 'Neurology', 'Paediatric', 'Oncology', 'Dental', 
+    'Gynaecology', 'Psychiatry', 'Diabetes'
+  ];
+
   const [formData, setFormData] = useState({
     name: '',
     code: '',
     type: '',
     contact: '',
+    email: '',
     location: '',
-    departments: '', // Comma separated for now
+    departments: [] as string[],
   });
 
   React.useEffect(() => {
@@ -53,8 +60,10 @@ export default function AddHospitalScreen() {
           code: hospital.code || '',
           type: hospital.type || '',
           contact: hospital.contact || '',
+          email: hospital.email || '',
           location: hospital.location || '',
-          departments: hospital.departments ? hospital.departments.join(', ') : '',
+          departments: Array.isArray(hospital.departments) ? hospital.departments : 
+                       (typeof hospital.departments === 'string' ? hospital.departments.split(',').map((d:string)=>d.trim()) : []),
         });
       } catch (error) {
         console.error('Failed to parse edit data', error);
@@ -67,11 +76,11 @@ export default function AddHospitalScreen() {
   };
 
   const validatePhone = (phone: string) => {
-    return /^\+?[0-9\s-]{9,15}$/.test(phone);
+    return /^(0)[0-9]{9}$/.test(phone);
   };
 
   const handleSave = async () => {
-    if (!formData.name || !formData.code || !formData.type || !formData.contact || !formData.location) {
+    if (!formData.name || !formData.code || !formData.type || !formData.contact || !formData.email || !formData.location) {
       alert('Please fill all required fields');
       return;
     }
@@ -81,13 +90,24 @@ export default function AddHospitalScreen() {
       return;
     }
 
-    const contact = formData.contact.trim();
-    const isEmail = contact.includes('@');
-    if (isEmail && !validateEmail(contact)) {
-      alert('Please enter a valid email address');
+    if (!/^[a-zA-Z\s]+$/.test(formData.name)) {
+      alert('Hospital Name can only contain letters and spaces.');
       return;
-    } else if (!isEmail && !validatePhone(contact)) {
-      alert('Please enter a valid phone number');
+    }
+
+    if (!/^[a-zA-Z0-9-]+$/.test(formData.code)) {
+      alert('Hospital Code can only contain letters, numbers, and dashes.');
+      return;
+    }
+
+    const contact = formData.contact.trim();
+    if (!validatePhone(contact)) {
+      alert('Please enter a valid 10-digit phone number starting with 0.');
+      return;
+    }
+
+    if (!validateEmail(formData.email.trim())) {
+      alert('Please enter a valid email address.');
       return;
     }
     
@@ -194,28 +214,56 @@ export default function AddHospitalScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>{t("Contact Information")}</Text>
+                <Text style={styles.label}>{t("Contact Number")}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder={t("Phone or Email")}
+                  placeholder={t("e.g. 0112345678")}
                   placeholderTextColor={Colors.textLight}
                   keyboardType="phone-pad"
                   value={formData.contact}
-                  onChangeText={(text) => setFormData({ ...formData, contact: text })}
+                  onChangeText={(text) => setFormData({ ...formData, contact: text.replace(/[^0-9]/g, '') })}
+                  maxLength={10}
                 />
               </View>
 
-              <Text style={[styles.sectionTitle, { marginTop: 10 }]}>{t("Medical Departments")}</Text>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>{t("Departments (Comma separated)")}</Text>
+                <Text style={styles.label}>{t("Email Address")}</Text>
                 <TextInput
-                  style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-                  placeholder={t("e.g. OPD, Cardiology, Neurology")}
+                  style={styles.input}
+                  placeholder={t("e.g. contact@hospital.com")}
                   placeholderTextColor={Colors.textLight}
-                  multiline
-                  value={formData.departments}
-                  onChangeText={(text) => setFormData({ ...formData, departments: text })}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={formData.email}
+                  onChangeText={(text) => setFormData({ ...formData, email: text.replace(/\s/g, '') })}
                 />
+              </View>
+
+              <Text style={[styles.sectionTitle, { marginTop: 10 }]}>{t("Clinics / Departments")}</Text>
+              <Text style={styles.sectionSubtitle}>{t("Select available clinics for this hospital.")}</Text>
+              <View style={styles.chipsContainer}>
+                {predefinedClinics.map((clinic) => {
+                  const isSelected = formData.departments.includes(clinic);
+                  return (
+                    <TouchableOpacity
+                      key={clinic}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          departments: isSelected 
+                            ? prev.departments.filter(d => d !== clinic)
+                            : [...prev.departments, clinic]
+                        }));
+                      }}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                        {t(clinic)}
+                      </Text>
+                      {isSelected && <Text style={styles.chipCheck}>✓</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
             </View>
@@ -448,5 +496,40 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 16,
     fontWeight: '700',
+  },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 10,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  chipActive: {
+    backgroundColor: Colors.primary + '15',
+    borderColor: Colors.primary,
+  },
+  chipText: {
+    color: Colors.textMedium,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  chipTextActive: {
+    color: Colors.primaryDark,
+    fontWeight: '700',
+  },
+  chipCheck: {
+    color: Colors.primary,
+    fontWeight: 'bold',
+    marginLeft: 8,
+    fontSize: 14,
   },
 });

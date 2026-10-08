@@ -388,9 +388,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   styles.filterChipText,
                   filter === 'pre_booked' && styles.filterChipTextActive,
                 ]}
-              >
-                Pre-Booked
-              </Text>
+              >{t("Pre-Booked")}</Text>
             </TouchableOpacity>
 
             {/* Filter: Walk-In */}
@@ -415,9 +413,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   styles.filterChipText,
                   filter === 'walk_in' && styles.filterChipTextActive,
                 ]}
-              >
-                Walk-In
-              </Text>
+              >{t("Walk-In")}</Text>
             </TouchableOpacity>
 
             {/* Filter: Visited Today */}
@@ -824,7 +820,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                               <View style={styles.timelineDetailRow}>
                                 <Ionicons name="business" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
                                 <Text style={styles.timelineDepartmentText}>
-                                  {activeTodayVisit.department || t('General OPD')}
+                                  {t(activeTodayVisit.department || 'General OPD')}
                                 </Text>
                               </View>
                               <View style={styles.timelineDetailRow}>
@@ -888,7 +884,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                                 <View style={styles.timelineDetailRow}>
                                   <Ionicons name="business-outline" size={14} color={Colors.textMedium} style={{ marginRight: 6 }} />
                                   <Text style={styles.pastDepartmentText}>
-                                    {visit.department || t('General OPD')}
+                                    {t(visit.department || 'General OPD')}
                                   </Text>
                                 </View>
                                 <View style={styles.timelineDetailRow}>

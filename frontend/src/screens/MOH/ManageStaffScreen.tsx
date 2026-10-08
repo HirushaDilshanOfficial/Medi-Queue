@@ -12,6 +12,7 @@ import { View,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../../config';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 
@@ -27,6 +28,7 @@ export default function ManageStaffScreen() {
   }, []);
 
   const [activeFilter, setActiveFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
@@ -100,9 +102,13 @@ export default function ManageStaffScreen() {
     );
   };
 
-  const filteredStaff = activeFilter === 'All' 
-    ? staff 
-    : staff.filter(s => s.role === activeFilter);
+  const filteredStaff = staff.filter(s => {
+    const matchesFilter = activeFilter === 'All' || s.role === activeFilter;
+    const matchesSearch = s.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          s.role?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          s._id?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFilter && (searchQuery === '' || matchesSearch);
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -134,11 +140,13 @@ export default function ManageStaffScreen() {
           </View>
 
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons name="search-outline" size={20} color={Colors.textMedium} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
               placeholder={t("Search by name, role or employee ID...")}
               placeholderTextColor={Colors.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </View>
 
@@ -220,7 +228,7 @@ export default function ManageStaffScreen() {
                     </View>
                     <View style={styles.deptBadge}>
                       <Text style={styles.deptBadgeText}>
-                        {member.department || t('N/A')}
+                        {t(member.department || 'N/A')}
                       </Text>
                     </View>
                   </View>
@@ -305,14 +313,14 @@ export default function ManageStaffScreen() {
                 
                 <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>{t("Employment Information")}</Text>
                 <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Employee ID:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.employeeNo}</Text></Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Department:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.department || t('N/A')}</Text></Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Department:")}{' '}<Text style={{ color: Colors.textDark }}>{t(selectedStaff?.department || 'N/A')}</Text></Text>
                 <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>{t("Status:")}{' '}<Text style={{ color: Colors.textDark }}>{t(selectedStaff?.status ?? '')}</Text></Text>
 
                 {selectedStaff?.role === 'Doctor' && (
                   <View>
                     <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>{t("Doctor Information")}</Text>
                     <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Med Reg No:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.medRegNo}</Text></Text>
-                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Specialization:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.specialization}</Text></Text>
+                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Specialization:")}{' '}<Text style={{ color: Colors.textDark }}>{t(selectedStaff?.specialization ?? '')}</Text></Text>
                     <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>{t("Qualification:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.doctorQualification}</Text></Text>
                   </View>
                 )}

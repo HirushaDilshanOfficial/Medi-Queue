@@ -42,7 +42,7 @@ export function ReportRow({ report, onPress, onDelete }: Props) {
             {report.title}
           </Text>
           <Text style={styles.meta} numberOfLines={1}>
-            {[report.category, dated, report.fileName ? 'File attached' : null].filter(Boolean).join(' · ')}
+            {[t(report.category), dated, report.fileName ? t('File attached') : null].filter(Boolean).join(' · ')}
           </Text>
           {report.notes ? (
             <Text style={styles.notes} numberOfLines={2}>
@@ -61,7 +61,7 @@ export function ReportRow({ report, onPress, onDelete }: Props) {
                 report.status === 'reviewed' ? styles.statusTextReviewed : styles.statusTextPending,
               ]}
             >
-              {STATUS_TEXT[report.status]}
+              {t(STATUS_TEXT[report.status])}
             </Text>
           </View>
         </View>
@@ -100,7 +100,7 @@ export function ReportActivityRow({
       </View>
       <View style={styles.activityText}>
         <Text style={styles.activityTitle} numberOfLines={1}>
-          {t(title ?? '')}
+          {title}
         </Text>
         {meta ? (
           <Text style={styles.activityMeta} numberOfLines={1}>

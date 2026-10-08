@@ -1,3 +1,4 @@
+import { useLanguage } from '../i18n/LanguageContext';
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,31 +10,32 @@ interface Props {
 }
 
 export default function MOHBottomNav({ activeTab }: Props) {
+  const { t } = useLanguage();
   return (
     <View style={styles.bottomNav}>
       <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/dashboard')}>
         <Ionicons name={activeTab === 'home' ? 'home' : 'home-outline'} size={24} color={activeTab === 'home' ? Colors.primaryDark : Colors.textLight} />
-        <Text style={[styles.navLabel, activeTab === 'home' && styles.navLabelActive]}>Home</Text>
+        <Text style={[styles.navLabel, activeTab === 'home' && styles.navLabelActive]}>{t("Home")}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/manage-hospitals')}>
         <Ionicons name={activeTab === 'hospitals' ? 'business' : 'business-outline'} size={24} color={activeTab === 'hospitals' ? Colors.primaryDark : Colors.textLight} />
-        <Text style={[styles.navLabel, activeTab === 'hospitals' && styles.navLabelActive]}>Hospitals</Text>
+        <Text style={[styles.navLabel, activeTab === 'hospitals' && styles.navLabelActive]}>{t("Hospitals")}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/manage-staff')}>
         <Ionicons name={activeTab === 'staff' ? 'id-card' : 'id-card-outline'} size={24} color={activeTab === 'staff' ? Colors.primaryDark : Colors.textLight} />
-        <Text style={[styles.navLabel, activeTab === 'staff' && styles.navLabelActive]}>Staff</Text>
+        <Text style={[styles.navLabel, activeTab === 'staff' && styles.navLabelActive]}>{t("Staff")}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/manage-patients')}>
         <Ionicons name={activeTab === 'patients' ? 'people' : 'people-outline'} size={24} color={activeTab === 'patients' ? Colors.primaryDark : Colors.textLight} />
-        <Text style={[styles.navLabel, activeTab === 'patients' && styles.navLabelActive]}>Patients</Text>
+        <Text style={[styles.navLabel, activeTab === 'patients' && styles.navLabelActive]}>{t("Patients")}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/profile')}>
         <Ionicons name={activeTab === 'profile' ? 'person' : 'person-outline'} size={24} color={activeTab === 'profile' ? Colors.primaryDark : Colors.textLight} />
-        <Text style={[styles.navLabel, activeTab === 'profile' && styles.navLabelActive]}>Profile</Text>
+        <Text style={[styles.navLabel, activeTab === 'profile' && styles.navLabelActive]}>{t("Profile")}</Text>
       </TouchableOpacity>
     </View>
   );

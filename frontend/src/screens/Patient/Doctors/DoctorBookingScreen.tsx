@@ -8,14 +8,18 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as DocumentPicker from 'expo-document-picker';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { doctorApi } from '../../../services/doctorApi';
 import { bookingApi } from '../../../services/bookingApi';
+import { patientApi } from '../../../services/patientApi';
 import { HttpError } from '../../../services/http';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import type { SlotOption } from '../../../types/patient';
-import { longDayLabel, shortDayParts } from '../../../utils/opdDates';
+import { addDaysKey, isPastDateKey, longDayLabel, shortDayParts, todayKey } from '../../../utils/opdDates';
 import { DesignImage } from '../../../components/patient/DesignImage';
+import { PassQr } from '../../../components/patient/PassQr';
+import type { QueuePass } from '../../../types/patient';
 
 const C = {
   background: '#f3faff', primary: '#004c5b', secondary: '#00696e',
@@ -42,29 +46,42 @@ export function DoctorBookingScreen() {
   const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { id, rescheduleId } = useLocalSearchParams<{ id: string; rescheduleId?: string }>();
+  const { id, rescheduleId, section } = useLocalSearchParams<{ id: string; rescheduleId?: string; section?: string }>();
   const doctorId = Array.isArray(id) ? id[0] : id;
   const rescheduling = Array.isArray(rescheduleId) ? rescheduleId[0] : rescheduleId;
   const [chosenDate, setChosenDate] = useState<string | null>(null);
   const [time, setTime] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [reason, setReason] = useState('');
-  const [tab, setTab] = useState<BookingTab>('Appointment');
+  const requestedSection = Array.isArray(section) ? section[0] : section;
+  const tab: BookingTab = requestedSection === 'Schedule' || requestedSection === 'About' ? requestedSection : 'Appointment';
+  const setTab = (next: BookingTab) => router.setParams({ section: next });
   const [mode, setMode] = useState<'Hospital' | 'Online'>('Hospital');
+  const [selectedDocument, setSelectedDocument] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [bookingPass, setBookingPass] = useState<QueuePass | null>(null);
+  const [bookedTime, setBookedTime] = useState<string | null>(null);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [bookingConfirmed, setBookingConfirmed] = useState(false);
+  const [documentUploadError, setDocumentUploadError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const dateStrip = useRef<ScrollView>(null);
   const submissionPending = useRef(false);
 
   const doctor = useAsyncResource(() => doctorApi.getById(doctorId), [doctorId]);
   const days = useAsyncResource(() => bookingApi.bookableDays(doctorId), [doctorId]);
-  const date = chosenDate ?? days.data?.days[0]?.date ?? null;
+  const hospitalToday = todayKey();
+  const maxDateKey = addDaysKey(hospitalToday, 14);
+  const availableDays = (days.data?.days ?? []).filter((day) => !isPastDateKey(day.date, hospitalToday) && day.date <= maxDateKey);
+  const date = chosenDate ?? availableDays[0]?.date ?? null;
   const slots = useAsyncResource(
     () => date ? bookingApi.slots(doctorId, date) : Promise.resolve<{ date: string; slots: SlotOption[] }>({ date: '', slots: [] }),
     [doctorId, date],
   );
   // A previous day's cached slots must never remain selectable during a reload.
   const currentSlots = slots.data?.date === date ? slots.data.slots : [];
-  const canSubmit = mode === 'Hospital' && !!date && !!time && !submitting
+  const dateIsValid = Boolean(date && /^\d{4}-\d{2}-\d{2}$/.test(date) && !isPastDateKey(date, hospitalToday) && date <= maxDateKey);
+  const canSubmit = mode === 'Hospital' && !!date && !!time && !submitting && !bookingConfirmed
+    && dateIsValid
     && !days.loading && !days.error && !slots.loading && !slots.error
     && currentSlots.some(slot => slot.time === time && slot.available);
 
@@ -75,13 +92,58 @@ export function DoctorBookingScreen() {
 
   const submit = async () => {
     if (!canSubmit || !date || !time || submissionPending.current) return;
+    if (!dateIsValid) {
+      Alert.alert(t('Invalid appointment date'), t('Please choose a date from today through the next 14 days.'));
+      setTime(null);
+      return;
+    }
     submissionPending.current = true;
     setSubmitting(true);
     try {
+      let bookingResult: Awaited<ReturnType<typeof bookingApi.create>> | null = null;
       if (rescheduling) await bookingApi.reschedule(rescheduling, date, time);
-      else await bookingApi.create({ doctorId, date, slotTime: time, reason: reason.trim() || undefined });
-      Alert.alert(rescheduling ? t('Appointment updated') : t('Appointment confirmed'), t("{value0} at {value1}", { value0: String(longDayLabel(date, locale)), value1: String(time) }));
-      router.back();
+      else bookingResult = await bookingApi.create({ doctorId, date, slotTime: time, reason: reason.trim() || undefined });
+      if (rescheduling) {
+        Alert.alert(t('Appointment updated'), t("{value0} at {value1}", { value0: String(longDayLabel(date, locale)), value1: String(time) }));
+        router.back();
+      } else {
+        // A successful booking is final even if an optional document upload fails.
+        // Display the issued pass immediately instead of waiting for the upload.
+        setBookingConfirmed(true);
+        setBookedTime(bookingResult!.appointment.slotTime);
+        setDocumentUploadError(null);
+        setBookingPass(bookingResult!.pass);
+        let documentUploadFailed = false;
+        let documentUploadError = '';
+        if (selectedDocument && bookingResult?.appointment.id) {
+          setUploadingDocument(true);
+          try {
+            const form = new FormData();
+            form.append('title', selectedDocument.name || 'Medical document');
+            form.append('category', 'General');
+            form.append('reportDate', date);
+            form.append('appointmentId', bookingResult.appointment.id);
+            if (selectedDocument.file) {
+              form.append('file', selectedDocument.file);
+            } else {
+              form.append('file', {
+                uri: selectedDocument.uri,
+                name: selectedDocument.name || 'medical-document',
+                type: selectedDocument.mimeType || 'application/octet-stream',
+              } as unknown as Blob);
+            }
+            await patientApi.uploadReport(form);
+          } catch (error) {
+            documentUploadFailed = true;
+            documentUploadError = error instanceof HttpError
+              ? error.message
+              : t('Please add the document from your reports page.');
+          } finally {
+            setUploadingDocument(false);
+          }
+        }
+        setDocumentUploadError(documentUploadFailed ? documentUploadError : null);
+      }
     } catch (error) {
       Alert.alert(t('Could not confirm appointment'), error instanceof HttpError ? error.message : t('Please try again.'));
       // Refresh capacity after a conflict so a sold-out slot cannot be retried.
@@ -96,21 +158,31 @@ export function DoctorBookingScreen() {
     }
   };
 
-  const showReports = () => Alert.alert(
-    t('Medical documents'),
-    t('Add or view a medical report in your patient profile. Files cannot be attached directly to this booking yet.'),
-    [
-      { text: t('Cancel'), style: 'cancel' },
-      { text: 'View reports', onPress: () => router.push('/(patient)/profile/reports') },
-      { text: t('Add report'), onPress: () => router.push('/(patient)/profile/report/new') },
-    ],
-  );
+  const chooseDocument = useCallback(async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (result.canceled) return;
+    const file = result.assets[0];
+    if ((file.size ?? 0) > 10 * 1024 * 1024) {
+      Alert.alert(t('Medical document'), t('The report file must be 10 MB or smaller.'));
+      return;
+    }
+    setSelectedDocument(file);
+  }, [t]);
   const showOptions = () => Alert.alert(t('Appointment options'), t('Choose an action'), [
     { text: t('Cancel'), style: 'cancel' },
-    { text: 'About this doctor', onPress: () => setTab('About') },
-    { text: 'Refresh availability', onPress: () => { setTime(null); days.reload(); slots.reload(); } },
+    { text: t('About this doctor'), onPress: () => setTab('About') },
+    { text: t('Refresh availability'), onPress: () => { setTime(null); days.reload(); slots.reload(); } },
   ]);
   const profile = doctor.data?.doctor;
+  const viewBookedPass = () => {
+    if (submissionPending.current) return;
+    setBookingPass(null);
+    router.replace('/(patient)/queue');
+  };
   const services = profile?.department.toLowerCase().includes('orthop')
     ? ['Consultation', 'Diagnostics', 'Surgery', 'Rehabilitation', 'Physical Therapy']
     : ['Consultation', 'Diagnostics'];
@@ -153,7 +225,7 @@ export function DoctorBookingScreen() {
               </View>
               <View style={styles.profileRow}>
                 <View style={styles.bio}>
-                  <Text style={styles.specialty}>{profile.specialization}</Text>
+                  <Text style={styles.specialty}>{t(profile.specialization)}</Text>
                   <Text style={styles.doctorName}>{profile.displayName || profile.name}</Text>
                   <View style={styles.tags}>{services.map(service => <View key={service} style={styles.tag}><Text style={styles.tagText}>{service}</Text></View>)}</View>
                 </View>
@@ -180,7 +252,7 @@ export function DoctorBookingScreen() {
                 <Text style={styles.sectionTitle}>{t("About")}{' '}{profile.displayName || profile.name}</Text>
                 <Text style={styles.aboutText}>{profile.about || t('Contact the clinic for more information about this doctor.')}</Text>
                 {!!profile.qualifications && <Text style={styles.aboutText}>{profile.qualifications}</Text>}
-                {!!profile.languages.length && <Text style={styles.hint}>{t("Languages:")}{' '}{profile.languages.join(', ')}</Text>}
+                {!!profile.languages.length && <Text style={styles.hint}>{t("Languages:")}{' '}{profile.languages.map(value => t(value)).join(', ')}</Text>}
                 {!!profile.room && <Text style={styles.hint}>{t("Clinic room:")}{' '}{profile.room}</Text>}
               </View>
             ) : (
@@ -204,13 +276,13 @@ export function DoctorBookingScreen() {
                   {date && <Text style={styles.dateContext}>{new Date(`${date}T12:00:00Z`).toLocaleDateString(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' })}</Text>}
                   {days.loading ? <ActivityIndicator style={styles.loading} color={C.primary} /> : days.error ? (
                     <View style={styles.notice}><Text style={styles.hint}>{days.error}</Text><Pressable accessibilityRole="button" onPress={days.reload}><Text style={styles.link}>{t("Try again")}</Text></Pressable></View>
-                  ) : !days.data?.days.length ? <Text style={styles.hint}>
+                  ) : !availableDays.length ? <Text style={styles.hint}>
                     {days.data?.scheduleConfigured === false
                       ? t('This doctor has no clinic schedule configured yet. Please check again later.')
                       : t('No available dates. Please check again later.')}
                   </Text> : (
                     <ScrollView ref={dateStrip} horizontal showsHorizontalScrollIndicator={false} style={styles.dateStrip} contentContainerStyle={styles.dateContent}>
-                      {days.data.days.map(day => {
+                      {availableDays.map(day => {
                         const parts = shortDayParts(day.date, locale);
                         const selected = day.date === date;
                         return <Pressable key={day.date} accessibilityRole="button" accessibilityLabel={t("{value0}, {value1} slots available", { value0: String(longDayLabel(day.date, locale)), value1: String(day.slotsRemaining) })} accessibilityState={{ selected }} onPress={() => selectDate(day.date)} style={({ pressed }) => [styles.day, selected && styles.dayActive, pressed && styles.pressed]}>
@@ -225,7 +297,7 @@ export function DoctorBookingScreen() {
                   ) : date && !currentSlots.length ? <Text style={styles.hint}>{t("No clinic times for this day. Try another date.")}</Text> : (
                     <View style={styles.slotGrid}>{currentSlots.map(slot => {
                       const selected = slot.time === time;
-                      return <View key={slot.id} style={styles.slotCell}><Pressable accessibilityRole="button" accessibilityState={{ selected, disabled: !slot.available }} accessibilityLabel={`${slot.time}, ${slot.available ? `${slot.remaining} slots remaining` : 'fully booked'}`} disabled={!slot.available} onPress={() => setTime(slot.time)} style={({ pressed }) => [styles.slot, selected && styles.slotActive, !slot.available && styles.slotUnavailable, pressed && styles.pressed]}>
+                      return <View key={slot.id} style={styles.slotCell}><Pressable accessibilityRole="button" accessibilityState={{ selected, disabled: !slot.available }} accessibilityLabel={`${slot.time}, ${slot.available ? `${slot.remaining} slots remaining` : t("fully booked")}`} disabled={!slot.available} onPress={() => setTime(slot.time)} style={({ pressed }) => [styles.slot, selected && styles.slotActive, !slot.available && styles.slotUnavailable, pressed && styles.pressed]}>
                         <Text style={[styles.slotText, selected && styles.whiteText]}>{slot.time}</Text>
                       </Pressable></View>;
                     })}</View>
@@ -240,9 +312,9 @@ export function DoctorBookingScreen() {
                     </View>
                     <View>
                       <Text style={styles.fieldLabel}>{t("Medical Document")}{' '}<Text style={styles.optional}>{t("(Optional)")}</Text></Text>
-                      <Pressable accessibilityRole="button" accessibilityLabel={t("Add or view medical reports")} onPress={showReports} style={({ pressed }) => [styles.uploadCard, pressed && styles.pressed]}>
+                      <Pressable accessibilityRole="button" accessibilityLabel={t("Attach a medical document")} onPress={chooseDocument} style={({ pressed }) => [styles.uploadCard, pressed && styles.pressed]}>
                         <View style={styles.uploadIcon}><BookingIcon name="upload" color={C.secondary} /></View>
-                        <View style={styles.uploadCopy}><Text style={styles.uploadTitle}>{t("Attach reports or scans")}</Text><Text style={styles.uploadHint} numberOfLines={1}>{t("Example: latest medical check and referral document")}</Text></View>
+                        <View style={styles.uploadCopy}><Text style={styles.uploadTitle}>{selectedDocument?.name || t("Attach reports or scans")}</Text><Text style={styles.uploadHint} numberOfLines={1}>{selectedDocument ? t("This document will be attached to the appointment") : t("PDF, JPEG, PNG or WebP up to 10 MB")}</Text></View>
                         <BookingIcon name="plus" color={C.outline} size={20} />
                       </Pressable>
                     </View>
@@ -265,16 +337,38 @@ export function DoctorBookingScreen() {
           <View style={[styles.calendarSheet, { paddingBottom: Math.max(insets.bottom, 24) }]} accessibilityViewIsModal>
             <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{t("Choose an available date")}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("Close date picker")} onPress={() => setCalendarOpen(false)} style={styles.calendarButton}><Text style={styles.link}>{t("Done")}</Text></Pressable></View>
             <ScrollView contentContainerStyle={styles.calendarDays}>
-              {(days.data?.days ?? []).map((day, index) => <Pressable key={day.date} accessibilityRole="button" accessibilityState={{ selected: date === day.date }} onPress={() => { selectDate(day.date); setCalendarOpen(false); dateStrip.current?.scrollTo({ x: index * 64, animated: true }); }} style={[styles.calendarDay, date === day.date && styles.modeActive]}>
+              {availableDays.map((day, index) => <Pressable key={day.date} accessibilityRole="button" accessibilityState={{ selected: date === day.date }} onPress={() => { selectDate(day.date); setCalendarOpen(false); dateStrip.current?.scrollTo({ x: index * 64, animated: true }); }} style={[styles.calendarDay, date === day.date && styles.modeActive]}>
                 <Text style={[styles.fieldLabel, date === day.date && styles.whiteText]}>{longDayLabel(day.date, locale)}</Text><Text style={[styles.hint, date === day.date && styles.whiteText]}>{day.slotsRemaining} {t("slots available")}</Text>
               </Pressable>)}
-              {!days.data?.days.length && <Text style={styles.hint}>
+              {!availableDays.length && <Text style={styles.hint}>
                 {days.data?.scheduleConfigured === false
                   ? t('This doctor has no clinic schedule configured yet.')
                   : t('No available dates to display.')}
               </Text>}
             </ScrollView>
           </View>
+        </View>
+      </Modal>
+      <Modal visible={Boolean(bookingPass)} transparent animationType="fade" onRequestClose={viewBookedPass}>
+        <View style={[styles.confirmationBackdrop, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
+          <ScrollView style={styles.confirmationScroll} contentContainerStyle={styles.confirmationCard}>
+            <View accessibilityViewIsModal style={styles.confirmationContent}>
+            <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={styles.confirmationTitle}>{t('Appointment confirmed')}</Text>
+            <Text style={styles.confirmationSubtitle}>{t('Your queue and token details are ready.')}</Text>
+            <Text style={styles.confirmationSubtitle}>{t('Show this QR code to the staff at your appointment.')}</Text>
+            {bookingPass ? <PassQr value={bookingPass.qrValue} size={190} /> : null}
+            {bookingPass ? <Text style={styles.confirmationToken}>{bookingPass.tokenLabel}</Text> : null}
+            {bookingPass ? <Text style={styles.confirmationQueue}>{t('Queue number: {value0}', { value0: String(bookingPass.tokenNumber) })}</Text> : null}
+            {bookingPass ? <Text style={styles.confirmationMeta}>{bookingPass.doctorName || t(bookingPass.department)} · {longDayLabel(bookingPass.queueDate, locale)}</Text> : null}
+            {bookedTime ? <Text style={styles.confirmationMeta}>{t('Appointment time: {time}', { time: bookedTime })}</Text> : null}
+            {uploadingDocument ? <View style={styles.confirmationUploading}><ActivityIndicator color={C.primary} /><Text accessibilityLiveRegion="polite" style={styles.confirmationSubtitle}>{t('Uploading your medical document...')}</Text></View> : null}
+            {documentUploadError ? <Text accessibilityRole="alert" style={styles.confirmationError}>{t('The medical document could not be uploaded.')}{'\n'}{documentUploadError}</Text> : null}
+            <View style={styles.confirmationActions}>
+              {documentUploadError ? <Pressable accessibilityRole="button" onPress={() => { setBookingPass(null); router.replace('/(patient)/profile/reports'); }} style={styles.confirmationSecondary}><Text style={styles.confirmationSecondaryText}>{t('View reports')}</Text></Pressable> : null}
+              <Pressable accessibilityRole="button" accessibilityState={{ disabled: submitting }} disabled={submitting} onPress={viewBookedPass} style={[styles.confirmationPrimary, submitting && styles.ctaDisabled]}><Text style={styles.confirmationPrimaryText}>{t('View queue pass')}</Text></Pressable>
+            </View>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
     </KeyboardAvoidingView>
@@ -348,6 +442,22 @@ const styles = StyleSheet.create({
   uploadCopy: { flex: 1, minWidth: 0 },
   uploadTitle: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: C.text },
   uploadHint: { fontSize: 12, lineHeight: 16, color: C.outline, marginTop: 2 },
+  confirmationBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: 'rgba(14,30,35,0.55)' },
+  confirmationScroll: { width: '100%', maxWidth: 420, flexGrow: 0, borderRadius: 24, backgroundColor: C.white },
+  confirmationCard: { padding: 24 },
+  confirmationContent: { alignItems: 'center', gap: 10 },
+  confirmationUploading: { alignItems: 'center', gap: 8 },
+  confirmationTitle: { color: C.text, fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  confirmationSubtitle: { color: C.muted, fontSize: 14, textAlign: 'center' },
+  confirmationToken: { color: C.primary, fontSize: 30, fontWeight: '800' },
+  confirmationQueue: { color: C.text, fontSize: 18, fontWeight: '700' },
+  confirmationMeta: { color: C.muted, fontSize: 13, textAlign: 'center' },
+  confirmationError: { color: '#a12626', fontSize: 12, textAlign: 'center' },
+  confirmationActions: { width: '100%', gap: 8, marginTop: 6 },
+  confirmationPrimary: { minHeight: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: C.primary },
+  confirmationPrimaryText: { color: C.white, fontSize: 14, fontWeight: '700' },
+  confirmationSecondary: { minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.primary },
+  confirmationSecondaryText: { color: C.primary, fontSize: 14, fontWeight: '700' },
   footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: C.background, boxShadow: '0 -4px 20px -2px rgba(14,30,35,0.06)' },
   cta: { minHeight: 52, borderRadius: 30, backgroundColor: C.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
   ctaDisabled: { opacity: 0.45 },

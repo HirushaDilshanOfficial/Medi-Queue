@@ -29,7 +29,7 @@ export function DoctorCard({ doctor, onPress }: Props) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={t("View {value0}, {value1}", { value0: String(doctor.name), value1: String(doctor.specialization) })}
+      accessibilityLabel={t("View {value0}, {value1}", { value0: String(doctor.name), value1: t(doctor.specialization) })}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <View style={[styles.avatar, { backgroundColor: toneFor(doctor.id) }]}>
@@ -45,14 +45,14 @@ export function DoctorCard({ doctor, onPress }: Props) {
         </View>
 
         <Text style={styles.specialty} numberOfLines={1}>
-          {doctor.specialization}
+          {t(doctor.specialization)}
         </Text>
 
         <View style={styles.metaRow}>
           <View style={styles.metaItem}>
             <DesignImage name="badge" size={12} color={PatientTheme.brandMid} />
             <Text style={styles.meta} numberOfLines={1}>
-              {doctor.department}
+              {t(doctor.department)}
             </Text>
           </View>
           {doctor.room ? (
