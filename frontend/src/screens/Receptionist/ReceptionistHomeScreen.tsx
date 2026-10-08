@@ -426,7 +426,13 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
           <TouchableOpacity
             style={styles.bellButton}
             activeOpacity={0.8}
-            onPress={() => setNotificationModalVisible(true)}
+            onPress={() => {
+              if (onNavigate) {
+                onNavigate('notifications');
+              } else {
+                router.push('/notifications' as any);
+              }
+            }}
             accessibilityLabel={t("Notifications")}
             accessibilityRole="button"
           >
