@@ -1136,8 +1136,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 </View>
               </View>
 
-<<<<<<< HEAD
-              <TouchableOpacity
+<TouchableOpacity
                 style={[
                   styles.topRefreshButton,
                   {
@@ -1150,49 +1149,9 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 accessibilityLabel="Refresh Current Patient"
               >
                 <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
-=======
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {/* Top Bar Refresh Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.topRefreshButton,
-                    {
-                      backgroundColor: theme.card,
-                      borderColor: theme.cardBorder,
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                  onPress={handleResetToCurrentPatient}
-                  accessibilityLabel="Refresh Current Patient"
-                >
-                  <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
-                    <Ionicons
-                      name="refresh-outline"
-                      size={20}
-                      color={theme.accent}
-                    />
+<Ionicons name="refresh-outline" size={20} color={theme.accent} />
                   </Animated.View>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.bellButton,
-                    {
-                      backgroundColor: theme.card,
-                      borderColor: theme.cardBorder,
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                  onPress={() => showToast(t("Notifications: No new alerts"))}
-                >
->>>>>>> origin/dev
-                  <Ionicons
-                    name="refresh-outline"
-                    size={20}
-                    color={theme.accent}
-                  />
-                </Animated.View>
-              </TouchableOpacity>
             </View>
 
             {/* ─────────────────────────────────────────────────────────
@@ -1461,8 +1420,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                             },
                           ]}
                         >
-<<<<<<< HEAD
-                          <View style={styles.chronicDot} />
+<View style={styles.chronicDot} />
                           <Text
                             style={[styles.chronicChipText, { color: theme.textDark }]}
                           >
@@ -1477,18 +1435,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     </Text>
                   );
                 })()}
-=======
-                          {cond}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <Text style={[styles.noneRecordedText, { color: theme.textMuted }]}>
-                    {t("None recorded.")}
-                  </Text>
-                )}
->>>>>>> origin/dev
+
               </View>
 
               {/* e. Current Medications Heading with Add Button */}
@@ -2004,15 +1951,10 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 <View style={styles.subSectionHeaderRow}>
                   <Text
                     style={[styles.subSectionTitle, { color: theme.textDark }]}
-<<<<<<< HEAD
-                  >
-                    Diagnostic imaging & reports
+>
+                    {t("Diagnostic imaging & reports")}
                   </Text>
                   {((currentPatient.reports && currentPatient.reports.length > 0) || currentPatient.imaging?.hasImaging) && (
-=======
-                  >{t("Diagnostic imaging")}</Text>
-                  {currentPatient.imaging.hasImaging && (
->>>>>>> origin/dev
                     <Text
                       style={[styles.subSectionSubLabel, { color: theme.textMuted }]}
                     >
@@ -2156,13 +2098,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       ]}
                       activeOpacity={0.8}
                       onPress={() =>
-<<<<<<< HEAD
-                        setSelectedReportToView(currentPatient.imaging)
-=======
-                        showToast(
-                          t("Viewing report for {value0}", { value0: String(currentPatient.imaging.title) })
-                        )
->>>>>>> origin/dev
+setSelectedReportToView(currentPatient.imaging)
                       }
                     >
                       <Text
@@ -2189,11 +2125,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                         { color: theme.textMuted },
                       ]}
                     >
-<<<<<<< HEAD
-                      No diagnostic imaging / lab records found
-=======
-                      {t("No diagnostic imaging records found")}
->>>>>>> origin/dev
+{t("No diagnostic imaging / lab records found")}
                     </Text>
                   </View>
                 )}
