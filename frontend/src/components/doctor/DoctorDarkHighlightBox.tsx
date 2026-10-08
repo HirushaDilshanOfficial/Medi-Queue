@@ -1,13 +1,13 @@
 import React from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   ViewStyle,
   StyleProp,
   TextStyle,
 } from 'react-native';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DOCTOR_TOKENS as C } from './doctorTheme';
 
@@ -154,7 +154,8 @@ const styles = StyleSheet.create({
     backgroundColor: C.white16,
     borderWidth: 1,
     borderColor: C.white40,
-    height: 46,
+    minHeight: 46,
+    paddingVertical: 8,
     borderRadius: 14,
     paddingHorizontal: 14,
   },
@@ -162,10 +163,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 6,
   },
   outlineBtnText: {
     color: '#FFFFFF',
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '700',
+    flexShrink: 1,
   },
 });

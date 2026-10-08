@@ -1,8 +1,8 @@
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useTheme } from '../../theme/ThemeContext';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Modal,
@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Animated,
 } from 'react-native';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -91,6 +92,7 @@ export default function AllergyAlertSection({
   onAllergiesChange,
 }: AllergyAlertSectionProps) {
   const { t } = useLanguage();
+  const { isDark } = useTheme();
   // Local allergies state
   const [allergies, setAllergies] = useState<AllergyItem[]>(() => {
     if (initialAllergies && Array.isArray(initialAllergies)) {
@@ -366,40 +368,40 @@ export default function AllergyAlertSection({
       {/* ========================================================================= */}
       {allergies.length === 0 ? (
         // ----------------- GREEN EMPTY STATE CARD -----------------
-        <View style={styles.emptyGreenCard}>
+        <View style={[styles.emptyGreenCard, isDark && { backgroundColor: '#0c2419', borderColor: '#166534' }]}>
           <View style={styles.emptyGreenLeft}>
             <View style={styles.shieldIconWrap}>
               <Ionicons name="shield-checkmark" size={26} color="#16a34a" />
             </View>
             <View style={styles.emptyGreenTextWrap}>
-              <Text style={styles.emptyGreenTitle}>{t("No known allergies")}</Text>
-              <Text style={styles.emptyGreenSubtitle}>
+              <Text style={[styles.emptyGreenTitle, isDark && { color: '#86efac' }]}>{t("No known allergies")}</Text>
+              <Text style={[styles.emptyGreenSubtitle, isDark && { color: '#a7f3d0' }]}>
                 {t("Confirm with the patient before prescribing")}
               </Text>
             </View>
           </View>
 
           <TouchableOpacity
-            style={styles.emptyGreenAddBtn}
+            style={[styles.emptyGreenAddBtn, isDark && { backgroundColor: '#14412c', borderColor: '#166534' }]}
             onPress={handleOpenAdd}
             activeOpacity={0.75}
             accessibilityRole="button"
             accessibilityLabel={t("Add allergy")}
           >
             <Ionicons name="add" size={17} color="#065f46" style={{ marginRight: 3 }} />
-            <Text style={styles.emptyGreenAddText}>{t("Add allergy")}</Text>
+            <Text style={[styles.emptyGreenAddText, isDark && { color: '#86efac' }]}>{t("Add")}</Text>
           </TouchableOpacity>
         </View>
       ) : (
         // ----------------- RED-TINTED ALERT CARD -----------------
-        <View style={styles.redAlertCard}>
+        <View style={[styles.redAlertCard, isDark && { backgroundColor: '#2a1215', borderColor: '#7f1d1d' }]}>
           {/* Header Row */}
           <View style={styles.alertHeaderRow}>
             <View style={styles.alertHeaderLeft}>
               <View style={styles.warningIconBadge}>
                 <Ionicons name="warning" size={19} color="#dc2626" />
               </View>
-              <Text style={styles.alertHeaderTitle}>
+              <Text style={[styles.alertHeaderTitle, isDark && { color: '#fca5a5' }]}>
                 {allergies.length === 1 ? 'Allergy alert' : `Allergy alerts (${allergies.length})`}
               </Text>
             </View>
@@ -423,12 +425,12 @@ export default function AllergyAlertSection({
               const isLifeThreatening = item.severity === 'life-threatening';
 
               return (
-                <View key={item.id} style={styles.allergyRowCard}>
+                <View key={item.id} style={[styles.allergyRowCard, isDark && { backgroundColor: '#1c1719', borderColor: '#451a1a' }]}>
                   {/* Row Top Header: Allergen name + Severity pill + Action buttons */}
                   <View style={styles.rowTopRow}>
                     <View style={styles.rowInfoCol}>
                       <View style={styles.rowTitleAndBadgeWrap}>
-                        <Text style={styles.allergenNameText} numberOfLines={2}>
+                        <Text style={[styles.allergenNameText, isDark && { color: '#fca5a5' }]} numberOfLines={2}>
                           {item.allergen}
                         </Text>
                         <View
@@ -964,12 +966,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#166534', // green-800
     letterSpacing: -0.2,
+    flexShrink: 1,
   },
   emptyGreenSubtitle: {
     fontSize: 11,
     fontWeight: '500',
     color: '#15803d', // green-700
     marginTop: 2,
+    flexShrink: 1,
   },
   emptyGreenAddBtn: {
     flexDirection: 'row',
@@ -981,6 +985,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 14,
     minHeight: 36,
+    flexShrink: 0,
   },
   emptyGreenAddText: {
     fontSize: 12,

@@ -44,9 +44,11 @@ import {
   PrimaryButton,
   SecondaryButton,
 } from '../../components/doctor';
+import { useTheme } from '../../theme/ThemeContext';
 
 export default function DoctorDashboardScreen() {
   const { t } = useLanguage();
+  const { isDark } = useTheme();
   const [data, setData] = useState<DoctorDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -644,7 +646,7 @@ export default function DoctorDashboardScreen() {
   }, [currentTime]);
 
   return (
-    <View style={styles.rootContainer}>
+    <View style={[styles.rootContainer, isDark && { backgroundColor: '#091012' }]}>
       <StatusBar barStyle="light-content" backgroundColor={C.teal} />
 
       {/* 1. SHARED TOP BAR */}
@@ -677,7 +679,7 @@ export default function DoctorDashboardScreen() {
             <View style={styles.darkGreetingRow}>
               <Ionicons name={greetingIcon} size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text style={styles.darkGreetingText}>{greetingText}</Text>
-</View>
+            </View>
             <DarkStrongPill
               label={getBreakPillLabel()}
               pulse
@@ -725,34 +727,34 @@ export default function DoctorDashboardScreen() {
 
         {/* 3. STATS ROW (3 EQUAL WHITE TILES: Waiting "2 +3", Done "0 / 30", Avg wait "15 min") */}
         <View style={styles.statsRow}>
-          <View style={styles.statTile}>
-            <Text style={styles.statLabelText}>{t('Waiting')}</Text>
+          <View style={[styles.statTile, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
+            <Text style={[styles.statLabelText, isDark && { color: '#86A4A9' }]}>{t('Waiting')}</Text>
             <View style={styles.statNumberRow}>
-              <Text style={styles.statNumberText}>{waitingCount}</Text>
-              <Text style={styles.statSuffixText}>+3</Text>
+              <Text style={[styles.statNumberText, isDark && { color: '#EEF8FA' }]}>{waitingCount}</Text>
+              <Text style={[styles.statSuffixText, isDark && { color: '#86A4A9' }]}>+3</Text>
             </View>
           </View>
 
-          <View style={styles.statTile}>
-            <Text style={styles.statLabelText}>{t('Done')}</Text>
+          <View style={[styles.statTile, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
+            <Text style={[styles.statLabelText, isDark && { color: '#86A4A9' }]}>{t('Completed')}</Text>
             <View style={styles.statNumberRow}>
-              <Text style={styles.statNumberText}>{completedCount}</Text>
-              <Text style={styles.statSuffixText}>/ {totalCapacity}</Text>
+              <Text style={[styles.statNumberText, isDark && { color: '#EEF8FA' }]}>{completedCount}</Text>
+              <Text style={[styles.statSuffixText, isDark && { color: '#86A4A9' }]}>/ {totalCapacity}</Text>
             </View>
           </View>
 
-          <View style={styles.statTile}>
-            <Text style={styles.statLabelText}>{t('Avg wait')}</Text>
+          <View style={[styles.statTile, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
+            <Text style={[styles.statLabelText, isDark && { color: '#86A4A9' }]}>{t('Avg wait')}</Text>
             <View style={styles.statNumberRow}>
-              <Text style={styles.statNumberText}>{avgWaitMinutes}</Text>
-              <Text style={styles.statSuffixText}>{t('min')}</Text>
+              <Text style={[styles.statNumberText, isDark && { color: '#EEF8FA' }]}>{avgWaitMinutes}</Text>
+              <Text style={[styles.statSuffixText, isDark && { color: '#86A4A9' }]}>{t('min')}</Text>
             </View>
           </View>
         </View>
 
         {/* 4. "NOW SERVING" CARD (WHITE, 4PX TEAL LEFT BORDER) */}
         {currentPatient ? (
-          <View style={styles.nowServingCard}>
+          <View style={[styles.nowServingCard, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
             <View style={styles.nowServingHeader}>
               <StatusPill label={t('Now serving')} />
               <View style={styles.timePill}>
@@ -770,10 +772,10 @@ export default function DoctorDashboardScreen() {
               </View>
 
               <View style={styles.patientInfoCol}>
-                <Text style={styles.patientNameHeading} numberOfLines={1}>
+                <Text style={[styles.patientNameHeading, isDark && { color: '#EEF8FA' }]} numberOfLines={1}>
                   {currentPatient.patientName}
                 </Text>
-                <Text style={styles.patientSubtitleInfo} numberOfLines={1}>
+                <Text style={[styles.patientSubtitleInfo, isDark && { color: '#86A4A9' }]} numberOfLines={1}>
                   {t(currentPatient.reason || 'General OPD consultation')} · {currentPatient.age || 28} {t('yrs')}
                 </Text>
               </View>
@@ -781,12 +783,12 @@ export default function DoctorDashboardScreen() {
 
             {/* Vitals tiles */}
             <View style={styles.vitalsRow}>
-              <View style={styles.vitalTile}>
-                <Text style={styles.vitalLabel}>{t('Blood pressure')}</Text>
-                <Text style={styles.vitalValue}>{currentPatient.bloodPressure || '120/80'}</Text>
+              <View style={[styles.vitalTile, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+                <Text style={[styles.vitalLabel, isDark && { color: '#86A4A9' }]}>{t('Blood pressure')}</Text>
+                <Text style={[styles.vitalValue, isDark && { color: '#EEF8FA' }]}>{currentPatient.bloodPressure || '120/80'}</Text>
               </View>
-              <View style={styles.vitalTile}>
-                <Text style={styles.vitalLabel}>{t('Heart rate')}</Text>
+              <View style={[styles.vitalTile, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+                <Text style={[styles.vitalLabel, isDark && { color: '#86A4A9' }]}>{t('Heart rate')}</Text>
                 <Text style={styles.vitalValueTeal}>{currentPatient.heartRate || '76 bpm'}</Text>
               </View>
             </View>
@@ -802,7 +804,7 @@ export default function DoctorDashboardScreen() {
             {/* Action row: undo icon button, short Rx secondary button, primary Complete & next */}
             <View style={styles.actionRow}>
               <TouchableOpacity
-                style={styles.undoBtn}
+                style={[styles.undoBtn, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
                 onPress={handleUndoPatient}
                 disabled={isProcessing}
                 activeOpacity={0.75}
@@ -828,17 +830,17 @@ export default function DoctorDashboardScreen() {
                     router.push('/(doctor)/prescription' as any);
                   }
                 }}
-                style={{ paddingHorizontal: 12 }}
-                textStyle={{ fontSize: 13 }}
+                style={{ paddingHorizontal: 10 }}
+                textStyle={{ fontSize: 12 }}
               />
 
               <PrimaryButton
                 label={t('Complete & next')}
-                icon={<Ionicons name="checkmark-circle-outline" size={17} color="#FFFFFF" />}
+                icon={<Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />}
                 onPress={handleCompleteAndNext}
                 loading={isProcessing}
-                style={{ flex: 1, paddingHorizontal: 10 }}
-                textStyle={{ fontSize: 13 }}
+                style={{ flex: 1, paddingHorizontal: 8 }}
+                textStyle={{ fontSize: 12 }}
               />
             </View>
           </View>
@@ -846,12 +848,12 @@ export default function DoctorDashboardScreen() {
 
         {/* 5. QUICK ACTIONS */}
         <View style={styles.quickActionsSection}>
-          <View style={styles.quickActionsRow}>
+          <View style={[styles.quickActionsRow, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
             <TouchableOpacity style={styles.quickActionItem} onPress={handleCallNext} activeOpacity={0.7}>
-              <View style={styles.quickActionCircle}>
-                <Ionicons name="megaphone-outline" size={20} color={C.tealDeep} />
+              <View style={[styles.quickActionCircle, isDark && { backgroundColor: '#142528' }]}>
+                <Ionicons name="megaphone-outline" size={20} color={isDark ? "#3BD1DF" : C.tealDeep} />
               </View>
-              <Text style={styles.quickActionLabel}>{t('Call next')}</Text>
+              <Text style={[styles.quickActionLabel, isDark && { color: '#EEF8FA' }]}>{t('Call next')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -859,30 +861,30 @@ export default function DoctorDashboardScreen() {
               onPress={() => router.push('/(doctor)/schedule' as any)}
               activeOpacity={0.7}
             >
-              <View style={styles.quickActionCircle}>
-                <Ionicons name="calendar-outline" size={20} color={C.tealDeep} />
+              <View style={[styles.quickActionCircle, isDark && { backgroundColor: '#142528' }]}>
+                <Ionicons name="calendar-outline" size={20} color={isDark ? "#3BD1DF" : C.tealDeep} />
               </View>
-              <Text style={styles.quickActionLabel}>{t('Schedule')}</Text>
+              <Text style={[styles.quickActionLabel, isDark && { color: '#EEF8FA' }]}>{t('Schedule')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.quickActionItem} onPress={handleBreakActionPress} activeOpacity={0.7}>
-              <View style={[styles.quickActionCircle, activeBreak && { backgroundColor: C.warnTint }]}>
+              <View style={[styles.quickActionCircle, isDark && { backgroundColor: '#142528' }, activeBreak && { backgroundColor: C.warnTint }]}>
                 <Ionicons
                   name={activeBreak?.type === 'lunch' || activeBreak?.type === 'dinner' ? 'restaurant-outline' : 'cafe-outline'}
                   size={20}
-                  color={activeBreak ? C.warn : C.tealDeep}
+                  color={activeBreak ? C.warn : (isDark ? "#3BD1DF" : C.tealDeep)}
                 />
               </View>
-              <Text style={[styles.quickActionLabel, activeBreak && { color: C.warn, fontWeight: '800' }]}>
+              <Text style={[styles.quickActionLabel, isDark && { color: '#EEF8FA' }, activeBreak && { color: C.warn, fontWeight: '800' }]}>
                 {activeBreak ? t('End break') : t('Take break')}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.quickActionItem} onPress={handleRecallPatient} activeOpacity={0.7}>
-              <View style={styles.quickActionCircle}>
-                <Ionicons name="notifications-outline" size={20} color={C.tealDeep} />
+              <View style={[styles.quickActionCircle, isDark && { backgroundColor: '#142528' }]}>
+                <Ionicons name="notifications-outline" size={20} color={isDark ? "#3BD1DF" : C.tealDeep} />
               </View>
-              <Text style={styles.quickActionLabel}>{t('Recall')}</Text>
+              <Text style={[styles.quickActionLabel, isDark && { color: '#EEF8FA' }]}>{t('Recall')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -890,7 +892,7 @@ export default function DoctorDashboardScreen() {
         {/* 6. UP NEXT IN QUEUE */}
         <View style={styles.queueSection}>
           <View style={styles.queueHeaderRow}>
-            <Text style={styles.queueTitleText}>{t('Up next in queue')}</Text>
+            <Text style={[styles.queueTitleText, isDark && { color: '#EEF8FA' }]}>{t('Up next in queue')}</Text>
             <TouchableOpacity
               style={styles.fullQueueBtn}
               onPress={() => router.push('/(doctor)/queue' as any)}
@@ -903,19 +905,19 @@ export default function DoctorDashboardScreen() {
 
           <View style={styles.queueCardsList}>
             {displayQueue.map((item, index) => (
-              <View key={`${item.tokenNumber}-${index}`} style={styles.queueCard}>
+              <View key={`${item.tokenNumber}-${index}`} style={[styles.queueCard, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
                 <View style={styles.queueTokenTile}>
                   <Text style={styles.queueTokenLabel}>{t('Token')}</Text>
                   <Text style={styles.queueTokenNum}>{String(item.tokenNumber).padStart(3, '0')}</Text>
                 </View>
                 <View style={styles.queueItemInfo}>
-                  <Text style={styles.queueItemName} numberOfLines={1}>{item.patientName}</Text>
-                  <Text style={styles.queueItemSubtitle} numberOfLines={1}>
+                  <Text style={[styles.queueItemName, isDark && { color: '#EEF8FA' }]} numberOfLines={1}>{item.patientName}</Text>
+                  <Text style={[styles.queueItemSubtitle, isDark && { color: '#86A4A9' }]} numberOfLines={1}>
                     {t(item.reason || 'OPD check')} · {item.age} {t('yrs')}
                   </Text>
                 </View>
-                <View style={styles.queueTimePill}>
-                  <Text style={styles.queueTimeText}>{item.slotTime || '--:--'}</Text>
+                <View style={[styles.queueTimePill, isDark && { backgroundColor: '#18383E' }]}>
+                  <Text style={[styles.queueTimeText, isDark && { color: '#86A4A9' }]}>{item.slotTime || '--:--'}</Text>
                 </View>
               </View>
             ))}
@@ -938,9 +940,9 @@ export default function DoctorDashboardScreen() {
           activeOpacity={1}
           onPress={() => setIsHospitalModalOpen(false)}
         >
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
             <View style={styles.modalHeader}>
-<Text style={styles.modalTitleText}>{t('Switch OPD Hospital')}</Text>
+<Text style={[styles.modalTitleText, isDark && { color: '#EEF8FA' }]}>{t('Switch OPD Hospital')}</Text>
               <TouchableOpacity onPress={() => setIsHospitalModalOpen(false)}>
                 <Ionicons name="close" size={22} color={C.ink} />
               </TouchableOpacity>
@@ -996,10 +998,10 @@ export default function DoctorDashboardScreen() {
           activeOpacity={1}
           onPress={() => setIsWalkInModalOpen(false)}
         >
-          <TouchableOpacity style={styles.walkInModalContent} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+          <TouchableOpacity style={[styles.walkInModalContent, isDark && { backgroundColor: '#142528' }]} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitleText}>{t('Add Walk-in Patient')}</Text>
+              <Text style={[styles.modalTitleText, isDark && { color: '#EEF8FA' }]}>{t('Add Walk-in Patient')}</Text>
               <TouchableOpacity onPress={() => setIsWalkInModalOpen(false)}>
                 <Ionicons name="close" size={22} color={C.ink} />
               </TouchableOpacity>
@@ -1087,9 +1089,9 @@ export default function DoctorDashboardScreen() {
           activeOpacity={1}
           onPress={() => setIsBreakModalOpen(false)}
         >
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitleText}>{t('Select Break Type')}</Text>
+              <Text style={[styles.modalTitleText, isDark && { color: '#EEF8FA' }]}>{t('Select Break Type')}</Text>
               <TouchableOpacity onPress={() => setIsBreakModalOpen(false)}>
                 <Ionicons name="close" size={22} color={C.ink} />
               </TouchableOpacity>
@@ -1112,7 +1114,7 @@ export default function DoctorDashboardScreen() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={styles.breakOptionTitle}>{t(item.label)}</Text>
                     <View style={styles.breakDurationBadge}>
-                      <Text style={styles.breakDurationBadgeText}>{item.duration}</Text>
+                      <Text style={styles.breakDurationBadgeText}>{t(item.duration)}</Text>
                     </View>
                   </View>
                   <Text style={styles.breakOptionDesc}>{t(item.description)}</Text>
@@ -1148,7 +1150,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 14,
-    paddingBottom: 110,
+    paddingBottom: 150,
   },
 
   // 2. Dark Highlight Box
@@ -1272,6 +1274,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: C.sub,
     marginBottom: 4,
+    minHeight: 18,
+    lineHeight: 16,
   },
   statNumberRow: {
     flexDirection: 'row',
@@ -1456,6 +1460,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: C.ink,
+    minHeight: 18,
+    textAlign: 'center',
   },
 
   // 6. Up Next Queue

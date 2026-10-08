@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
+import { ThemeProvider } from '../theme/ThemeContext';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -8,8 +9,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <LanguageProvider>
-        <View style={{ flex: 1 }}>
+      <ThemeProvider>
+        <LanguageProvider>
+          <View style={{ flex: 1 }}>
           <LanguageSwitcher />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
@@ -25,10 +27,12 @@ export default function RootLayout() {
             <Stack.Screen name="(doctor)/schedule" />
             <Stack.Screen name="(doctor)/prescription" />
             <Stack.Screen name="(doctor)/records" />
+            <Stack.Screen name="(doctor)/ehr" />
             <Stack.Screen name="schedule" />
           </Stack>
         </View>
       </LanguageProvider>
-    </SafeAreaProvider>
+    </ThemeProvider>
+  </SafeAreaProvider>
   );
 }

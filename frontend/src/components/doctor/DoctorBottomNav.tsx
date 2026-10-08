@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { DOCTOR_TOKENS as C } from './doctorTheme';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useTheme } from '../../theme/ThemeContext';
 
 export type DoctorTabType = 'home' | 'queue' | 'records' | 'schedule' | 'rx';
 
@@ -14,6 +16,8 @@ interface DoctorBottomNavProps {
 
 export const DoctorBottomNav = ({ activeTab, onTabPress }: DoctorBottomNavProps) => {
   const { t } = useLanguage();
+  const { isDark } = useTheme();
+  const inactiveColor = isDark ? '#86A4A9' : C.sub;
 
   const handlePress = (tab: DoctorTabType) => {
     if (onTabPress) {
@@ -34,7 +38,7 @@ export const DoctorBottomNav = ({ activeTab, onTabPress }: DoctorBottomNavProps)
   };
 
   return (
-    <View style={styles.tabBar}>
+    <View style={[styles.tabBar, isDark && { backgroundColor: '#142528', borderTopColor: '#1F383C' }]}>
       <TouchableOpacity
         style={styles.tabItem}
         onPress={() => handlePress('home')}
@@ -43,9 +47,9 @@ export const DoctorBottomNav = ({ activeTab, onTabPress }: DoctorBottomNavProps)
         <Ionicons
           name={activeTab === 'home' ? 'home' : 'home-outline'}
           size={22}
-          color={activeTab === 'home' ? C.teal : C.sub}
+          color={activeTab === 'home' ? C.teal : inactiveColor}
         />
-        <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>
+        <Text numberOfLines={1} style={[styles.tabLabel, isDark && { color: inactiveColor }, activeTab === 'home' && styles.tabLabelActive]}>
           {t('Home')}
         </Text>
       </TouchableOpacity>
@@ -58,9 +62,9 @@ export const DoctorBottomNav = ({ activeTab, onTabPress }: DoctorBottomNavProps)
         <MaterialCommunityIcons
           name="ticket-confirmation-outline"
           size={22}
-          color={activeTab === 'queue' ? C.teal : C.sub}
+          color={activeTab === 'queue' ? C.teal : inactiveColor}
         />
-        <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>
+        <Text numberOfLines={1} style={[styles.tabLabel, isDark && { color: inactiveColor }, activeTab === 'queue' && styles.tabLabelActive]}>
           {t('Queue')}
         </Text>
       </TouchableOpacity>
@@ -73,9 +77,9 @@ export const DoctorBottomNav = ({ activeTab, onTabPress }: DoctorBottomNavProps)
         <MaterialCommunityIcons
           name="folder-account-outline"
           size={22}
-          color={activeTab === 'records' ? C.teal : C.sub}
+          color={activeTab === 'records' ? C.teal : inactiveColor}
         />
-        <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>
+        <Text numberOfLines={1} style={[styles.tabLabel, isDark && { color: inactiveColor }, activeTab === 'records' && styles.tabLabelActive]}>
           {t('Records')}
         </Text>
       </TouchableOpacity>
@@ -88,9 +92,9 @@ export const DoctorBottomNav = ({ activeTab, onTabPress }: DoctorBottomNavProps)
         <MaterialCommunityIcons
           name="calendar-month-outline"
           size={22}
-          color={activeTab === 'schedule' ? C.teal : C.sub}
+          color={activeTab === 'schedule' ? C.teal : inactiveColor}
         />
-        <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>
+        <Text numberOfLines={1} style={[styles.tabLabel, isDark && { color: inactiveColor }, activeTab === 'schedule' && styles.tabLabelActive]}>
           {t('Schedule')}
         </Text>
       </TouchableOpacity>
@@ -103,9 +107,9 @@ export const DoctorBottomNav = ({ activeTab, onTabPress }: DoctorBottomNavProps)
         <MaterialCommunityIcons
           name="clipboard-edit-outline"
           size={22}
-          color={activeTab === 'rx' ? C.teal : C.sub}
+          color={activeTab === 'rx' ? C.teal : inactiveColor}
         />
-        <Text style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}>
+        <Text numberOfLines={1} style={[styles.tabLabel, isDark && { color: inactiveColor }, activeTab === 'rx' && styles.tabLabelActive]}>
           {t('Prescription')}
         </Text>
       </TouchableOpacity>
@@ -131,10 +135,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
     color: C.sub,
     marginTop: 2,
+    textAlign: 'center',
   },
   tabLabelActive: {
     color: C.teal,

@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   Modal,
   Image,
   Alert,
   Platform,
+  Switch,
 } from 'react-native';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { DOCTOR_TOKENS as C } from './doctorTheme';
 import { useLanguage, LANGUAGES } from '../../i18n/LanguageContext';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface DoctorTopBarProps {
   doctorName?: string;
@@ -31,6 +33,7 @@ export const DoctorTopBar = ({
   unreadCount = 4,
 }: DoctorTopBarProps) => {
   const { t, language, setLanguage } = useLanguage();
+  const { isDark, toggleTheme } = useTheme();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
@@ -137,6 +140,15 @@ export const DoctorTopBar = ({
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={styles.themeChip}
+              activeOpacity={0.75}
+              onPress={toggleTheme}
+              accessibilityLabel={isDark ? t('Light mode') : t('Dark mode')}
+            >
+              <Ionicons name={isDark ? 'sunny' : 'moon-outline'} size={17} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.bellBtn}
               activeOpacity={0.75}
               onPress={() => router.push('/notifications')}
@@ -209,6 +221,26 @@ export const DoctorTopBar = ({
                 <Text style={styles.menuItemText}>{t('Remove photo')}</Text>
               </TouchableOpacity>
             )}
+
+            <View style={styles.menuDivider} />
+
+            <View style={styles.menuThemeRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Ionicons
+                  name={isDark ? 'sunny-outline' : 'moon-outline'}
+                  size={19}
+                  color={C.tealDeep}
+                  style={styles.menuIcon}
+                />
+                <Text style={styles.menuItemText}>{t('Dark mode')}</Text>
+              </View>
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: '#cbd5e1', true: C.teal }}
+                thumbColor="#ffffff"
+              />
+            </View>
 
             <View style={styles.menuDivider} />
 
@@ -422,6 +454,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
+  themeChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: C.white18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bellBtn: {
     width: 36,
     height: 36,
@@ -526,6 +566,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: C.ink,
+  },
+  menuThemeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
   },
 
   // Sign out confirmation dialog

@@ -227,7 +227,8 @@ export interface AllergyCheckResult {
   note?: string;
 }
 
-export const getDefaultAllergiesForPatient = (patient: PatientRecord): AllergyItem[] => {
+export const getDefaultAllergiesForPatient = (patient?: PatientRecord): AllergyItem[] => {
+  if (!patient) return [];
   if (patient.allergies && patient.allergies.length > 0) {
     return patient.allergies;
   }
@@ -340,10 +341,11 @@ export const checkMedicationAllergyWithList = (
 
 export const checkMedicationAllergy = (
   drugNameInput: string,
-  patient: PatientRecord
+  patient?: PatientRecord
 ): AllergyCheckResult => {
+  if (!patient) return { status: 'safe' };
   const allergies = getDefaultAllergiesForPatient(patient);
-  return checkMedicationAllergyWithList(drugNameInput, allergies, patient.medications);
+  return checkMedicationAllergyWithList(drugNameInput, allergies, patient.medications || []);
 };
 
 // ─────────────────────────────────────────────────────────────
