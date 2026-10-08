@@ -83,8 +83,7 @@ export default function AlertsScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={{ backgroundColor: Colors.white }} />
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
 
       {/* Header Profile Section */}
       <View style={styles.header}>
@@ -108,10 +107,10 @@ export default function AlertsScreen() {
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.actionIcon}>
-            <Text>🔔</Text>
+            <Text style={{ fontSize: 20 }}>🔔</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.profileImagePlaceholder}>
-            <Text style={{ color: Colors.white, fontSize: 12 }}>👤</Text>
+            <Text style={{ color: Colors.primaryDark, fontSize: 12 }}>👤</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -336,20 +335,42 @@ export default function AlertsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F9FA' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: Colors.white },
-  backButton: { paddingRight: 15 },
-  backButtonText: { fontSize: 24, color: Colors.textDark },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingVertical: 20, 
+    backgroundColor: Colors.primaryDark,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
+    marginBottom: 10,
+  },
+  backButton: { 
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  backButtonText: { fontSize: 20, color: Colors.white, fontWeight: 'bold' },
   headerProfile: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  profileIcon: { width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  profileIcon: { width: 36, height: 36, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   profileIconText: { fontSize: 18 },
-  headerTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.textDark, marginRight: 8 },
-  liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E6F4F1', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 12 },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary, marginRight: 4 },
-  liveText: { fontSize: 10, color: Colors.primaryDark, fontWeight: 'bold' },
-  headerSubtitle: { fontSize: 11, color: Colors.textMedium, marginTop: 2 },
+  headerTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.white, marginRight: 8 },
+  liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 12 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF3B30', marginRight: 4 },
+  liveText: { fontSize: 10, color: Colors.white, fontWeight: 'bold' },
+  headerSubtitle: { fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   actionIcon: { marginRight: 12, padding: 4 },
-  profileImagePlaceholder: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.primaryDark, alignItems: 'center', justifyContent: 'center' },
+  profileImagePlaceholder: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center' },
   scrollArea: { flex: 1 },
   bannerContainer: { backgroundColor: Colors.primary, margin: 16, borderRadius: 16, padding: 20 },
   bannerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
