@@ -83,7 +83,7 @@ export const SEVERITY_OPTIONS: {
 
 export default function AllergyAlertSection({
   patientId,
-  tokenNumber = 29,
+  tokenNumber = 1,
   patientName,
   patientRecord,
   initialAllergies,
@@ -91,21 +91,13 @@ export default function AllergyAlertSection({
 }: AllergyAlertSectionProps) {
   // Local allergies state
   const [allergies, setAllergies] = useState<AllergyItem[]>(() => {
-    if (initialAllergies && initialAllergies.length > 0) {
+    if (initialAllergies && Array.isArray(initialAllergies)) {
       return initialAllergies;
     }
-    if (patientRecord) {
+    if (patientRecord && patientRecord.allergy?.hasAllergy) {
       return getDefaultAllergiesForPatient(patientRecord);
     }
-    return [
-      {
-        id: 'alg-default-sulfa',
-        allergen: 'Sulfa Drugs (Sulfonamides, TMP-SMX)',
-        reaction: 'Angioedema',
-        severity: 'life-threatening',
-        note: 'Do not administer. Patient experienced facial swelling in previous admission.',
-      },
-    ];
+    return [];
   });
 
   const storageKey = `@medi_queue_patient_allergies_${tokenNumber}`;
@@ -173,15 +165,20 @@ export default function AllergyAlertSection({
       }
 
       // If no cache, use initialAllergies or patientRecord
-      if (initialAllergies && initialAllergies.length > 0) {
+      if (initialAllergies && Array.isArray(initialAllergies)) {
         if (isMounted) {
           setAllergies(initialAllergies);
           onAllergiesChange?.(initialAllergies);
         }
-      } else if (patientRecord && isMounted) {
+      } else if (patientRecord && patientRecord.allergy?.hasAllergy && isMounted) {
         const defaults = getDefaultAllergiesForPatient(patientRecord);
         setAllergies(defaults);
         onAllergiesChange?.(defaults);
+      } else {
+        if (isMounted) {
+          setAllergies([]);
+          onAllergiesChange?.([]);
+        }
       }
     };
 
@@ -191,6 +188,13 @@ export default function AllergyAlertSection({
       isMounted = false;
     };
   }, [storageKey]);
+
+  // Synchronize when parent updates initialAllergies (e.g. newly loaded patient with 0 allergies)
+  useEffect(() => {
+    if (initialAllergies !== undefined) {
+      setAllergies(initialAllergies);
+    }
+  }, [initialAllergies]);
 
   // Web keyboard handler for closing modals with Escape
   useEffect(() => {

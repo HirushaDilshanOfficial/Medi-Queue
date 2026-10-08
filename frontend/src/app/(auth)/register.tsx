@@ -43,11 +43,48 @@ export default function RegisterScreen() {
     }
   };
 
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const validatePhone = (phone: string) => {
+    return /^(0)[0-9]{9}$/.test(phone);
+  };
+
+  const validateNIC = (nic: string) => {
+    return /^([0-9]{9}[vVxX]|[0-9]{12})$/.test(nic);
+  };
+
+  const validateName = (name: string) => {
+    return /^[a-zA-Z\s]+$/.test(name);
+  };
+
   const handleRegister = async () => {
     if (!fullName || !nic || !birthday || !phone || !email || !password || !confirmPassword) {
       Alert.alert(t('Error'), t('Please fill in all fields'));
       return;
     }
+
+    if (!validateName(fullName)) {
+      Alert.alert(t('Error'), t('Full Name can only contain letters and spaces.'));
+      return;
+    }
+
+    if (!validateNIC(nic)) {
+      Alert.alert(t('Error'), t('Please enter a valid NIC (e.g. 123456789V or 123456789012).'));
+      return;
+    }
+
+    if (!validatePhone(phone)) {
+      Alert.alert(t('Error'), t('Mobile number must be 10 digits starting with 0.'));
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      Alert.alert(t('Error'), t('Please enter a valid email address.'));
+      return;
+    }
+
     if (password !== confirmPassword) {
       Alert.alert(t('Error'), t('Passwords do not match'));
       return;
@@ -124,11 +161,11 @@ export default function RegisterScreen() {
         <View style={styles.formContainer}>
           <Text style={styles.sectionLabel}>{t("Full Name")}</Text>
           <TextInput style={styles.input} placeholder={t("Enter your full name")}
-            placeholderTextColor={Colors.textLight} value={fullName} onChangeText={setFullName} />
+            placeholderTextColor={Colors.textLight} value={fullName} onChangeText={(text) => setFullName(text.replace(/[^a-zA-Z\s]/g, ''))} />
 
           <Text style={styles.sectionLabel}>{t("NIC Number")}</Text>
           <TextInput style={styles.input} placeholder="e.g. 199912345678"
-            placeholderTextColor={Colors.textLight} value={nic} onChangeText={setNic} />
+            placeholderTextColor={Colors.textLight} value={nic} onChangeText={(text) => setNic(text.replace(/[^0-9vVxX]/g, ''))} maxLength={12} />
 
           <Text style={styles.sectionLabel}>{t("Birthday")}</Text>
           <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowDatePicker(true)}>
@@ -156,7 +193,7 @@ export default function RegisterScreen() {
 
           <Text style={styles.sectionLabel}>{t("Telephone Number")}</Text>
           <TextInput style={styles.input} placeholder="e.g. 0712345678" keyboardType="phone-pad"
-            placeholderTextColor={Colors.textLight} value={phone} onChangeText={setPhone} />
+            placeholderTextColor={Colors.textLight} value={phone} onChangeText={(text) => setPhone(text.replace(/[^0-9]/g, ''))} maxLength={10} />
 
           <Text style={styles.sectionLabel}>{t("Blood Group (Optional)")}</Text>
           <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowBloodGroupDropdown(true)}>
@@ -168,7 +205,7 @@ export default function RegisterScreen() {
 
           <Text style={styles.sectionLabel}>{t("Email Address")}</Text>
           <TextInput style={styles.input} placeholder={t("Enter your email")}
-            placeholderTextColor={Colors.textLight} value={email} onChangeText={setEmail}
+            placeholderTextColor={Colors.textLight} value={email} onChangeText={(text) => setEmail(text.replace(/\s/g, ''))}
             keyboardType="email-address" autoCapitalize="none" />
 
           <Text style={styles.sectionLabel}>{t("Password")}</Text>

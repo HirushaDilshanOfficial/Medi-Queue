@@ -211,11 +211,7 @@ export default function PatientQueueScreen() {
     try {
       const res = await fetchDoctorDashboard();
       if (res) {
-        if (!res.currentPatient && (!res.upcomingQueue || res.upcomingQueue.length === 0)) {
-          advanceQueueLocally();
-        } else {
-          setData(res);
-        }
+        setData(res);
       }
     } catch (err) {
       console.log('Error loading patient queue:', err);
@@ -223,7 +219,7 @@ export default function PatientQueueScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [advanceQueueLocally]);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -416,15 +412,26 @@ export default function PatientQueueScreen() {
         }, 120);
       }
     } else if (tab === 'records') {
-      try {
-        router.push('/(doctor)/records' as any);
-      } catch (e) {
-        router.push('/records' as any);
-      }
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
+      const activeP = data?.currentPatient;
+      if (activeP) {
+        try {
+          router.push({
+            pathname: '/(doctor)/records' as any,
+            params: {
+              patientId: (activeP as any).patientId || '',
+              patientName: activeP.patientName,
+              tokenNumber: String(activeP.tokenNumber),
+            },
+          });
+        } catch (e) {
           router.push('/(doctor)/records' as any);
-        }, 120);
+        }
+      } else {
+        try {
+          router.push('/(doctor)/records' as any);
+        } catch (e) {
+          router.push('/records' as any);
+        }
       }
     } else if (tab === 'schedule') {
       try {

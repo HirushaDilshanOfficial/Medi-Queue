@@ -56,6 +56,15 @@ const patientSchema = new mongoose.Schema(
         severity: { type: String, trim: true },
       },
     ],
+    vitals: {
+      bloodPressure: { type: String, trim: true },
+      heartRate: { type: String, trim: true },
+      temperature: { type: Number },
+      spO2: { type: Number },
+      weight: { type: Number },
+      height: { type: Number },
+      recordedAt: { type: Date },
+    },
     registeredVia: {
       type: String,
       enum: ['app', 'reception'],

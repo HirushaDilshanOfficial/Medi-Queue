@@ -8,6 +8,7 @@ import { Colors } from '../../constants/Colors';
 import { BASE_URL } from '../../config';
 
 import { getAuthToken, clearAuthToken } from '../../services/http';
+import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 
 export default function ProfileScreen() {
   const { t } = useLanguage();
@@ -181,12 +182,13 @@ export default function ProfileScreen() {
           </View>
         </ScrollView>
       </View>
+      <MOHBottomNav activeRoute="profile" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: 100 },
   headerBackground: {
     backgroundColor: Colors.primaryDark,
     paddingTop: Platform.OS === 'android' ? 20 : 10,

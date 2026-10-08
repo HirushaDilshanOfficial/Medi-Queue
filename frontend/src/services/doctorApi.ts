@@ -11,15 +11,15 @@ export type DoctorQuery = {
 
 export const doctorApi = {
   list: (query: DoctorQuery = {}) =>
-    http.get<{ doctors: Doctor[] }>('/doctors', {
+    http.get<Doctor[]>('/doctors', {
       department: query.department,
       hospitalId: query.hospitalId,
       search: query.search,
       available: query.available,
       sort: query.sort,
-    }),
+    }).then((doctors: any[]) => ({ doctors: doctors.map(d => ({ ...d, id: d._id || d.id })) })),
 
-  departments: () => http.get<{ departments: string[] }>('/doctors/departments'),
+  departments: () => http.get<string[]>('/doctors/departments').then(departments => ({ departments })),
 
-  getById: (id: string) => http.get<{ doctor: Doctor }>(`/doctors/${id}`),
+  getById: (id: string) => http.get<any>(`/doctors/${id}`).then(doctor => ({ doctor: { ...doctor, id: doctor._id || doctor.id } })),
 };
