@@ -1,4 +1,5 @@
 import { API_URL } from '../config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type PatientStatus = 'All' | 'Waiting' | 'In consultation' | 'Seen';
 
@@ -115,6 +116,8 @@ export interface PatientRecord {
   vitalsHistory: VitalHistoryReading[];
   imaging: PatientImaging;
   recentVisits: PatientVisitHistory[];
+  hospitalName?: string;
+  reports?: any[];
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1184,6 +1187,534 @@ export const ALL_DUMMY_PATIENTS: PatientRecord[] = [
   },
 ];
 
+// Tag initial dummy patients with Colombo Teaching Hospital 1
+ALL_DUMMY_PATIENTS.forEach((p) => {
+  if (!p.hospitalName) {
+    p.hospitalName = 'Colombo Teaching Hospital 1';
+  }
+});
+
+export const makeHospitalRecord = (
+  id: string,
+  name: string,
+  tokenNumber: number,
+  hospitalName: string,
+  status: 'Waiting' | 'In consultation' | 'Seen',
+  age: number,
+  gender: 'Male' | 'Female',
+  bloodGroup: string,
+  nic: string,
+  reason: string,
+  bp: string,
+  hr: number,
+  temp: number,
+  spO2: number,
+  allergyTitle?: string,
+  allergyDesc?: string,
+  medName?: string,
+  medDose?: string,
+  photoUrl?: string
+): PatientRecord => {
+  const shortName = name.split(' ')[0];
+  const [sysStr, diaStr] = bp.split('/');
+  const systolic = Number(sysStr) || 120;
+  const diastolic = Number(diaStr) || 80;
+
+  return {
+    id,
+    name,
+    shortName,
+    verified: true,
+    age,
+    gender,
+    bloodGroup,
+    tokenNumber,
+    tokenFormatted: `#${String(tokenNumber).padStart(3, '0')}`,
+    nic,
+    registeredTime: '08:30 AM',
+    status,
+    hospitalName,
+    photoUrl:
+      photoUrl ||
+      (gender === 'Female'
+        ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200'
+        : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'),
+    allergy: allergyTitle
+      ? {
+          hasAllergy: true,
+          isHighRisk: allergyTitle.toLowerCase().includes('severe') || allergyTitle.toLowerCase().includes('high'),
+          title: allergyTitle,
+          description: allergyDesc || 'Clinical allergy on intake.',
+        }
+      : {
+          hasAllergy: false,
+          isHighRisk: false,
+          title: 'No known allergies (NKDA)',
+          description: 'No known adverse drug reactions recorded.',
+        },
+    chronicConditions: [reason],
+    medications: medName
+      ? [
+          {
+            id: `med-${id}`,
+            drugName: medName,
+            dose: medDose || '500 mg',
+            frequency: 'Twice daily',
+            sinceDate: 'Recent',
+          },
+        ]
+      : [],
+    hasVitals: true,
+    vitals: {
+      triageTime: 'Triage: 20 min ago',
+      bloodPressure: bp,
+      bloodPressureUnit: 'mmHg',
+      heartRate: `${hr}`,
+      heartRateUnit: 'bpm',
+      bodyTemp: `${temp}`,
+      bodyTempUnit: '°C',
+      spO2: `${spO2}%`,
+      spO2Status: spO2 >= 95 ? 'Normal' : 'Low',
+      systolic,
+      diastolic,
+      heartRateNum: hr,
+      tempNum: temp,
+      spO2Num: spO2,
+      weight: '68 kg',
+      weightNum: 68,
+      height: '170 cm',
+      heightNum: 170,
+      bmi: '23.5',
+      bmiNum: 23.5,
+      bmiStatus: 'Normal',
+    },
+    vitalsHistory: [
+      {
+        id: `vh-${id}`,
+        dateLabel: 'Now',
+        timestamp: 'Today, 08:30 AM',
+        systolic,
+        diastolic,
+        heartRate: hr,
+        bodyTemp: temp,
+        spO2,
+      },
+    ],
+    imaging: {
+      hasImaging: false,
+    },
+    recentVisits: [
+      {
+        id: `rec-${id}`,
+        title: `${reason} Consultation`,
+        date: 'Today',
+        details: `Clinical review at ${hospitalName}.`,
+        statusBadge: status === 'Seen' ? 'Resolved' : 'Active',
+      },
+    ],
+  };
+};
+
+// Records for City General Hospital
+const CITY_GENERAL_PATIENTS: PatientRecord[] = [
+  makeHospitalRecord(
+    'pat-cg-004',
+    'Imantha kaniska',
+    4,
+    'City General Hospital',
+    'In consultation',
+    28,
+    'Male',
+    'B+',
+    '1998-1029384',
+    'General OPD Consultation',
+    '118/76',
+    72,
+    36.9,
+    99,
+    undefined,
+    undefined,
+    'Paracetamol',
+    '500 mg'
+  ),
+  makeHospitalRecord(
+    'pat-cg-005',
+    'Nihal Jayawardena',
+    5,
+    'City General Hospital',
+    'Waiting',
+    60,
+    'Male',
+    'O+',
+    '1966-2938475',
+    'Chest Discomfort Checkup',
+    '138/88',
+    82,
+    37.1,
+    98,
+    'Aspirin Sensitivity',
+    'Mild gastric irritation from NSAIDs',
+    'Atorvastatin',
+    '20 mg'
+  ),
+  makeHospitalRecord(
+    'pat-cg-006',
+    'Anoma Wickramasinghe',
+    6,
+    'City General Hospital',
+    'Waiting',
+    39,
+    'Female',
+    'A+',
+    '1987-9283741',
+    'Migraine Consultation',
+    '118/76',
+    70,
+    36.8,
+    99,
+    undefined,
+    undefined,
+    'Propranolol',
+    '40 mg'
+  ),
+  makeHospitalRecord(
+    'pat-cg-007',
+    'Dhammika Perera',
+    7,
+    'City General Hospital',
+    'Waiting',
+    50,
+    'Male',
+    'AB+',
+    '1976-3829104',
+    'Cholesterol Review',
+    '128/84',
+    75,
+    36.7,
+    99,
+    undefined,
+    undefined,
+    'Rosuvastatin',
+    '10 mg'
+  ),
+  makeHospitalRecord(
+    'pat-cg-008',
+    'Sujatha Alwis',
+    8,
+    'City General Hospital',
+    'Waiting',
+    57,
+    'Female',
+    'O-',
+    '1969-4829103',
+    'Thyroid Medication Review',
+    '120/78',
+    71,
+    36.8,
+    99,
+    undefined,
+    undefined,
+    'Levothyroxine',
+    '50 mcg'
+  ),
+  makeHospitalRecord(
+    'pat-cg-009',
+    'Sanduni Perera',
+    9,
+    'City General Hospital',
+    'Seen',
+    41,
+    'Female',
+    'A-',
+    '1985-5829102',
+    'Routine Ortho Review',
+    '115/75',
+    68,
+    36.6,
+    100
+  ),
+];
+
+// Records for National Hospital Sri Lanka
+const NATIONAL_HOSPITAL_PATIENTS: PatientRecord[] = [
+  makeHospitalRecord(
+    'pat-nh-101',
+    'Sarath Fonseka',
+    101,
+    'National Hospital Sri Lanka',
+    'In consultation',
+    55,
+    'Male',
+    'A+',
+    '1971-8472910',
+    'Blood Sugar Monitoring',
+    '124/82',
+    76,
+    36.8,
+    99,
+    undefined,
+    undefined,
+    'Metformin',
+    '500 mg'
+  ),
+  makeHospitalRecord(
+    'pat-nh-102',
+    'Gamini Senanayake',
+    102,
+    'National Hospital Sri Lanka',
+    'Waiting',
+    66,
+    'Male',
+    'B+',
+    '1960-7382910',
+    'Arthritis Follow-up',
+    '135/86',
+    78,
+    37.0,
+    98,
+    'High Risk • Penicillin',
+    'Anaphylaxis risk to Penicillin derivatives',
+    'Glucosamine',
+    '1500 mg'
+  ),
+  makeHospitalRecord(
+    'pat-nh-103',
+    'Rohini Jayasuriya',
+    103,
+    'National Hospital Sri Lanka',
+    'Waiting',
+    48,
+    'Female',
+    'O+',
+    '1978-6291048',
+    'Gastritis & Acid Reflux',
+    '122/80',
+    74,
+    36.9,
+    99,
+    undefined,
+    undefined,
+    'Omeprazole',
+    '20 mg'
+  ),
+  makeHospitalRecord(
+    'pat-nh-104',
+    'Prasanna Fernando',
+    104,
+    'National Hospital Sri Lanka',
+    'Waiting',
+    35,
+    'Male',
+    'AB+',
+    '1991-5192837',
+    'Lower Back Strain',
+    '120/80',
+    72,
+    36.7,
+    99,
+    undefined,
+    undefined,
+    'Paracetamol',
+    '500 mg'
+  ),
+  makeHospitalRecord(
+    'pat-nh-105',
+    'Chitra Samaranayake',
+    105,
+    'National Hospital Sri Lanka',
+    'Waiting',
+    59,
+    'Female',
+    'A-',
+    '1967-4081928',
+    'Osteoporosis Consultation',
+    '126/82',
+    75,
+    36.8,
+    99,
+    undefined,
+    undefined,
+    'Calcium + Vit D',
+    '600 mg'
+  ),
+  makeHospitalRecord(
+    'pat-nh-106',
+    'Mahinda Abeyrathne',
+    106,
+    'National Hospital Sri Lanka',
+    'Waiting',
+    63,
+    'Male',
+    'O+',
+    '1963-3972810',
+    'Post-CABG Routine Check',
+    '130/80',
+    70,
+    36.7,
+    98,
+    undefined,
+    undefined,
+    'Aspirin',
+    '75 mg'
+  ),
+  makeHospitalRecord(
+    'pat-nh-107',
+    'Kumari Weerasinghe',
+    107,
+    'National Hospital Sri Lanka',
+    'Seen',
+    41,
+    'Female',
+    'B-',
+    '1985-2861902',
+    'Allergy & Sinus Review',
+    '118/74',
+    69,
+    36.9,
+    99,
+    'Dust Mites',
+    'Seasonal allergic rhinitis'
+  ),
+];
+
+// Records for Colombo South Teaching Hospital
+const COLOMBO_SOUTH_PATIENTS: PatientRecord[] = [
+  makeHospitalRecord(
+    'pat-cs-201',
+    'Upul Tharanga',
+    201,
+    'Colombo South Teaching Hospital',
+    'In consultation',
+    38,
+    'Male',
+    'O+',
+    '1988-1928374',
+    'Ankle Sprain Bandage Check',
+    '120/80',
+    71,
+    36.8,
+    99,
+    undefined,
+    undefined,
+    'Paracetamol',
+    '500 mg'
+  ),
+  makeHospitalRecord(
+    'pat-cs-202',
+    'Shirani Nanayakkara',
+    202,
+    'Colombo South Teaching Hospital',
+    'Waiting',
+    53,
+    'Female',
+    'A+',
+    '1973-8273918',
+    'Insomnia & Anxiety Consultation',
+    '124/82',
+    75,
+    36.9,
+    99,
+    undefined,
+    undefined,
+    'Melatonin',
+    '3 mg'
+  ),
+  makeHospitalRecord(
+    'pat-cs-203',
+    'Chandana Karunaratne',
+    203,
+    'Colombo South Teaching Hospital',
+    'Waiting',
+    49,
+    'Male',
+    'B+',
+    '1977-7182930',
+    'Urine Culture Follow-up',
+    '122/78',
+    73,
+    37.1,
+    98,
+    'Sulfa Antibiotics',
+    'Skin hives on co-trimoxazole intake',
+    'Nitrofurantoin',
+    '100 mg'
+  ),
+  makeHospitalRecord(
+    'pat-cs-204',
+    'Indrani Cooray',
+    204,
+    'Colombo South Teaching Hospital',
+    'Waiting',
+    65,
+    'Female',
+    'AB+',
+    '1961-6091827',
+    'Joint Pain & Physiotherapy',
+    '130/84',
+    76,
+    36.8,
+    99,
+    undefined,
+    undefined,
+    'Paracetamol',
+    '500 mg'
+  ),
+  makeHospitalRecord(
+    'pat-cs-205',
+    'Ranil Wickramatunga',
+    205,
+    'Colombo South Teaching Hospital',
+    'Waiting',
+    56,
+    'Male',
+    'O-',
+    '1970-5982716',
+    'Cardiac Wellness Check',
+    '128/82',
+    74,
+    36.8,
+    99,
+    undefined,
+    undefined,
+    'Bisoprolol',
+    '2.5 mg'
+  ),
+  makeHospitalRecord(
+    'pat-cs-206',
+    'Menaka Hettiarachchi',
+    206,
+    'Colombo South Teaching Hospital',
+    'Seen',
+    34,
+    'Female',
+    'A-',
+    '1992-4871625',
+    'Vitamin D Deficiency Follow-up',
+    '114/74',
+    68,
+    36.7,
+    100,
+    undefined,
+    undefined,
+    'Cholecalciferol',
+    '60,000 IU'
+  ),
+];
+
+// Append all hospital patients to ALL_DUMMY_PATIENTS
+ALL_DUMMY_PATIENTS.push(
+  ...CITY_GENERAL_PATIENTS,
+  ...NATIONAL_HOSPITAL_PATIENTS,
+  ...COLOMBO_SOUTH_PATIENTS
+);
+
+export const getHospitalRecords = (hospitalName?: string): PatientRecord[] => {
+  const targetHosp = hospitalName || 'Colombo Teaching Hospital 1';
+  return ALL_DUMMY_PATIENTS.filter(
+    (p) => (p.hospitalName || 'Colombo Teaching Hospital 1') === targetHosp
+  );
+};
+
 export const fallbackAureliaRecord: PatientRecord = ALL_DUMMY_PATIENTS[0];
 
 /**
@@ -1226,39 +1757,69 @@ export interface DoctorRecordsResponseData {
   currentPatientId?: string;
 }
 
-export const fetchDoctorRecordsResponseApi = async (query?: string): Promise<DoctorRecordsResponseData> => {
+export const fetchDoctorRecordsResponseApi = async (
+  query?: string,
+  hospitalName?: string
+): Promise<DoctorRecordsResponseData> => {
+  let activeHosp = hospitalName;
+  if (!activeHosp) {
+    try {
+      activeHosp = (await AsyncStorage.getItem('doctor_current_hospital')) || undefined;
+      if (!activeHosp && typeof window !== 'undefined' && (window as any).localStorage) {
+        activeHosp = (window as any).localStorage.getItem('doctor_current_hospital') || undefined;
+      }
+    } catch (e) {}
+  }
+  const currentTargetHospital = activeHosp || 'Colombo Teaching Hospital 1';
+  let hospitalRecordsFallback = getHospitalRecords(currentTargetHospital);
+  if (query && query.trim()) {
+    hospitalRecordsFallback = filterPatientsList(hospitalRecordsFallback, query, 'All');
+  }
+
   try {
-    const q = query ? `?query=${encodeURIComponent(query)}` : '';
-    const response = await fetch(`${API_URL}/doctor/records${q}`);
+    const params = new URLSearchParams();
+    if (query) params.append('query', query);
+    if (currentTargetHospital) params.append('hospitalName', currentTargetHospital);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const response = await fetch(`${API_URL}/doctor/records${qs}`);
     if (response.ok) {
       const json = await response.json();
       if (Array.isArray(json.data) && json.data.length > 0) {
-        const records = json.data.map((item: any) => ({
-          ...item,
-          status: item.status || 'Waiting',
-          hasVitals: Boolean(item.hasVitals),
-          chronicConditions: item.chronicConditions || [],
-          medications: item.medications || [],
-          imaging: item.imaging || { hasImaging: false },
-          recentVisits: item.recentVisits || [],
-          vitalsHistory: Array.isArray(item.vitalsHistory) ? item.vitalsHistory : [],
-        }));
-        return {
-          records,
-          doctor: json.doctor,
-          currentPatientId: json.currentPatientId,
-        };
+        const matchingRecords = json.data
+          .filter((item: any) => !item.hospitalName || item.hospitalName === currentTargetHospital)
+          .map((item: any) => ({
+            ...item,
+            status: item.status || 'Waiting',
+            hasVitals: Boolean(item.hasVitals),
+            chronicConditions: item.chronicConditions || [],
+            medications: item.medications || [],
+            imaging: item.imaging || { hasImaging: false },
+            recentVisits: item.recentVisits || [],
+            vitalsHistory: Array.isArray(item.vitalsHistory) ? item.vitalsHistory : [],
+            hospitalName: item.hospitalName || currentTargetHospital,
+            reports: item.reports || [],
+          }));
+        if (matchingRecords.length > 0) {
+          return {
+            records: matchingRecords,
+            doctor: json.doctor,
+            currentPatientId: json.currentPatientId,
+          };
+        }
       }
     }
-    return { records: ALL_DUMMY_PATIENTS };
+    return { records: hospitalRecordsFallback };
   } catch (error) {
     console.log('Error fetching patient records, fallback to local:', error);
-    return { records: ALL_DUMMY_PATIENTS };
+    return { records: hospitalRecordsFallback };
   }
 };
 
-export const fetchPatientRecordsApi = async (query?: string): Promise<PatientRecord[]> => {
-  const result = await fetchDoctorRecordsResponseApi(query);
+export const fetchPatientRecordsApi = async (
+  query?: string,
+  hospitalName?: string
+): Promise<PatientRecord[]> => {
+  const result = await fetchDoctorRecordsResponseApi(query, hospitalName);
   return result.records;
 };
 

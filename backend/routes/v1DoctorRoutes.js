@@ -35,6 +35,8 @@ const {
   getPatientRecords,
   updatePatientVitals,
   generatePrescriptionPdfApi,
+  removeScheduleAppointment,
+  getDoctorReportFile,
 } = require('../controllers/doctorController');
 
 router.get('/dashboard', getDoctorDashboard);
@@ -47,12 +49,16 @@ router.post('/chime', ringChime);
 router.post('/call-token', callSpecificPatient);
 router.get('/schedule', getDoctorSchedule);
 router.post('/walkin-slot', addWalkInSlot);
+router.delete('/schedule/appointment/:id', removeScheduleAppointment);
+router.delete('/appointment/:id', removeScheduleAppointment);
+router.post('/schedule/remove', removeScheduleAppointment);
 router.post('/break', toggleDoctorBreak);
 router.get('/prescription', getPrescriptionDetails);
 router.post('/prescription', savePrescription);
 router.post('/prescription/pdf', generatePrescriptionPdfApi);
 router.post('/referral', referPatient);
 router.get('/records', getPatientRecords);
+router.get('/reports/:id/file', getDoctorReportFile);
 router.post('/vitals', updatePatientVitals);
 
 module.exports = router;

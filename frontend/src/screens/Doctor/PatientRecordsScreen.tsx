@@ -13,16 +13,22 @@ import {
   useColorScheme,
   Platform,
   Animated,
+  Linking,
+  Alert,
+  Image,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DoctorTopBar } from '../../components/doctor';
+import { BASE_URL } from '../../config';
 import { savePrescriptionApi } from '../../services/prescriptionService';
 import { fetchDoctorDashboard } from '../../services/doctorService';
 import {
   PatientRecord,
   PatientStatus,
   ALL_DUMMY_PATIENTS,
+  getHospitalRecords,
   fetchPatientRecordsApi,
   fetchDoctorRecordsResponseApi,
   filterPatientsList,
@@ -137,9 +143,43 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     room: 'Room 101 online',
     initials: 'PP',
   });
+  const [currentHospital, setCurrentHospital] = useState('Colombo Teaching Hospital 1');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<PatientStatus>('All');
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('records');
+  const [selectedReportToView, setSelectedReportToView] = useState<any | null>(null);
+
+  const handleOpenReportFile = useCallback(
+    async (report: any) => {
+      if (!report) return;
+      const fileEndpoint =
+        report.fileUrl ||
+        (report.id || report._id ? `/api/v1/doctor/reports/${report.id || report._id}/file` : '');
+      if (!fileEndpoint) {
+        Alert.alert(
+          t('No File Attached'),
+          t('This medical report does not contain an attached document.')
+        );
+        return;
+      }
+      const fullUrl = fileEndpoint.startsWith('http')
+        ? fileEndpoint
+        : `${BASE_URL}${fileEndpoint}`;
+      try {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.open(fullUrl, '_blank');
+        } else {
+          await Linking.openURL(fullUrl);
+        }
+      } catch (err: any) {
+        Alert.alert(
+          t('Could Not Open File'),
+          err?.message || t('Please verify your connection and try again.')
+        );
+      }
+    },
+    [t]
+  );
 
   // Currently active patient record
   const currentPatient = useMemo(() => {
@@ -149,92 +189,147 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   // Scroll reference for smooth scrolling to top on patient selection
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Fetch real patient records from backend on mount or search
-  useEffect(() => {
-    let isMounted = true;
-
-    // Fetch doctor dashboard in parallel to know real doctor details
-    fetchDoctorDashboard().then((dash) => {
-      if (!isMounted) return;
-      if (dash?.doctor) {
-        const dName = dash.doctor.name || 'Dr. Palitha Perera';
-        const dRoom = dash.doctor.room ? `${dash.doctor.room} online` : 'Room 101 online';
-        const clean = dName.replace(/^Dr\.\s*/i, '').trim();
-        const parts = clean.split(' ');
-        const initials = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : clean.slice(0, 2).toUpperCase();
-        setDoctorInfo({
-          name: dName,
-          room: dRoom,
-          initials: initials || 'DR',
-        });
+  // Fetch real patient records for the currently selected hospital
+  const loadRecordsForHospital = useCallback(
+    async (hospName?: string, query?: string) => {
+      let targetHosp = hospName;
+      if (!targetHosp) {
+        try {
+          targetHosp = (await AsyncStorage.getItem('doctor_current_hospital')) || undefined;
+          if (!targetHosp && typeof window !== 'undefined' && (window as any).localStorage) {
+            targetHosp = (window as any).localStorage.getItem('doctor_current_hospital') || undefined;
+          }
+        } catch (e) {}
       }
-    }).catch(() => {});
+      const activeHosp = targetHosp || currentHospital || 'Colombo Teaching Hospital 1';
+      if (activeHosp !== currentHospital) {
+        setCurrentHospital(activeHosp);
+      }
 
-    fetchDoctorRecordsResponseApi(searchQuery).then(async (response) => {
-      if (isMounted && response?.records && response.records.length > 0) {
-        const records = response.records;
-        setPatients(records);
+      // 1. Fetch doctor dashboard in parallel to know real doctor details & room for this hospital
+      fetchDoctorDashboard(undefined, activeHosp)
+        .then((dash) => {
+          if (dash?.doctor) {
+            const dName = dash.doctor.name || 'Dr. Palitha Perera';
+            const dRoom = dash.doctor.room ? `${dash.doctor.room} online` : 'Room 101 online';
+            const clean = dName.replace(/^Dr\.\s*/i, '').trim();
+            const parts = clean.split(' ');
+            const initials =
+              parts.length > 1
+                ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+                : clean.slice(0, 2).toUpperCase();
+            setDoctorInfo({
+              name: dName,
+              room: dRoom,
+              initials: initials || 'DR',
+            });
+          }
+        })
+        .catch(() => {});
 
-        if (response.doctor) {
-          const dName = response.doctor.name || 'Dr. Palitha Perera';
-          const dRoom = response.doctor.room ? `${response.doctor.room} online` : 'Room 101 online';
-          const clean = dName.replace(/^Dr\.\s*/i, '').trim();
-          const parts = clean.split(' ');
-          const initials = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : clean.slice(0, 2).toUpperCase();
-          setDoctorInfo({
-            name: dName,
-            room: dRoom,
-            initials: initials || 'DR',
-          });
-        }
-
-        const pToken = params?.tokenNumber ? Number(params.tokenNumber) : null;
-        const pName = params?.patientName ? params.patientName.trim().toLowerCase() : null;
-        const pId = params?.patientId;
-
-        let matched = records.find(
-          (p) =>
-            (pId && p.id === pId) ||
-            (pName && (p.name.toLowerCase().includes(pName) || p.shortName.toLowerCase().includes(pName))) ||
-            (pToken && p.tokenNumber === pToken)
+      try {
+        const response = await fetchDoctorRecordsResponseApi(
+          query !== undefined ? query : searchQuery,
+          activeHosp
         );
+        if (response?.records && response.records.length > 0) {
+          const records = response.records;
+          setPatients(records);
 
-        if (!matched) {
-          try {
-            const storedName = await AsyncStorage.getItem('active_record_patient_name');
-            const storedToken = await AsyncStorage.getItem('active_record_patient_token');
-            if (storedName) {
-              matched = records.find((p) => p.name.toLowerCase().includes(storedName.trim().toLowerCase()));
+          if (response.doctor) {
+            const dName = response.doctor.name || 'Dr. Palitha Perera';
+            const dRoom = response.doctor.room ? `${response.doctor.room} online` : 'Room 101 online';
+            const clean = dName.replace(/^Dr\.\s*/i, '').trim();
+            const parts = clean.split(' ');
+            const initials =
+              parts.length > 1
+                ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+                : clean.slice(0, 2).toUpperCase();
+            setDoctorInfo({
+              name: dName,
+              room: dRoom,
+              initials: initials || 'DR',
+            });
+          }
+
+          const pToken = params?.tokenNumber ? Number(params.tokenNumber) : null;
+          const pName = params?.patientName ? params.patientName.trim().toLowerCase() : null;
+          const pId = params?.patientId;
+
+          let matched = records.find(
+            (p) =>
+              (pId && p.id === pId) ||
+              (pName &&
+                (p.name.toLowerCase().includes(pName) || p.shortName.toLowerCase().includes(pName))) ||
+              (pToken && p.tokenNumber === pToken)
+          );
+
+          if (!matched) {
+            try {
+              const storedName = await AsyncStorage.getItem('active_record_patient_name');
+              const storedToken = await AsyncStorage.getItem('active_record_patient_token');
+              if (storedName) {
+                matched = records.find((p) =>
+                  p.name.toLowerCase().includes(storedName.trim().toLowerCase())
+                );
+              }
+              if (!matched && storedToken) {
+                matched = records.find((p) => p.tokenNumber === Number(storedToken));
+              }
+            } catch (e) {}
+          }
+
+          // If not matched by query or storage, prioritize the patient currently in consultation of this hospital
+          if (!matched) {
+            matched = records.find((p) => p.status === 'In consultation') || records[0];
+          }
+
+          if (matched) {
+            setCurrentPatientId(matched.id);
+          } else if (response.currentPatientId) {
+            const cMatch = records.find((p) => p.id === response.currentPatientId);
+            if (cMatch) {
+              setCurrentPatientId(cMatch.id);
+            } else if (records[0]) {
+              setCurrentPatientId(records[0].id);
             }
-            if (!matched && storedToken) {
-              matched = records.find((p) => p.tokenNumber === Number(storedToken));
-            }
-          } catch (e) {}
-        }
-
-        // If not matched by query or storage, prioritize the patient currently in consultation
-        if (!matched) {
-          matched = records.find((p) => p.status === 'In consultation');
-        }
-
-        if (matched) {
-          setCurrentPatientId(matched.id);
-        } else if (response.currentPatientId) {
-          const cMatch = records.find((p) => p.id === response.currentPatientId);
-          if (cMatch) {
-            setCurrentPatientId(cMatch.id);
           } else if (records[0]) {
             setCurrentPatientId(records[0].id);
           }
-        } else if (records[0]) {
-          setCurrentPatientId(records[0].id);
+        } else {
+          const fallbackList = getHospitalRecords(activeHosp);
+          setPatients(fallbackList);
+          if (fallbackList[0]) setCurrentPatientId(fallbackList[0].id);
         }
+      } catch (err) {
+        const fallbackList = getHospitalRecords(activeHosp);
+        setPatients(fallbackList);
+        if (fallbackList[0]) setCurrentPatientId(fallbackList[0].id);
       }
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, [searchQuery]);
+    },
+    [currentHospital, searchQuery, params]
+  );
+
+  useEffect(() => {
+    loadRecordsForHospital(currentHospital, searchQuery);
+  }, [searchQuery, loadRecordsForHospital]);
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          let storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
+          if (!storedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
+            storedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
+          }
+          if (storedHosp && storedHosp !== currentHospital) {
+            setCurrentHospital(storedHosp);
+            loadRecordsForHospital(storedHosp);
+          }
+        } catch (e) {}
+      })();
+    }, [currentHospital, loadRecordsForHospital])
+  );
 
   // Sync when route parameters change
   useEffect(() => {
@@ -990,15 +1085,15 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   }, [currentPatient, activeTrendVital, bpStatus, hrStatus, tempStatus, spO2Status, currentWeightNum, currentHeightNum, bmiDisplay, bmiStatusResult]);
 
   return (
-    <SafeAreaView
+    <View
       style={[
         styles.safeArea,
         { backgroundColor: isDark ? theme.pageBg : theme.pageBg },
       ]}
     >
       <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={theme.background}
+        barStyle="light-content"
+        backgroundColor="#0E7C86"
       />
 
       {/* Centered responsive frame: 440px max width on desktop, full width on mobile */}
@@ -1014,58 +1109,48 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
             { backgroundColor: theme.background },
           ]}
         >
+          {/* SHARED TOP BAR */}
+          <DoctorTopBar
+            doctorName={doctorInfo.name || 'Dr. Palitha Perera'}
+            room={doctorInfo.room ? doctorInfo.room.replace(/\s*online/i, '').trim() : 'Room 101'}
+            unreadCount={4}
+          />
+
           {/* Main Scroll Content */}
           <ScrollView
             ref={scrollViewRef}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* ─────────────────────────────────────────────────────────
-                1. HEADER
-                Doctor avatar with green online dot, "Dr. Emilia Emelson",
-                "Room 3B online" in teal, notification bell with red dot
-               ───────────────────────────────────────────────────────── */}
-            <View style={styles.headerRow}>
-              <View style={styles.headerLeft}>
-                <TouchableOpacity
-                  onPress={() => router.push('/(doctor)/dashboard' as any)}
-                  style={styles.homeBackBtn}
-                  activeOpacity={0.7}
-                  accessibilityLabel={t("Back to Home")}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="home" size={18} color="#0D9488" />
-                </TouchableOpacity>
-                <View style={styles.avatarWrapper}>
-                  <View
-                    style={[
-                      styles.avatarBadge,
-                      { backgroundColor: theme.primaryDeep },
-                    ]}
-                  >
-                    <Text style={styles.avatarInitials}>{doctorInfo.initials}</Text>
-                  </View>
-                  <View style={styles.onlineDot} />
-                </View>
-
-                <View style={styles.doctorInfo}>
-                  <Text
-                    style={[styles.doctorName, { color: theme.textDark }]}
-                    numberOfLines={1}
-                  >
-                    {doctorInfo.name}
+            {/* 1. SCREEN TITLE & REFRESH BUTTON ROW */}
+            <View style={styles.recordsHeaderTitleRow}>
+              <View>
+                <Text style={[styles.recordsScreenTitle, { color: theme.textDark }]}>
+                  {t('Patient records')}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+                  <Ionicons name="business" size={13} color={theme.accent} style={{ marginRight: 4 }} />
+                  <Text style={{ fontSize: 13, color: theme.textMuted, fontWeight: '600' }}>
+                    {currentHospital}
                   </Text>
-                  <View style={styles.doctorSubRow}>
-                    <View style={styles.onlineMiniDot} />
-                    <Text
-                      style={[styles.doctorSubtitle, { color: theme.accent }]}
-                    >
-                      {doctorInfo.room}
-                    </Text>
-                  </View>
                 </View>
               </View>
 
+<<<<<<< HEAD
+              <TouchableOpacity
+                style={[
+                  styles.topRefreshButton,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+                activeOpacity={0.7}
+                onPress={handleResetToCurrentPatient}
+                accessibilityLabel="Refresh Current Patient"
+              >
+                <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
+=======
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 {/* Top Bar Refresh Button */}
                 <TouchableOpacity
@@ -1100,14 +1185,14 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   activeOpacity={0.7}
                   onPress={() => showToast(t("Notifications: No new alerts"))}
                 >
+>>>>>>> origin/dev
                   <Ionicons
-                    name="notifications-outline"
+                    name="refresh-outline"
                     size={20}
-                    color={theme.textDark}
+                    color={theme.accent}
                   />
-                  <View style={styles.redDot} />
-                </TouchableOpacity>
-              </View>
+                </Animated.View>
+              </TouchableOpacity>
             </View>
 
             {/* ─────────────────────────────────────────────────────────
@@ -1359,23 +1444,40 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 >
                   {t("Chronic conditions")}
                 </Text>
-                {currentPatient.chronicConditions.length > 0 ? (
-                  <View style={styles.chronicChipsWrap}>
-                    {currentPatient.chronicConditions.map((cond, idx) => (
-                      <View
-                        key={idx}
-                        style={[
-                          styles.chronicChip,
-                          {
-                            backgroundColor: theme.card,
-                            borderColor: theme.cardBorder,
-                          },
-                        ]}
-                      >
-                        <View style={styles.chronicDot} />
-                        <Text
-                          style={[styles.chronicChipText, { color: theme.textDark }]}
+                {(() => {
+                  const conditions = Array.isArray(currentPatient.chronicConditions)
+                    ? currentPatient.chronicConditions
+                    : (currentPatient.chronicConditions ? [String(currentPatient.chronicConditions)] : []);
+                  return conditions.length > 0 ? (
+                    <View style={styles.chronicChipsWrap}>
+                      {conditions.map((cond, idx) => (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.chronicChip,
+                            {
+                              backgroundColor: theme.card,
+                              borderColor: theme.cardBorder,
+                            },
+                          ]}
                         >
+<<<<<<< HEAD
+                          <View style={styles.chronicDot} />
+                          <Text
+                            style={[styles.chronicChipText, { color: theme.textDark }]}
+                          >
+                            {cond}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={[styles.noneRecordedText, { color: theme.textMuted }]}>
+                      None recorded.
+                    </Text>
+                  );
+                })()}
+=======
                           {cond}
                         </Text>
                       </View>
@@ -1386,6 +1488,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     {t("None recorded.")}
                   </Text>
                 )}
+>>>>>>> origin/dev
               </View>
 
               {/* e. Current Medications Heading with Add Button */}
@@ -1896,22 +1999,110 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
             </>
           )}
 
-              {/* i. Diagnostic Imaging Section */}
+              {/* i. Diagnostic Imaging & Medical Reports Section */}
               <View style={styles.sectionBlock}>
                 <View style={styles.subSectionHeaderRow}>
                   <Text
                     style={[styles.subSectionTitle, { color: theme.textDark }]}
+<<<<<<< HEAD
+                  >
+                    Diagnostic imaging & reports
+                  </Text>
+                  {((currentPatient.reports && currentPatient.reports.length > 0) || currentPatient.imaging?.hasImaging) && (
+=======
                   >{t("Diagnostic imaging")}</Text>
                   {currentPatient.imaging.hasImaging && (
+>>>>>>> origin/dev
                     <Text
                       style={[styles.subSectionSubLabel, { color: theme.textMuted }]}
                     >
-                      {currentPatient.imaging.subtitle}
+                      {currentPatient.reports && currentPatient.reports.length > 0
+                        ? `${currentPatient.reports.length} report(s) filed`
+                        : currentPatient.imaging.subtitle}
                     </Text>
                   )}
                 </View>
 
-                {currentPatient.imaging.hasImaging ? (
+                {currentPatient.reports && currentPatient.reports.length > 0 ? (
+                  currentPatient.reports.map((rpt: any, idx: number) => (
+                    <TouchableOpacity
+                      key={rpt.id || `rpt-${idx}`}
+                      style={[
+                        styles.imagingCard,
+                        {
+                          backgroundColor: theme.card,
+                          borderColor: theme.cardBorder,
+                          marginBottom: 10,
+                        },
+                      ]}
+                      activeOpacity={0.85}
+                      onPress={() => setSelectedReportToView(rpt)}
+                    >
+                      <View style={styles.imagingLeft}>
+                        <View
+                          style={[
+                            styles.imagingIconBox,
+                            { backgroundColor: theme.tint },
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name={
+                              rpt.fileMimeType?.includes('pdf')
+                                ? 'file-pdf-box'
+                                : rpt.fileMimeType?.includes('image')
+                                ? 'file-image'
+                                : 'clipboard-text'
+                            }
+                            size={24}
+                            color={theme.primaryDeep}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.imagingTitle,
+                              { color: theme.textDark },
+                            ]}
+                          >
+                            {rpt.title}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.imagingDesc,
+                              { color: theme.textMuted },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {rpt.category || 'Lab report'} • {rpt.fileName || rpt.reportDate || 'Uploaded Document'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.viewReportPill,
+                          {
+                            backgroundColor: theme.tint,
+                            borderColor: theme.cardBorder,
+                          },
+                        ]}
+                        activeOpacity={0.8}
+                        onPress={() =>
+                          setSelectedReportToView(rpt)
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.viewReportText,
+                            { color: theme.primaryDeep },
+                          ]}
+                        >
+                          View report
+                        </Text>
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  ))
+                ) : currentPatient.imaging?.hasImaging ? (
                   <View
                     style={[
                       styles.imagingCard,
@@ -1965,9 +2156,13 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       ]}
                       activeOpacity={0.8}
                       onPress={() =>
+<<<<<<< HEAD
+                        setSelectedReportToView(currentPatient.imaging)
+=======
                         showToast(
                           t("Viewing report for {value0}", { value0: String(currentPatient.imaging.title) })
                         )
+>>>>>>> origin/dev
                       }
                     >
                       <Text
@@ -1994,7 +2189,11 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                         { color: theme.textMuted },
                       ]}
                     >
+<<<<<<< HEAD
+                      No diagnostic imaging / lab records found
+=======
                       {t("No diagnostic imaging records found")}
+>>>>>>> origin/dev
                     </Text>
                   </View>
                 )}
@@ -3228,6 +3427,255 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
       </Modal>
 
       {/* ─────────────────────────────────────────────────────────
+          VIEW REPORT MODAL
+         ───────────────────────────────────────────────────────── */}
+      <Modal
+        visible={selectedReportToView !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedReportToView(null)}
+      >
+        <TouchableOpacity
+          style={[styles.modalOverlay, { backgroundColor: theme.modalOverlay }]}
+          activeOpacity={1}
+          onPress={() => setSelectedReportToView(null)}
+        >
+          <View
+            style={{
+              backgroundColor: theme.sheetBg,
+              borderColor: theme.cardBorder,
+              borderWidth: 1,
+              maxWidth: 460,
+              width: '92%',
+              padding: 20,
+              borderRadius: 16,
+              maxHeight: '90%',
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 14,
+              }}
+            >
+              <Text
+                style={{ color: theme.textDark, marginBottom: 0, fontSize: 17, fontWeight: '700' }}
+              >
+                {selectedReportToView?.title || 'Medical Report'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setSelectedReportToView(null)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="close" size={22} color={theme.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
+              <View
+                style={{
+                  backgroundColor: theme.tint,
+                  padding: 12,
+                  borderRadius: 10,
+                  marginBottom: 14,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '700',
+                    color: theme.primaryDeep,
+                    marginBottom: 4,
+                  }}
+                >
+                  {selectedReportToView?.category || 'Lab Result'}
+                </Text>
+                <Text style={{ fontSize: 12, color: theme.textMedium }}>
+                  Date: {selectedReportToView?.reportDate || selectedReportToView?.date || 'Recorded recently'}
+                </Text>
+                {selectedReportToView?.fileName ? (
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: theme.textMedium,
+                      marginTop: 4,
+                      fontWeight: '500',
+                    }}
+                  >
+                    File: {selectedReportToView.fileName}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* PDF Document Box */}
+              {selectedReportToView ? (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: theme.isDark ? '#14252a' : '#f0fdf4',
+                    borderColor: theme.isDark ? '#274b54' : '#86efac',
+                    borderWidth: 1.5,
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                  activeOpacity={0.8}
+                  onPress={() => handleOpenReportFile(selectedReportToView)}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 10,
+                        backgroundColor: '#fee2e2',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons
+                        name={
+                          selectedReportToView?.fileMimeType?.includes('image')
+                            ? 'image'
+                            : 'document-text'
+                        }
+                        size={24}
+                        color={
+                          selectedReportToView?.fileMimeType?.includes('image')
+                            ? '#2563eb'
+                            : '#dc2626'
+                        }
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{ fontSize: 13, fontWeight: '700', color: theme.textDark }}
+                        numberOfLines={1}
+                      >
+                        {selectedReportToView?.fileName || `${selectedReportToView?.title || 'Report'}.pdf`}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: theme.primaryDeep, fontWeight: '600', marginTop: 2 }}>
+                        {selectedReportToView?.fileMimeType?.includes('image')
+                          ? 'Medical Image · Tap to preview'
+                          : 'PDF Report · Tap to open & view'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: theme.primary,
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <Ionicons name="open-outline" size={14} color="#fff" />
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Open</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : null}
+
+              {/* Image Preview if it's an image */}
+              {selectedReportToView &&
+              (selectedReportToView.fileMimeType?.includes('image') ||
+                selectedReportToView.fileName?.match(/\.(png|jpg|jpeg|webp)$/i)) ? (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textMuted, marginBottom: 6 }}>
+                    Attachment Preview:
+                  </Text>
+                  <Image
+                    source={{
+                      uri: selectedReportToView.fileUrl?.startsWith('http')
+                        ? selectedReportToView.fileUrl
+                        : `${BASE_URL}${selectedReportToView.fileUrl || `/api/v1/doctor/reports/${selectedReportToView.id || selectedReportToView._id}/file`}`,
+                    }}
+                    style={{
+                      width: '100%',
+                      height: 180,
+                      borderRadius: 10,
+                      backgroundColor: theme.isDark ? '#1a2e35' : '#f1f5f9',
+                    }}
+                    resizeMode="contain"
+                  />
+                </View>
+              ) : null}
+
+              {selectedReportToView?.description || selectedReportToView?.notes ? (
+                <View style={{ marginBottom: 16 }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '600',
+                      color: theme.textMuted,
+                      marginBottom: 4,
+                    }}
+                  >
+                    Summary & Findings:
+                  </Text>
+                  <Text style={{ fontSize: 13, color: theme.textDark, lineHeight: 18 }}>
+                    {selectedReportToView.notes || selectedReportToView.description}
+                  </Text>
+                </View>
+              ) : null}
+            </ScrollView>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 10,
+                marginTop: 10,
+                paddingTop: 10,
+                borderTopWidth: 1,
+                borderTopColor: theme.cardBorder,
+              }}
+            >
+              <TouchableOpacity
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.cardBorder,
+                  paddingHorizontal: 16,
+                  paddingVertical: 9,
+                  borderRadius: 8,
+                }}
+                onPress={() => setSelectedReportToView(null)}
+              >
+                <Text style={{ color: theme.textMedium, fontWeight: '600', fontSize: 13 }}>Close</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: theme.primary,
+                  paddingHorizontal: 16,
+                  paddingVertical: 9,
+                  borderRadius: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onPress={() => handleOpenReportFile(selectedReportToView)}
+              >
+                <Ionicons name="open-outline" size={16} color="#fff" />
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                  {selectedReportToView?.fileMimeType?.includes('image')
+                    ? 'Open Image'
+                    : 'Open PDF Document'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────
           FLOATING TOAST NOTIFICATION
          ───────────────────────────────────────────────────────── */}
       {toastMessage && (
@@ -3249,7 +3697,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
           <Text style={styles.toastText}>{toastMessage}</Text>
         </Animated.View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -3282,6 +3730,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 24,
+  },
+
+  recordsHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    marginBottom: 14,
+  },
+  recordsScreenTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
 
   // 1. Header

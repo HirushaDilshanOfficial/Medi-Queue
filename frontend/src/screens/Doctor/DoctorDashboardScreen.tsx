@@ -1,10 +1,11 @@
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   RefreshControl,
   ActivityIndicator,
   Alert,
@@ -13,286 +14,137 @@ import {
   TextInput,
   Platform,
 } from 'react-native';
-import { LocalizedText as Text } from '../../i18n/LocalizedText';
-import { useLanguage } from '../../i18n/LanguageContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Circle, Rect, Line, Polyline, Polygon } from 'react-native-svg';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+<<<<<<< HEAD
+import AsyncStorage from '@react-native-async-storage/async-storage';
+=======
 import { Colors } from '../../constants/Colors';
 import { notificationApi } from '../../services/notificationApi';
 import { getAuthToken } from '../../services/http';
 import { BASE_URL } from '../../config';
 import EmergencyBanner from '../../components/EmergencyBanner';
+>>>>>>> origin/dev
 import {
   fetchDoctorDashboard,
-  updateDoctorStatusApi,
-  updateDoctorHospitalApi,
   callNextPatientApi,
-  callSpecificTokenApi,
   undoPatientApi,
   addWalkInSlotApi,
   getCatalogPatient,
+  updateDoctorHospitalApi,
+  getDoctorDashboardForHospital,
   DoctorDashboardData,
   PatientQueueItem,
 } from '../../services/doctorService';
+import {
+  DOCTOR_TOKENS as C,
+  DoctorTopBar,
+  DoctorBottomNav,
+  DoctorDarkHighlightBox,
+  DarkStrongPill,
+  DarkTranslucentChip,
+  StatusPill,
+  PrimaryButton,
+  SecondaryButton,
+} from '../../components/doctor';
 
-// ==========================================
-// 2px STROKE LINE ICONS (NO EMOJIS, ROUND CAPS)
-// ==========================================
-const LineGlobe = ({ color = '#FFFFFF', size = 18 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Circle cx="12" cy="12" r="10" />
-    <Line x1="2" y1="12" x2="22" y2="12" />
-    <Path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-  </Svg>
-);
-
-const LineBell = ({ color = '#FFFFFF', size = 18 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <Path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </Svg>
-);
-
-const LineBuilding = ({ color = '#FFFFFF', size = 17 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
-    <Path d="M9 22v-4h6v4" />
-    <Line x1="8" y1="6" x2="8.01" y2="6" />
-    <Line x1="16" y1="6" x2="16.01" y2="6" />
-    <Line x1="12" y1="6" x2="12.01" y2="6" />
-    <Line x1="8" y1="10" x2="8.01" y2="10" />
-    <Line x1="12" y1="10" x2="12.01" y2="10" />
-    <Line x1="16" y1="10" x2="16.01" y2="10" />
-  </Svg>
-);
-
-const LineSwap = ({ color = '#FFFFFF', size = 13 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M16 3l4 4-4 4" />
-    <Path d="M20 7H4" />
-    <Path d="M8 21l-4-4 4-4" />
-    <Path d="M4 17h16" />
-  </Svg>
-);
-
-const LineClock = ({ color = '#0B4F59', size = 14 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Circle cx="12" cy="12" r="10" />
-    <Polyline points="12 6 12 12 16 14" />
-  </Svg>
-);
-
-const LineAlertTriangle = ({ color = '#C62828', size = 18 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-    <Line x1="12" y1="9" x2="12" y2="13" />
-    <Line x1="12" y1="17" x2="12.01" y2="17" />
-  </Svg>
-);
-
-const LineUndo = ({ color = '#0B4F59', size = 18 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M3 7v6h6" />
-    <Path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
-  </Svg>
-);
-
-const LineDocument = ({ color = '#0B4F59', size = 16 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <Polyline points="14 2 14 8 20 8" />
-    <Line x1="16" y1="13" x2="8" y2="13" />
-    <Line x1="16" y1="17" x2="8" y2="17" />
-    <Line x1="10" y1="9" x2="8" y2="9" />
-  </Svg>
-);
-
-const LineCheckCircle = ({ color = '#FFFFFF', size = 16 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-    <Polyline points="22 4 12 14.01 9 11.01" />
-  </Svg>
-);
-
-const LineSpeaker = ({ color = '#0B4F59', size = 22 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-    <Path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-    <Path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-  </Svg>
-);
-
-const LineUserPlus = ({ color = '#0B4F59', size = 22 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <Circle cx="8.5" cy="7" r="4" />
-    <Line x1="20" y1="8" x2="20" y2="14" />
-    <Line x1="23" y1="11" x2="17" y2="11" />
-  </Svg>
-);
-
-const LineCoffee = ({ color = '#0B4F59', size = 22 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M18 8h1a4 4 0 0 1 0 8h-1" />
-    <Path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
-    <Line x1="6" y1="1" x2="6" y2="4" />
-    <Line x1="10" y1="1" x2="10" y2="4" />
-    <Line x1="14" y1="1" x2="14" y2="4" />
-  </Svg>
-);
-
-const LineChevronRight = ({ color = '#0E8F9A', size = 15 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Polyline points="9 18 15 12 9 6" />
-  </Svg>
-);
-
-const LineThreeDot = ({ color = '#5B6B73', size = 18 }: { color?: string; size?: number }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Circle cx="12" cy="12" r="1.5" />
-    <Circle cx="12" cy="5" r="1.5" />
-    <Circle cx="12" cy="19" r="1.5" />
-  </Svg>
-);
-
-// Fallback sample queue dataset specified in design requirements
-const SAMPLE_QUEUE: PatientQueueItem[] = [
-  { tokenNumber: 29, patientName: 'Aurelia Sisca', age: 32, gender: 'Female', priority: 'normal', category: 'all', status: 'next', reason: 'Post-op Check', slotTime: '11:15 AM' },
-  { tokenNumber: 30, patientName: 'Rohan Mendis', age: 54, gender: 'Male', priority: 'normal', category: 'all', status: 'Waiting', reason: 'Hypertension Follow-up', slotTime: '11:30 AM' },
-  { tokenNumber: 31, patientName: 'Dilshan Madushanka', age: 28, gender: 'Male', priority: 'normal', category: 'all', status: 'Waiting', reason: 'Hypertension Follow-up', slotTime: '11:45 AM' },
-  { tokenNumber: 32, patientName: 'Sanduni Perera', age: 41, gender: 'Female', priority: 'normal', category: 'all', status: 'Waiting', reason: 'Hypertension Follow-up', slotTime: '12:00 PM' },
-  { tokenNumber: 33, patientName: 'Piyadasa Samarasinghe', age: 71, gender: 'Male', priority: 'normal', category: 'all', status: 'Waiting', reason: 'Hypertension Follow-up', slotTime: '12:15 PM' },
-  { tokenNumber: 34, patientName: 'Kavindi Fernando', age: 24, gender: 'Female', priority: 'normal', category: 'all', status: 'Waiting', reason: 'Hypertension Follow-up', slotTime: '12:30 PM' },
-];
-
-interface DoctorDashboardScreenProps {
-  navigation?: any;
-}
-
-export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScreenProps) {
-  const { t, language, setLanguage } = useLanguage();
+export default function DoctorDashboardScreen() {
+  const { t } = useLanguage();
   const [data, setData] = useState<DoctorDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('home');
-  const [currentHospital, setCurrentHospital] = useState<string>('Colombo Teaching Hospital 1');
+  const [timerSeconds, setTimerSeconds] = useState(244);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [unreadCount, setUnreadCount] = useState(4);
+  const [currentHospital, setCurrentHospital] = useState('Colombo Teaching Hospital 1');
   const [isHospitalModalOpen, setIsHospitalModalOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isBreakModalOpen, setIsBreakModalOpen] = useState(false);
 
-  // Live timer state: starts at 08:47 (527 seconds) and increments live every second
-  const [timerSeconds, setTimerSeconds] = useState(8 * 60 + 47);
-
-  // Walk-in Registration Modal state
+  // Walk-in modal state
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [walkInName, setWalkInName] = useState('');
   const [walkInAge, setWalkInAge] = useState('');
-  const [walkInGender, setWalkInGender] = useState<'Male' | 'Female' | 'Other'>('Male');
-  const [walkInPriority, setWalkInPriority] = useState<'walkin' | 'urgent' | 'normal'>('walkin');
+  const [walkInGender, setWalkInGender] = useState<'Male' | 'Female'>('Male');
+  const [walkInPriority, setWalkInPriority] = useState<'walkin' | 'urgent'>('walkin');
   const [walkInReason, setWalkInReason] = useState('');
   const [isSubmittingWalkIn, setIsSubmittingWalkIn] = useState(false);
-  const [availableHospitals, setAvailableHospitals] = useState<string[]>([
-    'Colombo Teaching Hospital 1',
-    'Colombo National Hospital',
-    'City General Hospital',
-  ]);
-  const [patientUndoHistory, setPatientUndoHistory] = useState<any[]>([]);
+
+  // Break state (Tea break, Lunch break, Dinner break)
   const [activeBreak, setActiveBreak] = useState<{
-    type: 'tea' | 'lunch' | 'dinner';
     label: string;
+    type?: 'tea' | 'lunch' | 'dinner';
     duration: string;
-    minutes: number;
-    hospitalId: string;
-    hospitalName: string;
-    shiftName: string;
     startTime: number;
   } | null>(null);
 
-  const [unreadCount, setUnreadCount] = useState(3);
-
-  // Timer increment effect
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimerSeconds((prev) => prev + 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const formatTimer = (sec: number) => {
-    const mm = String(Math.floor(sec / 60)).padStart(2, '0');
-    const ss = String(sec % 60).padStart(2, '0');
-    return `${mm}:${ss}`;
-  };
-
-  // Color tokens based on appearance mode
-  const colors = useMemo(() => {
-    if (isDarkMode) {
-      return {
-        bgPage: '#0C1A1E',
-        cardBg: '#13262B',
-        textPrimary: '#EAF4F6',
-        textSecondary: '#9DB2B8',
-        tealDeep: '#0B4F59',
-        tealBright: '#0E8F9A',
-        tealTint: '#1B3A40',
-        chipGrey: '#172F35',
-        alertText: '#FF8A80',
-        alertBg: '#3A1B1B',
-        headerOverlay: 'rgba(255, 255, 255, 0.12)',
-        headerBorder: 'rgba(255, 255, 255, 0.18)',
-        headerPillInner: 'rgba(0, 0, 0, 0.35)',
-        cardShadow: {
-          shadowColor: '#000000',
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.45,
-          shadowRadius: 18,
-          elevation: 8,
+  // Advance queue locally
+  const advanceQueueLocally = useCallback(() => {
+    setData((prev) => {
+      const base = prev || {
+        doctor: {
+          name: 'Dr. Palitha Perera',
+          specialization: 'Consultant Physician',
+          department: 'OPD Clinic',
+          room: 'Room 101',
+          hospitalName: 'Colombo Teaching Hospital 1',
+          status: 'active' as const,
+          dailyCapacity: 30,
+          avgConsultMinutes: 15,
         },
-        cardShadowSm: {
-          shadowColor: '#000000',
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 3,
+        metrics: {
+          currentCallingToken: 4,
+          waitingCount: 2,
+          completedCount: 0,
+          totalToday: 30,
+          avgWaitMinutes: 15,
         },
-        borderSubtle: 'rgba(255, 255, 255, 0.08)',
+        currentPatient: {
+          tokenNumber: 4,
+          patientName: 'Imantha kaniska',
+          age: 28,
+          gender: 'Male',
+          priority: 'normal' as const,
+          status: 'in_consultation',
+          reason: 'General OPD Consultation',
+          bloodPressure: '120/80',
+          heartRate: '76 bpm',
+          fileRecord: 'REC-004',
+          checkedInTime: '08:59',
+          calledAtTime: '08:59',
+        },
+        upcomingQueue: [
+          {
+            tokenNumber: 5,
+            patientName: 'Kasun Bandara',
+            age: 34,
+            gender: 'Male',
+            priority: 'normal' as const,
+            category: 'all' as const,
+            status: 'next',
+            reason: 'Hypertension Review',
+            location: 'Waiting Area',
+            slotTime: '09:15',
+          },
+          {
+            tokenNumber: 6,
+            patientName: 'Nadeesha Silva',
+            age: 29,
+            gender: 'Female',
+            priority: 'normal' as const,
+            category: 'all' as const,
+            status: 'Waiting',
+            reason: 'Routine Medical Checkup',
+            location: 'Waiting Area',
+            slotTime: '09:30',
+          },
+        ],
       };
-    }
-    return {
-      bgPage: '#EEF6F8',
-      cardBg: '#FFFFFF',
-      textPrimary: '#0F1F24',
-      textSecondary: '#5B6B73',
-      tealDeep: '#0B4F59',
-      tealBright: '#0E8F9A',
-      tealTint: '#DDF1F3',
-      chipGrey: '#EEF3F4',
-      alertText: '#C62828',
-      alertBg: '#FDECEC',
-      headerOverlay: 'rgba(255, 255, 255, 0.16)',
-      headerBorder: 'rgba(255, 255, 255, 0.25)',
-      headerPillInner: 'rgba(11, 79, 89, 0.45)',
-      cardShadow: {
-        shadowColor: '#0B4F59',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 22,
-        elevation: 7,
-      },
-      cardShadowSm: {
-        shadowColor: '#0B4F59',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-        elevation: 3,
-      },
-      borderSubtle: 'rgba(11, 79, 89, 0.08)',
-    };
-  }, [isDarkMode]);
 
+<<<<<<< HEAD
+      const queue = [...(base.upcomingQueue || [])];
+      let nextPat: PatientQueueItem;
+=======
   const checkUnreadNotifications = async () => {
     setUnreadCount(0);
     try {
@@ -301,169 +153,234 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
       console.log('Failed to fetch notifications', e);
     }
   };
+>>>>>>> origin/dev
 
-  const loadActiveBreak = useCallback(async () => {
-    try {
-      const raw = await AsyncStorage.getItem('@medi_queue_doctor_break');
-      if (raw) {
-        setActiveBreak(JSON.parse(raw));
+      if (queue.length > 0) {
+        nextPat = queue.shift()!;
       } else {
-        setActiveBreak(null);
+        const lastNum = base.currentPatient?.tokenNumber || 4;
+        nextPat = {
+          tokenNumber: lastNum + 1,
+          patientName: 'Nadeesha Silva',
+          age: 29,
+          gender: 'Female',
+          priority: 'normal',
+          status: 'next',
+          reason: 'Routine Medical Checkup',
+          slotTime: '09:30',
+        };
       }
-    } catch (e) {
-      setActiveBreak(null);
-    }
+
+      if (queue.length < 2) {
+        const highestToken = Math.max(nextPat.tokenNumber, ...queue.map((q) => q.tokenNumber), 4);
+        const nextNames = ['Ruwan Jayasinghe', 'Chathuri Perera', 'Dinesh Chandimal', 'Kumari Ranasinghe'];
+        const chosen = nextNames[(highestToken + 1) % nextNames.length];
+        queue.push({
+          tokenNumber: highestToken + 1,
+          patientName: chosen,
+          age: 25 + ((highestToken * 3) % 40),
+          gender: highestToken % 2 === 0 ? 'Female' : 'Male',
+          priority: 'normal',
+          category: 'all',
+          status: 'Waiting',
+          reason: 'Routine OPD Consultation',
+          slotTime: '10:00',
+        });
+      }
+
+      return {
+        ...base,
+        metrics: {
+          ...base.metrics,
+          completedCount: (base.metrics?.completedCount || 0) + 1,
+          waitingCount: queue.length,
+          currentCallingToken: nextPat.tokenNumber,
+        },
+        currentPatient: {
+          tokenNumber: nextPat.tokenNumber,
+          patientName: nextPat.patientName,
+          age: nextPat.age,
+          gender: nextPat.gender,
+          priority: (nextPat.priority === 'urgent' ? 'urgent' : 'normal') as 'normal' | 'urgent',
+          status: 'in_consultation',
+          reason: nextPat.reason || 'General OPD Consultation',
+          bloodPressure: '120/80',
+          heartRate: '76 bpm',
+          fileRecord: `REC-${String(nextPat.tokenNumber).padStart(3, '0')}`,
+          checkedInTime: nextPat.slotTime || '09:00',
+          calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+        upcomingQueue: queue,
+      };
+    });
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadActiveBreak();
-      checkUnreadNotifications();
-    }, [loadActiveBreak])
-  );
-
-  const handleEndActiveBreakFromDashboard = async () => {
-    try {
-      await AsyncStorage.removeItem('@medi_queue_doctor_break');
-      setActiveBreak(null);
-      if (data) {
-        setData({
-          ...data,
-          doctor: { ...data.doctor, status: 'active' },
-        });
-        await updateDoctorStatusApi('active', data.doctor._id);
-      }
-      Alert.alert(t('Shift Resumed'), t('You have resumed your active shift.'));
-    } catch (e) {
-      console.log('Error ending break:', e);
-    }
-  };
-
-  const handleTake15mBreak = async () => {
-    if (activeBreak) {
-      await handleEndActiveBreakFromDashboard();
-      return;
-    }
-    const newBreak = {
-      type: 'tea' as const,
-      label: 'Tea Break',
-      duration: '15 mins',
-      minutes: 15,
-      hospitalId: 'hosp-1',
-      hospitalName: currentHospital,
-      shiftName: 'Morning Shift',
-      startTime: Date.now(),
-    };
-    try {
-      await AsyncStorage.setItem('@medi_queue_doctor_break', JSON.stringify(newBreak));
-      setActiveBreak(newBreak);
-      if (data?.doctor) {
-        setData({
-          ...data,
-          doctor: { ...data.doctor, status: 'on_break' },
-        });
-        await updateDoctorStatusApi('on_break', data.doctor._id);
-      }
-      Alert.alert(t('Break Started'), t('15m Break is now active on your dashboard.'));
-    } catch (e) {}
-  };
 
   const loadData = useCallback(async () => {
     try {
-      loadActiveBreak();
-      let savedHospital = '';
-      try {
-        const storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
-        if (storedHosp) savedHospital = storedHosp;
-      } catch (e) {}
-
-      const res = await fetchDoctorDashboard();
-      const hosp = savedHospital || res?.doctor?.hospitalName || 'Colombo Teaching Hospital 1';
-      setCurrentHospital(hosp);
-      setData(res);
+      let savedHosp = await AsyncStorage.getItem('doctor_current_hospital');
+      if (!savedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
+        savedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
+      }
+      const activeHosp = savedHosp || currentHospital || 'Colombo Teaching Hospital 1';
+      if (activeHosp !== currentHospital) {
+        setCurrentHospital(activeHosp);
+      }
+      const res = await fetchDoctorDashboard(undefined, activeHosp);
+      if (res) {
+        setData(res);
+        if (res.doctor?.hospitalName) {
+          setCurrentHospital(res.doctor.hospitalName);
+        }
+      } else {
+        setData(getDoctorDashboardForHospital(activeHosp));
+      }
     } catch (err) {
-      console.log('Failed to load doctor dashboard', err);
+      console.log('Error loading doctor dashboard:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadActiveBreak]);
+  }, [currentHospital]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const raw = await AsyncStorage.getItem('@medi_queue_doctor_break');
+          if (raw) setActiveBreak(JSON.parse(raw));
+          else setActiveBreak(null);
+
+          let storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
+          if (!storedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
+            storedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
+          }
+          if (storedHosp && storedHosp !== currentHospital) {
+            setCurrentHospital(storedHosp);
+            const res = await fetchDoctorDashboard(undefined, storedHosp);
+            if (res) setData(res);
+            else setData(getDoctorDashboardForHospital(storedHosp));
+          }
+        } catch (e) {}
+      })();
+    }, [currentHospital])
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimerSeconds((prev) => prev + 1);
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
   };
 
-  const handleToggleShift = async () => {
-    if (!data) return;
-    if (activeBreak) {
-      await handleEndActiveBreakFromDashboard();
-      return;
+  const BREAK_OPTIONS = useMemo(
+    () => [
+      {
+        type: 'tea' as const,
+        label: 'Tea break',
+        duration: '15 min',
+        icon: 'cafe-outline' as const,
+        description: '15 min morning / evening tea interval',
+      },
+      {
+        type: 'lunch' as const,
+        label: 'Lunch break',
+        duration: '30 min',
+        icon: 'restaurant-outline' as const,
+        description: '30 min mid-day lunch interval',
+      },
+      {
+        type: 'dinner' as const,
+        label: 'Dinner break',
+        duration: '30 min',
+        icon: 'moon-outline' as const,
+        description: '30 min evening dinner interval',
+      },
+    ],
+    []
+  );
+
+  const getBreakPillLabel = useCallback(() => {
+    if (!activeBreak) return t('Active shift');
+    if (activeBreak.type === 'lunch') return t('Lunch break');
+    if (activeBreak.type === 'tea') return t('Tea break');
+    if (activeBreak.type === 'dinner') return t('Dinner break');
+
+    const lbl = (activeBreak.label || '').toLowerCase();
+    if (lbl.includes('lunch')) return t('Lunch break');
+    if (lbl.includes('dinner')) return t('Dinner break');
+    if (lbl.includes('tea')) return t('Tea break');
+
+    const hour = new Date().getHours();
+    if (hour >= 11 && hour < 15) return t('Lunch break');
+    if (hour >= 18 || hour < 5) return t('Dinner break');
+    return t('Tea break');
+  }, [activeBreak, t]);
+
+  const handleStartBreak = async (option: {
+    type: 'tea' | 'lunch' | 'dinner';
+    label: string;
+    duration: string;
+  }) => {
+    const breakInfo = {
+      label: option.label,
+      type: option.type,
+      duration: option.duration,
+      startTime: Date.now(),
+    };
+    setActiveBreak(breakInfo);
+    try {
+      await AsyncStorage.setItem('@medi_queue_doctor_break', JSON.stringify(breakInfo));
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('@medi_queue_doctor_break', JSON.stringify(breakInfo));
+      }
+    } catch (e) {}
+    setIsBreakModalOpen(false);
+    if (Platform.OS !== 'web') {
+      Alert.alert(t(option.label), t("{value0} scheduled.", { value0: t(option.label) }));
     }
-    const newStatus = data.doctor?.status === 'active' ? 'on_break' : 'active';
-    setData({
-      ...data,
-      doctor: { ...data.doctor, status: newStatus },
-    });
-    await updateDoctorStatusApi(newStatus, data.doctor?._id);
   };
 
-  const advanceQueueLocally = useCallback(() => {
-    setData((prev) => {
-      if (!prev) return prev;
-      const queue = [...(prev.upcomingQueue || [])];
-
-      if (queue.length > 0) {
-        const nextPat = queue.shift()!;
-        return {
-          ...prev,
-          metrics: {
-            ...prev.metrics,
-            completedCount: (prev.metrics?.completedCount || 0) + 1,
-            waitingCount: queue.length,
-            currentCallingToken: nextPat.tokenNumber,
-          },
-          currentPatient: {
-            tokenNumber: nextPat.tokenNumber,
-            patientName: nextPat.patientName,
-            age: nextPat.age,
-            gender: nextPat.gender,
-            priority: (nextPat.priority === 'urgent' ? 'urgent' : 'normal') as 'normal' | 'urgent',
-            status: 'in_consultation',
-            reason: nextPat.reason || 'General OPD Consultation',
-            bloodPressure: '124/82',
-            heartRate: '76 bpm',
-            fileRecord: `REC-${800 + nextPat.tokenNumber}`,
-            checkedInTime: nextPat.slotTime || '11:15 AM',
-            calledAtTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          },
-          upcomingQueue: queue,
-        };
+  const handleEndBreak = async () => {
+    const currentName = getBreakPillLabel();
+    setActiveBreak(null);
+    try {
+      await AsyncStorage.removeItem('@medi_queue_doctor_break');
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('@medi_queue_doctor_break');
       }
+    } catch (e) {}
+    setIsBreakModalOpen(false);
+    if (Platform.OS !== 'web') {
+      Alert.alert(t('Break Ended'), t("{value0} ended. Resumed active consultation.", { value0: currentName }));
+    }
+  };
 
-      return {
-        ...prev,
-        metrics: {
-          ...prev.metrics,
-          completedCount: (prev.metrics?.completedCount || 0) + 1,
-          waitingCount: 0,
-          currentCallingToken: 0,
-        },
-        currentPatient: null,
-        upcomingQueue: [],
-      };
-    });
-  }, []);
+  const handleBreakActionPress = () => {
+    if (activeBreak) {
+      handleEndBreak();
+    } else {
+      setIsBreakModalOpen(true);
+    }
+  };
 
   const handleCompleteAndNext = async () => {
     setIsProcessing(true);
-    if (data?.currentPatient) {
-      setPatientUndoHistory((prev) => [...prev, { ...data.currentPatient! }]);
-    }
     try {
       const res = await callNextPatientApi();
       if (res && res.data) {
@@ -472,19 +389,22 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         advanceQueueLocally();
       }
       setTimerSeconds(0);
-      Alert.alert(t('Consultation Completed'), t('Advanced to next patient.'));
+      Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
     } catch (err: any) {
       advanceQueueLocally();
       setTimerSeconds(0);
-      Alert.alert(t('Consultation Completed'), t('Advanced to next patient.'));
+      Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleUndoPatient = async () => {
-    if (data?.currentPatient && data.currentPatient.tokenNumber <= 1) {
-      Alert.alert(t('Notice'), t('First Patient Reached'));
+    if (!data?.currentPatient) return;
+    const currentToken = data.currentPatient.tokenNumber;
+
+    if (currentToken <= 1) {
+      Alert.alert(t('First Patient Reached'), t('You are already at Token #001. Cannot undo further.'));
       return;
     }
 
@@ -497,13 +417,15 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         setIsProcessing(false);
         return;
       }
-    } catch (err) {}
+    } catch (err) {
+      console.log('Error calling undo API:', err);
+    }
 
-    let restoredToken = 27;
+    let restoredToken = 1;
     setData((prev) => {
       if (!prev) return prev;
       const curr = prev.currentPatient;
-      const targetToken = curr ? curr.tokenNumber - 1 : 27;
+      const targetToken = curr ? curr.tokenNumber - 1 : 3;
       restoredToken = Math.max(1, targetToken);
       const prevPatientData = getCatalogPatient(restoredToken);
 
@@ -518,7 +440,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
           category: 'all',
           status: 'next',
           reason: curr.reason || 'General OPD Consultation',
-          slotTime: curr.checkedInTime || '11:15 AM',
+          slotTime: curr.checkedInTime || '08:45 AM',
         };
         updatedQueue = [currAsQueueItem, ...updatedQueue.filter((q) => q.tokenNumber !== curr.tokenNumber)];
       }
@@ -534,9 +456,9 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         currentPatient: {
           ...prevPatientData,
           status: 'in_consultation',
-          bloodPressure: '124/82',
+          bloodPressure: '120/80',
           heartRate: '76 bpm',
-          calledAtTime: '08:47',
+          calledAtTime: '08:45',
         },
         upcomingQueue: updatedQueue,
       };
@@ -567,8 +489,8 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   };
 
   const handleRecallPatient = () => {
-    const tokenStr = String(data?.currentPatient?.tokenNumber || 28).padStart(3, '0');
-    Alert.alert(t('Recall'), `${t('Recalling Token')} #${tokenStr}`);
+    const tokenStr = String(data?.currentPatient?.tokenNumber || 4).padStart(3, '0');
+    Alert.alert(t('Recall'), `${t('Recalling token')} #${tokenStr}`);
   };
 
   const handleOpenWalkInModal = () => {
@@ -591,7 +513,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
     try {
       const res = await addWalkInSlotApi({
         patientName: trimmedName,
-        age: walkInAge ? Number(walkInAge) : 35,
+        age: walkInAge ? Number(walkInAge) : 28,
         gender: walkInGender,
         priority: walkInPriority,
         reason: walkInReason.trim() || 'Walk-in OPD Consultation',
@@ -606,11 +528,11 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             prev.currentPatient?.tokenNumber || 0,
             ...prev.upcomingQueue.map((q) => q.tokenNumber || 0),
           ];
-          const nextToken = Math.max(34, ...currentTokens) + 1;
+          const nextToken = Math.max(4, ...currentTokens) + 1;
           const newPatient: PatientQueueItem = {
             tokenNumber: nextToken,
             patientName: trimmedName,
-            age: walkInAge ? Number(walkInAge) : 35,
+            age: walkInAge ? Number(walkInAge) : 28,
             gender: walkInGender,
             priority: walkInPriority === 'urgent' ? 'urgent' : 'walkin',
             category: 'walkin',
@@ -647,84 +569,41 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
     }
   };
 
-  const handleRemoveQueuePatient = (tokenNumber: number, patientName: string) => {
-    Alert.alert(
-      t('Remove Patient'),
-      `${patientName} (Token #${String(tokenNumber).padStart(3, '0')})`,
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        {
-          text: t('Remove'),
-          style: 'destructive',
-          onPress: () => {
-            setData((prev) => {
-              if (!prev) return prev;
-              const updatedQueue = prev.upcomingQueue.filter((p) => p.tokenNumber !== tokenNumber);
-              return {
-                ...prev,
-                metrics: {
-                  ...prev.metrics,
-                  waitingCount: updatedQueue.length,
-                },
-                upcomingQueue: updatedQueue,
-              };
-            });
-          },
-        },
-      ]
-    );
-  };
-
   const handleSelectHospital = async (hosp: string) => {
     setCurrentHospital(hosp);
     setIsHospitalModalOpen(false);
+
     try {
       await AsyncStorage.setItem('doctor_current_hospital', hosp);
-      await updateDoctorHospitalApi(hosp);
-      Alert.alert(t('Notice'), `${hosp}`);
-    } catch (e) {}
-  };
-
-  const handleTabPress = (tab: 'home' | 'queue' | 'records' | 'schedule' | 'rx') => {
-    setActiveTab(tab);
-    if (tab === 'queue') {
-      try { router.push('/(doctor)/queue' as any); } catch (e) { router.push('/queue' as any); }
-    } else if (tab === 'records') {
-      if (currentPatient) {
-        try {
-          router.push({
-            pathname: '/(doctor)/records' as any,
-            params: {
-              patientId: (currentPatient as any).patientId || '',
-              patientName: currentPatient.patientName,
-              tokenNumber: String(currentPatient.tokenNumber),
-            },
-          });
-        } catch (e) {
-          router.push('/(doctor)/records' as any);
-        }
-      } else {
-        try { router.push('/(doctor)/records' as any); } catch (e) { router.push('/records' as any); }
+      if (typeof window !== 'undefined' && (window as any).localStorage) {
+        (window as any).localStorage.setItem('doctor_current_hospital', hosp);
       }
-    } else if (tab === 'schedule') {
-      try { router.push('/(doctor)/schedule' as any); } catch (e) { router.push('/schedule' as any); }
-    } else if (tab === 'rx') {
-      try { router.push('/(doctor)/prescription' as any); } catch (e) { router.push('/prescription' as any); }
+      await updateDoctorHospitalApi(hosp);
+    } catch (e) {}
+
+    try {
+      const res = await fetchDoctorDashboard(undefined, hosp);
+      if (res) {
+        setData(res);
+      } else {
+        setData(getDoctorDashboardForHospital(hosp));
+      }
+    } catch (e) {
+      setData(getDoctorDashboardForHospital(hosp));
     }
   };
 
-  const toggleLanguage = async () => {
-    const nextLang = language === 'en' ? 'si' : language === 'si' ? 'ta' : 'en';
-    await setLanguage(nextLang);
-  };
-
-  // Up next queue list: use real backend queue from database
   const displayQueue: PatientQueueItem[] = useMemo(() => {
     if (data?.upcomingQueue && Array.isArray(data.upcomingQueue)) {
       return data.upcomingQueue;
     }
     return [];
   }, [data?.upcomingQueue]);
+
+  const defaultPatientForHosp = useMemo(
+    () => getDoctorDashboardForHospital(currentHospital).currentPatient,
+    [currentHospital]
+  );
 
   const currentPatient = data?.currentPatient ?? (displayQueue.length > 0 ? {
     tokenNumber: displayQueue[0].tokenNumber,
@@ -733,38 +612,117 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
     gender: displayQueue[0].gender,
     priority: displayQueue[0].priority === 'urgent' ? 'urgent' : 'normal',
     status: 'next',
-    reason: displayQueue[0].reason || 'OPD Consultation',
+    reason: displayQueue[0].reason || 'General OPD Consultation',
     bloodPressure: '120/80',
     heartRate: '76 bpm',
     fileRecord: `REC-${displayQueue[0].tokenNumber}`,
-    checkedInTime: displayQueue[0].slotTime || '10:00 AM',
-    calledAtTime: '09:00',
+    checkedInTime: displayQueue[0].slotTime || '08:59',
+    calledAtTime: '08:59',
     allergy: null,
     patientId: (displayQueue[0] as any).patientId,
     appointmentId: (displayQueue[0] as any).appointmentId,
-  } : null);
+  } : defaultPatientForHosp);
 
-  const waitingCount = data?.metrics?.waitingCount ?? displayQueue.length;
+  const waitingCount = data?.metrics?.waitingCount ?? (displayQueue.length > 0 ? displayQueue.length : 2);
   const completedCount = data?.metrics?.completedCount ?? 0;
   const totalCapacity = data?.doctor?.dailyCapacity ?? 30;
-  const avgWaitMinutes = data?.metrics?.avgWaitMinutes ?? 10;
+  const avgWaitMinutes = data?.metrics?.avgWaitMinutes ?? 15;
 
   const doctorDisplayName = data?.doctor?.name || 'Dr. Palitha Perera';
-  const doctorInitials = useMemo(() => {
+  const doctorShortName = useMemo(() => {
     const clean = doctorDisplayName.replace(/^Dr\.\s*/i, '').trim();
-    const parts = clean.split(' ');
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return clean.slice(0, 2).toUpperCase() || 'DR';
+    const first = clean.split(' ')[0] || clean;
+    return `Dr. ${first}`;
   }, [doctorDisplayName]);
 
+  const currentRoom = data?.doctor?.room || 'Room 101';
+
+  // Dynamic greeting based on current time
+  const { greetingText, greetingIcon } = useMemo(() => {
+    const hour = currentTime.getHours();
+    if (hour >= 5 && hour < 12) {
+      return {
+        greetingText: t('Good morning,'),
+        greetingIcon: 'sunny-outline' as const,
+      };
+    } else if (hour >= 12 && hour < 17) {
+      return {
+        greetingText: t('Good afternoon,'),
+        greetingIcon: 'sunny' as const,
+      };
+    } else if (hour >= 17 && hour < 21) {
+      return {
+        greetingText: t('Good evening,'),
+        greetingIcon: 'partly-sunny-outline' as const,
+      };
+    } else {
+      return {
+        greetingText: t('Good night,'),
+        greetingIcon: 'moon-outline' as const,
+      };
+    }
+  }, [currentTime, t]);
+
+  // Real-time clock & date
+  const { timeString, amPmString, dateString } = useMemo(() => {
+    let hours = currentTime.getHours();
+    const minutes = currentTime.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const minutesStr = minutes < 10 ? `0${minutes}` : `${minutes}`;
+    const timeFormatted = `${hours}:${minutesStr}`;
+
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dayName = days[currentTime.getDay()];
+    const monthName = months[currentTime.getMonth()];
+    const dayNum = currentTime.getDate();
+    const year = currentTime.getFullYear();
+    const dateFormatted = `${dayName}, ${monthName} ${dayNum}, ${year}`;
+
+    return {
+      timeString: timeFormatted,
+      amPmString: ampm,
+      dateString: dateFormatted,
+    };
+  }, [currentTime]);
+
   return (
-    <SafeAreaView style={[styles.safeContainer, { backgroundColor: colors.bgPage }]}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#0B4F59"
+    <View style={styles.rootContainer}>
+      <StatusBar barStyle="light-content" backgroundColor={C.teal} />
+
+      {/* 1. SHARED TOP BAR */}
+      <DoctorTopBar
+        doctorName={doctorDisplayName}
+        room={currentRoom}
+        unreadCount={unreadCount}
       />
       <EmergencyBanner />
 
+<<<<<<< HEAD
+      {/* SCROLLABLE BODY */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[C.teal]}
+            tintColor={C.teal}
+          />
+        }
+      >
+        {/* 2. ONE DARK HIGHLIGHT BOX COMBINING GREETING + LOCATION */}
+        <DoctorDarkHighlightBox style={styles.darkHighlightBox}>
+          {/* Top row: dynamic icon + Greeting on left, strong "Active shift" / break pill on right */}
+          <View style={styles.darkTopRow}>
+            <View style={styles.darkGreetingRow}>
+              <Ionicons name={greetingIcon} size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.darkGreetingText}>{greetingText}</Text>
+=======
       {/* CENTERED RESPONSIVE WRAPPER (MAX 420px) */}
       <View style={styles.centerAlignWrapper}>
         <View style={[styles.mobileContainer, { backgroundColor: colors.bgPage }]}>
@@ -1109,264 +1067,257 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                   )}
                 </View>
               )}
+>>>>>>> origin/dev
             </View>
+            <DarkStrongPill
+              label={getBreakPillLabel()}
+              pulse
+              onPress={handleBreakActionPress}
+            />
+          </View>
 
-            {/* ========================================================= */}
-            {/* SECTION 3: QUICK ACTIONS (FOUR 56px CIRCULAR BUTTONS) */}
-            {/* ========================================================= */}
-            <View style={styles.quickActionsSection}>
-              <View style={styles.quickActionsRow}>
-                {/* 1. Call Next (speaker icon) */}
-                <TouchableOpacity
-                  style={styles.quickActionItem}
-                  onPress={handleCallNext}
-                  disabled={isProcessing}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.quickActionCircle, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle }, colors.cardShadowSm]}>
-                    <LineSpeaker color={colors.tealDeep} size={22} />
-                  </View>
-                  <Text style={[styles.quickActionLabel, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {t('Call Next')}
-                  </Text>
-                </TouchableOpacity>
+          {/* Middle row: Doctor name on left, Real-time Clock & Date on right */}
+          <View style={styles.darkDoctorAndClockRow}>
+            <Text style={styles.darkDoctorName}>{doctorShortName}</Text>
 
-                {/* 2. Add Walk-in (user-plus icon) */}
-                <TouchableOpacity
-                  style={styles.quickActionItem}
-                  onPress={handleOpenWalkInModal}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.quickActionCircle, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle }, colors.cardShadowSm]}>
-                    <LineUserPlus color={colors.tealDeep} size={22} />
-                  </View>
-                  <Text style={[styles.quickActionLabel, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {t('Add Walk-in')}
-                  </Text>
-                </TouchableOpacity>
+            <View style={styles.darkClockCol}>
+              <View style={styles.darkTimeRow}>
+                <Text style={styles.darkTimeNumber}>{timeString}</Text>
+                <Text style={styles.darkTimeAmPm}>{amPmString}</Text>
+              </View>
+              <View style={styles.darkDateRow}>
+                <Ionicons name="calendar-outline" size={13} color={C.white80} style={{ marginRight: 5 }} />
+                <Text style={styles.darkDateText}>{dateString}</Text>
+              </View>
+            </View>
+          </View>
 
-                {/* 3. 15m Break (coffee cup icon) */}
-                <TouchableOpacity
-                  style={styles.quickActionItem}
-                  onPress={handleTake15mBreak}
-                  activeOpacity={0.7}
-                >
-                  <View
-                    style={[
-                      styles.quickActionCircle,
-                      { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle },
-                      activeBreak && { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' },
-                      colors.cardShadowSm,
-                    ]}
-                  >
-                    <LineCoffee color={activeBreak ? '#B45309' : colors.tealDeep} size={22} />
-                  </View>
-                  <Text
-                    style={[
-                      styles.quickActionLabel,
-                      { color: colors.textPrimary },
-                      activeBreak && { color: '#B45309', fontWeight: '800' },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {activeBreak ? t('End Break') : t('15m Break')}
-                  </Text>
-                </TouchableOpacity>
+          {/* Thin divider (white at 20% opacity) */}
+          <View style={styles.darkDivider} />
 
-                {/* 4. Recall (bell icon) */}
-                <TouchableOpacity
-                  style={styles.quickActionItem}
-                  onPress={handleRecallPatient}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.quickActionCircle, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle }, colors.cardShadowSm]}>
-                    <LineBell color={colors.tealDeep} size={22} />
-                  </View>
-                  <Text style={[styles.quickActionLabel, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {t('Recall')}
-                  </Text>
-                </TouchableOpacity>
+          {/* Location row: building icon in rounded square (white 16%), hospital name wrapped, Switch chip */}
+          <View style={styles.darkLocationRow}>
+            <View style={styles.darkLocationLeft}>
+              <View style={styles.darkBuildingSquare}>
+                <Ionicons name="business" size={17} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={styles.darkHospitalName}>{currentHospital}</Text>
+                <Text style={styles.darkRoomSubtitle}>OPD · {currentRoom}</Text>
+              </View>
+            </View>
+            <DarkTranslucentChip
+              label={t('Switch')}
+              icon={<Ionicons name="swap-horizontal" size={14} color="#FFFFFF" />}
+              onPress={() => setIsHospitalModalOpen(true)}
+            />
+          </View>
+        </DoctorDarkHighlightBox>
+
+        {/* 3. STATS ROW (3 EQUAL WHITE TILES: Waiting "2 +3", Done "0 / 30", Avg wait "15 min") */}
+        <View style={styles.statsRow}>
+          <View style={styles.statTile}>
+            <Text style={styles.statLabelText}>{t('Waiting')}</Text>
+            <View style={styles.statNumberRow}>
+              <Text style={styles.statNumberText}>{waitingCount}</Text>
+              <Text style={styles.statSuffixText}>+3</Text>
+            </View>
+          </View>
+
+          <View style={styles.statTile}>
+            <Text style={styles.statLabelText}>{t('Done')}</Text>
+            <View style={styles.statNumberRow}>
+              <Text style={styles.statNumberText}>{completedCount}</Text>
+              <Text style={styles.statSuffixText}>/ {totalCapacity}</Text>
+            </View>
+          </View>
+
+          <View style={styles.statTile}>
+            <Text style={styles.statLabelText}>{t('Avg wait')}</Text>
+            <View style={styles.statNumberRow}>
+              <Text style={styles.statNumberText}>{avgWaitMinutes}</Text>
+              <Text style={styles.statSuffixText}>{t('min')}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 4. "NOW SERVING" CARD (WHITE, 4PX TEAL LEFT BORDER) */}
+        {currentPatient ? (
+          <View style={styles.nowServingCard}>
+            <View style={styles.nowServingHeader}>
+              <StatusPill label={t('Now serving')} />
+              <View style={styles.timePill}>
+                <Ionicons name="time-outline" size={13} color={C.sub} style={{ marginRight: 4 }} />
+                <Text style={styles.timePillText}>{formatTimer(timerSeconds)}</Text>
               </View>
             </View>
 
-            {/* ========================================================= */}
-            {/* SECTION 4: UP NEXT IN QUEUE */}
-            {/* ========================================================= */}
-            <View style={styles.queueSection}>
-              {/* Header row */}
-              <View style={styles.queueHeaderRow}>
-                <Text style={[styles.queueTitleText, { color: colors.textSecondary }]}>
-                  {t('UP NEXT IN QUEUE')}
+            <View style={styles.patientRow}>
+              <View style={styles.tokenTile70}>
+                <Text style={styles.tokenTileLabel}>{t('Token')}</Text>
+                <Text style={styles.tokenTileNumber}>
+                  {String(currentPatient.tokenNumber).padStart(3, '0')}
                 </Text>
-                <TouchableOpacity
-                  style={styles.fullQueueBtn}
-                  onPress={() => router.push('/(doctor)/queue')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.fullQueueText}>{t('Full Queue')}</Text>
-                  <LineChevronRight color="#0E8F9A" size={15} />
-                </TouchableOpacity>
               </View>
 
-              {/* Vertical list of queue cards */}
-              <View style={styles.queueCardsList}>
-                {displayQueue.length === 0 ? (
-                  <View style={[styles.queueCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle, alignItems: 'center', justifyContent: 'center', paddingVertical: 24, paddingHorizontal: 16 }]}>
-                    <Ionicons name="people-outline" size={32} color={colors.textSecondary} style={{ marginBottom: 8 }} />
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textPrimary }}>
-                      {t('No Patients in Queue')}
-                    </Text>
-                    <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4, textAlign: 'center' }}>
-                      {t('New checked-in or walk-in patients will appear here automatically.')}
-                    </Text>
-                  </View>
-                ) : (
-                  displayQueue.map((item, index) => (
-                    <TouchableOpacity
-                      key={`${item.tokenNumber}-${index}`}
-                      style={[styles.queueCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle }, colors.cardShadowSm]}
-                      activeOpacity={0.85}
-                      onPress={() =>
-                        Alert.alert(
-                          `Token #${String(item.tokenNumber).padStart(3, '0')} - ${item.patientName}`,
-                          `${item.reason || 'OPD Consultation'}\nTime: ${item.slotTime || '--:--'}`,
-                          [
-                            {
-                              text: t('Call into Room'),
-                              onPress: async () => {
-                                setIsProcessing(true);
-                                try {
-                                  const res = await callSpecificTokenApi(item.tokenNumber);
-                                  if (res && res.data) setData(res.data);
-                                } finally {
-                                  setIsProcessing(false);
-                                }
-                              },
-                            },
-                            {
-                              text: t('View Records'),
-                              onPress: () => {
-                                router.push({
-                                  pathname: '/(doctor)/records' as any,
-                                  params: {
-                                    tokenNumber: String(item.tokenNumber),
-                                    patientName: item.patientName,
-                                    patientId: (item as any).patientId || '',
-                                  },
-                                });
-                              },
-                            },
-                            {
-                              text: t('Prescribe Rx'),
-                              onPress: () => {
-                                router.push({
-                                  pathname: '/(doctor)/prescription' as any,
-                                  params: {
-                                    tokenNumber: String(item.tokenNumber),
-                                    patientName: item.patientName,
-                                    patientId: (item as any).patientId || '',
-                                  },
-                                });
-                              },
-                            },
-                            { text: t('Cancel'), style: 'cancel' },
-                          ]
-                        )
-                      }
-                    >
-                      {/* Light-tint token tile (58px) */}
-                      <View style={[styles.queueTokenTile, { backgroundColor: colors.tealTint }]}>
-                        <Text style={[styles.queueTokenLabel, { color: colors.tealDeep }]}>
-                          {t('TKN')}
-                        </Text>
-                        <Text style={[styles.queueTokenNum, { color: colors.tealDeep }]}>
-                          {String(item.tokenNumber).padStart(3, '0')}
-                        </Text>
-                      </View>
-
-                      {/* Patient Name and Subtitle */}
-                      <View style={styles.queueItemInfo}>
-                        <Text style={[styles.queueItemName, { color: colors.textPrimary }]} numberOfLines={1}>
-                          {item.patientName}
-                        </Text>
-                        <Text style={[styles.queueItemSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                          {t(item.reason || (index === 0 ? 'OPD Check' : 'Follow-up'))} • {item.age} {t('yrs')}
-                        </Text>
-                      </View>
-
-                      {/* Teal-tinted Appointment Time Pill & Three-dot Menu */}
-                      <View style={styles.queueCardRight}>
-                        <View style={[styles.queueTimePill, { backgroundColor: colors.tealTint }]}>
-                          <Text style={[styles.queueTimeText, { color: colors.tealDeep }]}>
-                            {item.slotTime || '--:--'}
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          style={styles.threeDotBtn}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            Alert.alert(
-                              `${item.patientName} (Token #${String(item.tokenNumber).padStart(3, '0')})`,
-                              t('Choose an action'),
-                              [
-                                { text: t('Cancel'), style: 'cancel' },
-                                {
-                                  text: t('Remove'),
-                                  style: 'destructive',
-                                  onPress: () => handleRemoveQueuePatient(item.tokenNumber, item.patientName),
-                                },
-                              ]
-                            );
-                          }}
-                          accessibilityLabel={`Options for ${item.patientName}`}
-                        >
-                          <LineThreeDot color={colors.textSecondary} size={18} />
-                        </TouchableOpacity>
-                      </View>
-                    </TouchableOpacity>
-                  ))
-                )}
+              <View style={styles.patientInfoCol}>
+                <Text style={styles.patientNameHeading} numberOfLines={1}>
+                  {currentPatient.patientName}
+                </Text>
+                <Text style={styles.patientSubtitleInfo} numberOfLines={1}>
+                  {t(currentPatient.reason || 'General OPD consultation')} · {currentPatient.age || 28} {t('yrs')}
+                </Text>
               </View>
             </View>
 
-          </ScrollView>
+            {/* Vitals tiles */}
+            <View style={styles.vitalsRow}>
+              <View style={styles.vitalTile}>
+                <Text style={styles.vitalLabel}>{t('Blood pressure')}</Text>
+                <Text style={styles.vitalValue}>{currentPatient.bloodPressure || '120/80'}</Text>
+              </View>
+              <View style={styles.vitalTile}>
+                <Text style={styles.vitalLabel}>{t('Heart rate')}</Text>
+                <Text style={styles.vitalValueTeal}>{currentPatient.heartRate || '76 bpm'}</Text>
+              </View>
+            </View>
 
-          {/* ========================================================= */}
-          {/* BOTTOM NAVIGATION TABS (5 TABS) */}
-          {/* ========================================================= */}
-          <View style={[styles.bottomTabBar, { backgroundColor: colors.cardBg, borderTopColor: colors.borderSubtle }]}>
-            <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('home')}>
-              <Ionicons name="home" size={22} color={activeTab === 'home' ? '#0B4F59' : '#9DB2B8'} />
-              <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>{t('Home')}</Text>
+            {/* Allergy banner */}
+            <View style={styles.allergyBannerOk}>
+              <Ionicons name="shield-checkmark" size={16} color={C.ok} style={{ marginRight: 6 }} />
+              <Text style={styles.allergyBannerOkText}>
+                {t('No known drug allergies (NKDA)')}
+              </Text>
+            </View>
+
+            {/* Action row: undo icon button, short Rx secondary button, primary Complete & next */}
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={styles.undoBtn}
+                onPress={handleUndoPatient}
+                disabled={isProcessing}
+                activeOpacity={0.75}
+                accessibilityLabel={t('Undo')}
+              >
+                <Ionicons name="arrow-undo-outline" size={18} color={C.tealDeep} />
+              </TouchableOpacity>
+
+              <SecondaryButton
+                label={t('Prescription')}
+                icon={<MaterialCommunityIcons name="pill" size={16} color={C.tealDeep} />}
+                onPress={() => {
+                  if (currentPatient) {
+                    router.push({
+                      pathname: '/(doctor)/prescription',
+                      params: {
+                        tokenNumber: String(currentPatient.tokenNumber),
+                        patientName: currentPatient.patientName,
+                        patientId: currentPatient.patientId || '',
+                      },
+                    } as any);
+                  } else {
+                    router.push('/(doctor)/prescription' as any);
+                  }
+                }}
+                style={{ paddingHorizontal: 12 }}
+                textStyle={{ fontSize: 13 }}
+              />
+
+              <PrimaryButton
+                label={t('Complete & next')}
+                icon={<Ionicons name="checkmark-circle-outline" size={17} color="#FFFFFF" />}
+                onPress={handleCompleteAndNext}
+                loading={isProcessing}
+                style={{ flex: 1, paddingHorizontal: 10 }}
+                textStyle={{ fontSize: 13 }}
+              />
+            </View>
+          </View>
+        ) : null}
+
+        {/* 5. QUICK ACTIONS */}
+        <View style={styles.quickActionsSection}>
+          <View style={styles.quickActionsRow}>
+            <TouchableOpacity style={styles.quickActionItem} onPress={handleCallNext} activeOpacity={0.7}>
+              <View style={styles.quickActionCircle}>
+                <Ionicons name="megaphone-outline" size={20} color={C.tealDeep} />
+              </View>
+              <Text style={styles.quickActionLabel}>{t('Call next')}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('queue')}>
-              <MaterialCommunityIcons name="ticket-confirmation-outline" size={22} color={activeTab === 'queue' ? '#0B4F59' : '#9DB2B8'} />
-              <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>{t('Queue')}</Text>
+            <TouchableOpacity
+              style={styles.quickActionItem}
+              onPress={() => router.push('/(doctor)/schedule' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.quickActionCircle}>
+                <Ionicons name="calendar-outline" size={20} color={C.tealDeep} />
+              </View>
+              <Text style={styles.quickActionLabel}>{t('Schedule')}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('records')}>
-              <MaterialCommunityIcons name="folder-account-outline" size={22} color={activeTab === 'records' ? '#0B4F59' : '#9DB2B8'} />
-              <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>{t('Records')}</Text>
+            <TouchableOpacity style={styles.quickActionItem} onPress={handleBreakActionPress} activeOpacity={0.7}>
+              <View style={[styles.quickActionCircle, activeBreak && { backgroundColor: C.warnTint }]}>
+                <Ionicons
+                  name={activeBreak?.type === 'lunch' || activeBreak?.type === 'dinner' ? 'restaurant-outline' : 'cafe-outline'}
+                  size={20}
+                  color={activeBreak ? C.warn : C.tealDeep}
+                />
+              </View>
+              <Text style={[styles.quickActionLabel, activeBreak && { color: C.warn, fontWeight: '800' }]}>
+                {activeBreak ? t('End break') : t('Take break')}
+              </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('schedule')}>
-              <MaterialCommunityIcons name="calendar-month-outline" size={22} color={activeTab === 'schedule' ? '#0B4F59' : '#9DB2B8'} />
-              <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>{t('Schedule')}</Text>
+            <TouchableOpacity style={styles.quickActionItem} onPress={handleRecallPatient} activeOpacity={0.7}>
+              <View style={styles.quickActionCircle}>
+                <Ionicons name="notifications-outline" size={20} color={C.tealDeep} />
+              </View>
+              <Text style={styles.quickActionLabel}>{t('Recall')}</Text>
             </TouchableOpacity>
+          </View>
+        </View>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('rx')}>
-              <MaterialCommunityIcons name="clipboard-edit-outline" size={22} color={activeTab === 'rx' ? '#0B4F59' : '#9DB2B8'} />
-              <Text style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}>{t('Prescription')}</Text>
+        {/* 6. UP NEXT IN QUEUE */}
+        <View style={styles.queueSection}>
+          <View style={styles.queueHeaderRow}>
+            <Text style={styles.queueTitleText}>{t('Up next in queue')}</Text>
+            <TouchableOpacity
+              style={styles.fullQueueBtn}
+              onPress={() => router.push('/(doctor)/queue' as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.fullQueueText}>{t('Full queue')}</Text>
+              <Ionicons name="chevron-forward" size={14} color={C.teal} />
             </TouchableOpacity>
           </View>
 
+          <View style={styles.queueCardsList}>
+            {displayQueue.map((item, index) => (
+              <View key={`${item.tokenNumber}-${index}`} style={styles.queueCard}>
+                <View style={styles.queueTokenTile}>
+                  <Text style={styles.queueTokenLabel}>{t('Token')}</Text>
+                  <Text style={styles.queueTokenNum}>{String(item.tokenNumber).padStart(3, '0')}</Text>
+                </View>
+                <View style={styles.queueItemInfo}>
+                  <Text style={styles.queueItemName} numberOfLines={1}>{item.patientName}</Text>
+                  <Text style={styles.queueItemSubtitle} numberOfLines={1}>
+                    {t(item.reason || 'OPD check')} · {item.age} {t('yrs')}
+                  </Text>
+                </View>
+                <View style={styles.queueTimePill}>
+                  <Text style={styles.queueTimeText}>{item.slotTime || '--:--'}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
-      </View>
+      </ScrollView>
 
-      {/* ========================================================= */}
+      {/* 7. SHARED BOTTOM NAVIGATION BAR */}
+      <DoctorBottomNav activeTab="home" />
+
       {/* HOSPITAL SELECTION MODAL */}
-      {/* ========================================================= */}
       <Modal
         visible={isHospitalModalOpen}
         transparent
@@ -1374,12 +1325,53 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
         onRequestClose={() => setIsHospitalModalOpen(false)}
       >
         <TouchableOpacity
-          style={styles.modalOverlay}
+          style={styles.modalBackdrop}
           activeOpacity={1}
           onPress={() => setIsHospitalModalOpen(false)}
         >
-          <View style={[styles.modalCard, { backgroundColor: colors.cardBg }]} onStartShouldSetResponder={() => true}>
+          <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
+<<<<<<< HEAD
+              <Text style={styles.modalTitleText}>{t('Switch OPD Hospital')}</Text>
+              <TouchableOpacity onPress={() => setIsHospitalModalOpen(false)}>
+                <Ionicons name="close" size={22} color={C.ink} />
+              </TouchableOpacity>
+            </View>
+
+            {[
+              'Colombo Teaching Hospital 1',
+              'City General Hospital',
+              'National Hospital Sri Lanka',
+              'Colombo South Teaching Hospital',
+            ].map((hosp) => (
+              <TouchableOpacity
+                key={hosp}
+                style={[
+                  styles.hospitalOptionItem,
+                  currentHospital === hosp && styles.hospitalOptionSelected,
+                ]}
+                onPress={() => handleSelectHospital(hosp)}
+              >
+                <Ionicons
+                  name="business"
+                  size={18}
+                  color={currentHospital === hosp ? C.tealDeep : C.sub}
+                  style={{ marginRight: 10 }}
+                />
+                <Text
+                  style={[
+                    styles.hospitalOptionText,
+                    currentHospital === hosp && styles.hospitalOptionTextSelected,
+                  ]}
+                >
+                  {hosp}
+                </Text>
+                {currentHospital === hosp && (
+                  <Ionicons name="checkmark" size={18} color={C.tealDeep} style={{ marginLeft: 'auto' }} />
+                )}
+              </TouchableOpacity>
+            ))}
+=======
               <View style={styles.modalHeaderTitleRow}>
                 <MaterialCommunityIcons name="hospital-building" size={22} color="#0B4F59" style={{ marginRight: 8 }} />
                 <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t("Select Hospital Duty")}</Text>
@@ -1432,86 +1424,71 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                 );
               })}
             </View>
+>>>>>>> origin/dev
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* ========================================================= */}
       {/* WALK-IN REGISTRATION MODAL */}
-      {/* ========================================================= */}
       <Modal
         visible={isWalkInModalOpen}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setIsWalkInModalOpen(false)}
       >
         <TouchableOpacity
-          style={styles.modalOverlay}
+          style={styles.modalBackdrop}
           activeOpacity={1}
           onPress={() => setIsWalkInModalOpen(false)}
         >
-          <View style={[styles.walkInModalContent, { backgroundColor: colors.cardBg }]} onStartShouldSetResponder={() => true}>
+          <TouchableOpacity style={styles.walkInModalContent} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderTitleRow}>
-                <View style={styles.walkInHeaderIconCircle}>
-                  <Ionicons name="person-add" size={18} color="#0B4F59" />
-                </View>
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('Add Walk-in')}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsWalkInModalOpen(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              <Text style={styles.modalTitleText}>{t('Add Walk-in Patient')}</Text>
+              <TouchableOpacity onPress={() => setIsWalkInModalOpen(false)}>
+                <Ionicons name="close" size={22} color={C.ink} />
               </TouchableOpacity>
             </View>
 
-            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-              {t('Register an unscheduled or emergency walk-in patient directly to today\'s queue.')}
-            </Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.fieldLabel}>{t('Patient Name *')}</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder={t('Enter full name')}
+                placeholderTextColor={C.sub}
+                value={walkInName}
+                onChangeText={setWalkInName}
+              />
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
-              <View style={styles.walkInFieldGroup}>
-                <Text style={[styles.walkInFieldLabel, { color: colors.textPrimary }]}>{t('Patient Full Name *')}</Text>
-                <TextInput
-                  style={[styles.walkInTextInput, { backgroundColor: colors.chipGrey, color: colors.textPrimary }]}
-                  placeholder="e.g. Kasun Bandara"
-                  placeholderTextColor="#94a3b8"
-                  value={walkInName}
-                  onChangeText={setWalkInName}
-                  autoCapitalize="words"
-                />
-              </View>
-
-              <View style={styles.walkInRowGroup}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                  <Text style={[styles.walkInFieldLabel, { color: colors.textPrimary }]}>{t('Age')}</Text>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>{t('Age')}</Text>
                   <TextInput
-                    style={[styles.walkInTextInput, { backgroundColor: colors.chipGrey, color: colors.textPrimary }]}
-                    placeholder="e.g. 38"
-                    placeholderTextColor="#94a3b8"
+                    style={styles.textInput}
+                    placeholder="28"
+                    placeholderTextColor={C.sub}
+                    keyboardType="numeric"
                     value={walkInAge}
                     onChangeText={setWalkInAge}
-                    keyboardType="numeric"
-                    maxLength={3}
                   />
                 </View>
 
-                <View style={{ flex: 1.6 }}>
-                  <Text style={[styles.walkInFieldLabel, { color: colors.textPrimary }]}>{t('Gender')}</Text>
-                  <View style={styles.genderSelectRow}>
-                    {(['Male', 'Female', 'Other'] as const).map((g) => (
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>{t('Gender')}</Text>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {(['Male', 'Female'] as const).map((g) => (
                       <TouchableOpacity
                         key={g}
                         style={[
-                          styles.genderSelectPill,
-                          { backgroundColor: colors.chipGrey },
-                          walkInGender === g && { backgroundColor: '#0B4F59' },
+                          styles.genderChip,
+                          walkInGender === g && styles.genderChipActive,
                         ]}
                         onPress={() => setWalkInGender(g)}
                       >
                         <Text
                           style={[
-                            styles.genderSelectPillText,
-                            { color: colors.textSecondary },
-                            walkInGender === g && { color: '#FFFFFF', fontWeight: '800' },
+                            styles.genderChipText,
+                            walkInGender === g && styles.genderChipTextActive,
                           ]}
                         >
                           {t(g)}
@@ -1522,894 +1499,664 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                 </View>
               </View>
 
-              <View style={styles.walkInFieldGroup}>
-                <Text style={[styles.walkInFieldLabel, { color: colors.textPrimary }]}>{t('Chief Complaint / Reason')}</Text>
-                <TextInput
-                  style={[styles.walkInTextInput, { height: 68, textAlignVertical: 'top', paddingTop: 8, backgroundColor: colors.chipGrey, color: colors.textPrimary }]}
-                  placeholder="e.g. Spine checkup, acute pain..."
-                  placeholderTextColor="#94a3b8"
-                  value={walkInReason}
-                  onChangeText={setWalkInReason}
-                  multiline
+              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{t('Consultation Reason')}</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder={t('e.g. Headache, Follow-up, Fever')}
+                placeholderTextColor={C.sub}
+                value={walkInReason}
+                onChangeText={setWalkInReason}
+              />
+
+              <View style={{ marginTop: 20 }}>
+                <PrimaryButton
+                  label={t('Register & Add to Queue')}
+                  onPress={handleRegisterWalkIn}
+                  loading={isSubmittingWalkIn}
                 />
               </View>
             </ScrollView>
-
-            <View style={styles.walkInModalActions}>
-              <TouchableOpacity
-                style={[styles.walkInCancelBtn, { backgroundColor: colors.chipGrey }]}
-                onPress={() => setIsWalkInModalOpen(false)}
-                disabled={isSubmittingWalkIn}
-              >
-                <Text style={[styles.walkInCancelBtnText, { color: colors.textSecondary }]}>{t('Cancel')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.walkInSubmitBtn}
-                onPress={handleRegisterWalkIn}
-                disabled={isSubmittingWalkIn}
-              >
-                {isSubmittingWalkIn ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="add-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                    <Text style={styles.walkInSubmitBtnText}>{t('Add Walk-in')}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
-    </SafeAreaView>
+      {/* BREAK TYPE SELECTION MODAL */}
+      <Modal
+        visible={isBreakModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsBreakModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setIsBreakModalOpen(false)}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitleText}>{t('Select Break Type')}</Text>
+              <TouchableOpacity onPress={() => setIsBreakModalOpen(false)}>
+                <Ionicons name="close" size={22} color={C.ink} />
+              </TouchableOpacity>
+            </View>
+
+            {BREAK_OPTIONS.map((item) => (
+              <TouchableOpacity
+                key={item.type}
+                style={[
+                  styles.breakOptionItem,
+                  activeBreak?.type === item.type && styles.breakOptionItemSelected,
+                ]}
+                onPress={() => handleStartBreak(item)}
+                activeOpacity={0.75}
+              >
+                <View style={styles.breakOptionIconBox}>
+                  <Ionicons name={item.icon} size={20} color={C.tealDeep} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={styles.breakOptionTitle}>{t(item.label)}</Text>
+                    <View style={styles.breakDurationBadge}>
+                      <Text style={styles.breakDurationBadgeText}>{item.duration}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.breakOptionDesc}>{t(item.description)}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+
+            {activeBreak && (
+              <TouchableOpacity
+                style={styles.endBreakBtnModal}
+                onPress={handleEndBreak}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="stop-circle-outline" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+                <Text style={styles.endBreakBtnModalText}>{t('End current break')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
   );
 }
 
-// ==========================================
-// STYLES (ROUNDED EVERYWHERE, 420px MAX WIDTH)
-// ==========================================
 const styles = StyleSheet.create({
-  safeContainer: {
+  rootContainer: {
     flex: 1,
-  },
-  centerAlignWrapper: {
-    flex: 1,
-    alignItems: 'center',
-    width: '100%',
-  },
-  mobileContainer: {
-    width: '100%',
-    maxWidth: 420,
-    flex: 1,
+    backgroundColor: C.bg,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 110,
   },
 
-  // ------------------------------------------
-  // 1. GRADIENT HEADER (#0B4F59 -> #0E8F9A)
-  // ------------------------------------------
-  gradientHeader: {
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 24 : 14,
-    paddingBottom: 70, // Room for overlapping card
+  // 2. Dark Highlight Box
+  darkHighlightBox: {
+    marginBottom: 12,
   },
-  headerTopRow: {
+  darkTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  doctorProfileWrap: {
+  darkGreetingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
-  avatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitials: {
-    fontSize: 17,
-    fontWeight: '800',
+  darkGreetingText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
   },
-  doctorInfoCol: {
-    justifyContent: 'center',
-  },
-  doctorName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    lineHeight: 20,
-  },
-  onlineBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
-  },
-  greenOnlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-  },
-  onlineBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.92)',
-  },
-  headerActionsWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  bellBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    minWidth: 17,
-    height: 17,
-    borderRadius: 9,
-    backgroundColor: '#E53935',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#0E8F9A',
-    paddingHorizontal: 3,
-  },
-  bellBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  greetingHeaderRow: {
+  darkDoctorAndClockRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginTop: 14,
+    gap: 8,
+    marginTop: 2,
   },
-  greetingWrap: {
-    flex: 1,
-  },
-  greetingSmall: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.88)',
-  },
-  greetingDoctor: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    lineHeight: 33,
-    letterSpacing: -0.5,
-  },
-  shiftStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: 4,
-  },
-  shiftStatusBadgeBreak: {
-    backgroundColor: 'rgba(254, 243, 199, 0.35)',
-    borderColor: '#FCD34D',
-  },
-  shiftStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-  },
-  shiftStatusDotBreak: {
-    backgroundColor: '#F59E0B',
-  },
-  shiftStatusText: {
-    fontSize: 11,
+  darkDoctorName: {
+    fontSize: 32,
     fontWeight: '800',
     color: '#FFFFFF',
+    letterSpacing: -0.5,
+    flexShrink: 1,
   },
-  shiftStatusTextBreak: {
-    color: '#FEF08A',
+  darkClockCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    paddingBottom: 2,
   },
-  locationPill: {
+  darkTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  darkTimeNumber: {
+    fontSize: 27,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    lineHeight: 30,
+  },
+  darkTimeAmPm: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginLeft: 3,
+  },
+  darkDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  darkDateText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: C.white80,
+  },
+  darkDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.20)',
+    marginVertical: 4,
+  },
+  darkLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 18,
-    paddingLeft: 12,
-    paddingRight: 6,
-    paddingVertical: 6,
-    marginTop: 14,
   },
-  locationLeft: {
+  darkLocationLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     flex: 1,
-    marginRight: 6,
   },
-  locationText: {
-    fontSize: 12,
+  darkBuildingSquare: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: C.white16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  darkHospitalName: {
+    fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
-    flex: 1,
+    lineHeight: 18,
   },
-  locationSwitchBtn: {
+  darkRoomSubtitle: {
+    fontSize: 12,
+    color: C.white80,
+    marginTop: 1,
+  },
+
+  // 3. Stats Row
+  statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(11, 79, 89, 0.45)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  locationSwitchText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  statTilesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 16,
+    gap: 8,
+    marginBottom: 12,
   },
   statTile: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 18,
+    backgroundColor: C.card,
+    borderRadius: C.radiusTile,
+    paddingVertical: 12,
     paddingHorizontal: 10,
-    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: C.line,
+    ...C.shadow,
   },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginBottom: 4,
-  },
-  statValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 3,
-  },
-  statNumber: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    lineHeight: 26,
-  },
-  statSuffix: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-
-  // ------------------------------------------
-  // ACTIVE BREAK PROMINENT CARD
-  // ------------------------------------------
-  dashboardBreakCard: {
-    marginHorizontal: 16,
-    marginTop: -40,
-    marginBottom: 12,
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1.5,
-    borderColor: '#FCD34D',
-    borderRadius: 22,
-    padding: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#B45309',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
-    zIndex: 15,
-  },
-  dashboardBreakLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  dashboardBreakIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#FDE68A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dashboardBreakTextWrap: {
-    flex: 1,
-  },
-  dashboardBreakTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dashboardBreakTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#92400E',
-  },
-  dashboardBreakLivePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FDE68A',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  dashboardBreakLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#D97706',
-  },
-  dashboardBreakLiveText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#92400E',
-  },
-  dashboardBreakSub: {
+  statLabelText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#B45309',
-    marginTop: 2,
+    color: C.sub,
+    marginBottom: 4,
   },
-  dashboardEndBreakBtn: {
-    backgroundColor: '#D97706',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+  statNumberRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
   },
-  dashboardEndBreakBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
+  statNumberText: {
+    fontSize: 26,
     fontWeight: '800',
+    color: C.teal,
+    letterSpacing: -0.5,
+  },
+  statSuffixText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: C.sub,
+    marginLeft: 3,
   },
 
-  // ------------------------------------------
-  // 2. NOW SERVING CARD (OVERLAPPING BY 50PX)
-  // ------------------------------------------
-  nowServingContainer: {
-    paddingHorizontal: 16,
-    marginTop: -50, // 50px overlap
-    zIndex: 10,
-  },
+  // 4. "Now Serving" Card
   nowServingCard: {
-    borderRadius: 26,
+    backgroundColor: C.card,
+    borderRadius: C.radiusCard,
     padding: 16,
     borderWidth: 1,
+    borderColor: C.line,
+    borderLeftWidth: 4,
+    borderLeftColor: C.teal,
+    ...C.shadow,
+    marginBottom: 14,
   },
-  nowServingTopRow: {
+  nowServingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
   },
-  pulsingTitleWrap: {
+  timePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    backgroundColor: C.bg,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: C.radiusPill,
+    borderWidth: 1,
+    borderColor: C.line,
   },
-  pulseDotOuter: {
-    width: 14,
-    height: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  pulseDotRing: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#0E8F9A',
-    opacity: 0.35,
-  },
-  pulseDotCore: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#0E8F9A',
-  },
-  nowServingLabel: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-    color: '#0E8F9A',
-  },
-  timerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  timerText: {
-    fontSize: 13,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
+  timePillText: {
+    fontSize: 12,
+    color: C.sub,
+    fontWeight: '600',
   },
   patientRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    marginBottom: 12,
   },
-  tokenBadgeDark: {
-    width: 68,
-    height: 68,
-    borderRadius: 20,
-    backgroundColor: '#0B4F59',
-    alignItems: 'center',
+  tokenTile70: {
+    width: 70,
+    height: 70,
+    borderRadius: 14,
+    backgroundColor: C.tint,
+    borderWidth: 1,
+    borderColor: C.tintBorder,
     justifyContent: 'center',
-    shadowColor: '#0B4F59',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 4,
+    alignItems: 'center',
+    marginRight: 12,
   },
-  tokenBadgeLabel: {
-    fontSize: 9,
+  tokenTileLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: C.tealDeep,
+  },
+  tokenTileNumber: {
+    fontSize: 26,
     fontWeight: '800',
-    letterSpacing: 0.8,
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-  tokenBadgeNumber: {
-    fontSize: 25,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    lineHeight: 29,
+    color: C.tealDeep,
     letterSpacing: -0.5,
   },
-  patientDetailsCol: {
+  patientInfoCol: {
     flex: 1,
-    justifyContent: 'center',
   },
-  patientNameText: {
-    fontSize: 18,
-    fontWeight: '900',
-    lineHeight: 22,
+  patientNameHeading: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: C.ink,
+    letterSpacing: -0.3,
   },
-  patientSubtitleText: {
-    fontSize: 12.5,
-    fontWeight: '600',
+  patientSubtitleInfo: {
+    fontSize: 13,
+    color: C.sub,
     marginTop: 3,
   },
-  vitalsChipsRow: {
+  vitalsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
-    marginTop: 12,
+    marginBottom: 10,
   },
-  vitalChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 11,
-    paddingVertical: 5,
+  vitalTile: {
+    flex: 1,
+    backgroundColor: C.bg,
     borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: C.line,
   },
-  vitalChipLabel: {
-    fontSize: 12,
+  vitalLabel: {
+    fontSize: 11,
     fontWeight: '600',
+    color: C.sub,
+    marginBottom: 2,
   },
-  vitalChipVal: {
-    fontSize: 12,
+  vitalValue: {
+    fontSize: 13,
     fontWeight: '800',
+    color: C.ink,
   },
-  allergyBanner: {
+  vitalValueTeal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: C.teal,
+  },
+  allergyBannerOk: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    borderRadius: 14,
+    backgroundColor: C.okTint,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginTop: 11,
+    borderWidth: 1,
+    borderColor: '#C6EEDB',
+    marginBottom: 12,
   },
-  allergyText: {
-    fontSize: 12.5,
-    fontWeight: '800',
+  allergyBannerOkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.ok,
   },
-
-  // Action Row: Three 48px buttons fitted perfectly
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    marginTop: 13,
+    gap: 8,
   },
-  actionBtnUndo: {
-    width: 44,
+  undoBtn: {
+    width: 48,
     height: 48,
-    borderRadius: 16,
-    alignItems: 'center',
+    borderRadius: 14,
+    backgroundColor: C.tint,
     justifyContent: 'center',
-  },
-  actionBtnRx: {
-    height: 48,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  actionBtnRxText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  actionBtnComplete: {
-    flex: 1.35,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#0B4F59',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    gap: 5,
-    shadowColor: '#0B4F59',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  actionBtnCompleteText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
   },
 
-  // ------------------------------------------
-  // 3. QUICK ACTIONS (FOUR 56px CIRCULAR BUTTONS)
-  // ------------------------------------------
+  // 5. Quick Actions
   quickActionsSection: {
-    paddingHorizontal: 16,
-    marginTop: 20,
+    marginBottom: 14,
   },
   quickActionsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    backgroundColor: C.card,
+    borderRadius: C.radiusTile,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: C.line,
+    ...C.shadow,
   },
   quickActionItem: {
-    alignItems: 'center',
     flex: 1,
+    alignItems: 'center',
   },
   quickActionCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 1,
-    alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: C.tint,
     justifyContent: 'center',
-    marginBottom: 7,
+    alignItems: 'center',
+    marginBottom: 5,
   },
   quickActionLabel: {
     fontSize: 11,
-    fontWeight: '800',
-    textAlign: 'center',
+    fontWeight: '700',
+    color: C.ink,
   },
 
-  // ------------------------------------------
-  // 4. UP NEXT IN QUEUE
-  // ------------------------------------------
+  // 6. Up Next Queue
   queueSection: {
-    paddingHorizontal: 16,
-    marginTop: 20,
+    marginBottom: 14,
   },
   queueHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    marginBottom: 11,
+    marginBottom: 10,
   },
   queueTitleText: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.8,
+    fontSize: 16,
+    fontWeight: '800',
+    color: C.ink,
   },
   fullQueueBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
   },
   fullQueueText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#0E8F9A',
+    fontWeight: '700',
+    color: C.teal,
+    marginRight: 2,
   },
   queueCardsList: {
-    gap: 11,
+    gap: 8,
   },
   queueCard: {
-    borderRadius: 22,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
+    backgroundColor: C.card,
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: C.line,
+    ...C.shadow,
   },
   queueTokenTile: {
-    width: 58,
-    height: 58,
-    borderRadius: 16,
-    alignItems: 'center',
+    width: 46,
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: C.tint,
     justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
   queueTokenLabel: {
     fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    opacity: 0.8,
+    fontWeight: '600',
+    color: C.sub,
   },
   queueTokenNum: {
-    fontSize: 20,
-    fontWeight: '900',
-    lineHeight: 24,
+    fontSize: 14,
+    fontWeight: '800',
+    color: C.tealDeep,
   },
   queueItemInfo: {
     flex: 1,
-    justifyContent: 'center',
   },
   queueItemName: {
-    fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 20,
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.ink,
   },
   queueItemSubtitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 3,
-  },
-  queueCardRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    fontSize: 11,
+    color: C.sub,
+    marginTop: 2,
   },
   queueTimePill: {
+    backgroundColor: C.bg,
+    borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: C.line,
   },
   queueTimeText: {
     fontSize: 11,
-    fontWeight: '800',
-  },
-  threeDotBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // ------------------------------------------
-  // 5. BOTTOM NAVIGATION BAR
-  // ------------------------------------------
-  bottomTabBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-  },
-  tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-    flex: 1,
-  },
-  tabLabel: {
-    fontSize: 10,
     fontWeight: '600',
-    color: '#9DB2B8',
-    marginTop: 2,
-  },
-  tabLabelActive: {
-    color: '#0B4F59',
-    fontWeight: '800',
+    color: C.sub,
   },
 
-  // ------------------------------------------
-  // MODALS
-  // ------------------------------------------
-  modalOverlay: {
+  // Modal styles
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'rgba(16, 39, 43, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    padding: 16,
   },
   modalCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 18,
     width: '100%',
     maxWidth: 380,
-    borderRadius: 24,
-    padding: 20,
-  },
-  walkInModalContent: {
-    width: '100%',
-    maxWidth: 380,
-    borderRadius: 24,
-    padding: 20,
+    ...C.shadow,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 14,
   },
-  modalHeaderTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  walkInHeaderIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#DDF1F3',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  modalTitle: {
+  modalTitleText: {
     fontSize: 17,
     fontWeight: '800',
+    color: C.ink,
   },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  modalHospitalList: {
-    gap: 10,
-  },
-  modalHospitalItem: {
+  hospitalOptionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-  },
-  modalHospitalItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  modalItemIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalHospitalItemName: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  modalHospitalItemSub: {
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-
-  // Walk-in modal fields
-  walkInFieldGroup: {
-    marginBottom: 14,
-  },
-  walkInRowGroup: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  walkInFieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  walkInTextInput: {
+    paddingVertical: 12,
+    paddingHorizontal: 10,
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    marginBottom: 4,
+  },
+  hospitalOptionSelected: {
+    backgroundColor: C.tint,
+  },
+  hospitalOptionText: {
     fontSize: 14,
     fontWeight: '600',
-  },
-  genderSelectRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  genderSelectPill: {
+    color: C.ink,
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  genderSelectPillText: {
+  hospitalOptionTextSelected: {
+    fontWeight: '800',
+    color: C.tealDeep,
+  },
+
+  // Walk-in modal
+  walkInModalContent: {
+    backgroundColor: C.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 32,
+    width: '100%',
+    maxHeight: '85%',
+    marginTop: 'auto',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.line,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  fieldLabel: {
     fontSize: 12,
     fontWeight: '700',
+    color: C.ink,
+    marginBottom: 6,
   },
-  walkInModalActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 18,
+  textInput: {
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 12,
+    height: 44,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    color: C.ink,
   },
-  walkInCancelBtn: {
+  genderChip: {
     flex: 1,
     height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.line,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  walkInCancelBtnText: {
-    fontSize: 14,
+  genderChipActive: {
+    backgroundColor: C.tint,
+    borderColor: C.tintBorder,
+  },
+  genderChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.sub,
+  },
+  genderChipTextActive: {
+    color: C.tealDeep,
     fontWeight: '700',
   },
-  walkInSubmitBtn: {
-    flex: 1.4,
-    height: 44,
+
+  // Break Modal Styles
+  breakOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRadius: 14,
-    backgroundColor: '#0B4F59',
+    borderWidth: 1,
+    borderColor: C.line,
+    marginBottom: 10,
+    backgroundColor: C.card,
+  },
+  breakOptionItemSelected: {
+    borderColor: C.teal,
+    backgroundColor: C.tint,
+  },
+  breakOptionIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: C.tint,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  breakOptionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: C.ink,
+  },
+  breakOptionDesc: {
+    fontSize: 12,
+    color: C.sub,
+    marginTop: 2,
+  },
+  breakDurationBadge: {
+    backgroundColor: C.bg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  breakDurationBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: C.sub,
+  },
+  endBreakBtnModal: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
-  walkInSubmitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
+  endBreakBtnModalText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 });

@@ -27,7 +27,8 @@ export function LanguageSwitcher() {
   const bgColor = isDark ? '#0a6e7e' : '#f3faff';
   const textColor = isDark ? '#ffffff' : '#004c5b';
   
-  if (segments[0] === '(auth)' || segments[0] === 'index' || segments.length === 0) {
+  const firstSeg = segments[0] as string | undefined;
+  if (firstSeg === '(auth)' || firstSeg === 'index' || segments.length === 0 || firstSeg === '(doctor)') {
     return null;
   }
 

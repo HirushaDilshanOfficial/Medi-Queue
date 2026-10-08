@@ -53,134 +53,482 @@ export interface DoctorDashboardData {
     calledAtTime?: string;
     allergy?: string | null;
     allergies?: any[];
+    nic?: string;
     patientId?: string;
     appointmentId?: string;
   } | null;
   upcomingQueue: PatientQueueItem[];
 }
 
-// Fallback data matching the Figma "Live Patient Queue & Next Call" design
-const fallbackDoctorData: DoctorDashboardData = {
-  doctor: {
-    name: 'Dr. Emilia Emelson',
-    specialization: 'Orthopedics Surgeon',
-    department: 'Orthopedics OPD',
-    room: 'Room 3B',
-    hospitalName: 'Colombo Teaching Hospital 1',
-    status: 'active',
-    dailyCapacity: 32,
-    avgConsultMinutes: 9,
-    workingHours: { start: '08:00', end: '16:00' },
-  },
-  metrics: {
-    currentCallingToken: 28,
-    waitingCount: 14,
-    completedCount: 18,
-    totalToday: 32,
-    avgWaitMinutes: 9,
-    estimatedWaitTime: '~42m',
-  },
-  currentPatient: {
-    tokenNumber: 28,
-    patientName: 'Kamal Gunaratne',
-    age: 48,
-    gender: 'Male',
-    priority: 'normal',
-    status: 'in_consultation',
-    reason: 'Spine Checkup',
-    bloodPressure: '124/82',
-    heartRate: '76 bpm',
-    fileRecord: 'REC-841',
-    checkedInTime: '10:15 AM',
-    calledAtTime: '08:47',
-  },
-  upcomingQueue: [
-    {
-      tokenNumber: 29,
-      patientName: 'Aurelia Sisca',
-      age: 32,
-      gender: 'Female',
-      priority: 'normal',
-      category: 'all',
-      status: 'next',
-      reason: 'Post-op Inspection',
-      location: 'Ready at Lobby',
-      arrivedTime: '10:14',
-      vitalsVerified: true,
-      slotTime: '11:15 AM',
+// Hospital-specific presets for all 4 hospitals
+export const HOSPITAL_DASHBOARDS: Record<string, DoctorDashboardData> = {
+  'Colombo Teaching Hospital 1': {
+    doctor: {
+      name: 'Dr. Palitha Perera',
+      specialization: 'Orthopedics Surgeon',
+      department: 'Orthopedics OPD',
+      room: 'Room 101',
+      hospitalName: 'Colombo Teaching Hospital 1',
+      status: 'active',
+      dailyCapacity: 32,
+      avgConsultMinutes: 9,
+      workingHours: { start: '08:00', end: '16:00' },
     },
-    {
-      tokenNumber: 30,
-      patientName: 'Rohan Mendis',
-      age: 54,
+    metrics: {
+      currentCallingToken: 28,
+      waitingCount: 6,
+      completedCount: 18,
+      totalToday: 25,
+      avgWaitMinutes: 9,
+      estimatedWaitTime: '~36m',
+    },
+    currentPatient: {
+      tokenNumber: 28,
+      patientName: 'Kamal Gunaratne',
+      age: 48,
       gender: 'Male',
-      priority: 'elderly',
-      category: 'priority',
-      status: 'Checked In • Ready',
-      reason: 'Hypertension follow',
-      location: 'Waiting Area',
-      arrivedTime: '10:20',
-      vitalsVerified: true,
-      slotTime: '11:30 AM',
+      priority: 'normal',
+      status: 'in_consultation',
+      reason: 'Spine Checkup',
+      bloodPressure: '124/82',
+      heartRate: '76 bpm',
+      fileRecord: 'REC-828',
+      checkedInTime: '08:45 AM',
+      calledAtTime: '08:47',
     },
-    {
-      tokenNumber: 31,
-      patientName: 'Dilshan Madushanka',
+    upcomingQueue: [
+      {
+        tokenNumber: 29,
+        patientName: 'Aurelia Sisca',
+        age: 32,
+        gender: 'Female',
+        priority: 'normal',
+        category: 'all',
+        status: 'next',
+        reason: 'Post-op Inspection',
+        location: 'Ready at Lobby',
+        arrivedTime: '10:14',
+        vitalsVerified: true,
+        slotTime: '11:15 AM',
+      },
+      {
+        tokenNumber: 30,
+        patientName: 'Sunil Shantha',
+        age: 52,
+        gender: 'Male',
+        priority: 'elderly',
+        category: 'priority',
+        status: 'Checked In • Ready',
+        reason: 'Hypertension Follow-up',
+        location: 'Waiting Area',
+        arrivedTime: '10:20',
+        vitalsVerified: true,
+        slotTime: '11:30 AM',
+      },
+      {
+        tokenNumber: 31,
+        patientName: 'Kanthi Rajapaksha',
+        age: 46,
+        gender: 'Female',
+        priority: 'urgent',
+        category: 'priority',
+        status: 'Checked In • Ready',
+        reason: 'Diabetes Screening',
+        location: 'Waiting Area',
+        arrivedTime: '10:30',
+        vitalsVerified: true,
+        slotTime: '11:45 AM',
+      },
+      {
+        tokenNumber: 32,
+        patientName: 'Bandula Gunasekara',
+        age: 64,
+        gender: 'Male',
+        priority: 'elderly',
+        category: 'priority',
+        status: 'Waiting',
+        reason: 'Chronic Knee Pain',
+        location: 'Waiting Area',
+        arrivedTime: '10:40',
+        vitalsVerified: false,
+        slotTime: '12:00 PM',
+      },
+      {
+        tokenNumber: 33,
+        patientName: 'Malkanthi Silva',
+        age: 43,
+        gender: 'Female',
+        priority: 'normal',
+        category: 'all',
+        status: 'Waiting',
+        reason: 'Routine Physical Exam',
+        location: 'Waiting Area',
+        arrivedTime: '10:45',
+        vitalsVerified: true,
+        slotTime: '12:15 PM',
+      },
+      {
+        tokenNumber: 34,
+        patientName: 'Dilshan Madushanka',
+        age: 28,
+        gender: 'Male',
+        priority: 'walkin',
+        category: 'walkin',
+        status: 'X-Ray Ready',
+        reason: 'Acute knee sprain',
+        location: 'Radiology returned',
+        arrivedTime: '10:50',
+        vitalsVerified: true,
+        slotTime: '12:30 PM',
+      },
+    ],
+  },
+
+  'City General Hospital': {
+    doctor: {
+      name: 'Dr. Palitha Perera',
+      specialization: 'General Physician',
+      department: 'General OPD',
+      room: 'Room 3B',
+      hospitalName: 'City General Hospital',
+      status: 'active',
+      dailyCapacity: 30,
+      avgConsultMinutes: 8,
+      workingHours: { start: '08:30', end: '16:30' },
+    },
+    metrics: {
+      currentCallingToken: 4,
+      waitingCount: 5,
+      completedCount: 12,
+      totalToday: 18,
+      avgWaitMinutes: 8,
+      estimatedWaitTime: '~28m',
+    },
+    currentPatient: {
+      tokenNumber: 4,
+      patientName: 'Imantha kaniska',
       age: 28,
       gender: 'Male',
-      priority: 'walkin',
-      category: 'walkin',
-      status: 'X-Ray Ready',
-      reason: 'Acute knee sprain',
-      location: 'Radiology returned',
-      arrivedTime: '10:32',
-      vitalsVerified: true,
-      slotTime: '11:45 AM',
-    },
-    {
-      tokenNumber: 32,
-      patientName: 'Sanduni Perera',
-      age: 41,
-      gender: 'Female',
       priority: 'normal',
-      category: 'all',
-      status: 'Waiting (18m)',
-      reason: 'Routine Ortho Revie',
-      location: 'Waiting Area',
-      arrivedTime: '10:40',
-      vitalsVerified: false,
-      slotTime: '12:00 PM',
+      status: 'in_consultation',
+      reason: 'General OPD Consultation',
+      bloodPressure: '118/76',
+      heartRate: '72 bpm',
+      fileRecord: 'REC-004',
+      checkedInTime: '08:50 AM',
+      calledAtTime: '08:59',
     },
-    {
-      tokenNumber: 33,
-      patientName: 'Piyadasa Samarasinghe',
-      age: 71,
+    upcomingQueue: [
+      {
+        tokenNumber: 5,
+        patientName: 'Nihal Jayawardena',
+        age: 60,
+        gender: 'Male',
+        priority: 'elderly',
+        category: 'priority',
+        status: 'next',
+        reason: 'Chest Discomfort Checkup',
+        location: 'Ready at Lobby',
+        arrivedTime: '09:05',
+        vitalsVerified: true,
+        slotTime: '09:15 AM',
+      },
+      {
+        tokenNumber: 6,
+        patientName: 'Anoma Wickramasinghe',
+        age: 39,
+        gender: 'Female',
+        priority: 'normal',
+        category: 'all',
+        status: 'Checked In • Ready',
+        reason: 'Migraine Consultation',
+        location: 'Waiting Area',
+        arrivedTime: '09:12',
+        vitalsVerified: true,
+        slotTime: '09:30 AM',
+      },
+      {
+        tokenNumber: 7,
+        patientName: 'Dhammika Perera',
+        age: 50,
+        gender: 'Male',
+        priority: 'normal',
+        category: 'all',
+        status: 'Waiting',
+        reason: 'Cholesterol Review',
+        location: 'Waiting Area',
+        arrivedTime: '09:20',
+        vitalsVerified: true,
+        slotTime: '09:45 AM',
+      },
+      {
+        tokenNumber: 8,
+        patientName: 'Sujatha Alwis',
+        age: 57,
+        gender: 'Female',
+        priority: 'elderly',
+        category: 'priority',
+        status: 'Waiting',
+        reason: 'Thyroid Medication Review',
+        location: 'Waiting Area',
+        arrivedTime: '09:30',
+        vitalsVerified: false,
+        slotTime: '10:00 AM',
+      },
+      {
+        tokenNumber: 9,
+        patientName: 'Sanduni Perera',
+        age: 41,
+        gender: 'Female',
+        priority: 'walkin',
+        category: 'walkin',
+        status: 'Waiting',
+        reason: 'Routine Ortho Review',
+        location: 'Waiting Area',
+        arrivedTime: '09:45',
+        vitalsVerified: true,
+        slotTime: '10:15 AM',
+      },
+    ],
+  },
+
+  'National Hospital Sri Lanka': {
+    doctor: {
+      name: 'Dr. Palitha Perera',
+      specialization: 'Endocrinologist & Physician',
+      department: 'Diabetic & Endocrine OPD',
+      room: 'Room 204',
+      hospitalName: 'National Hospital Sri Lanka',
+      status: 'active',
+      dailyCapacity: 35,
+      avgConsultMinutes: 12,
+      workingHours: { start: '08:00', end: '17:00' },
+    },
+    metrics: {
+      currentCallingToken: 101,
+      waitingCount: 6,
+      completedCount: 24,
+      totalToday: 31,
+      avgWaitMinutes: 12,
+      estimatedWaitTime: '~45m',
+    },
+    currentPatient: {
+      tokenNumber: 101,
+      patientName: 'Sarath Fonseka',
+      age: 55,
       gender: 'Male',
-      priority: 'elderly',
-      category: 'priority',
-      status: 'Checked In • Ready',
-      reason: 'Severe Osteoarthritis',
-      location: 'Waiting Area',
-      arrivedTime: '10:45',
-      vitalsVerified: true,
-      slotTime: '12:15 PM',
+      priority: 'normal',
+      status: 'in_consultation',
+      reason: 'Blood Sugar Monitoring',
+      bloodPressure: '124/82',
+      heartRate: '76 bpm',
+      fileRecord: 'REC-101',
+      checkedInTime: '08:30 AM',
+      calledAtTime: '08:40',
     },
-    {
-      tokenNumber: 34,
-      patientName: 'Kavindi Fernando',
-      age: 24,
-      gender: 'Female',
-      priority: 'walkin',
-      category: 'walkin',
-      status: 'Waiting',
-      reason: 'Ankle Sprain Bandage',
-      location: 'Waiting Area',
-      arrivedTime: '10:50',
-      vitalsVerified: true,
-      slotTime: '12:30 PM',
+    upcomingQueue: [
+      {
+        tokenNumber: 102,
+        patientName: 'Gamini Senanayake',
+        age: 66,
+        gender: 'Male',
+        priority: 'elderly',
+        category: 'priority',
+        status: 'next',
+        reason: 'Arthritis Follow-up',
+        location: 'Ready at Lobby',
+        arrivedTime: '08:45',
+        vitalsVerified: true,
+        slotTime: '09:00 AM',
+      },
+      {
+        tokenNumber: 103,
+        patientName: 'Rohini Jayasuriya',
+        age: 48,
+        gender: 'Female',
+        priority: 'normal',
+        category: 'all',
+        status: 'Checked In • Ready',
+        reason: 'Gastritis & Acid Reflux',
+        location: 'Waiting Area',
+        arrivedTime: '08:50',
+        vitalsVerified: true,
+        slotTime: '09:15 AM',
+      },
+      {
+        tokenNumber: 104,
+        patientName: 'Prasanna Fernando',
+        age: 35,
+        gender: 'Male',
+        priority: 'normal',
+        category: 'all',
+        status: 'Waiting',
+        reason: 'Lower Back Strain',
+        location: 'Waiting Area',
+        arrivedTime: '09:05',
+        vitalsVerified: true,
+        slotTime: '09:30 AM',
+      },
+      {
+        tokenNumber: 105,
+        patientName: 'Chitra Samaranayake',
+        age: 59,
+        gender: 'Female',
+        priority: 'elderly',
+        category: 'priority',
+        status: 'Waiting',
+        reason: 'Osteoporosis Consultation',
+        location: 'Waiting Area',
+        arrivedTime: '09:15',
+        vitalsVerified: false,
+        slotTime: '09:45 AM',
+      },
+      {
+        tokenNumber: 106,
+        patientName: 'Mahinda Abeyrathne',
+        age: 63,
+        gender: 'Male',
+        priority: 'urgent',
+        category: 'priority',
+        status: 'Waiting',
+        reason: 'Post-CABG Routine Check',
+        location: 'Waiting Area',
+        arrivedTime: '09:25',
+        vitalsVerified: true,
+        slotTime: '10:00 AM',
+      },
+      {
+        tokenNumber: 107,
+        patientName: 'Kumari Weerasinghe',
+        age: 41,
+        gender: 'Female',
+        priority: 'walkin',
+        category: 'walkin',
+        status: 'Waiting',
+        reason: 'Allergy & Sinus Review',
+        location: 'Waiting Area',
+        arrivedTime: '09:40',
+        vitalsVerified: true,
+        slotTime: '10:15 AM',
+      },
+    ],
+  },
+
+  'Colombo South Teaching Hospital': {
+    doctor: {
+      name: 'Dr. Palitha Perera',
+      specialization: 'Cardiologist & Physician',
+      department: 'Cardiology OPD',
+      room: 'Room 12A',
+      hospitalName: 'Colombo South Teaching Hospital',
+      status: 'active',
+      dailyCapacity: 28,
+      avgConsultMinutes: 10,
+      workingHours: { start: '08:00', end: '16:00' },
     },
-  ],
+    metrics: {
+      currentCallingToken: 201,
+      waitingCount: 5,
+      completedCount: 15,
+      totalToday: 21,
+      avgWaitMinutes: 10,
+      estimatedWaitTime: '~35m',
+    },
+    currentPatient: {
+      tokenNumber: 201,
+      patientName: 'Upul Tharanga',
+      age: 38,
+      gender: 'Male',
+      priority: 'normal',
+      status: 'in_consultation',
+      reason: 'Ankle Sprain Bandage Check',
+      bloodPressure: '120/80',
+      heartRate: '71 bpm',
+      fileRecord: 'REC-201',
+      checkedInTime: '08:35 AM',
+      calledAtTime: '08:45',
+    },
+    upcomingQueue: [
+      {
+        tokenNumber: 202,
+        patientName: 'Shirani Nanayakkara',
+        age: 53,
+        gender: 'Female',
+        priority: 'normal',
+        category: 'all',
+        status: 'next',
+        reason: 'Insomnia & Anxiety Consultation',
+        location: 'Ready at Lobby',
+        arrivedTime: '08:50',
+        vitalsVerified: true,
+        slotTime: '09:10 AM',
+      },
+      {
+        tokenNumber: 203,
+        patientName: 'Chandana Karunaratne',
+        age: 49,
+        gender: 'Male',
+        priority: 'normal',
+        category: 'all',
+        status: 'Checked In • Ready',
+        reason: 'Urine Culture Follow-up',
+        location: 'Waiting Area',
+        arrivedTime: '09:05',
+        vitalsVerified: true,
+        slotTime: '09:25 AM',
+      },
+      {
+        tokenNumber: 204,
+        patientName: 'Indrani Cooray',
+        age: 65,
+        gender: 'Female',
+        priority: 'elderly',
+        category: 'priority',
+        status: 'Waiting',
+        reason: 'Joint Pain & Physiotherapy',
+        location: 'Waiting Area',
+        arrivedTime: '09:15',
+        vitalsVerified: true,
+        slotTime: '09:40 AM',
+      },
+      {
+        tokenNumber: 205,
+        patientName: 'Ranil Wickramatunga',
+        age: 56,
+        gender: 'Male',
+        priority: 'urgent',
+        category: 'priority',
+        status: 'Waiting',
+        reason: 'Cardiac Wellness Check',
+        location: 'Waiting Area',
+        arrivedTime: '09:30',
+        vitalsVerified: false,
+        slotTime: '09:55 AM',
+      },
+      {
+        tokenNumber: 206,
+        patientName: 'Menaka Hettiarachchi',
+        age: 34,
+        gender: 'Female',
+        priority: 'walkin',
+        category: 'walkin',
+        status: 'Waiting',
+        reason: 'Vitamin D Deficiency Follow-up',
+        location: 'Waiting Area',
+        arrivedTime: '09:45',
+        vitalsVerified: true,
+        slotTime: '10:10 AM',
+      },
+    ],
+  },
 };
+
+export const getDoctorDashboardForHospital = (hospitalName: string): DoctorDashboardData => {
+  return HOSPITAL_DASHBOARDS[hospitalName] || HOSPITAL_DASHBOARDS['Colombo Teaching Hospital 1'];
+};
+
+// Fallback data matching default hospital
+const fallbackDoctorData: DoctorDashboardData = HOSPITAL_DASHBOARDS['Colombo Teaching Hospital 1'];
 
 const getDoctorAuthContext = async (doctorId?: string) => {
   let resolvedDoctorId = doctorId;
@@ -209,12 +557,27 @@ const getDoctorAuthContext = async (doctorId?: string) => {
   return { resolvedDoctorId, headers };
 };
 
-export const fetchDoctorDashboard = async (doctorId?: string): Promise<DoctorDashboardData> => {
+export const fetchDoctorDashboard = async (
+  doctorId?: string,
+  hospitalName?: string
+): Promise<DoctorDashboardData> => {
+  let activeHosp = hospitalName;
+  if (!activeHosp) {
+    try {
+      activeHosp = (await AsyncStorage.getItem('doctor_current_hospital')) || undefined;
+      if (!activeHosp && typeof window !== 'undefined' && (window as any).localStorage) {
+        activeHosp = (window as any).localStorage.getItem('doctor_current_hospital') || undefined;
+      }
+    } catch (e) {}
+  }
+  const fallback = getDoctorDashboardForHospital(activeHosp || 'Colombo Teaching Hospital 1');
   try {
     const { resolvedDoctorId, headers } = await getDoctorAuthContext(doctorId);
-    const url = resolvedDoctorId
-      ? `${API_URL}/doctor/dashboard?doctorId=${resolvedDoctorId}`
-      : `${API_URL}/doctor/dashboard`;
+    const params = new URLSearchParams();
+    if (resolvedDoctorId) params.append('doctorId', resolvedDoctorId);
+    if (activeHosp) params.append('hospitalName', activeHosp);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const url = `${API_URL}/doctor/dashboard${qs}`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -226,14 +589,14 @@ export const fetchDoctorDashboard = async (doctorId?: string): Promise<DoctorDas
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      return fallbackDoctorData;
+      return fallback;
     }
 
     const json = await response.json();
-    return json.data || fallbackDoctorData;
+    return json.data || fallback;
   } catch (error) {
     console.log('Using local fallback doctor dashboard data:', error);
-    return fallbackDoctorData;
+    return fallback;
   }
 };
 

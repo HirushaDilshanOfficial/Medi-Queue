@@ -20,6 +20,7 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DoctorTopBar } from '../../components/doctor';
 import { API_URL } from '../../config';
 import {
   HOSPITALS,
@@ -310,8 +311,18 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   const handleEndBreak = async (hosp: HospitalInfo) => {
     setActiveBreak(null);
     setOpenBreakDropdownHospId(null);
+<<<<<<< HEAD
+    try {
+      await AsyncStorage.removeItem('@medi_queue_doctor_break');
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('@medi_queue_doctor_break');
+      }
+    } catch (e) {}
+    showToast(`Break ended. Resumed ${hosp.shiftName}`);
+=======
     await AsyncStorage.removeItem('@medi_queue_doctor_break');
     showToast(t("Break ended. Resumed {value0}", { value0: String(hosp.shiftName) }));
+>>>>>>> origin/dev
   };
 
   // Consultation elapsed counter for active patient
@@ -748,21 +759,49 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
   // Open Delete Confirmation Modal
   const handleOpenRemoveModal = (appt: ScheduleAppointment) => {
+    setSelectedPatient(null);
     setWalkInToDelete(appt);
     setIsRemoveModalVisible(true);
   };
 
   // Perform actual removal
   const executeRemoveWalkIn = (appt: ScheduleAppointment) => {
+    // 0. Persistently remove from database backend
+    if (appt.id || appt.token || appt.patientName) {
+      try {
+        const deleteUrl = appt.id
+          ? `${API_URL}/doctor/schedule/appointment/${appt.id}`
+          : `${API_URL}/doctor/schedule/remove`;
+        fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: appt.token,
+            patientName: appt.patientName,
+            dateKey: selectedDateKey,
+          }),
+        }).catch((err) => console.log('Error deleting schedule appointment on backend:', err));
+      } catch (err) {}
+    }
+
     // 1. Remove from schedule appointments
     setScheduleData((prev) => {
-      const daySchedule = prev[selectedDateKey];
-      if (!daySchedule) return prev;
+      const daySchedule = prev[selectedDateKey] || INITIAL_SCHEDULE_DATA[selectedDateKey] || {
+        dateKey: selectedDateKey,
+        hospitals: [],
+        appointments: [],
+      };
+      const isTarget = (a: ScheduleAppointment) => {
+        if (a.id === appt.id) return true;
+        if (appt.token && a.token === appt.token && a.hospitalId === appt.hospitalId) return true;
+        if (appt.patientName && a.patientName === appt.patientName && a.token === appt.token) return true;
+        return false;
+      };
       const updated = {
         ...prev,
         [selectedDateKey]: {
           ...daySchedule,
-          appointments: daySchedule.appointments.filter((a) => a.id !== appt.id),
+          appointments: (daySchedule.appointments || []).filter((a) => !isTarget(a)),
         },
       };
       try {
@@ -799,7 +838,11 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     setIsRemoveModalVisible(false);
     setWalkInToDelete(null);
 
+<<<<<<< HEAD
+    showToast(`✓ Removed walk-in slot (${appt.token || appt.patientName}). Allocation restored.`);
+=======
     showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value0: String(appt.token) }));
+>>>>>>> origin/dev
   };
 
   // Backward compatibility alias
@@ -961,15 +1004,15 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   // Current formatted time for timeline header (today only)
 
   return (
-    <SafeAreaView
+    <View
       style={[
         styles.safeArea,
         { backgroundColor: isDark ? theme.pageBg : theme.pageBg },
       ]}
     >
       <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={theme.background}
+        barStyle="light-content"
+        backgroundColor="#0E7C86"
       />
 
       {/* Centered responsive frame: 440px max width on desktop, full width on mobile */}
@@ -985,11 +1028,20 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             { backgroundColor: theme.background },
           ]}
         >
+          {/* SHARED TOP BAR */}
+          <DoctorTopBar
+            doctorName="Dr. Palitha Perera"
+            room="Room 101"
+            unreadCount={4}
+          />
+
           {/* Main Scroll Content */}
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
+<<<<<<< HEAD
+=======
             {/* ─────────────────────────────────────────────────────────
                 1. HEADER
                 Doctor avatar (initials) with green online dot,
@@ -1056,6 +1108,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 <View style={styles.redDot} />
               </TouchableOpacity>
             </View>
+>>>>>>> origin/dev
 
             {/* ─────────────────────────────────────────────────────────
                 2. TODAY'S DATE & SCREEN TITLE
@@ -2238,10 +2291,8 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     }
 
                     return (
-                      <TouchableOpacity
+                      <View
                         key={appt.id}
-                        activeOpacity={0.7}
-                        onPress={() => setSelectedPatient(appt)}
                         style={[
                           styles.timelineRowCard,
                           {
@@ -2250,7 +2301,13 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                           },
                         ]}
                       >
-                        <View style={styles.timelineRowLeft}>
+                        <TouchableOpacity
+                          style={styles.timelineRowLeft}
+                          activeOpacity={0.7}
+                          onPress={() => setSelectedPatient(appt)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`View details for ${appt.patientName}`}
+                        >
                           {/* Time */}
                           <View style={styles.timeBlock}>
                             <Text
@@ -2314,15 +2371,17 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                               </View>
                             </View>
                           </View>
-                        </View>
+                        </TouchableOpacity>
 
                         {/* Status Pill & Remove Option for Walk-in */}
                         <View style={styles.rowRightPillGroup}>
-                          <View
+                          <TouchableOpacity
                             style={[
                               styles.statusPillSmall,
                               { backgroundColor: statusBg },
                             ]}
+                            activeOpacity={0.7}
+                            onPress={() => setSelectedPatient(appt)}
                           >
                             <Text
                               style={[
@@ -2332,19 +2391,14 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                             >
                               {appt.status}
                             </Text>
-                          </View>
+                          </TouchableOpacity>
 
                           {isWalkIn && (
                             <View style={styles.walkInActionsRow}>
                               <TouchableOpacity
                                 style={styles.editWalkInRowBadge}
                                 activeOpacity={0.7}
-                                onPress={(e) => {
-                                  if (e && typeof e.stopPropagation === 'function') {
-                                    e.stopPropagation();
-                                  }
-                                  handleOpenEditWalkInModal(appt);
-                                }}
+                                onPress={() => handleOpenEditWalkInModal(appt)}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                 accessibilityRole="button"
                                 accessibilityLabel={`Edit walk-in ${appt.patientName}`}
@@ -2356,12 +2410,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                               <TouchableOpacity
                                 style={styles.removeWalkInRowBadge}
                                 activeOpacity={0.7}
-                                onPress={(e) => {
-                                  if (e && typeof e.stopPropagation === 'function') {
-                                    e.stopPropagation();
-                                  }
-                                  handleOpenRemoveModal(appt);
-                                }}
+                                onPress={() => handleOpenRemoveModal(appt)}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                 accessibilityRole="button"
                                 accessibilityLabel={`Remove walk-in ${appt.patientName}`}
@@ -2372,13 +2421,16 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                             </View>
                           )}
                         </View>
-                      </TouchableOpacity>
+                      </View>
                     );
                   })}
                 </View>
               )}
             </View>
 
+<<<<<<< HEAD
+
+=======
             {/* ─────────────────────────────────────────────────────────
                 7. ADD WALK-IN SLOT
                 - Full-width dark teal pill button: "+ Add walk-in slot"
@@ -2434,6 +2486,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 </Text>
               </View>
             </View>
+>>>>>>> origin/dev
 
             {/* Bottom spacer so content is not hidden by navigation bar */}
             <View style={{ height: 100 }} />
@@ -3421,7 +3474,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
       >
         <View style={styles.dialogBackdropOverlay}>
           <TouchableOpacity
-            style={styles.backdropTapArea}
+            style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={() => {
               setIsRemoveModalVisible(false);
@@ -4129,7 +4182,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
           <Text style={styles.toastText}>{toastMessage}</Text>
         </Animated.View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
