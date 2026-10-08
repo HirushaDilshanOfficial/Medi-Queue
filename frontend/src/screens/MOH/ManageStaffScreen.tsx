@@ -228,7 +228,7 @@ export default function ManageStaffScreen() {
                     </View>
                     <View style={styles.deptBadge}>
                       <Text style={styles.deptBadgeText}>
-                        {member.department || t('N/A')}
+                        {t(member.department || 'N/A')}
                       </Text>
                     </View>
                   </View>
@@ -313,14 +313,14 @@ export default function ManageStaffScreen() {
                 
                 <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>{t("Employment Information")}</Text>
                 <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Employee ID:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.employeeNo}</Text></Text>
-                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Department:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.department || t('N/A')}</Text></Text>
+                <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Department:")}{' '}<Text style={{ color: Colors.textDark }}>{t(selectedStaff?.department || 'N/A')}</Text></Text>
                 <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>{t("Status:")}{' '}<Text style={{ color: Colors.textDark }}>{t(selectedStaff?.status ?? '')}</Text></Text>
 
                 {selectedStaff?.role === 'Doctor' && (
                   <View>
                     <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 8, color: Colors.textDark }}>{t("Doctor Information")}</Text>
                     <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Med Reg No:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.medRegNo}</Text></Text>
-                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Specialization:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.specialization}</Text></Text>
+                    <Text style={{ color: Colors.textMedium, marginBottom: 4 }}>{t("Specialization:")}{' '}<Text style={{ color: Colors.textDark }}>{t(selectedStaff?.specialization ?? '')}</Text></Text>
                     <Text style={{ color: Colors.textMedium, marginBottom: 15 }}>{t("Qualification:")}{' '}<Text style={{ color: Colors.textDark }}>{selectedStaff?.doctorQualification}</Text></Text>
                   </View>
                 )}

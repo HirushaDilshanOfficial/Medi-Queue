@@ -30,10 +30,14 @@ const {
   assignDoctor,
   updateAutoAdvance,
   getAutoAdvance,
+  validatePass,
 } = require('../controllers/queueController');
 
 // All reception queue routes require auth + receptionist, admin, or doctor role
 const receptionAuth = [protect, authorizeRoles('receptionist', 'admin', 'doctor')];
+
+// Validate patient queue QR passes at an administration terminal.
+router.get('/pass/:passCode', ...receptionAuth, validatePass);
 
 // GET /api/reception/queue/auto-advance -> read auto-advance setting
 router.get('/auto-advance', ...receptionAuth, getAutoAdvance);

@@ -20,6 +20,7 @@ const paths = {
   notes: 'M15 3H5v18h14V7l-4-4Zm0 0v5h4M8 12h8m-8 4h5',
   check: 'm5 12 4 4L19 6',
   close: 'm6 6 12 12M18 6 6 18',
+  chevronDown: 'm6 9 6 6 6-6',
 } as const;
 
 export type ProfileIconName = DesignImageName | keyof typeof paths | 'qr';

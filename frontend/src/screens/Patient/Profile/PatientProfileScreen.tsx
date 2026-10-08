@@ -12,7 +12,7 @@ import { patientApi } from '../../../services/patientApi';
 import { queueApi } from '../../../services/queueApi';
 import { clearAuthToken } from '../../../services/http';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
-import { calendarDateLabel } from '../../../utils/opdDates';
+import { calendarDateLabel, longDayLabel } from '../../../utils/opdDates';
 import type { VisitRecord } from '../../../types/patient';
 import { ProfileIcon } from '../../../components/patient/ProfileIcon';
 import { AccountRow, Avatar, EmptyState, IconButton, isPrescription, Metric, PersonalInfo, VisitCard } from './ProfileParts';
@@ -82,7 +82,7 @@ export function PatientProfileScreen() {
 
   const exportVisits = async (items: VisitRecord[]) => {
     const text = [t('Medi-Queue · OPD visit summary'), patient?.fullName ?? '', ...items.map(visit =>
-      [visit.department, visit.doctorName, `${visit.dateLong ?? visit.date} · ${visit.slotTime}`,
+      [t(visit.department), visit.doctorName, `${longDayLabel(visit.date, locale)} · ${visit.slotTime}`,
         t('Status: {status}', { status: t(visit.status) }), visit.tokenNumber !== null ? t('Queue #{number}', { number: visit.tokenNumber }) : '',
         visit.reason ? t('Visit reason: {reason}', { reason: visit.reason }) : ''].filter(Boolean).join('\n'))].join('\n\n');
     try {
@@ -107,7 +107,7 @@ export function PatientProfileScreen() {
     catch { setActionError(t('Could not log out. Please try again.')); setLoggingOut(false); }
   };
   const notice = () => showMessage(t('Appointment reminders'), pass
-    ? t("Your queue #{value0} is {value1} at {value2}. Open Queue to follow your turn.", { value0: String(pass.tokenNumber), value1: t(pass.status), value2: String(pass.department) })
+    ? t("Your queue #{value0} is {value1} at {value2}. Open Queue to follow your turn.", { value0: String(pass.tokenNumber), value1: t(pass.status), value2: t(pass.department) })
     : t('No active queue pass. Your reminder preference is available in Settings.'));
 
   if (!fontsLoaded && !fontError) return <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator color={C.primary} accessibilityLabel={t("Loading profile")} /></View>;
@@ -176,7 +176,7 @@ export function PatientProfileScreen() {
           <LinearGradient colors={[C.container, C.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.queueBanner}>
             <View pointerEvents="none" style={styles.queueRing} /><View style={styles.queueIcon}><ProfileIcon name="ticket" size={22} color={C.aqua} /></View>
             <View style={styles.grow}><Text style={styles.queueTitle}>{t("Queue #")}{pass.tokenNumber} {pass.status === 'in_consultation' ? t('In Progress') : pass.status === 'called' ? t('Called') : t('Waiting')}</Text>
-              <Text style={styles.queueCaption}>{pass.department}{pass.live?.estimatedTurnAt ? t(" • Est. {value0}", { value0: String(new Date(pass.live.estimatedTurnAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Colombo' })) }) : ''}</Text></View>
+              <Text style={styles.queueCaption}>{t(pass.department)}{pass.live?.estimatedTurnAt ? t(" • Est. {value0}", { value0: String(new Date(pass.live.estimatedTurnAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Colombo' })) }) : ''}</Text></View>
             <View style={styles.activeBadge}><Text style={styles.activeText}>{t("Active")}</Text></View><View style={styles.queueArrow}><ProfileIcon name="arrow" size={20} color={C.white} /></View>
           </LinearGradient>
         </Pressable> : null}
@@ -191,7 +191,7 @@ export function PatientProfileScreen() {
           {history.loading && !history.data ? <ActivityIndicator color={C.primary} /> : history.error ? <EmptyState title={t("Could not load your visits")} body={history.error} onRetry={reloadHistory} /> : !filteredVisits.length ?
             <EmptyState title={visits.length ? t('No matching visits') : t('No visits yet')} body={visits.length ? t('Choose another filter to see your records.') : t('Your past clinic appointments will appear here.')} /> :
             filteredVisits.slice(0, 3).map(visit => <VisitCard key={visit.id} visit={visit} reports={reports.filter(report => report.appointmentId === visit.id)}
-              onExport={() => exportVisits([visit])} onNotes={() => showMessage(t('Visit details'), `${visit.doctorName}\n${visit.department}\n\n${visit.reason ? `Visit reason: ${visit.reason}` : t('No clinical notes have been shared for this visit.')}`)} onReports={() => setTab('Documents')} />)}
+              onExport={() => exportVisits([visit])} onNotes={() => showMessage(t('Visit details'), `${visit.doctorName}\n${t(visit.department)}\n\n${visit.reason ? t('Visit reason: {reason}', { reason: visit.reason }) : t('No clinical notes have been shared for this visit.')}`)} onReports={() => setTab('Documents')} />)}
           {filteredVisits.length > 3 ? <Pressable accessibilityRole="button" onPress={() => router.push('/(patient)/profile/history')} style={styles.moreButton}><Text style={styles.link}>{t("View all visits")}</Text><ProfileIcon name="arrow" size={16} /></Pressable> : null}
         </View>
         <View style={styles.section}><View style={styles.vault}><View style={styles.roundIcon}><ProfileIcon name="folder" size={24} /></View>
@@ -202,8 +202,8 @@ export function PatientProfileScreen() {
       {tab === 'Documents' ? <View style={styles.section}>
         <View style={styles.sectionHeading}><Text accessibilityRole="header" style={styles.sectionTitle}>{t("Medical Documents")}</Text><Pressable accessibilityRole="button" onPress={() => router.push('/(patient)/profile/report/new')} style={styles.exportButton}><Text style={styles.link}>{t("Add report")}</Text></Pressable></View>
         {history.loading && !history.data ? <ActivityIndicator color={C.primary} /> : history.error ? <EmptyState title={t("Could not load documents")} body={history.error} onRetry={reloadHistory} /> : reports.length ? reports.map(report =>
-          <Pressable key={report.id} accessibilityRole="button" onPress={() => showMessage(report.title, [report.category, calendarDateLabel(report.reportDate, locale), report.notes, report.fileName ? t('File reference: {file}', { file: report.fileName }) : null, t('The original document is held by the clinic.')].filter(Boolean).join('\n\n'))} style={styles.documentCard}>
-            <View style={styles.squareIcon}><ProfileIcon name={isPrescription(report) ? 'pill' : 'clipboard'} /></View><View style={styles.grow}><Text style={styles.rowTitle}>{report.title}</Text><Text style={styles.caption}>{report.category} • {report.status === 'reviewed' ? t('Reviewed') : t('Pending review')}</Text></View><ProfileIcon name="arrow" size={16} /></Pressable>) : <EmptyState title={t("No documents yet")} body={t("Add a lab report, referral or prescription to your profile.")} />}
+          <Pressable key={report.id} accessibilityRole="button" onPress={() => showMessage(report.title, [t(report.category), calendarDateLabel(report.reportDate, locale), report.notes, report.fileName ? t('File reference: {file}', { file: report.fileName }) : null, t('The original document is held by the clinic.')].filter(Boolean).join('\n\n'))} style={styles.documentCard}>
+            <View style={styles.squareIcon}><ProfileIcon name={isPrescription(report) ? 'pill' : 'clipboard'} /></View><View style={styles.grow}><Text style={styles.rowTitle}>{report.title}</Text><Text style={styles.caption}>{t(report.category)} • {report.status === 'reviewed' ? t('Reviewed') : t('Pending review')}</Text></View><ProfileIcon name="arrow" size={16} /></Pressable>) : <EmptyState title={t("No documents yet")} body={t("Add a lab report, referral or prescription to your profile.")} />}
         <Pressable accessibilityRole="button" onPress={openReports} style={styles.moreButton}><Text style={styles.link}>{t("Manage medical reports")}</Text><ProfileIcon name="arrow" size={16} /></Pressable>
       </View> : null}
       {tab === 'Visit History' || tab === 'Settings' ? account : null}
@@ -232,7 +232,7 @@ export function PatientProfileScreen() {
                 </View>
               </Pressable>)}
             </ScrollView>
-          </> : sheet === 'pass' ? pass ? <><View style={styles.qrFrame}><QRCode value={pass.qrValue} size={192} color={C.primary} /></View><View style={styles.passRecap}><Text style={styles.rowTitle}>{patient?.fullName}</Text><Text style={styles.caption}>{t('Queue')} #{pass.tokenNumber} • {pass.department}</Text></View></> :
+          </> : sheet === 'pass' ? pass ? <><View style={styles.qrFrame}><QRCode value={pass.qrValue} size={192} color={C.primary} /></View><View style={styles.passRecap}><Text style={styles.rowTitle}>{patient?.fullName}</Text><Text style={styles.caption}>{t('Queue')} #{pass.tokenNumber} • {t(pass.department)}</Text></View></> :
             <Text style={styles.sheetBody}>{queue.loading ? t('Loading your queue pass...') : queue.error ? t('Your pass could not be loaded. Open Queue to try again.') : t('You do not have an active queue pass. Open Queue on the day of your appointment to check in.')}</Text> :
             <Text style={styles.sheetBody}>{sheet === 'logout' ? t('Sign in again to access your profile and medical history.') : sheet?.body}</Text>}
           {actionError ? <Text accessibilityRole="alert" style={styles.error}>{t(actionError)}</Text> : null}

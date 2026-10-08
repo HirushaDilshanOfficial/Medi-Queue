@@ -14,6 +14,61 @@ function loadCopy(file) {
 }
 const { translate, translations } = loadCopy(path.join(__dirname, '../src/i18n/translations.ts'));
 
+test('every standard clinic, department and description translates in Sinhala and Tamil', () => {
+  const { CLINIC_CATALOGUE } = require('../../backend/utils/clinicCatalogue');
+  for (const [clinic, description, department] of CLINIC_CATALOGUE) {
+    for (const language of ['si', 'ta']) {
+      for (const label of [clinic, description, department]) {
+        assert.notEqual(translate(language, label), label, `${language}: ${label}`);
+        assert.equal(translate('en', label), label);
+      }
+    }
+  }
+});
+
+test('display aliases and case variations localize without changing API values', () => {
+  for (const language of ['si', 'ta']) {
+    assert.equal(translate(language, 'Orthopedics'), translate(language, 'Orthopaedic'));
+    assert.equal(translate(language, '  GENERAL   MEDICAL  '), translate(language, 'General Medical'));
+    assert.equal(translate(language, 'Cardiologist'), translate(language, 'Cardiology'));
+  }
+  assert.equal(translate('en', 'General Medical'), 'General Medical');
+});
+
+test('doctor names remain intact while the displayed specialty changes languages', () => {
+  const file = path.join(__dirname, '../src/components/patient/DoctorCard.tsx');
+  const compiled = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText;
+  let language = 'en';
+  const modules = {
+    react: { createElement: (type, props, ...children) => ({ type, props: { ...props, children } }) },
+    'react-native': { View: 'View', Pressable: 'Pressable', StyleSheet: { create: value => value } },
+    '../../i18n/LocalizedText': { LocalizedText: 'Text' },
+    '../../i18n/LanguageContext': { useLanguage: () => ({ t: (text, values) => translate(language, text, values) }) },
+    '../../constants/PatientTheme': { PatientTheme: { designType: {} } },
+    './DesignImage': { DesignImage: 'DesignImage' },
+  };
+  const context = { exports: {}, require: name => { assert.ok(name in modules, name); return modules[name]; } };
+  vm.runInNewContext(compiled, context);
+  // Even a person's name that matches a translated UI word must remain intact.
+  const doctor = Object.freeze({ id: 'doctor-id', name: 'Eye', displayName: 'Eye', firstName: 'Eye', initials: 'EY', specialization: 'Cardiology', department: 'General Medical' });
+  let presses = 0;
+  function textNodes(node) {
+    if (!node || typeof node !== 'object') return [];
+    return [node.type === 'Text' ? node.props.children.join('') : null, ...node.props.children.flatMap(child => textNodes(child))].filter(Boolean);
+  }
+  for (language of ['en', 'si', 'ta', 'en']) {
+    const tree = context.exports.DoctorCard({ doctor, onPress: () => { presses++; } });
+    const text = textNodes(tree);
+    assert.ok(text.includes('Eye'));
+    assert.ok(text.includes(translate(language, 'Cardiology')));
+    assert.ok(text.includes(translate(language, 'General Medical')));
+    assert.ok(tree.props.accessibilityLabel.includes('Eye'));
+    tree.props.onPress();
+  }
+  assert.equal(presses, 4);
+  assert.equal(doctor.department, 'General Medical');
+});
+
 test('English copy and unknown text stay intact in all languages', () => {
   assert.equal(translate('en', 'Language'), 'Language');
   for (const language of ['en', 'si', 'ta']) {

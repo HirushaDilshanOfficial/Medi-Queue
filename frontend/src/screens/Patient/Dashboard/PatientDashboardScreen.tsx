@@ -1,3 +1,4 @@
+import { dayLabel } from '../../../utils/opdDates';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -8,13 +9,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts } from 'expo-font';
 import { DesignImage, type DesignImageName } from '../../../components/patient/DesignImage';
 import { patientApi } from '../../../services/patientApi';
+import { notificationApi } from '../../../services/notificationApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import { ACTION_TILES, EVENTS } from './dashboardContent';
 import { clinicApi } from '../../../services/clinicApi';
 import { C, styles } from './dashboardStyles';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAuthToken } from '../../../services/http';
-import { BASE_URL } from '../../../config';
 
 function StatCard({ value, label, icon, onPress }: { value: number | null | undefined; label: string; icon: DesignImageName; onPress: () => void }) {
   const { t } = useLanguage();
@@ -54,21 +53,9 @@ export function PatientDashboardScreen() {
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(timer); }, []);
 
   const checkUnreadNotifications = async () => {
+    setUnreadCount(0);
     try {
-      const token = await getAuthToken();
-      if (!token) return;
-      const res = await fetch(`${BASE_URL}/api/v1/notifications`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const userStr = await AsyncStorage.getItem('user');
-        const userId = userStr ? JSON.parse(userStr)._id : '';
-        const lastReadTime = await AsyncStorage.getItem(`last_notification_read_time_${userId}`);
-        const lastReadDate = lastReadTime ? new Date(lastReadTime) : new Date(0);
-        const unread = data.filter((n: any) => new Date(n.createdAt) > lastReadDate).length;
-        setUnreadCount(unread);
-      }
+      setUnreadCount(await notificationApi.unreadCount());
     } catch (e) {
       console.log('Failed to fetch notifications', e);
     }
@@ -93,11 +80,20 @@ export function PatientDashboardScreen() {
   const wide = width >= 760;
   const columns = wide ? 4 : 2;
   const specialtyWidth = (Math.min(width, 1120) - 40 - (columns - 1) * 10) / columns;
-  const doctors = () => router.push('/(patient)/doctors');
+  const openDirectory = (view = '') => router.push({ pathname: '/(patient)/doctors', params: { tab: 'directory', view, department: '', hospitalId: '', search: '' } });
+  const doctors = () => openDirectory();
+  const bookings = () => router.push({ pathname: '/(patient)/doctors', params: { tab: 'bookings' } });
   const queue = () => router.push('/(patient)/queue');
   const profile = () => router.push('/(patient)/profile');
   const reports = () => router.push('/(patient)/profile/reports');
   const history = () => router.push('/(patient)/profile/history');
+  const quickActions: Record<(typeof ACTION_TILES)[number]['key'], () => void> = {
+    'clinic-registration': () => openDirectory('registration'),
+    'doctor-schedule': () => openDirectory('schedule'),
+    'doctor-appointment': bookings,
+    'clinics-queue': queue,
+    'medicine-queue': () => router.push({ pathname: '/(patient)/profile/report/new', params: { category: 'Prescription' } }),
+  };
   const showMessage = (title: string, body: string) => setSheet({ title, body });
   const notifications = () => router.push('/notifications');
   const help = () => showMessage(t('How can we help?'), t('Book a slot in Doctors, then open Queue on the day of your appointment to check in and follow your turn. Your visit history and medical reports are available in Profile.'));
@@ -132,7 +128,7 @@ export function PatientDashboardScreen() {
       {dashboard.loading && !data ? <View style={styles.status}><ActivityIndicator color={C.primary} /><Text style={styles.statusText}>{t("Loading your dashboard…")}</Text></View> : null}
       {dashboard.error ? <View style={styles.error}><Text style={styles.errorTitle}>{t("We could not refresh your dashboard")}</Text><Text style={styles.statusText}>{dashboard.error}</Text><Pressable accessibilityRole="button" onPress={reload} style={[styles.textButton, { alignSelf: 'flex-start' }]}><Text style={styles.link}>{t("Try again")}</Text></Pressable></View> : null}
       <View style={styles.stats}>
-        <StatCard value={data?.stats.upcomingAppointments} label={t("Upcoming visits")} icon="calendar" onPress={doctors} />
+        <StatCard value={data?.stats.upcomingAppointments} label={t("Upcoming visits")} icon="calendar" onPress={bookings} />
         <StatCard value={data?.stats.completedVisits} label={t("Completed visits")} icon="medical" onPress={history} />
         <StatCard value={data?.stats.reports} label={t("Medical reports")} icon="clipboard" onPress={reports} />
       </View>
@@ -147,13 +143,13 @@ export function PatientDashboardScreen() {
         <View style={[styles.overview, wide && styles.wideRow]}>
           <View style={[styles.careCard, wide && styles.wideCard]}>
             <View style={styles.cardTop}><Text style={styles.cardType}>{t("NEXT APPOINTMENT")}</Text><View style={styles.badge}><Text style={styles.badgeLabel}>{next ? t('Upcoming') : data ? t('Not booked') : t('Loading')}</Text></View></View>
-            <View style={{ gap: 6 }}><Text style={styles.careHeading}>{next ? next.doctorName : data ? t('Plan your next visit') : t('Your next visit')}</Text><Text style={styles.careDescription}>{next ? next.department : data ? t('Book a consultation when you need care.') : t('Your appointment details will appear here.')}</Text></View>
-            <View style={styles.cardMeta}><DesignImage name="calendar" size={14} color={C.secondary} /><Text style={styles.careDescription}>{next ? `${next.dateLabel ?? next.date} · ${next.slotTime}` : t('Choose your preferred date and time')}</Text></View>
-            <Pressable accessibilityRole="button" onPress={next ? notifications : doctors} style={({ pressed }) => [styles.cardFooter, pressed && styles.pressed]}><Text style={styles.link}>{next ? t('View appointment') : t('Find a doctor')}</Text><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
+            <View style={{ gap: 6 }}><Text style={styles.careHeading}>{next ? next.doctorName : data ? t('Plan your next visit') : t('Your next visit')}</Text><Text style={styles.careDescription}>{next ? t(next.department) : data ? t('Book a consultation when you need care.') : t('Your appointment details will appear here.')}</Text></View>
+            <View style={styles.cardMeta}><DesignImage name="calendar" size={14} color={C.secondary} /><Text style={styles.careDescription}>{next ? `${dayLabel(next.date, undefined, locale)} · ${next.slotTime}` : t('Choose your preferred date and time')}</Text></View>
+            <Pressable accessibilityRole="button" onPress={next ? bookings : doctors} style={({ pressed }) => [styles.cardFooter, pressed && styles.pressed]}><Text style={styles.link}>{next ? t('View appointment') : t('Find a doctor')}</Text><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
           </View>
           <View style={[styles.careCard, wide && styles.wideCard]}>
             <View style={styles.cardTop}><Text style={styles.cardType}>{t("LIVE QUEUE")}</Text><View style={styles.badge}><Text style={styles.badgeLabel}>{pass ? called ? t('Your turn') : t('Active') : data ? t('No active pass') : t('Loading')}</Text></View></View>
-            <View style={{ gap: 4 }}><Text style={pass ? styles.careNumber : styles.careHeading}>{pass ? `#${pass.tokenNumber}` : t('Your place in line')}</Text><Text style={styles.careDescription}>{pass ? pass.department : t('Check in on the day of your appointment.')}</Text></View>
+            <View style={{ gap: 4 }}><Text style={pass ? styles.careNumber : styles.careHeading}>{pass ? `#${pass.tokenNumber}` : t('Your place in line')}</Text><Text style={styles.careDescription}>{pass ? t(pass.department) : t('Check in on the day of your appointment.')}</Text></View>
             <View style={styles.cardMeta}><DesignImage name="clock" size={14} color={C.secondary} /><Text style={styles.careDescription}>{pass ? called ? pass.room ? t('Please go to {room}', { room: pass.room }) : t('Please go to the clinic desk') : ahead === null ? t('Follow your live queue here') : ahead === 0 ? t('You are next') : t('{count} people ahead of you', { count: ahead }) : t('Your position updates automatically')}</Text></View>
             {pass?.estimatedTurnAt && !called ? <Text style={styles.careDescription}>{t("Estimated turn:")}{' '}{pass.estimatedTurnAt}</Text> : null}
             <Pressable accessibilityRole="button" onPress={queue} style={({ pressed }) => [styles.cardFooter, pressed && styles.pressed]}><Text style={styles.link}>{pass ? t('Open queue pass') : t('Go to queue')}</Text><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
@@ -169,7 +165,7 @@ export function PatientDashboardScreen() {
       <View style={styles.section}>
         <SectionHeading title={t("Quick actions")} action={t("Help")} onPress={help} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionScroll} contentContainerStyle={styles.actionContent}>
-          {ACTION_TILES.map(tile => <Pressable key={tile.key} accessibilityRole="button" accessibilityLabel={`${t(tile.label)} ${t(tile.caption)}`} onPress={tile.key === 'clinics-queue' || tile.key === 'medicine-queue' ? queue : doctors} style={({ pressed }) => [styles.action, pressed && styles.pressed]}><View style={styles.actionIcon}><DesignImage name={tile.icon} size={20} color={C.secondary} /></View><Text style={styles.actionLabel}>{t(tile.label)}{'\n'}{t(tile.caption)}</Text></Pressable>)}
+          {ACTION_TILES.map(tile => <Pressable key={tile.key} accessibilityRole="button" accessibilityLabel={`${t(tile.label)} ${t(tile.caption)}`} onPress={quickActions[tile.key]} style={({ pressed }) => [styles.action, pressed && styles.pressed]}><View style={styles.actionIcon}><DesignImage name={tile.icon} size={20} color={C.secondary} /></View><Text style={styles.actionLabel}>{t(tile.label)}{'\n'}{t(tile.caption)}</Text></Pressable>)}
         </ScrollView>
       </View>
       <View style={styles.section}>
@@ -184,7 +180,7 @@ export function PatientDashboardScreen() {
         ) : clinics.error ? (
           <View style={styles.error}><Text style={styles.errorTitle}>{t("Could not load clinics")}</Text><Text style={styles.statusText}>{clinics.error}</Text><Pressable onPress={clinics.reload} style={styles.textButton}><Text style={styles.link}>{t("Try again")}</Text></Pressable></View>
         ) : clinics.data?.clinics.length ? (
-          <View style={styles.specialties}>{(showAllClinics ? clinics.data.clinics : clinics.data.clinics.slice(0, 16)).map((clinic) => <Pressable key={clinic._id} accessibilityRole="button" accessibilityLabel={clinic.name} onPress={() => router.push({ pathname: '/(patient)/doctors', params: { department: clinic.department, hospitalId: clinic.hospital?._id } })} style={({ pressed }) => [styles.specialty, { width: specialtyWidth }, pressed && styles.pressed]}><View style={styles.specialtyIcon}><DesignImage name="stethoscope" size={20} color={C.secondary} /></View><Text style={styles.specialtyLabel}>{clinic.name.replace(/ Clinic$/, '')}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable>)}</View>
+          <View style={styles.specialties}>{(showAllClinics ? clinics.data.clinics : clinics.data.clinics.slice(0, 16)).map((clinic) => <Pressable key={clinic._id} accessibilityRole="button" accessibilityLabel={t(clinic.name)} onPress={() => router.push({ pathname: '/(patient)/doctors', params: { tab: 'directory', view: '', search: '', department: clinic.department, hospitalId: clinic.hospital?._id ?? '' } })} style={({ pressed }) => [styles.specialty, { width: specialtyWidth }, pressed && styles.pressed]}><View style={styles.specialtyIcon}><DesignImage name="stethoscope" size={20} color={C.secondary} /></View><Text style={styles.specialtyLabel}>{t(clinic.name.replace(/ Clinic$/, ''))}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable>)}</View>
         ) : (
           <View style={styles.emptyActivity}><Text style={styles.activityTitle}>{t("No clinics available")}</Text><Text style={styles.sectionCaption}>{t("Your hospital has not enabled any clinics yet.")}</Text></View>
         )}
@@ -194,7 +190,7 @@ export function PatientDashboardScreen() {
         <View style={styles.activityCard}>
           {data?.recentActivity.length ? data.recentActivity.slice(0, 4).map((item, index) => <React.Fragment key={`${item.type}-${item.id}`}>
             {index ? <View style={styles.divider} /> : null}
-            <Pressable accessibilityRole="button" accessibilityLabel={item.title} onPress={item.type === 'report' ? reports : history} style={({ pressed }) => [styles.activityRow, pressed && styles.pressed]}><View style={styles.actionIcon}><DesignImage name={item.type === 'report' ? 'clipboard' : 'calendar'} size={18} color={C.secondary} /></View><View style={styles.grow}><Text style={styles.activityTitle}>{item.title}</Text><Text style={styles.activityCaption}>{[item.dateLabel ?? item.date, item.status.replace(/_/g, ' ')].filter(Boolean).join(' · ')}</Text></View><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={item.type === 'appointment' ? item.title.split(' · ').map((part, index) => index === 0 ? part : t(part)).join(' · ') : item.title} onPress={item.type === 'report' ? reports : history} style={({ pressed }) => [styles.activityRow, pressed && styles.pressed]}><View style={styles.actionIcon}><DesignImage name={item.type === 'report' ? 'clipboard' : 'calendar'} size={18} color={C.secondary} /></View><View style={styles.grow}><Text style={styles.activityTitle}>{item.type === 'appointment' ? item.title.split(' · ').map((part, index) => index === 0 ? part : t(part)).join(' · ') : item.title}</Text><Text style={styles.activityCaption}>{[item.type === 'report' ? t(item.dateLabel ?? '') : item.date ? dayLabel(item.date, undefined, locale) : '', t(item.status.replace(/_/g, ' '))].filter(Boolean).join(' · ')}</Text></View><DesignImage name="arrow" size={14} color={C.secondary} /></Pressable>
           </React.Fragment>) : <View style={styles.emptyActivity}><Text style={styles.activityTitle}>{data ? t('No recent activity yet') : t('Your recent activity')}</Text><Text style={styles.sectionCaption}>{data ? t('Your appointments and reports will be listed here.') : t('Activity will appear once your dashboard loads.')}</Text></View>}
         </View>
       </View>

@@ -256,6 +256,7 @@ export type QueuePass = {
   tokenLabel: string;
   passCode: string;
   qrValue: string;
+  doctorId: string | null;
   doctorName: string | null;
   room: string | null;
   priority: 'normal' | 'urgent';

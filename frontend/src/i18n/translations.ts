@@ -1,11 +1,14 @@
-// UI copy only: patient names, clinical notes and server-provided records stay intact.
+// UI and known clinical-category labels only. Personal names and entered notes stay intact.
 import { commonCopy } from './commonCopy';
 import { doctorCopy } from './doctorCopy';
 import { mohCopy } from './mohCopy';
 import { receptionCopy } from './receptionCopy';
 import { templateCopy } from './templateCopy';
+import { clinicCopy } from './clinicCopy';
+import { additionalCopy } from './additionalCopy';
 export type Language = 'en' | 'si' | 'ta';
 export type TranslationValues = Record<string, string | number>;
+const normalizeLabel = (text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase();
 
 // Backend enums keep their original value; only their displayed label changes.
 const displayLabels: Record<string, string> = {
@@ -18,7 +21,7 @@ const displayLabels: Record<string, string> = {
 
 export function translate(language: Language, text: string, values?: TranslationValues): string {
   const canonical = displayLabels[text.toLowerCase().replace(/ /g, '_')];
-  const translated = language === 'en' ? text : (translations[text] ?? translations[canonical])?.[language === 'si' ? 0 : 1] ?? text;
+  const translated = language === 'en' ? text : (translations[text] ?? normalizedTranslations[normalizeLabel(text)] ?? translations[canonical])?.[language === 'si' ? 0 : 1] ?? text;
   return values ? translated.replace(/\{(\w+)\}/g, (match, key: string) => String(values[key] ?? match)) : translated;
 }
 
@@ -28,6 +31,8 @@ export const translations: Record<string, readonly [string, string]> = {
   ...doctorCopy,
   ...mohCopy,
   ...receptionCopy,
+  ...clinicCopy,
+  ...additionalCopy,
   'Confirmed': ['තහවුරු කර ඇත', 'உறுதிசெய்யப்பட்டது'],
   'Checked in': ['පැමිණීම ලියාපදිංචි කර ඇත', 'வருகை பதிவு செய்யப்பட்டது'],
   'In consultation': ['වෛද්‍ය හමුවීමේදී', 'ஆலோசனையில் உள்ளார்'],
@@ -443,3 +448,8 @@ export const translations: Record<string, readonly [string, string]> = {
   'Missed': ['මඟහැරී ඇත', 'தவறவிடப்பட்டது'],
   'Seen': ['හමුවී ඇත', 'சந்தித்தார்'],
 };
+
+// Server labels may differ in capitalisation or spacing from the UI catalogue.
+const normalizedTranslations = Object.fromEntries(
+  Object.entries(translations).map(([key, value]) => [normalizeLabel(key), value]),
+);

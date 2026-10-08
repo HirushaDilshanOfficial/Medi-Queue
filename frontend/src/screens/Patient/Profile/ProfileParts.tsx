@@ -1,3 +1,4 @@
+import { dayLabel } from '../../../utils/opdDates';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React from 'react';
@@ -27,14 +28,14 @@ export function Avatar({ patient, small = false }: { patient?: PatientProfile; s
 }
 
 export function Metric({ value, label, active = false }: { value: string; label: string; active?: boolean }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   return <View style={styles.metric}><View style={styles.metricValueRow}><Text style={[styles.metricValue, active && { color: C.secondary }]}>{value}</Text>{active ? <View style={styles.activeDot} /> : null}</View><Text style={styles.metricLabel}>{t(label ?? '')}</Text></View>;
 }
 
 export function AccountRow({ icon, title, caption, onPress, iconColor }: {
   icon: ProfileIconName; title: string; caption: string; onPress: () => void; iconColor?: string;
 }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.accountRow, pressed && styles.pressed]}>
     <View style={styles.roundIcon}><ProfileIcon name={icon} color={iconColor} /></View>
     <View style={styles.grow}><Text style={styles.rowTitle}>{t(title ?? '')}</Text><Text style={styles.caption}>{t(caption ?? '')}</Text></View><ProfileIcon name="arrow" size={16} color={C.muted} />
@@ -42,7 +43,7 @@ export function AccountRow({ icon, title, caption, onPress, iconColor }: {
 }
 
 export function EmptyState({ title, body, onRetry }: { title: string; body: string; onRetry?: () => void }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   return <View style={styles.empty}><Text style={styles.rowTitle}>{t(title ?? '')}</Text><Text style={styles.caption}>{body}</Text>{onRetry ? <Pressable accessibilityRole="button" onPress={onRetry} style={styles.moreButton}><Text style={styles.link}>{t("Try again")}</Text></Pressable> : null}</View>;
 }
 
@@ -62,17 +63,17 @@ export function PersonalInfo({ patient, onEdit }: { patient?: PatientProfile; on
 export function VisitCard({ visit, reports, onExport, onNotes, onReports }: {
   visit: VisitRecord; reports: MedicalReport[]; onExport: () => void; onNotes: () => void; onReports: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const status = visit.status === 'completed' ? 'Completed' : visit.status.replace(/_/g, ' ');
   const prescription = reports.some(isPrescription);
   return <View style={styles.visitCard}>
     <View style={styles.visitHeading}>
       <View style={styles.squareIcon}><ProfileIcon name={/cardio/i.test(visit.department) ? 'heart' : /general/i.test(visit.department) ? 'stethoscope' : 'medical'} size={22} /></View>
-      <View style={styles.grow}><Text style={styles.rowTitle}>{visit.department}</Text><Text style={styles.caption}>{visit.doctorName}</Text></View>
+      <View style={styles.grow}><Text style={styles.rowTitle}>{t(visit.department)}</Text><Text style={styles.caption}>{visit.doctorName}</Text></View>
       <View style={styles.statusPill}><View style={styles.statusDot} /><Text style={styles.statusLabel}>{t(status)}</Text></View>
     </View>
     <View style={styles.visitDetails}>
-      <View style={styles.visitDateRow}><ProfileIcon name="calendar" size={14} color={C.muted} /><Text style={styles.visitDate}>{visit.dateLabel ?? visit.date} • {visit.slotTime}</Text>
+      <View style={styles.visitDateRow}><ProfileIcon name="calendar" size={14} color={C.muted} /><Text style={styles.visitDate}>{dayLabel(visit.date, undefined, locale)} • {visit.slotTime}</Text>
         {visit.tokenNumber !== null ? <View style={styles.tokenPill}><Text style={styles.tokenLabel}>{t('Queue')} #{visit.tokenNumber}</Text></View> : null}</View>
       <View><Text style={styles.reasonLabel}>{t("VISIT REASON")}</Text><Text style={styles.reason}>{visit.reason ?? t('No visit reason recorded.')}</Text></View>
     </View>
@@ -80,7 +81,7 @@ export function VisitCard({ visit, reports, onExport, onNotes, onReports }: {
       <Pressable accessibilityRole="button" onPress={onNotes} style={styles.actionChip}><ProfileIcon name="notes" size={15} /><Text style={styles.actionLabel}>{t("Visit Details")}</Text></Pressable>
       {reports.length ? <Pressable accessibilityRole="button" onPress={onReports} style={styles.actionChip}><ProfileIcon name={prescription ? 'pill' : 'clipboard'} size={15} /><Text style={styles.actionLabel}>{prescription ? t('Prescription (Rx)') : t('Lab Reports')}</Text></Pressable> : null}
       <View style={styles.grow} />
-      <Pressable accessibilityRole="button" accessibilityLabel={t("Export {value0} visit summary", { value0: String(visit.department) })} onPress={onExport} style={styles.downloadButton}><ProfileIcon name="download" size={16} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("Export {value0} visit summary", { value0: t(visit.department) })} onPress={onExport} style={styles.downloadButton}><ProfileIcon name="download" size={16} /></Pressable>
     </View>
   </View>;
 }

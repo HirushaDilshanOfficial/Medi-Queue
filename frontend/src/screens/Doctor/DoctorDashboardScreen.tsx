@@ -20,8 +20,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Rect, Line, Polyline, Polygon } from 'react-native-svg';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { getAuthToken } from '../../services/http';
-import { BASE_URL } from '../../config';
+import { Colors } from '../../constants/Colors';
+import { notificationApi } from '../../services/notificationApi';
 import {
   fetchDoctorDashboard,
   updateDoctorStatusApi,
@@ -291,22 +291,12 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   }, [isDarkMode]);
 
   const checkUnreadNotifications = async () => {
+    setUnreadCount(0);
     try {
-      const token = await getAuthToken();
-      if (!token) return;
-      const res = await fetch(`${BASE_URL}/api/v1/notifications`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const userStr = await AsyncStorage.getItem('user');
-        const userId = userStr ? JSON.parse(userStr)._id : '';
-        const lastReadTime = await AsyncStorage.getItem(`last_notification_read_time_${userId}`);
-        const lastReadDate = lastReadTime ? new Date(lastReadTime) : new Date(0);
-        const unread = data.filter((n: any) => new Date(n.createdAt) > lastReadDate).length;
-        setUnreadCount(Math.max(3, unread));
-      }
-    } catch (e) {}
+      setUnreadCount(await notificationApi.unreadCount());
+    } catch (e) {
+      console.log('Failed to fetch notifications', e);
+    }
   };
 
   const loadActiveBreak = useCallback(async () => {
@@ -956,7 +946,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={[styles.nowServingContainer, activeBreak && { marginTop: 0 }]}>
               {currentPatient ? (
                 <View style={[styles.nowServingCard, { backgroundColor: colors.cardBg, borderColor: colors.borderSubtle }, colors.cardShadow]}>
-                  
+
                   {/* Top Row: Pulsing Dot + "NOW SERVING" and Tinted Live Timer */}
                   <View style={styles.nowServingTopRow}>
                     <View style={styles.pulsingTitleWrap}>
@@ -1388,7 +1378,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderTitleRow}>
                 <MaterialCommunityIcons name="hospital-building" size={22} color="#0B4F59" style={{ marginRight: 8 }} />
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Hospital Duty</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t("Select Hospital Duty")}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsHospitalModalOpen(false)} style={styles.modalCloseBtn}>
                 <Ionicons name="close" size={20} color={colors.textSecondary} />
@@ -1396,7 +1386,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             </View>
 
             <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-              Select the hospital you are currently stationed at for OPD patient consultations.
+              {t("Select the hospital you are currently stationed at for OPD patient consultations.")}
             </Text>
 
             <View style={styles.modalHospitalList}>

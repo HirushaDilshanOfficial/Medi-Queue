@@ -30,6 +30,7 @@ import {
   markNoShow,
   getErrorMessage,
   searchPatients,
+  validateQueuePass,
 } from '../../services/api';
 import {
   LoadingState,
@@ -200,11 +201,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
       setActionLoading(true);
       const res = await callNext();
       const calledToken = res?.tokenLabel || res?.tokenNumber || 'Next patient';
-      showToast(`Called token ${calledToken}. Patient display & doctor queue updated.`, 'success');
+      showToast(t("Called token {value0}. Patient display & doctor queue updated.", { value0: String(calledToken) }), 'success');
       await refresh(false);
     } catch (err: any) {
       const msg = getErrorMessage(err);
-      showToast(msg || 'Failed to call next patient. Queue may be empty.', 'error');
+      showToast(msg || t("Failed to call next patient. Queue may be empty."), 'error');
     } finally {
       if (isMounted.current) {
         setActionLoading(false);
@@ -218,11 +219,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     try {
       setActionLoading(true);
       await recallToken(tokenLabel);
-      showToast(`Chime sound triggered! Token ${tokenLabel} recalled to counter`, 'info');
+      showToast(t("Chime sound triggered! Token {value0} recalled to counter", { value0: String(tokenLabel) }), 'info');
       await refresh(false);
     } catch (err: any) {
       const msg = getErrorMessage(err);
-      showToast(msg || 'Chime broadcast completed', 'info');
+      showToast(msg || t("Chime broadcast completed"), 'info');
     } finally {
       if (isMounted.current) {
         setActionLoading(false);
@@ -245,11 +246,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             try {
               setActionLoading(true);
               await markNoShow(tokenLabel);
-              showToast(`Token ${tokenLabel} marked as No-Show`, 'warning');
+              showToast(t("Token {value0} marked as No-Show", { value0: String(tokenLabel) }), 'warning');
               await refresh(false);
             } catch (err: any) {
               const msg = getErrorMessage(err);
-              showToast(msg || 'Unable to mark token as no-show.', 'error');
+              showToast(msg || t("Unable to mark token as no-show."), 'error');
             } finally {
               if (isMounted.current) {
                 setActionLoading(false);
@@ -269,7 +270,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
   const executeSearchForVerify = async (queryVal: string) => {
     const trimmed = queryVal.trim();
     if (!trimmed) {
-      showToast('Please enter or scan an NIC / Barcode', 'warning');
+      showToast(t("Please enter or scan an NIC / Barcode"), 'warning');
       return;
     }
     try {
@@ -287,7 +288,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
         setVerifyNicResult({ found: false });
       }
     } catch {
-      showToast('Error verifying NIC. Please try again.', 'error');
+      showToast(t("Error verifying NIC. Please try again."), 'error');
     } finally {
       if (isMounted.current) {
         setVerifyNicLoading(false);
@@ -297,6 +298,33 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
 
   const handleScanForVerify = (scannedValue: string) => {
     let code = scannedValue.trim();
+    const passUrl = code.match(/(?:\/pass\/|\/queue-pass\/)([^/?#\s]+)/i);
+    const passCode = passUrl?.[1]
+      ? decodeURIComponent(passUrl[1]).toUpperCase()
+      : /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/i.test(code)
+        ? code.toUpperCase()
+        : null;
+    if (passCode) {
+      setVerifyNicQuery(passCode);
+      setVerifyNicLoading(true);
+      setVerifyNicResult(null);
+      validateQueuePass(passCode)
+        .then((result) => {
+          setVerifyNicResult({
+            found: Boolean(result.patient),
+            patient: result.patient,
+            pass: result.pass,
+            isQueuePass: true,
+          });
+          showToast(t("Queue pass verified: {value0}", { value0: String(result.pass.tokenLabel) }), 'success');
+        })
+        .catch((error) => {
+          setVerifyNicResult({ found: false, isQueuePass: true });
+          showToast(getErrorMessage(error), 'error');
+        })
+        .finally(() => setVerifyNicLoading(false));
+      return;
+    }
     try {
       const parsed = JSON.parse(scannedValue);
       if (parsed.nic) code = parsed.nic;
@@ -305,7 +333,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     } catch {}
     setVerifyNicQuery(code);
     executeSearchForVerify(code);
-    showToast(`Scanned: ${code}`, 'success');
+    showToast(t("Scanned: {value0}", { value0: String(code) }), 'success');
   };
 
   if (loading && !data) {
@@ -316,7 +344,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
     return (
       <ErrorState
         fullscreen
-        title="Dashboard Error"
+        title={t("Dashboard Error")}
         message={error}
         onRetry={() => refresh(false)}
       />
@@ -428,7 +456,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             style={styles.bellButton}
             activeOpacity={0.8}
             onPress={() => setNotificationModalVisible(true)}
-            accessibilityLabel="Notifications"
+            accessibilityLabel={t("Notifications")}
             accessibilityRole="button"
           >
             <Ionicons name="notifications" size={20} color={Colors.white} />
@@ -695,7 +723,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                       {topWaitingDoctor.name || t('Assigned Specialist')}
                     </Text>
                     <Text style={styles.innerDoctorDept}>
-                      {topWaitingDoctor.department || 'General OPD'} • {t('Room')} {topWaitingDoctor.room || '1A'}
+                      {t(topWaitingDoctor.department || 'General OPD')} • {t('Room')} {topWaitingDoctor.room || '1A'}
                     </Text>
                   </View>
                 </View>
@@ -783,7 +811,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               onPress={() => !isShiftClosed && handleNav('RegisterTab')}
               disabled={isShiftClosed}
               activeOpacity={0.7}
-              accessibilityLabel="New Intake"
+              accessibilityLabel={t("New Intake")}
               accessibilityRole="button"
             >
               <View style={[styles.quickActionIconBox, { backgroundColor: '#F0FDF4' }]}>
@@ -802,7 +830,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 setVerifyNicModalVisible(true);
               }}
               activeOpacity={0.7}
-              accessibilityLabel="Verify NIC"
+              accessibilityLabel={t("Verify NIC")}
               accessibilityRole="button"
             >
               <View style={[styles.quickActionIconBox, { backgroundColor: '#F0F9FF' }]}>
@@ -817,7 +845,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               style={styles.quickActionCard}
               onPress={() => setReprintModalVisible(true)}
               activeOpacity={0.7}
-              accessibilityLabel="Reprint Slip"
+              accessibilityLabel={t("Reprint Slip")}
               accessibilityRole="button"
             >
               <View style={[styles.quickActionIconBox, { backgroundColor: '#FEF3C7' }]}>
@@ -892,7 +920,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 style={styles.roomListCard}
                 activeOpacity={0.8}
                 onPress={() => {
-                  showToast(`${room.doctor} (${room.room}) is currently ${room.status}`, 'info');
+                  showToast(t("{value0} ({value1}) is currently {value2}", { value0: String(room.doctor), value1: String(room.room), value2: String(room.status) }), 'info');
                 }}
               >
                 {/* Room Badge */}
@@ -1043,7 +1071,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 style={styles.modalConfirmBtn}
                 onPress={() => {
                   setReprintModalVisible(false);
-                  showToast('Token slip sent to counter thermal printer 🖨️', 'success');
+                  showToast(t("Token slip sent to counter thermal printer 🖨️"), 'success');
                 }}
               >
                 <Ionicons name="print" size={16} color={Colors.white} style={{ marginRight: 6 }} />
@@ -1085,7 +1113,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <View key={idx} style={styles.rosterItem}>
                   <View>
                     <Text style={styles.rosterDocName}>{doc.doctor}</Text>
-                    <Text style={styles.rosterDocDept}>{t(doc.department || 'OPD')} · Room {doc.room}</Text>
+                    <Text style={styles.rosterDocDept}>{t(doc.department || 'OPD')}{' '}{t("· Room")}{' '}{doc.room}</Text>
                   </View>
                   <View style={styles.rosterDocHours}>
                     <Text style={styles.rosterDocHoursText}>08:00 - 16:30</Text>
@@ -1282,6 +1310,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <Text style={styles.verifyNicPatientPhone}>
                   📞 {verifyNicResult.patient.phone || 'No phone recorded'}
                 </Text>
+                {verifyNicResult.isQueuePass && verifyNicResult.pass ? (
+                  <Text style={styles.verifyNicPatientMeta}>
+                    {t("Queue:")}{' '}{verifyNicResult.pass.tokenLabel} • {t(verifyNicResult.pass.department ?? '')} • {verifyNicResult.pass.status}
+                  </Text>
+                ) : null}
 
                 <View style={styles.verifyNicActionsRow}>
                   <TouchableOpacity
@@ -1311,7 +1344,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 <Ionicons name="alert-circle-outline" size={30} color="#D97706" style={{ marginBottom: 6 }} />
                 <Text style={styles.verifyNicNotFoundTitle}>{t('No Record Found')}</Text>
                 <Text style={styles.verifyNicNotFoundSub}>
-                  No patient registered under NIC "{verifyNicQuery}".
+                  {t("No patient registered under NIC \"")}{verifyNicQuery}".
                 </Text>
                 <TouchableOpacity
                   style={styles.verifyNicCreateNewBtn}
@@ -1388,7 +1421,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                     ]}
                     onPress={() => {
                       setActiveCounter(counterOption);
-                      showToast(`Switched active desk to ${counterOption}`, 'info');
+                      showToast(t("Switched active desk to {value0}", { value0: String(counterOption) }), 'info');
                     }}
                     activeOpacity={0.7}
                   >
@@ -1420,18 +1453,18 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             <View style={styles.dutyInfoBox}>
               <View style={styles.dutyInfoRow}>
                 <Ionicons name="time-outline" size={15} color={Colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.dutyInfoLabel}>{t('Desk Hours:')}</Text>
-                <Text style={styles.dutyInfoValue}>08:00 AM - 04:30 PM (Shift 1)</Text>
+                <Text style={styles.dutyInfoLabel}>{t("Desk Hours:")}</Text>
+                <Text style={styles.dutyInfoValue}>{t("08:00 AM - 04:30 PM (Shift 1)")}</Text>
               </View>
               <View style={[styles.dutyInfoRow, { marginTop: 6 }]}>
                 <Ionicons name="medkit-outline" size={15} color={Colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.dutyInfoLabel}>{t('Station:')}</Text>
-                <Text style={styles.dutyInfoValue}>{t('Orthopedic & General Triage')}</Text>
+                <Text style={styles.dutyInfoLabel}>{t("Station:")}</Text>
+                <Text style={styles.dutyInfoValue}>{t("Orthopedic & General Triage")}</Text>
               </View>
               <View style={[styles.dutyInfoRow, { marginTop: 6 }]}>
                 <Ionicons name="pulse" size={15} color="#059669" style={{ marginRight: 8 }} />
-                <Text style={styles.dutyInfoLabel}>{t('Queue Status:')}</Text>
-                <Text style={[styles.dutyInfoValue, { color: '#059669', fontWeight: '700' }]}>{t('Online & Dispatching')}</Text>
+                <Text style={styles.dutyInfoLabel}>{t("Queue Status:")}</Text>
+                <Text style={[styles.dutyInfoValue, { color: '#059669', fontWeight: '700' }]}>{t("Online & Dispatching")}</Text>
               </View>
             </View>
 

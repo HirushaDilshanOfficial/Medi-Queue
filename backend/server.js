@@ -71,6 +71,8 @@ app.use('/api/v1/patients', patientRoutes);
 app.use('/api/v1/patients', v1PatientRoutes);
 app.use('/api/v1/policies', policyRoutes);
 app.use('/api/v1/public', publicRoutes);
+// Older QR codes configured with PUBLIC_WEB_URL used this backend path.
+app.get('/pass/:passCode', require('./controllers/queueController').publicPass);
 app.use('/api/v1/doctor', v1DoctorRoutes);
 
 // Patient module

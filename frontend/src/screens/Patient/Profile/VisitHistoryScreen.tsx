@@ -1,14 +1,15 @@
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   StyleSheet,
   FlatList,
   RefreshControl,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { PatientTheme } from '../../../constants/PatientTheme';
 import { patientApi } from '../../../services/patientApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
@@ -34,21 +35,28 @@ const STATUS_LABEL: Record<string, string> = {
   in_consultation: 'In the room',
 };
 
+const HISTORY_FILTERS = {
+  completed: { title: 'Seen appointments', empty: 'No seen appointments', description: 'Your completed appointments will appear here.' },
+  no_show: { title: 'Missed appointments', empty: 'No missed appointments', description: 'Appointments you did not attend will appear here.' },
+  cancelled: { title: 'Cancelled appointments', empty: 'No cancelled appointments', description: 'Appointments you cancel will appear here immediately.' },
+} as const;
+type HistoryFilter = keyof typeof HISTORY_FILTERS;
+
 export function VisitHistoryScreen() {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ status?: string }>();
+  const requestedStatus = Array.isArray(params.status) ? params.status[0] : params.status;
+  const status: HistoryFilter | null = requestedStatus === 'completed' || requestedStatus === 'no_show' || requestedStatus === 'cancelled' ? requestedStatus : null;
+  const filter = status ? HISTORY_FILTERS[status] : null;
 
-  const [refreshing, setRefreshing] = useState(false);
   const history = useAsyncResource(() => patientApi.getHistory(), []);
+  const reload = history.reload;
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await history.reload();
-    setRefreshing(false);
-  }, [history]);
+  useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
-  const visits = history.data?.visits ?? [];
+  const visits = (history.data?.visits ?? []).filter(visit => !status || visit.status === status);
   const summary = history.data?.summary;
   const reports = history.data?.reports ?? [];
 
@@ -56,7 +64,7 @@ export function VisitHistoryScreen() {
     <View style={styles.root}>
       <View style={{ paddingTop: insets.top + PatientTheme.spaceSm }}>
         <ScreenHeader
-          title={t("Visit history")}
+          title={t(filter?.title ?? 'Visit history')}
           subtitle={t("Every appointment you have booked")}
           showBack
         />
@@ -69,22 +77,23 @@ export function VisitHistoryScreen() {
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={PatientTheme.brand} />
+          <RefreshControl refreshing={history.loading && Boolean(history.data)} onRefresh={reload} tintColor={PatientTheme.brand} />
         }
         ListHeaderComponent={
           <View style={styles.header}>
             {summary ? (
               <View style={styles.summaryRow}>
-                <SummaryTile value={summary.totalVisits} label={t("Seen")} />
-                <SummaryTile value={summary.noShow} label={t("Missed")} />
-                <SummaryTile value={summary.cancelled} label={t("Cancelled")} />
+                <SummaryTile value={summary.totalVisits} label={t("Seen")} selected={status === 'completed'} onPress={() => router.setParams({ status: 'completed' })} />
+                <SummaryTile value={summary.noShow} label={t("Missed")} selected={status === 'no_show'} onPress={() => router.setParams({ status: 'no_show' })} />
+                <SummaryTile value={summary.cancelled} label={t("Cancelled")} selected={status === 'cancelled'} onPress={() => router.setParams({ status: 'cancelled' })} />
               </View>
             ) : null}
+            {status ? <Pressable accessibilityRole="button" onPress={() => router.setParams({ status: '' })} style={styles.allButton}><Text style={styles.allLabel}>{t('Show all appointments')}</Text></Pressable> : null}
 
             {/* Reports filed against a visit live on that visit's row, so a patient
                 looking back at a consultation can see the paperwork that came out
                 of it. */}
-            {reports.length ? (
+            {!status && reports.length ? (
               <View style={styles.looseReports}>
                 <Text style={styles.looseTitle}>{t("Reports not linked to a visit")}</Text>
                 {reports.map((report) => (
@@ -109,8 +118,8 @@ export function VisitHistoryScreen() {
           ) : (
             <MessageState
               icon="calendar"
-              title={t("No visits yet")}
-              description={t("Once you have booked and seen a doctor at the clinic, the visit will appear here.")}
+              title={t(filter?.empty ?? 'No visits yet')}
+              description={t(filter?.description ?? 'Once you have booked and seen a doctor at the clinic, the visit will appear here.')}
               actionLabel={t("Book a doctor")}
               onAction={() => router.push('/(patient)/doctors')}
             />
@@ -121,18 +130,18 @@ export function VisitHistoryScreen() {
   );
 }
 
-function SummaryTile({ value, label }: { value: number; label: string }) {
+function SummaryTile({ value, label, selected, onPress }: { value: number; label: string; selected: boolean; onPress: () => void }) {
   const { t } = useLanguage();
   return (
-    <View style={styles.summaryTile}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => [styles.summaryTile, selected && styles.summarySelected, pressed && { opacity: 0.8 }]}>
       <Text style={styles.summaryValue}>{String(value)}</Text>
       <Text style={styles.summaryLabel}>{t(label ?? '')}</Text>
-    </View>
+    </Pressable>
   );
 }
 
 function VisitCard({ visit }: { visit: VisitRecord }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const tone = STATUS_TONE[visit.status] ?? 'neutral';
   const label = STATUS_LABEL[visit.status] ?? visit.status;
 
@@ -144,7 +153,7 @@ function VisitCard({ visit }: { visit: VisitRecord }) {
             {visit.date ? visit.date.slice(8, 10) : '--'}
           </Text>
           <Text style={styles.dateMonth}>
-            {visit.dateLabel && visit.dateLabel.length <= 11 ? visit.dateLabel.slice(0, 3) : ''}
+            {visit.date ? new Date(`${visit.date}T00:00:00Z`).toLocaleDateString(locale, { month: 'short', timeZone: 'UTC' }) : ''}
           </Text>
         </View>
 
@@ -153,7 +162,7 @@ function VisitCard({ visit }: { visit: VisitRecord }) {
             {visit.doctorName}
           </Text>
           <Text style={styles.meta} numberOfLines={1}>
-            {[visit.department, visit.slotTime, visit.room].filter(Boolean).join(' · ')}
+            {[t(visit.department), visit.slotTime, visit.room].filter(Boolean).join(' · ')}
           </Text>
           {visit.reason ? (
             <Text style={styles.reason} numberOfLines={2}>
@@ -207,6 +216,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: PatientTheme.brandDeep,
   },
+  summarySelected: {
+    borderColor: PatientTheme.brand,
+    backgroundColor: PatientTheme.surfaceMuted,
+    borderWidth: 2,
+  },
+  allButton: { alignSelf: 'flex-start', paddingVertical: PatientTheme.spaceSm },
+  allLabel: { color: PatientTheme.brand, fontWeight: '700' },
   summaryLabel: {
     marginTop: 2,
     fontSize: PatientTheme.designType.caption,

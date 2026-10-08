@@ -1,5 +1,3 @@
-const crypto = require('crypto');
-
 const Doctor = require('../models/Doctor');
 const OpdAppointment = require('../models/OpdAppointment');
 const OpdQueueEntry = require('../models/OpdQueueEntry');
@@ -7,30 +5,37 @@ const { nextTokenNumber, releaseTokenNumber } = require('../models/OpdQueueCount
 const { today, buildLiveState, buildBoard, ACTIVE_STATUSES } = require('../utils/opdQueue');
 const { relativeDate, humanDate, isValidObjectId } = require('../utils/opdAppointment');
 const Policy = require('../models/Policy');
+const { generatePassCode, passQrValue } = require('../utils/queuePass');
+const { ensureBookingQueueEntry } = require('../utils/ensureBookingQueueEntry');
+const { queuePassPage } = require('../utils/queuePassPage');
 
 const APPOINTMENT_ACTIVE = OpdAppointment.ACTIVE_STATUSES;
 
 // Short, unambiguous alphabet: no I/O/0/1, so a code read aloud or copied off a
 // blurry print still scans.
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+// The QR must contain a URL so a phone opens a useful pass page rather than
+// searching the opaque pass code as plain text.
+const publicPass = async (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  res.set('Referrer-Policy', 'no-referrer');
+  const page = (status, details) => res.status(status).type('html').send(queuePassPage(details));
+  try {
+    const passCode = String(req.params.passCode || '').trim().toUpperCase();
+    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/.test(passCode)) {
+      return page(400, { title: 'Invalid queue pass', message: 'Open your queue pass in Medi-Queue and scan its QR code again.' });
+    }
 
-function generatePassCode() {
-  const bytes = crypto.randomBytes(24);
-  let out = '';
-  for (const byte of bytes) {
-    out += CODE_ALPHABET[byte % CODE_ALPHABET.length];
+    const entry = await OpdQueueEntry.findOne({ passCode }).lean();
+    if (!entry) return page(404, { title: 'Queue pass not found', message: 'This pass is no longer available. Open your latest queue pass in Medi-Queue.' });
+    const closed = ['completed', 'cancelled', 'no_show'].includes(entry.status);
+    return page(200, { entry, title: closed ? 'Queue pass closed' : 'Queue pass verified',
+      message: closed ? 'This pass is no longer active. Please check with the reception desk.' : 'Show this page at the reception desk.' });
+  } catch (error) {
+    return page(503, { title: 'Queue pass temporarily unavailable', message: 'We could not load your pass. Please refresh this page or show your token number at reception.' });
   }
-  return out;
-}
+};
 
-// The pass QR carries a URL so a scanner at the clinic door can validate the pass
-// instead of showing a dead string. Only the code travels; no patient identity.
-function passQrValue(entry) {
-  const base = process.env.PUBLIC_WEB_URL || 'https://app.medi-queue.lk';
-  return `${base.replace(/\/+$/, '')}/pass/${entry.passCode}`;
-}
-
-function mapPass(entry, { todayKey, live } = {}) {
+function mapPass(entry, { todayKey, live, req } = {}) {
   if (!entry) return null;
 
   return {
@@ -45,7 +50,8 @@ function mapPass(entry, { todayKey, live } = {}) {
     // bare number when a patient is called.
     tokenLabel: `A-${String(entry.tokenNumber).padStart(3, '0')}`,
     passCode: entry.passCode,
-    qrValue: passQrValue(entry),
+    qrValue: passQrValue(entry, req),
+    doctorId: entry.doctor ? String(entry.doctor) : null,
     doctorName: entry.doctorName || null,
     room: entry.room || null,
     priority: entry.priority,
@@ -63,6 +69,13 @@ async function activePassFor(profileId) {
   }).sort({ checkedInAt: -1 });
 }
 
+async function activePassesFor(profileId) {
+  return OpdQueueEntry.find({
+    profile: profileId,
+    status: { $in: ACTIVE_STATUSES },
+  }).sort({ queueDate: 1, checkedInAt: 1 });
+}
+
 // @desc    Check in for today's appointment and collect a queue token
 // @route   POST /api/v1/queue/check-in
 // @access  Private/Patient
@@ -74,15 +87,6 @@ const checkIn = async (req, res, next) => {
 
     if (!appointmentId || !isValidObjectId(appointmentId)) {
       return res.status(400).json({ message: 'A valid appointmentId is required' });
-    }
-
-    const existing = await activePassFor(profileId);
-    if (existing) {
-      const live = await buildLiveState(existing);
-      return res.status(409).json({
-        message: 'You already have an active queue pass',
-        pass: mapPass(existing, { todayKey, live }),
-      });
     }
 
     const appointment = await OpdAppointment.findOne({
@@ -101,12 +105,30 @@ const checkIn = async (req, res, next) => {
       });
     }
 
-    if (appointment.status === 'checked_in' && appointment.queueEntry) {
-      const entry = await OpdQueueEntry.findById(appointment.queueEntry);
+    if (appointment.queueEntry) {
+      const entry = await OpdQueueEntry.findOne({
+        _id: appointment.queueEntry,
+        appointment: appointment._id,
+        profile: profileId,
+        status: { $in: ACTIVE_STATUSES },
+      });
       if (entry) {
+        if (appointment.status !== 'checked_in') {
+          appointment.status = 'checked_in';
+          await appointment.save();
+        }
         const live = await buildLiveState(entry);
-        return res.json({ pass: mapPass(entry, { todayKey, live }) });
+        return res.json({ pass: mapPass(entry, { todayKey, live, req }) });
       }
+    }
+
+    const existing = await activePassFor(profileId);
+    if (existing) {
+      const live = await buildLiveState(existing);
+      return res.status(409).json({
+        message: 'You already have an active queue pass',
+        pass: mapPass(existing, { todayKey, live, req }),
+      });
     }
 
     const doctor = await Doctor.findById(appointment.doctor).select('avgConsultMinutes room').lean();
@@ -152,7 +174,7 @@ const checkIn = async (req, res, next) => {
     await appointment.save();
 
     const live = await buildLiveState(entry);
-    return res.status(201).json({ pass: mapPass(entry, { todayKey, live }) });
+    return res.status(201).json({ pass: mapPass(entry, { todayKey, live, req }) });
   } catch (error) {
     return next(error);
   }
@@ -164,22 +186,25 @@ const checkIn = async (req, res, next) => {
 const myPass = async (req, res, next) => {
   try {
     const todayKey = today();
-    const entry = await activePassFor(req.patientProfile._id);
+    let entries = await activePassesFor(req.patientProfile._id);
+    const upcoming = await OpdAppointment.find({
+        profile: req.patientProfile._id,
+        status: 'booked',
+        date: { $gte: todayKey },
+      }).sort({ date: 1, slotTime: 1 });
+    for (const appointment of upcoming) {
+      await ensureBookingQueueEntry(appointment);
+    }
+    entries = await activePassesFor(req.patientProfile._id);
 
-    if (!entry) {
-      return res.json({ pass: null, message: 'You do not have an active queue pass' });
+    if (!entries.length) {
+      return res.json({ pass: null, passes: [], message: 'You do not have an active queue pass' });
     }
 
-    const live = await buildLiveState(entry);
-
-    // Keep the linked appointment in step with the queue so the bookings list and
-    // the pass card never disagree about whether the patient is checked in.
-    await OpdAppointment.updateOne(
-      { _id: entry.appointment, profile: req.patientProfile._id, status: 'booked' },
-      { $set: { status: 'checked_in', isActive: true, queueEntry: entry._id, tokenNumber: entry.tokenNumber } },
-    );
-
-    return res.json({ pass: mapPass(entry, { todayKey, live }) });
+    const passes = await Promise.all(entries.map(async (entry) => (
+      mapPass(entry, { todayKey, live: await buildLiveState(entry), req })
+    )));
+    return res.json({ pass: passes[0], passes });
   } catch (error) {
     return next(error);
   }
@@ -283,6 +308,46 @@ const leaveQueue = async (req, res, next) => {
     );
 
     return res.json({ pass: null, released: true });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const validatePass = async (req, res, next) => {
+  try {
+    const passCode = String(req.params.passCode || '').trim().toUpperCase();
+    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/.test(passCode)) {
+      return res.status(400).json({ message: 'Invalid queue pass code' });
+    }
+
+    const entry = await OpdQueueEntry.findOne({ passCode })
+      .populate('profile', 'fullName nic phone email gender')
+      .lean();
+    if (!entry) return res.status(404).json({ message: 'Queue pass not found' });
+
+    return res.json({
+      pass: {
+        id: String(entry._id),
+        passCode: entry.passCode,
+        tokenNumber: entry.tokenNumber,
+        tokenLabel: `A-${String(entry.tokenNumber).padStart(3, '0')}`,
+        department: entry.department,
+        doctorName: entry.doctorName || null,
+        room: entry.room || null,
+        queueDate: entry.queueDate,
+        status: entry.status,
+      },
+      patient: entry.profile
+        ? {
+            id: String(entry.profile._id),
+            fullName: entry.profile.fullName,
+            nic: entry.profile.nic || null,
+            phone: entry.profile.phone || null,
+            email: entry.profile.email || null,
+            gender: entry.profile.gender || null,
+          }
+        : null,
+    });
   } catch (error) {
     return next(error);
   }
@@ -851,9 +916,11 @@ module.exports = {
   board,
   liveDepartments,
   leaveQueue,
+  validatePass,
   mapPass,
   generatePassCode,
   passQrValue,
+  publicPass,
   getQueue,
   getNextInQueue,
   callNext,
