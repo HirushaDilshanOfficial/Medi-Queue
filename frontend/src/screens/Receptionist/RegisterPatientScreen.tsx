@@ -937,31 +937,6 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   priority={confirmedPriority || 'normal'}
                   size="large"
                 />
-                {/* ── SMS CONFIRMATION DELIVERED TO PATIENT CARD ── */}
-                <View style={styles.smsDeliveredCard}>
-                  <View style={styles.smsDeliveredHeader}>
-                    <View style={styles.smsDeliveredTitleRow}>
-                      <Ionicons name="chatbubbles" size={15} color="#0D9488" style={{ marginRight: 6 }} />
-                      <Text style={styles.smsDeliveredTitle}>{t('CONFIRMATION SMS SENT TO PATIENT')}</Text>
-                    </View>
-                    <View style={styles.smsSentBadge}>
-                      <View style={styles.smsSentDot} />
-                      <Text style={styles.smsSentBadgeText}>{t('Sent to')} {confirmedBooking.patient.phone}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.smsMessageBox}>
-                    <Text style={styles.smsMessageText}>
-                      {confirmedBooking.smsNotification?.message ||
-                        `[Medi-Queue Hospital] Dear ${confirmedBooking.patient.fullName}, your registration is SUCCESSFUL! Queue Token: ${confirmedBooking.token?.tokenLabel || `OPD-${String(confirmedBooking.token?.tokenNumber || 1).padStart(3, '0')}`}. Doctor: ${confirmedBooking.doctor?.name} (${confirmedBooking.doctor?.room || 'OPD Room'}). Est. Wait: ~${confirmedBooking.estimatedWaitMinutes || 15} mins. Please proceed to waiting area.`}
-                    </Text>
-                  </View>
-                  <View style={styles.smsFooterRow}>
-                    <Ionicons name="checkmark-circle" size={13} color="#059669" style={{ marginRight: 4 }} />
-                    <Text style={styles.smsTimestampText}>
-                      {t('Status: Delivered Successfully to Patient Mobile • Just Now')}
-                    </Text>
-                  </View>
-                </View>
               </View>
 
               {/* Summary Breakdown Card */}
@@ -2382,21 +2357,6 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 <Text style={styles.successSummaryKey}>{t('Doctor:')}</Text>
                 <Text style={styles.successSummaryVal}>{confirmedBooking?.doctor.name}</Text>
               </View>
-            </View>
-
-            {/* SMS Dispatch Confirmation in modal */}
-            <View style={styles.smsAlertCard}>
-              <View style={styles.smsAlertHeader}>
-                <Ionicons name="paper-plane" size={13} color="#0D9488" style={{ marginRight: 6 }} />
-                <Text style={styles.smsAlertTitle}>{t('SMS SENT TO PATIENT')}</Text>
-              </View>
-              <Text style={styles.smsAlertText}>
-                {confirmedBooking?.smsNotification?.message ||
-                  `[Medi-Queue Hospital] Dear ${confirmedBooking?.patient.fullName}, your registration is SUCCESSFUL! Queue Token: ${confirmedBooking?.token?.tokenLabel}. Doctor: ${confirmedBooking?.doctor?.name}.`}
-              </Text>
-              <Text style={styles.smsAlertSub}>
-                ✓ Sent to {confirmedBooking?.patient.phone} • Delivered
-              </Text>
             </View>
 
             <TouchableOpacity
