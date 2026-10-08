@@ -810,6 +810,27 @@ async function attachLatestAppointments(patients) {
     .sort({ date: -1, slotTime: -1, createdAt: -1 })
     .lean();
 
+  // Also query OpdAppointment via linked profiles
+  const profiles = await OpdPatientProfile.find({
+    patient: { $in: pIds },
+  }).select('_id patient').lean();
+
+  const profileMap = new Map();
+  for (const prof of profiles) {
+    profileMap.set(String(prof._id), String(prof.patient));
+  }
+
+  let opdAppts = [];
+  if (profiles.length > 0) {
+    opdAppts = await OpdAppointment.find({
+      profile: { $in: profiles.map((p) => p._id) },
+      status: { $ne: 'cancelled' },
+    })
+      .populate('doctor', 'name specialization department room')
+      .sort({ date: -1, slotTime: -1, createdAt: -1 })
+      .lean();
+  }
+
   const latestByPatient = new Map();
   for (const a of appts) {
     const pidStr = String(a.patient);
@@ -818,14 +839,24 @@ async function attachLatestAppointments(patients) {
     }
   }
 
+  for (const oa of opdAppts) {
+    const pidStr = profileMap.get(String(oa.profile));
+    if (pidStr) {
+      const existing = latestByPatient.get(pidStr);
+      if (!existing || oa.date > existing.date || (oa.date === existing.date && oa.slotTime > existing.slotTime)) {
+        latestByPatient.set(pidStr, oa);
+      }
+    }
+  }
+
   return patients.map((p) => {
     const a = latestByPatient.get(String(p._id));
     return {
       ...p,
-      latestType: a ? (a.type || 'walk_in') : (p.registeredVia === 'app' ? 'pre_booked' : 'walk_in'),
+      latestType: a ? (a.type || 'pre_booked') : (p.registeredVia === 'app' ? 'pre_booked' : 'walk_in'),
       latestVisitDate: a ? a.date : undefined,
       latestVisitSlotTime: a ? a.slotTime : undefined,
-      latestDoctorName: a?.doctor?.name || undefined,
+      latestDoctorName: a?.doctor?.name || a?.doctorName || undefined,
       latestDepartment: a ? a.department : undefined,
       latestTokenNumber: a ? a.tokenNumber : undefined,
       latestStatus: a ? a.status : undefined,
@@ -995,17 +1026,39 @@ const getPatientById = asyncHandler(async (req, res) => {
   }
 
   // Visit history: Appointments newest first with doctor name, department, date, status, notes
-  const appointments = await Appointment.find({ patient: id })
-    .populate('doctor', 'name specialization department room')
-    .sort({ date: -1, slotTime: -1, createdAt: -1 })
-    .lean();
+  const [appointments, profiles] = await Promise.all([
+    Appointment.find({ patient: id })
+      .populate('doctor', 'name specialization department room')
+      .sort({ date: -1, slotTime: -1, createdAt: -1 })
+      .lean(),
+    OpdPatientProfile.find({
+      $or: [
+        { patient: id },
+        ...(patient.nic ? [{ nic: patient.nic }] : []),
+        ...(patient.phone ? [{ phone: patient.phone }] : []),
+      ],
+    }).select('_id').lean(),
+  ]);
 
-  const visitHistory = appointments.map((appt) => {
-    const doctorName =
-      appt.doctor?.name ||
-      (typeof appt.doctor === 'string' ? appt.doctor : null);
+  let opdList = [];
+  if (profiles.length > 0) {
+    opdList = await OpdAppointment.find({
+      profile: { $in: profiles.map((p) => p._id) },
+    })
+      .populate('doctor', 'name specialization department room')
+      .sort({ date: -1, slotTime: -1, createdAt: -1 })
+      .lean();
+  }
 
-    return {
+  const seenKeys = new Set();
+  const allVisits = [];
+
+  for (const appt of appointments) {
+    const key = `${appt.date}_${appt.slotTime}_${String(appt.doctor?._id || appt.doctor)}`;
+    seenKeys.add(key);
+
+    const doctorName = appt.doctor?.name || (typeof appt.doctor === 'string' ? appt.doctor : null);
+    allVisits.push({
       _id: appt._id,
       date: appt.date,
       slotTime: appt.slotTime,
@@ -1025,8 +1078,44 @@ const getPatientById = asyncHandler(async (req, res) => {
       tokenLabel: appt.tokenNumber ? `OPD-${String(appt.tokenNumber).padStart(3, '0')}` : null,
       notes: appt.notes || '',
       createdAt: appt.createdAt,
-    };
+    });
+  }
+
+  for (const appt of opdList) {
+    const key = `${appt.date}_${appt.slotTime}_${String(appt.doctor?._id || appt.doctor)}`;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+
+    const doctorName = appt.doctor?.name || appt.doctorName || 'Doctor';
+    allVisits.push({
+      _id: appt._id,
+      date: appt.date,
+      slotTime: appt.slotTime,
+      doctor: doctorName,
+      doctorName,
+      doctorDetails: appt.doctor && typeof appt.doctor === 'object' ? {
+        _id: appt.doctor._id,
+        name: appt.doctor.name,
+        specialization: appt.doctor.specialization,
+        department: appt.doctor.department,
+        room: appt.doctor.room,
+      } : null,
+      department: appt.department,
+      status: appt.status,
+      type: appt.type || 'pre_booked',
+      tokenNumber: appt.tokenNumber,
+      tokenLabel: appt.tokenNumber ? `OPD-${String(appt.tokenNumber).padStart(3, '0')}` : null,
+      notes: appt.reason || '',
+      createdAt: appt.createdAt,
+    });
+  }
+
+  allVisits.sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return (b.slotTime || '').localeCompare(a.slotTime || '');
   });
+
+  const visitHistory = allVisits;
 
   res.json({
     ...patient,

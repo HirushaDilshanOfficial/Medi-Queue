@@ -50,6 +50,7 @@ const getOrderedQueue = async (date, filters = {}) => {
 
   // Filter by Appointment type (walk_in | pre_booked)
   if (filters.type && filters.type !== 'all') {
+    const OpdAppointment = require('../models/OpdAppointment');
     const appointmentQuery = {
       date: targetDate,
       type: filters.type,
@@ -58,11 +59,15 @@ const getOrderedQueue = async (date, filters = {}) => {
       appointmentQuery.department = filters.department;
     }
 
-    const matchingAppointments = await Appointment.find(appointmentQuery)
-      .select('_id')
-      .lean();
+    const [matchingAppointments, matchingOpd] = await Promise.all([
+      Appointment.find(appointmentQuery).select('_id').lean(),
+      OpdAppointment.find(appointmentQuery).select('_id').lean(),
+    ]);
 
-    const appointmentIds = matchingAppointments.map((a) => a._id);
+    const appointmentIds = [
+      ...matchingAppointments.map((a) => a._id),
+      ...matchingOpd.map((a) => a._id),
+    ];
     query.appointment = { $in: appointmentIds };
   }
 
@@ -104,6 +109,51 @@ const getOrderedQueue = async (date, filters = {}) => {
     .populate('assignedDoctor')
     .populate('appointment')
     .sort({ priority: -1, tokenNumber: 1 });
+
+  // Fallback resolution for any tokens where patient or appointment failed to populate directly
+  const OpdPatientProfile = require('../models/OpdPatientProfile');
+  const OpdAppointment = require('../models/OpdAppointment');
+  for (const token of tokens) {
+    if (!token.patient) {
+      const rawToken = await QueueToken.findById(token._id).lean();
+      if (rawToken && rawToken.patient) {
+        const prof = await OpdPatientProfile.findById(rawToken.patient).lean();
+        if (prof) {
+          token.patient = {
+            _id: prof._id,
+            fullName: prof.fullName,
+            nic: prof.nic || '',
+            phone: prof.phone || '',
+            gender: prof.gender,
+          };
+        }
+      }
+    }
+
+    if (!token.appointment) {
+      const rawToken = await QueueToken.findById(token._id).lean();
+      if (rawToken && rawToken.appointment) {
+        const opd = await OpdAppointment.findById(rawToken.appointment).populate('doctor').lean();
+        if (opd) {
+          token.appointment = {
+            _id: opd._id,
+            type: opd.type || 'pre_booked',
+            status: opd.status,
+            date: opd.date,
+            slotTime: opd.slotTime,
+            department: opd.department,
+            doctor: opd.doctor,
+            tokenNumber: opd.tokenNumber,
+          };
+        }
+      }
+    }
+
+    // Default appointment type if missing
+    if (token.appointment && !token.appointment.type) {
+      token.appointment.type = 'pre_booked';
+    }
+  }
 
   // Guarantee ordering based on priority policy
   tokens.sort((a, b) => {

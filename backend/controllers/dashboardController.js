@@ -22,8 +22,12 @@ const getReceptionDashboard = asyncHandler(async (req, res) => {
   const targetDate = resolveTargetDate(req.query.date);
 
   // ── 2. Gather every figure for the day in parallel ──
+  const OpdAppointment = require('../models/OpdAppointment');
+  const OpdPatientProfile = require('../models/OpdPatientProfile');
+
   const [
-    intakeRows,
+    intakeLegacy,
+    intakeOpd,
     waitingTokens,
     inConsultationTokens,
     attendedDone,
@@ -31,6 +35,10 @@ const getReceptionDashboard = asyncHandler(async (req, res) => {
     doctors,
   ] = await Promise.all([
     Appointment.aggregate([
+      { $match: { date: targetDate, status: { $nin: ['cancelled', 'no_show'] } } },
+      { $group: { _id: '$type', count: { $sum: 1 } } },
+    ]),
+    OpdAppointment.aggregate([
       { $match: { date: targetDate, status: { $nin: ['cancelled', 'no_show'] } } },
       { $group: { _id: '$type', count: { $sum: 1 } } },
     ]),
@@ -46,6 +54,35 @@ const getReceptionDashboard = asyncHandler(async (req, res) => {
     Doctor.countDocuments({ status: 'active' }),
     Doctor.find({ status: { $in: ['active', 'on_break'] } }).lean(),
   ]);
+
+  // Merge intake rows
+  const intakeRows = [...intakeLegacy];
+  for (const opdRow of intakeOpd) {
+    const existing = intakeRows.find((r) => r._id === opdRow._id);
+    if (existing) {
+      existing.count += opdRow.count;
+    } else {
+      intakeRows.push(opdRow);
+    }
+  }
+
+  // Ensure inConsultationTokens have patient details
+  for (const token of inConsultationTokens) {
+    if (!token.patient) {
+      const rawId = token.get ? token.get('patient') : token.patient;
+      if (rawId) {
+        const prof = await OpdPatientProfile.findById(rawId).lean();
+        if (prof) {
+          token.patient = {
+            _id: prof._id,
+            fullName: prof.fullName,
+            nic: prof.nic || '',
+            phone: prof.phone || '',
+          };
+        }
+      }
+    }
+  }
 
   const policy = await Policy.findOne() || { targetWaitTime: 10 };
 

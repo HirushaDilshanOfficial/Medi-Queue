@@ -29,6 +29,10 @@ const app = express();
 
 // Connect to Database
 connectDB();
+const { syncDatabaseRecords } = require('./utils/patientSync');
+mongoose.connection.once('open', () => {
+  syncDatabaseRecords();
+});
 
 // Middleware
 app.use(cors());

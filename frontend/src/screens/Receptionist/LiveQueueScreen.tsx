@@ -62,6 +62,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
   // Doctor Picker Modal state
   const [doctorModalVisible, setDoctorModalVisible] = useState<boolean>(false);
   const [selectedTokenForDoctor, setSelectedTokenForDoctor] = useState<QueueToken | null>(null);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
 
   // Auto-Advance Switch state
   const [autoAdvanceEnabled, setAutoAdvanceEnabled] = useState<boolean>(false);
@@ -141,10 +142,133 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
     pre_booked: preBookedCount,
   };
 
-  // Identify waiting queue tokens
-  const waitingTokens = (data?.queue || []).filter((t) => t.status === 'waiting');
-  const nextInLine: QueueToken | null = waitingTokens.length > 0 ? waitingTokens[0] : null;
-  const upcomingTokens: QueueToken[] = waitingTokens.length > 1 ? waitingTokens.slice(1) : [];
+  const cleanRoomName = (room?: string | null): string => {
+    if (!room) return 'Room 01';
+    const trimmed = room.trim();
+    if (trimmed.toLowerCase().startsWith('room')) {
+      return trimmed;
+    }
+    return `Room ${trimmed}`;
+  };
+
+  const cleanRoomNumber = (room?: string | null): string => {
+    if (!room) return '01';
+    return room.trim().replace(/^room\s*/i, '') || '01';
+  };
+
+  // Identify waiting queue tokens with valid patient records
+  const waitingTokens = (data?.queue || []).filter(
+    (t) => t.status === 'waiting' && Boolean(t.patient)
+  );
+
+  // Group waiting tokens by assigned doctor, separating Walk-in and Pre-booked
+  const doctorGroupsMap = new Map<string, {
+    id: string;
+    name: string;
+    room?: string;
+    department?: string;
+    walkInTokens: QueueToken[];
+    preBookedTokens: QueueToken[];
+    totalCount: number;
+  }>();
+
+  if (data?.doctors && Array.isArray(data.doctors)) {
+    for (const doc of data.doctors) {
+      const docId = String((doc as any)._id || (doc as any).id);
+      if (!doctorGroupsMap.has(docId)) {
+        doctorGroupsMap.set(docId, {
+          id: docId,
+          name: doc.name.startsWith('Dr.') ? doc.name : `Dr. ${doc.name}`,
+          room: doc.room,
+          department: doc.department,
+          walkInTokens: [],
+          preBookedTokens: [],
+          totalCount: 0,
+        });
+      }
+    }
+  }
+
+  const unassignedGroup = {
+    id: 'unassigned',
+    name: t('Unassigned / Triage'),
+    room: 'Triage Desk',
+    department: 'General OPD',
+    walkInTokens: [] as QueueToken[],
+    preBookedTokens: [] as QueueToken[],
+    totalCount: 0,
+  };
+
+  for (const token of waitingTokens) {
+    const docObj =
+      typeof token.assignedDoctor === 'object' && token.assignedDoctor !== null
+        ? token.assignedDoctor
+        : null;
+    const docId = docObj ? String((docObj as any)._id || (docObj as any).id) : null;
+
+    const appointmentObj =
+      typeof token.appointment === 'object' && token.appointment !== null
+        ? token.appointment
+        : null;
+    const isWalkIn =
+      appointmentObj?.type === 'walk_in' || (token as any).type === 'walk_in';
+
+    if (docId && docObj) {
+      if (!doctorGroupsMap.has(docId)) {
+        doctorGroupsMap.set(docId, {
+          id: docId,
+          name: docObj.name
+            ? docObj.name.startsWith('Dr.')
+              ? docObj.name
+              : `Dr. ${docObj.name}`
+            : t('Specialist Doctor'),
+          room: docObj.room,
+          department: docObj.department,
+          walkInTokens: [],
+          preBookedTokens: [],
+          totalCount: 0,
+        });
+      }
+      const group = doctorGroupsMap.get(docId)!;
+      if (isWalkIn) {
+        group.walkInTokens.push(token);
+      } else {
+        group.preBookedTokens.push(token);
+      }
+      group.totalCount += 1;
+    } else {
+      if (isWalkIn) {
+        unassignedGroup.walkInTokens.push(token);
+      } else {
+        unassignedGroup.preBookedTokens.push(token);
+      }
+      unassignedGroup.totalCount += 1;
+    }
+  }
+
+  const allDoctorGroups = Array.from(doctorGroupsMap.values());
+  allDoctorGroups.sort((a, b) => {
+    if (a.totalCount > 0 && b.totalCount === 0) return -1;
+    if (a.totalCount === 0 && b.totalCount > 0) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  if (unassignedGroup.totalCount > 0) {
+    allDoctorGroups.push(unassignedGroup);
+  }
+
+  // Doctor-filtered or overall next in line
+  const selectedGroup = allDoctorGroups.find((g) => g.id === selectedDoctorId);
+  const selectedDoctorTokens = selectedGroup
+    ? [...selectedGroup.walkInTokens, ...selectedGroup.preBookedTokens].sort(
+        (a, b) => (a.tokenNumber || 0) - (b.tokenNumber || 0)
+      )
+    : [];
+
+  const nextInLine: QueueToken | null =
+    selectedDoctorId !== 'all'
+      ? (selectedDoctorTokens.length > 0 ? selectedDoctorTokens[0] : null)
+      : (waitingTokens.length > 0 ? waitingTokens[0] : null);
 
   const handleFilterChange = (selected: LiveQueueFilter) => {
     if (filter !== selected) {
@@ -366,7 +490,8 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         ? doctorObj.name
         : `Dr. ${doctorObj.name}`
       : 'General OPD Doctor';
-    const roomNumber = doctorObj?.room || '01';
+    const roomNumber = cleanRoomNumber(doctorObj?.room);
+    const roomLabel = cleanRoomName(doctorObj?.room);
     const waitSoFar = calculateWaitSoFar(nextInLine);
     const moveBackCount = nextInLine.moveBackCount || 0;
     const isUrgent = nextInLine.priority === 'urgent';
@@ -449,100 +574,48 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
               <Ionicons name="medkit" size={15} color={Colors.primary} style={{ marginRight: 6 }} />
               <Text style={styles.nextDetailLabel}>{t("Doctor:")}</Text>
               <Text style={styles.nextDetailValue} numberOfLines={1}>
-                {doctorName}
+                {doctorName} ({roomLabel})
               </Text>
             </View>
           </View>
 
-          {/* Buttons Stack */}
+          {/* Actions / Status Stack */}
           <View style={styles.nextActionsStack}>
-            {/* Primary Action: Call Next to Room <room> */}
-            <TouchableOpacity
-              style={[
-                styles.primaryCallBtn,
-                (actionLoading || isShiftClosed) && styles.btnDisabled,
-              ]}
-              onPress={() =>
-                handleCallNext(
-                  roomNumber,
-                  doctorObj?._id || doctorObj?.id,
-                  nextInLine.department
-                )
-              }
-              disabled={actionLoading || isShiftClosed}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel={t("Call Next to Room {value0}", { value0: String(roomNumber) })}
-            >
-              <Ionicons
-                name={isShiftClosed ? 'lock-closed' : 'play-forward'}
-                size={18}
-                color={Colors.white}
-                style={styles.btnIcon}
-              />
-              <Text style={styles.primaryCallBtnText}>
-                {isShiftClosed ? t('Shift Closed (Intake Disabled)') : t("Call Next to Room {value0}", { value0: String(roomNumber) })}
-              </Text>
-            </TouchableOpacity>
+            {/* OPD Queue Status: View Only for Receptionist */}
+            <View style={styles.opdMonitorInfoBox}>
+              <View style={styles.opdMonitorPill}>
+                <Ionicons name="eye-outline" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.opdMonitorPillText}>{t('OPD QUEUE MONITOR')}</Text>
+              </View>
+              <Text style={styles.opdMonitorRoomText}>{roomLabel}</Text>
+            </View>
 
-            {/* Secondary Action Row: Mark No-Show & Move Back (n) */}
-            <View style={styles.secondaryActionsRow}>
-              {/* Move Back (n) - Hidden for urgent tokens */}
-              {!isUrgent ? (
-                <TouchableOpacity
-                  style={[
-                    styles.secondaryActionBtn,
-                    styles.moveBackBtn,
-                    actionLoading && styles.btnDisabled,
-                  ]}
-                  onPress={() => handleMoveBack(nextInLine)}
-                  disabled={actionLoading}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("Move back token {value0}", { value0: String(tokenLabel) })}
-                >
-                  <Ionicons
-                    name="swap-vertical"
-                    size={16}
-                    color={Colors.secondary}
-                    style={styles.btnIcon}
-                  />
-                  <Text style={styles.moveBackBtnText}>
-                    {t("Move Back (")}{moveBackCount})
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-
-              {/* Mark No-Show */}
+            {/* Move Back in Line (n) */}
+            {!isUrgent ? (
               <TouchableOpacity
                 style={[
                   styles.secondaryActionBtn,
-                  styles.noShowBtn,
+                  styles.moveBackBtn,
+                  { width: '100%', marginTop: 8 },
                   actionLoading && styles.btnDisabled,
-                  isUrgent && { flex: 1 }, // Take full width if Move Back is hidden
                 ]}
-                onPress={() => handleMarkNoShow(nextInLine, patientName)}
+                onPress={() => handleMoveBack(nextInLine)}
                 disabled={actionLoading}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel={t("Mark token {value0} as no show", { value0: String(tokenLabel) })}
+                accessibilityLabel={t("Move back token {value0}", { value0: String(tokenLabel) })}
               >
                 <Ionicons
-                  name="close-circle-outline"
+                  name="swap-vertical"
                   size={16}
-                  color={Colors.danger}
+                  color={Colors.secondary}
                   style={styles.btnIcon}
                 />
-                <Text style={styles.noShowBtnText}>{t("Mark No-Show")}</Text>
+                <Text style={styles.moveBackBtnText}>
+                  {t("Move Back in Line (")}{moveBackCount})
+                </Text>
               </TouchableOpacity>
-            </View>
-
-            {/* Automatic update helper notice */}
-            <View style={styles.callNextHelperNoticeRow}>
-              <Ionicons name="sync-outline" size={13} color={Colors.textLight} style={{ marginRight: 5 }} />
-              <Text style={styles.callNextHelperNoticeText}>
-                {t("Patient display and doctor queue update automatically.")}</Text>
-            </View>
+            ) : null}
           </View>
         </View>
       </View>
@@ -550,162 +623,351 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
   };
 
   // ─────────────────────────────────────────────────────────
-  // Render "Upcoming Patients" List
+  // Render Individual Patient Queue Card
   // ─────────────────────────────────────────────────────────
-  const renderUpcomingPatientsList = () => {
+  const renderQueueItemCard = (
+    token: QueueToken,
+    posLabel: string,
+    isWalkIn: boolean,
+    groupRoom: string,
+    groupDocId?: string,
+    groupDept?: string
+  ) => {
+    const patientObj =
+      typeof token.patient === 'object' && token.patient !== null
+        ? token.patient
+        : null;
+    const patientName =
+      patientObj?.fullName || (patientObj as any)?.name || `Patient #${token.tokenNumber}`;
+    const isSenior = token.priority === 'senior';
+    const isUrgent = token.priority === 'urgent';
+    const tokenLabel = token.tokenLabel || `OPD-${token.tokenNumber}`;
+    const waitSoFar = calculateWaitSoFar(token);
+    const roomNumber = cleanRoomNumber(groupRoom);
+    const roomLabel = cleanRoomName(groupRoom);
+
     return (
-      <View style={styles.upcomingSection}>
+      <View key={token._id || tokenLabel} style={styles.doctorQueueItemCard}>
+        {/* Top Row: Position + Token Badge + Priority Chip */}
+        <View style={styles.upcomingTopRow}>
+          <View style={styles.upcomingTokenWrap}>
+            <View style={[styles.upcomingPosBadge, isWalkIn ? styles.walkInPosBadge : styles.preBookedPosBadge]}>
+              <Text style={[styles.upcomingPosText, isWalkIn ? styles.walkInPosText : styles.preBookedPosText]}>
+                {posLabel}
+              </Text>
+            </View>
+            <TokenBadge tokenLabel={tokenLabel} priority={token.priority} size="medium" />
+          </View>
+
+          {/* Priority & Type Chips */}
+          <View style={styles.upcomingChipsGroup}>
+            {isUrgent ? (
+              <View style={[styles.priorityBadge, styles.urgentPriorityBadge]}>
+                <Ionicons name="alert-circle" size={11} color="#DC2626" style={{ marginRight: 3 }} />
+                <Text style={styles.urgentPriorityText}>{t('Urgent')}</Text>
+              </View>
+            ) : isSenior ? (
+              <View style={[styles.priorityBadge, styles.seniorPriorityBadge]}>
+                <Ionicons name="ribbon" size={11} color="#D97706" style={{ marginRight: 3 }} />
+                <Text style={styles.seniorPriorityText}>{t('Senior')}</Text>
+              </View>
+            ) : null}
+
+            <View style={[styles.upcomingTypeChip, isWalkIn ? styles.walkInChip : styles.preBookedChip]}>
+              <Ionicons name={isWalkIn ? 'walk' : 'calendar'} size={11} color={isWalkIn ? '#0284C7' : '#0D9488'} />
+              <Text style={[styles.upcomingTypeChipText, { color: isWalkIn ? '#0284C7' : '#0D9488' }]}>
+                {isWalkIn ? t('Walk-in') : t('Pre-booked')}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Patient Details */}
+        <View style={styles.upcomingPatientRow}>
+          <Text style={styles.upcomingPatientName} numberOfLines={1}>
+            {patientName}
+          </Text>
+          <View style={styles.upcomingPatientMeta}>
+            {patientObj?.age ? (
+              <Text style={styles.upcomingMetaText}>{patientObj.age} {t('yrs')}</Text>
+            ) : null}
+            {patientObj?.gender ? (
+              <Text style={styles.upcomingMetaText}>
+                • {t(patientObj.gender.charAt(0).toUpperCase() + patientObj.gender.slice(1))}
+              </Text>
+            ) : null}
+            {patientObj?.nic ? (
+              <Text style={styles.upcomingMetaText}>• {patientObj.nic}</Text>
+            ) : null}
+            <Text style={[styles.upcomingMetaText, { color: '#D97706', fontWeight: '600', marginLeft: 4 }]}>
+              • {t('Wait: {value0}', { value0: waitSoFar })}
+            </Text>
+          </View>
+        </View>
+
+        {/* Action: Change Doctor (Receptionist Re-assignment) */}
+        <View style={styles.cardActionsRow}>
+          <TouchableOpacity
+            style={[styles.cardChangeDocBtn, { flex: 1 }]}
+            onPress={() => openDoctorModal(token)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={t('Change doctor for {value0}', { value0: tokenLabel })}
+          >
+            <Ionicons name="repeat-outline" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
+            <Text style={styles.cardChangeDocBtnText}>{t('Reassign Doctor')}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  // ─────────────────────────────────────────────────────────
+  // Render Doctor-Separated Queue Section (Walk-in vs Pre-booked)
+  // ─────────────────────────────────────────────────────────
+  const renderDoctorSeparatedQueues = () => {
+    const displayedGroups =
+      selectedDoctorId === 'all'
+        ? allDoctorGroups.filter((g) => g.totalCount > 0 || allDoctorGroups.length <= 2)
+        : allDoctorGroups.filter((g) => g.id === selectedDoctorId);
+
+    const totalWaitingPatients = waitingTokens.length;
+
+    return (
+      <View style={styles.doctorQueueSection}>
         <SectionHeader
-          title={t("Upcoming Patients ({value0})", { value0: String(upcomingTokens.length) })}
-          subtitle={t("Queue order following the next-in-line patient")}
+          title={t("Doctor Queue Breakdown")}
+          rightElement={
+            <View style={styles.doctorQueueTotalPill}>
+              <Text style={styles.doctorQueueTotalPillText}>
+                {totalWaitingPatients} {t("Total Waiting")}
+              </Text>
+            </View>
+          }
         />
 
-        {upcomingTokens.length > 0 ? (
-          upcomingTokens.map((token: QueueToken, index: number) => {
-            const patientObj =
-              typeof token.patient === 'object' && token.patient !== null
-                ? token.patient
-                : null;
-            const patientName =
-              patientObj?.fullName || (patientObj as any)?.name || `Patient #${token.tokenNumber}`;
-            const appointmentObj =
-              typeof token.appointment === 'object' && token.appointment !== null
-                ? token.appointment
-                : null;
-            const isWalkIn = appointmentObj?.type === 'walk_in';
-            const doctorObj =
-              typeof token.assignedDoctor === 'object' && token.assignedDoctor !== null
-                ? token.assignedDoctor
-                : null;
-            const doctorName = doctorObj?.name
-              ? doctorObj.name.startsWith('Dr.')
-                ? doctorObj.name
-                : `Dr. ${doctorObj.name}`
-              : null;
-            const roomName = doctorObj?.room ? `Room ${doctorObj.room}` : null;
-            const isSenior = token.priority === 'senior';
-            const isUrgent = token.priority === 'urgent';
-            const tokenLabel = token.tokenLabel || `OPD-${token.tokenNumber}`;
+        {/* ── DOCTOR SELECTOR CHIPS BAR ── */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.doctorFilterRow}
+        >
+          {/* All Doctors Chip */}
+          <TouchableOpacity
+            style={[
+              styles.doctorFilterChip,
+              selectedDoctorId === 'all' && styles.doctorFilterChipActive,
+            ]}
+            onPress={() => setSelectedDoctorId('all')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.doctorFilterText,
+                selectedDoctorId === 'all' && styles.doctorFilterTextActive,
+              ]}
+            >
+              {t("All Doctors")}
+            </Text>
+            <View
+              style={[
+                styles.doctorFilterBadge,
+                selectedDoctorId === 'all' && styles.doctorFilterBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.doctorFilterBadgeText,
+                  selectedDoctorId === 'all' && styles.doctorFilterBadgeTextActive,
+                ]}
+              >
+                {totalWaitingPatients}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Individual Doctor Chips */}
+          {allDoctorGroups.map((group) => {
+            const isSelected = selectedDoctorId === group.id;
+            const shortName = group.name.replace('Dr. ', '');
 
             return (
-              <View key={token._id || `upcoming-${index}`} style={styles.upcomingCard}>
-                {/* Header Row: Token + Name + Chips */}
-                <View style={styles.upcomingTopRow}>
-                  <View style={styles.upcomingTokenWrap}>
-                    <View style={styles.upcomingPosBadge}>
-                      <Text style={styles.upcomingPosText}>#{index + 2}</Text>
-                    </View>
-                    <TokenBadge
-                      tokenLabel={tokenLabel}
-                      priority={token.priority}
-                      size="medium"
-                    />
-                  </View>
-
-                  {/* Priority & Type Chips */}
-                  <View style={styles.upcomingChipsGroup}>
-                    {/* Senior / Urgent Chip */}
-                    {isUrgent ? (
-                      <View style={[styles.priorityBadge, styles.urgentPriorityBadge]}>
-                        <Ionicons name="alert-circle" size={11} color="#DC2626" style={{ marginRight: 3 }} />
-                        <Text style={styles.urgentPriorityText}>{t("Urgent")}</Text>
-                      </View>
-                    ) : isSenior ? (
-                      <View style={[styles.priorityBadge, styles.seniorPriorityBadge]}>
-                        <Ionicons name="ribbon" size={11} color="#D97706" style={{ marginRight: 3 }} />
-                        <Text style={styles.seniorPriorityText}>{t("Senior")}</Text>
-                      </View>
-                    ) : null}
-
-                    {/* Walk-in / Pre-booked Chip */}
-                    <View
-                      style={[
-                        styles.upcomingTypeChip,
-                        isWalkIn ? styles.walkInChip : styles.preBookedChip,
-                      ]}
-                    >
-                      <Ionicons
-                        name={isWalkIn ? 'walk' : 'calendar'}
-                        size={11}
-                        color={isWalkIn ? '#0284C7' : '#0D9488'}
-                      />
-                      <Text
-                        style={[
-                          styles.upcomingTypeChipText,
-                          { color: isWalkIn ? '#0284C7' : '#0D9488' },
-                        ]}
-                      >
-                        {isWalkIn ? t('Walk-in') : t('Pre-booked')}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Patient Name & Details */}
-                <View style={styles.upcomingPatientRow}>
-                  <Text style={styles.upcomingPatientName} numberOfLines={1}>
-                    {patientName}
+              <TouchableOpacity
+                key={group.id}
+                style={[
+                  styles.doctorFilterChip,
+                  isSelected && styles.doctorFilterChipActive,
+                ]}
+                onPress={() => setSelectedDoctorId(group.id)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.doctorFilterText,
+                    isSelected && styles.doctorFilterTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  Dr. {shortName}
+                </Text>
+                <View
+                  style={[
+                    styles.doctorFilterBadge,
+                    isSelected && styles.doctorFilterBadgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.doctorFilterBadgeText,
+                      isSelected && styles.doctorFilterBadgeTextActive,
+                    ]}
+                  >
+                    {group.totalCount}
                   </Text>
-                  <View style={styles.upcomingPatientMeta}>
-                    {patientObj?.age ? (
-                      <Text style={styles.upcomingMetaText}>{patientObj.age} {t("yrs")}</Text>
-                    ) : null}
-                    {patientObj?.gender ? (
-                      <Text style={styles.upcomingMetaText}>
-                        • {t(patientObj.gender.charAt(0).toUpperCase() + patientObj.gender.slice(1))}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* ── DOCTOR QUEUE CARDS LIST ── */}
+        {displayedGroups.length > 0 ? (
+          displayedGroups.map((group) => {
+            const roomLabel = cleanRoomName(group.room);
+            const roomNumber = cleanRoomNumber(group.room);
+            const doctorInitials =
+              group.name
+                .replace('Dr.', '')
+                .trim()
+                .split(' ')
+                .map((n) => n[0])
+                .join('')
+                .slice(0, 2) || 'DR';
+
+            const showWalkIn = filter === 'all' || filter === 'walk_in';
+            const showPreBooked = filter === 'all' || filter === 'pre_booked';
+
+            return (
+              <View key={group.id} style={styles.doctorSectionCard}>
+                {/* 1. Doctor Header Bar */}
+                <View style={styles.doctorHeaderBar}>
+                  <View style={styles.doctorHeaderLeft}>
+                    <View style={styles.doctorAvatarBox}>
+                      <Text style={styles.doctorAvatarText}>{doctorInitials}</Text>
+                    </View>
+                    <View style={{ marginLeft: 10, flex: 1 }}>
+                      <Text style={styles.doctorHeaderName} numberOfLines={1}>
+                        {group.name}
                       </Text>
-                    ) : null}
-                    {patientObj?.nic ? (
-                      <Text style={styles.upcomingMetaText}>• {patientObj.nic}</Text>
-                    ) : null}
+                      <View style={styles.doctorHeaderSubRow}>
+                        <Text style={styles.doctorRoomBadgeText}>{roomLabel}</Text>
+                        <Text style={styles.doctorDeptText} numberOfLines={1}>
+                          {' '}• {t(group.department || 'General OPD')}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.doctorHeaderRight}>
+                    <View style={styles.doctorTotalBadge}>
+                      <Text style={styles.doctorTotalBadgeText}>
+                        {group.totalCount} {t('Waiting')}
+                      </Text>
+                    </View>
+
                   </View>
                 </View>
 
-                {/* Doctor Assignment Row */}
-                <View style={styles.upcomingDoctorRow}>
-                  {doctorName ? (
-                    // Doctor is assigned: show name, room, and "Change" action
-                    <View style={styles.doctorAssignedWrap}>
-                      <View style={styles.doctorInfoCol}>
-                        <View style={styles.doctorIconRow}>
-                          <Ionicons name="medkit" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
-                          <Text style={styles.doctorNameText} numberOfLines={1}>
-                            {doctorName}
-                          </Text>
-                          {roomName ? (
-                            <Text style={styles.doctorRoomText}>({roomName})</Text>
-                          ) : null}
+                {/* 2. Doctor Breakdown Count Sub-bar */}
+                <View style={styles.doctorBreakdownBar}>
+                  <View style={[styles.breakdownPill, styles.walkInBreakdownPill]}>
+                    <Ionicons name="walk" size={13} color="#0284C7" style={{ marginRight: 4 }} />
+                    <Text style={styles.walkInBreakdownText}>
+                      {t('Walk-in:')} <Text style={{ fontWeight: '800' }}>{group.walkInTokens.length}</Text>
+                    </Text>
+                  </View>
+
+                  <View style={[styles.breakdownPill, styles.preBookedBreakdownPill]}>
+                    <Ionicons name="calendar" size={13} color="#0D9488" style={{ marginRight: 4 }} />
+                    <Text style={styles.preBookedBreakdownText}>
+                      {t('Pre-booked:')} <Text style={{ fontWeight: '800' }}>{group.preBookedTokens.length}</Text>
+                    </Text>
+                  </View>
+                </View>
+
+                {/* 3. SEPARATED QUEUE TRACKS */}
+                <View style={styles.doctorQueuesContainer}>
+                  {/* ── TRACK 1: WALK-IN QUEUE ── */}
+                  {showWalkIn && (
+                    <View style={styles.queueTrackWrap}>
+                      <View style={[styles.queueTrackHeader, styles.walkInTrackHeader]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name="walk" size={15} color="#0284C7" style={{ marginRight: 6 }} />
+                          <Text style={styles.walkInTrackTitle}>{t('Walk-in Patients Queue')}</Text>
+                        </View>
+                        <View style={styles.trackCountBadgeWalkIn}>
+                          <Text style={styles.trackCountBadgeWalkInText}>{group.walkInTokens.length}</Text>
                         </View>
                       </View>
 
-                      <TouchableOpacity
-                        style={styles.changeDoctorBtn}
-                        onPress={() => openDoctorModal(token)}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={t("Change assigned doctor for {value0}", { value0: String(tokenLabel) })}
-                      >
-                        <Text style={styles.changeDoctorBtnText}>{t("Change")}</Text>
-                      </TouchableOpacity>
+                      {group.walkInTokens.length > 0 ? (
+                        group.walkInTokens.map((token, idx) =>
+                          renderQueueItemCard(
+                            token,
+                            `#${idx + 1} Walk-in`,
+                            true,
+                            group.room || '',
+                            group.id !== 'unassigned' ? group.id : undefined,
+                            group.department
+                          )
+                        )
+                      ) : (
+                        <View style={styles.emptyTrackBox}>
+                          <Ionicons name="person-outline" size={16} color="#94A3B8" style={{ marginRight: 6 }} />
+                          <Text style={styles.emptyTrackText}>
+                            {t('No walk-in patients waiting for this doctor')}
+                          </Text>
+                        </View>
+                      )}
                     </View>
-                  ) : (
-                    // Doctor is unassigned: show "Assign Doctor" button
-                    <View style={styles.doctorUnassignedWrap}>
-                      <View style={styles.unassignedLabelWrap}>
-                        <Ionicons name="alert-circle-outline" size={14} color="#D97706" style={{ marginRight: 4 }} />
-                        <Text style={styles.unassignedLabelText}>{t("Doctor unassigned")}</Text>
+                  )}
+
+                  {/* ── TRACK 2: PRE-BOOKED QUEUE ── */}
+                  {showPreBooked && (
+                    <View style={styles.queueTrackWrap}>
+                      <View style={[styles.queueTrackHeader, styles.preBookedTrackHeader]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name="calendar" size={15} color="#0D9488" style={{ marginRight: 6 }} />
+                          <Text style={styles.preBookedTrackTitle}>
+                            {t('Pre-booked Appointments Queue')}
+                          </Text>
+                        </View>
+                        <View style={styles.trackCountBadgePreBooked}>
+                          <Text style={styles.trackCountBadgePreBookedText}>
+                            {group.preBookedTokens.length}
+                          </Text>
+                        </View>
                       </View>
 
-                      <TouchableOpacity
-                        style={styles.assignDoctorBtn}
-                        onPress={() => openDoctorModal(token)}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={t("Assign doctor to {value0}", { value0: String(tokenLabel) })}
-                      >
-                        <Ionicons name="person-add" size={12} color={Colors.white} style={{ marginRight: 4 }} />
-                        <Text style={styles.assignDoctorBtnText}>{t("Assign Doctor")}</Text>
-                      </TouchableOpacity>
+                      {group.preBookedTokens.length > 0 ? (
+                        group.preBookedTokens.map((token, idx) =>
+                          renderQueueItemCard(
+                            token,
+                            `#${idx + 1} Pre-booked`,
+                            false,
+                            group.room || '',
+                            group.id !== 'unassigned' ? group.id : undefined,
+                            group.department
+                          )
+                        )
+                      ) : (
+                        <View style={styles.emptyTrackBox}>
+                          <Ionicons name="calendar-outline" size={16} color="#94A3B8" style={{ marginRight: 6 }} />
+                          <Text style={styles.emptyTrackText}>
+                            {t('No pre-booked appointments waiting for this doctor')}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   )}
                 </View>
@@ -715,13 +977,11 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         ) : (
           <View style={styles.upcomingEmptyCard}>
             <View style={styles.upcomingEmptyIconBox}>
-              <Ionicons name="people-outline" size={24} color={Colors.textLight} />
+              <Ionicons name="checkmark-done-circle-outline" size={28} color="#0D9488" />
             </View>
-            <Text style={styles.upcomingEmptyTitle}>{t("No upcoming patients")}</Text>
+            <Text style={styles.upcomingEmptyTitle}>{t('All doctor queues are clear')}</Text>
             <Text style={styles.upcomingEmptySubtitle}>
-              {nextInLine
-                ? t('There are no additional waiting patients queued after the next in line.')
-                : t('No patients are currently waiting in this queue.')}
+              {t('No patients are currently waiting for the selected doctor or filter.')}
             </Text>
           </View>
         )}
@@ -1056,9 +1316,9 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
         {!loading || data ? renderNextInLineCard() : null}
 
         {/* ======================================================== */}
-        {/* 5. UPCOMING PATIENTS LIST                                 */}
+        {/* 5. DOCTOR-SEPARATED QUEUES (WALK-IN & PRE-BOOKED)         */}
         {/* ======================================================== */}
-        {!loading || data ? renderUpcomingPatientsList() : null}
+        {!loading || data ? renderDoctorSeparatedQueues() : null}
 
         {/* ======================================================== */}
         {/* 6. LOADING / ERROR STATES                                 */}
@@ -1083,16 +1343,6 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
           </View>
         ) : null}
 
-        {/* ======================================================== */}
-        {/* 7. TIP BANNER                                             */}
-        {/* ======================================================== */}
-        <View style={styles.tipBanner}>
-          <View style={styles.tipIconWrap}>
-            <Ionicons name="information-circle" size={20} color={Colors.primary} />
-          </View>
-          <Text style={styles.tipText}>
-            {t("Pressing Call Next alerts the patient display and doctor queue automatically.")}</Text>
-        </View>
 
         {/* Bottom padding for tab bar / safe layout */}
         <View style={styles.bottomSpacer} />
@@ -1653,6 +1903,369 @@ const styles = StyleSheet.create({
   },
 
   // ─────────────────────────────────────────────────────────
+  // Doctor Separated Queues & Filter Styles
+  // ─────────────────────────────────────────────────────────
+  doctorQueueSection: {
+    marginBottom: 20,
+  },
+  doctorQueueTotalPill: {
+    backgroundColor: Colors.tint,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  doctorQueueTotalPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  doctorFilterRow: {
+    paddingVertical: 10,
+    gap: 8,
+  },
+  doctorFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.cardBackground,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    marginRight: 8,
+  },
+  doctorFilterChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  doctorFilterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textDark,
+  },
+  doctorFilterTextActive: {
+    color: Colors.white,
+    fontWeight: '700',
+  },
+  doctorFilterBadge: {
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: Colors.background,
+  },
+  doctorFilterBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  doctorFilterBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textMedium,
+  },
+  doctorFilterBadgeTextActive: {
+    color: Colors.white,
+  },
+  doctorSectionCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  doctorHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  doctorHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  doctorAvatarBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doctorAvatarText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  doctorHeaderName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  doctorHeaderSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  doctorRoomBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.secondary,
+  },
+  doctorDeptText: {
+    fontSize: 12,
+    color: Colors.textMedium,
+  },
+  doctorHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  doctorTotalBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  doctorTotalBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  doctorQuickCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minHeight: 36,
+  },
+  doctorQuickCallBtnText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  doctorBreakdownBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+    gap: 10,
+  },
+  breakdownPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  walkInBreakdownPill: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+  },
+  walkInBreakdownText: {
+    fontSize: 12,
+    color: '#0369A1',
+  },
+  preBookedBreakdownPill: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#99F6E4',
+  },
+  preBookedBreakdownText: {
+    fontSize: 12,
+    color: '#0F766E',
+  },
+  doctorQueuesContainer: {
+    padding: 12,
+    gap: 14,
+  },
+  queueTrackWrap: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  queueTrackHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+  },
+  walkInTrackHeader: {
+    backgroundColor: '#F0F9FF',
+    borderBottomColor: '#BAE6FD',
+  },
+  preBookedTrackHeader: {
+    backgroundColor: '#F0FDFA',
+    borderBottomColor: '#99F6E4',
+  },
+  walkInTrackTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0369A1',
+  },
+  trackCountBadgeWalkIn: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  trackCountBadgeWalkInText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0369A1',
+  },
+  preBookedTrackTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  trackCountBadgePreBooked: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: '#CCFBF1',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+  },
+  trackCountBadgePreBookedText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  queueTrackTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  queueTrackCountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  queueTrackCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.textDark,
+  },
+  emptyTrackBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+  },
+  emptyTrackText: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontStyle: 'italic',
+  },
+  doctorQueueItemCard: {
+    backgroundColor: Colors.white,
+    marginHorizontal: 8,
+    marginVertical: 6,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  walkInPosBadge: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#BAE6FD',
+  },
+  walkInPosText: {
+    color: '#0369A1',
+  },
+  preBookedPosBadge: {
+    backgroundColor: '#CCFBF1',
+    borderColor: '#99F6E4',
+  },
+  preBookedPosText: {
+    color: '#0F766E',
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+  },
+  cardCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minHeight: 36,
+  },
+  cardCallBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  cardChangeDocBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.tint,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minHeight: 36,
+  },
+  cardChangeDocBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  cardNoShowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minHeight: 36,
+  },
+  cardNoShowBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.danger,
+  },
+
+  // ─────────────────────────────────────────────────────────
   // Upcoming Patients Section Styles
   // ─────────────────────────────────────────────────────────
   upcomingSection: {
@@ -1864,30 +2477,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Tip Banner Styles
-  // ─────────────────────────────────────────────────────────
-  tipBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  tipIconWrap: {
-    marginRight: 10,
-  },
-  tipText: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.textMedium,
-    lineHeight: 17,
-    fontWeight: '500',
-  },
 
   // ─────────────────────────────────────────────────────────
   // Shared Chip & State Handling
@@ -1940,6 +2529,42 @@ const styles = StyleSheet.create({
     color: Colors.textMedium,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  opdMonitorInfoBox: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#99F6E4',
+    padding: 10,
+    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  opdMonitorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  opdMonitorPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F766E',
+    letterSpacing: 0.3,
+  },
+  opdMonitorRoomText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F766E',
+    backgroundColor: Colors.white,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
   },
 });
 
