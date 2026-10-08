@@ -18,10 +18,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { savePrescriptionApi } from '../../services/prescriptionService';
+import { fetchDoctorDashboard } from '../../services/doctorService';
 import {
   PatientRecord,
   PatientStatus,
   ALL_DUMMY_PATIENTS,
+  fetchPatientRecordsApi,
+  fetchDoctorRecordsResponseApi,
   filterPatientsList,
   getBPStatus,
   getHRStatus,
@@ -33,6 +36,7 @@ import {
   checkMedicationAllergy,
   MedicationItem,
   VitalHistoryReading,
+  savePatientVitalsApi,
 } from '../../services/patientRecordsService';
 
 type ActiveVitalType = 'bp' | 'hr' | 'temp' | 'spo2' | 'weight' | 'bmi';
@@ -128,6 +132,11 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     }
     return ALL_DUMMY_PATIENTS[0].id;
   });
+  const [doctorInfo, setDoctorInfo] = useState({
+    name: 'Dr. Palitha Perera',
+    room: 'Room 101 online',
+    initials: 'PP',
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<PatientStatus>('All');
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('records');
@@ -139,6 +148,93 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
 
   // Scroll reference for smooth scrolling to top on patient selection
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Fetch real patient records from backend on mount or search
+  useEffect(() => {
+    let isMounted = true;
+
+    // Fetch doctor dashboard in parallel to know real doctor details
+    fetchDoctorDashboard().then((dash) => {
+      if (!isMounted) return;
+      if (dash?.doctor) {
+        const dName = dash.doctor.name || 'Dr. Palitha Perera';
+        const dRoom = dash.doctor.room ? `${dash.doctor.room} online` : 'Room 101 online';
+        const clean = dName.replace(/^Dr\.\s*/i, '').trim();
+        const parts = clean.split(' ');
+        const initials = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : clean.slice(0, 2).toUpperCase();
+        setDoctorInfo({
+          name: dName,
+          room: dRoom,
+          initials: initials || 'DR',
+        });
+      }
+    }).catch(() => {});
+
+    fetchDoctorRecordsResponseApi(searchQuery).then(async (response) => {
+      if (isMounted && response?.records && response.records.length > 0) {
+        const records = response.records;
+        setPatients(records);
+
+        if (response.doctor) {
+          const dName = response.doctor.name || 'Dr. Palitha Perera';
+          const dRoom = response.doctor.room ? `${response.doctor.room} online` : 'Room 101 online';
+          const clean = dName.replace(/^Dr\.\s*/i, '').trim();
+          const parts = clean.split(' ');
+          const initials = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : clean.slice(0, 2).toUpperCase();
+          setDoctorInfo({
+            name: dName,
+            room: dRoom,
+            initials: initials || 'DR',
+          });
+        }
+
+        const pToken = params?.tokenNumber ? Number(params.tokenNumber) : null;
+        const pName = params?.patientName ? params.patientName.trim().toLowerCase() : null;
+        const pId = params?.patientId;
+
+        let matched = records.find(
+          (p) =>
+            (pId && p.id === pId) ||
+            (pName && (p.name.toLowerCase().includes(pName) || p.shortName.toLowerCase().includes(pName))) ||
+            (pToken && p.tokenNumber === pToken)
+        );
+
+        if (!matched) {
+          try {
+            const storedName = await AsyncStorage.getItem('active_record_patient_name');
+            const storedToken = await AsyncStorage.getItem('active_record_patient_token');
+            if (storedName) {
+              matched = records.find((p) => p.name.toLowerCase().includes(storedName.trim().toLowerCase()));
+            }
+            if (!matched && storedToken) {
+              matched = records.find((p) => p.tokenNumber === Number(storedToken));
+            }
+          } catch (e) {}
+        }
+
+        // If not matched by query or storage, prioritize the patient currently in consultation
+        if (!matched) {
+          matched = records.find((p) => p.status === 'In consultation');
+        }
+
+        if (matched) {
+          setCurrentPatientId(matched.id);
+        } else if (response.currentPatientId) {
+          const cMatch = records.find((p) => p.id === response.currentPatientId);
+          if (cMatch) {
+            setCurrentPatientId(cMatch.id);
+          } else if (records[0]) {
+            setCurrentPatientId(records[0].id);
+          }
+        } else if (records[0]) {
+          setCurrentPatientId(records[0].id);
+        }
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [searchQuery]);
 
   // Sync when route parameters change
   useEffect(() => {
@@ -296,7 +392,27 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
       await AsyncStorage.removeItem('active_record_patient_name');
     } catch (e) {}
 
-    // Find the primary in-consultation patient (default #029 Aurelia Sisca)
+    try {
+      const dash = await fetchDoctorDashboard();
+      if (dash?.currentPatient) {
+        const cp = dash.currentPatient;
+        const matched = patients.find(
+          (p) =>
+            (cp.patientId && p.id === cp.patientId) ||
+            p.tokenNumber === cp.tokenNumber ||
+            p.name.toLowerCase().includes(cp.patientName.toLowerCase())
+        );
+        if (matched) {
+          setCurrentPatientId(matched.id);
+          setSearchQuery('');
+          showToast(`Refreshed: ${matched.name} (${matched.tokenFormatted})`);
+          scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+          return;
+        }
+      }
+    } catch (e) {}
+
+    // Find the primary in-consultation patient
     const inConsultationPatient =
       patients.find((p) => p.status === 'In consultation') || patients[0];
 
@@ -484,21 +600,36 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   const weightInputRef = useRef<TextInput>(null);
   const heightInputRef = useRef<TextInput>(null);
 
+  const hasVitals = Boolean(
+    currentPatient?.hasVitals ||
+    (currentPatient?.vitals && currentPatient.vitals.systolic > 0 && currentPatient.vitals.bloodPressure !== '--/--')
+  );
+
   const handleOpenEditVitals = () => {
-    setFormSystolic(String(currentPatient.vitals.systolic));
-    setFormDiastolic(String(currentPatient.vitals.diastolic));
-    setFormHeartRate(String(currentPatient.vitals.heartRateNum));
-    const tempC = formatTempCelsius(currentPatient.vitals.tempNum).display;
-    setFormBodyTemp(tempC);
-    setFormSpO2(String(currentPatient.vitals.spO2Num));
-    const rawWeight = currentPatient.vitals.weightNum
-      ? String(currentPatient.vitals.weightNum)
-      : (currentPatient.vitals.weight || '65').replace(/[^0-9.]/g, '');
-    const rawHeight = currentPatient.vitals.heightNum
-      ? String(currentPatient.vitals.heightNum)
-      : (currentPatient.vitals.height || '170').replace(/[^0-9.]/g, '');
-    setFormWeight(rawWeight);
-    setFormHeight(rawHeight);
+    if (hasVitals && currentPatient.vitals.systolic > 0) {
+      setFormSystolic(String(currentPatient.vitals.systolic));
+      setFormDiastolic(String(currentPatient.vitals.diastolic));
+      setFormHeartRate(String(currentPatient.vitals.heartRateNum));
+      const tempC = formatTempCelsius(currentPatient.vitals.tempNum).display;
+      setFormBodyTemp(tempC);
+      setFormSpO2(String(currentPatient.vitals.spO2Num));
+      const rawWeight = currentPatient.vitals.weightNum
+        ? String(currentPatient.vitals.weightNum)
+        : (currentPatient.vitals.weight || '').replace(/[^0-9.]/g, '');
+      const rawHeight = currentPatient.vitals.heightNum
+        ? String(currentPatient.vitals.heightNum)
+        : (currentPatient.vitals.height || '').replace(/[^0-9.]/g, '');
+      setFormWeight(rawWeight);
+      setFormHeight(rawHeight);
+    } else {
+      setFormSystolic('');
+      setFormDiastolic('');
+      setFormHeartRate('');
+      setFormBodyTemp('');
+      setFormSpO2('');
+      setFormWeight('');
+      setFormHeight('');
+    }
     setFieldErrors({});
     setIsEditVitalsOpen(true);
     setTimeout(() => {
@@ -598,8 +729,9 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
       prevList.map((p) => {
         if (p.id === currentPatient.id) {
           // Keep last 5 history readings
+          const historyArr = p.vitalsHistory || [];
           const updatedHistory = [
-            ...p.vitalsHistory.map((item) =>
+            ...historyArr.map((item) =>
               item.dateLabel === 'Now' ? { ...item, dateLabel: 'Prev' } : item
             ),
             newHistoryItem,
@@ -607,8 +739,10 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
 
           return {
             ...p,
+            hasVitals: true,
             vitals: {
               ...p.vitals,
+              hasVitals: true,
               triageTime: 'Triage: Just now',
               bloodPressure: `${sys}/${dia}`,
               heartRate: String(hr),
@@ -634,6 +768,17 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
         return p;
       })
     );
+
+    savePatientVitalsApi({
+      patientId: currentPatient.id,
+      tokenNumber: currentPatient.tokenNumber,
+      bloodPressure: `${sys}/${dia}`,
+      heartRate: `${hr} bpm`,
+      temperature: temp,
+      spO2: spo2,
+      weight: finalWeight,
+      height: finalHeight,
+    });
 
     setIsEditVitalsOpen(false);
     showToast(t("Vitals updated"));
@@ -743,9 +888,9 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
 
   // Trend summary helper
   const trendInfo = useMemo(() => {
-    const history = currentPatient.vitalsHistory;
+    const history = currentPatient?.vitalsHistory || [];
     const count = history.length;
-    const latest = history[count - 1];
+    const latest = count > 0 ? history[count - 1] : { systolic: 120, diastolic: 80, heartRate: 74, bodyTemp: 36.8, spO2: 99, weight: currentWeightNum };
     const prev = count > 1 ? history[count - 2] : null;
 
     if (activeTrendVital === 'bp') {
@@ -882,6 +1027,15 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                ───────────────────────────────────────────────────────── */}
             <View style={styles.headerRow}>
               <View style={styles.headerLeft}>
+                <TouchableOpacity
+                  onPress={() => router.push('/(doctor)/dashboard' as any)}
+                  style={styles.homeBackBtn}
+                  activeOpacity={0.7}
+                  accessibilityLabel={t("Back to Home")}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="home" size={18} color="#0D9488" />
+                </TouchableOpacity>
                 <View style={styles.avatarWrapper}>
                   <View
                     style={[
@@ -889,7 +1043,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { backgroundColor: theme.primaryDeep },
                     ]}
                   >
-                    <Text style={styles.avatarInitials}>EE</Text>
+                    <Text style={styles.avatarInitials}>{doctorInfo.initials}</Text>
                   </View>
                   <View style={styles.onlineDot} />
                 </View>
@@ -899,13 +1053,15 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     style={[styles.doctorName, { color: theme.textDark }]}
                     numberOfLines={1}
                   >
-                    Dr. Emilia Emelson
+                    {doctorInfo.name}
                   </Text>
                   <View style={styles.doctorSubRow}>
                     <View style={styles.onlineMiniDot} />
                     <Text
                       style={[styles.doctorSubtitle, { color: theme.accent }]}
-                    >{t("Room 3B online")}</Text>
+                    >
+                      {doctorInfo.room}
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -1365,7 +1521,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   <Text
                     style={[styles.triageTimeLabel, { color: theme.textMuted }]}
                   >
-                    {currentPatient.vitals.triageTime}
+                    {hasVitals ? (currentPatient.vitals.triageTime || 'Triage: Today') : 'Triage: Not recorded'}
                   </Text>
                 </View>
 
@@ -1381,7 +1537,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   onPress={handleOpenEditVitals}
                 >
                   <Ionicons
-                    name="pencil"
+                    name={hasVitals ? "pencil" : "add"}
                     size={12}
                     color={theme.primaryDeep}
                     style={{ marginRight: 4 }}
@@ -1391,12 +1547,100 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       styles.editVitalsText,
                       { color: theme.primaryDeep },
                     ]}
-                  >{t("Edit")}</Text>
+                  >
+                    {hasVitals ? t('Edit') : t('Record')}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
-              {/* g. Grid of Vital Cards (6 cards: BP, HR, Temp, SpO2, Weight, BMI - Tappable for Trend) */}
-              <View style={styles.vitalsGrid}>
+              {!hasVitals ? (
+                <View
+                  style={[
+                    styles.emptySubState,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                      paddingVertical: 26,
+                      paddingHorizontal: 18,
+                      alignItems: 'center',
+                      borderRadius: 14,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.vitalIconCircle,
+                      {
+                        backgroundColor: isDark ? '#1d2f33' : '#e6f7f9',
+                        width: 46,
+                        height: 46,
+                        borderRadius: 23,
+                        marginBottom: 10,
+                      },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="heart-pulse"
+                      size={24}
+                      color={theme.accent}
+                    />
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: 14.5,
+                      fontWeight: '700',
+                      color: theme.textDark,
+                      marginBottom: 4,
+                      textAlign: 'center',
+                    }}
+                  >
+                    No triage vitals recorded
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: theme.textMuted,
+                      textAlign: 'center',
+                      marginBottom: 15,
+                      lineHeight: 18,
+                    }}
+                  >
+                    Blood pressure, heart rate, or temperature have not been recorded for this patient yet.
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.editVitalsPill,
+                      {
+                        backgroundColor: theme.tint,
+                        borderColor: theme.cardBorder,
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
+                        borderRadius: 18,
+                      },
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={handleOpenEditVitals}
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={16}
+                      color={theme.primaryDeep}
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text
+                      style={[
+                        styles.editVitalsText,
+                        { color: theme.primaryDeep, fontWeight: '700', fontSize: 13 },
+                      ]}
+                    >
+                      Record Triage Vitals
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  {/* g. Grid of Vital Cards (6 cards: BP, HR, Temp, SpO2, Weight, BMI - Tappable for Trend) */}
+                  <View style={styles.vitalsGrid}>
                 {/* 1. Blood Pressure */}
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -1649,6 +1893,8 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   {t("Tap a card to see its trend.")}
                 </Text>
               </View>
+            </>
+          )}
 
               {/* i. Diagnostic Imaging Section */}
               <View style={styles.sectionBlock}>
@@ -3044,6 +3290,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 14,
+  },
+  homeBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
   headerLeft: {
     flexDirection: 'row',

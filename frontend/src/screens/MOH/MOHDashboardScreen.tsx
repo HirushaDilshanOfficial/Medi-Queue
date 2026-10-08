@@ -13,7 +13,7 @@ import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchMohDashboard } from '../../services/mohService';
-
+import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 // MOH Dashboard - Expo Router version matching the premium UI design
 export default function MOHDashboardScreen() {
   const { t } = useLanguage();
@@ -157,15 +157,7 @@ export default function MOHDashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={Colors.textLight} style={{ marginRight: 10 }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={t("Search hospitals, doctors or clinics...")}
-              placeholderTextColor={Colors.textLight}
-            />
-          </View>
+
 
           {/* Alert / Notice Banner */}
           <View style={styles.noticeBanner}>
@@ -202,7 +194,11 @@ export default function MOHDashboardScreen() {
 
           <View style={styles.clinicsGrid}>
             {hospitalClinics.map((clinic) => (
-              <TouchableOpacity key={clinic.id} style={styles.clinicCard}>
+              <TouchableOpacity 
+                key={clinic.id} 
+                style={styles.clinicCard}
+                onPress={() => router.push({ pathname: '/(moh)/manage-hospitals', params: { clinicFilter: clinic.name } })}
+              >
                 <View style={styles.clinicIconContainer}>
                   {clinic.icon}
                 </View>
@@ -214,26 +210,7 @@ export default function MOHDashboardScreen() {
         </View>
       </ScrollView>
 
-      {/* ---- BOTTOM NAVIGATION BAR ---- */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/(moh)/dashboard')}>
-          <Ionicons name="home" size={24} color={Colors.primaryDark} />
-          <Text style={[styles.navLabel, styles.navLabelActive]}>{t("Home")}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/manage-hospitals')}>
-          <Ionicons name="business-outline" size={24} color={Colors.textLight} />
-          <Text style={styles.navLabel}>{t("Hospitals")}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/manage-staff')}>
-          <Ionicons name="id-card-outline" size={24} color={Colors.textLight} />
-          <Text style={styles.navLabel}>{t("Staff")}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/(moh)/profile')}>
-          <Ionicons name="person-outline" size={24} color={Colors.textLight} />
-          <Text style={styles.navLabel}>{t("Profile")}</Text>
-        </TouchableOpacity>
-      </View>
-
+      <MOHBottomNav activeRoute="dashboard" />
         </View>
       </View>
     </View>

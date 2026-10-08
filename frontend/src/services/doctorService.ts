@@ -1,4 +1,5 @@
 import { API_URL } from '../config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface PatientQueueItem {
   tokenNumber: number;
@@ -50,6 +51,10 @@ export interface DoctorDashboardData {
     fileRecord?: string;
     checkedInTime?: string;
     calledAtTime?: string;
+    allergy?: string | null;
+    allergies?: any[];
+    patientId?: string;
+    appointmentId?: string;
   } | null;
   upcomingQueue: PatientQueueItem[];
 }
@@ -177,20 +182,46 @@ const fallbackDoctorData: DoctorDashboardData = {
   ],
 };
 
+const getDoctorAuthContext = async (doctorId?: string) => {
+  let resolvedDoctorId = doctorId;
+  let token: string | null = null;
+  try {
+    const userStr = await AsyncStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      if (!resolvedDoctorId && (user.doctorId || (user.role && user.role.toLowerCase() === 'doctor'))) {
+        resolvedDoctorId = user.doctorId || user._id;
+      }
+      if (user.token) token = user.token;
+    }
+    if (!token) {
+      token = await AsyncStorage.getItem('token');
+    }
+  } catch (e) {}
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return { resolvedDoctorId, headers };
+};
+
 export const fetchDoctorDashboard = async (doctorId?: string): Promise<DoctorDashboardData> => {
   try {
-    const url = doctorId
-      ? `${API_URL}/doctor/dashboard?doctorId=${doctorId}`
+    const { resolvedDoctorId, headers } = await getDoctorAuthContext(doctorId);
+    const url = resolvedDoctorId
+      ? `${API_URL}/doctor/dashboard?doctorId=${resolvedDoctorId}`
       : `${API_URL}/doctor/dashboard`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
     clearTimeout(timeoutId);
 
@@ -306,9 +337,11 @@ export const getCatalogPatient = (tokenNum: number) => {
 
 export const callNextPatientApi = async (): Promise<any> => {
   try {
+    const { resolvedDoctorId, headers } = await getDoctorAuthContext();
     const response = await fetch(`${API_URL}/doctor/call-next`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
+      body: JSON.stringify({ doctorId: resolvedDoctorId }),
     });
     return await response.json();
   } catch (error) {
@@ -319,9 +352,11 @@ export const callNextPatientApi = async (): Promise<any> => {
 
 export const undoPatientApi = async (): Promise<any> => {
   try {
+    const { resolvedDoctorId, headers } = await getDoctorAuthContext();
     const response = await fetch(`${API_URL}/doctor/undo-patient`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
+      body: JSON.stringify({ doctorId: resolvedDoctorId }),
     });
     return await response.json();
   } catch (error) {
@@ -348,10 +383,11 @@ export const ringRoomChimeApi = async (tokenNumber?: number, room?: string): Pro
 
 export const callSpecificTokenApi = async (tokenNumber: number): Promise<any> => {
   try {
+    const { resolvedDoctorId, headers } = await getDoctorAuthContext();
     const response = await fetch(`${API_URL}/doctor/call-token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tokenNumber }),
+      headers,
+      body: JSON.stringify({ tokenNumber, doctorId: resolvedDoctorId }),
     });
     return await response.json();
   } catch (error) {

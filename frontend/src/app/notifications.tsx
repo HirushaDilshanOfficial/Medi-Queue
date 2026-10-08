@@ -16,6 +16,7 @@ import { Colors } from '../constants/Colors';
 import { HttpError } from '../services/http';
 import { notificationApi, type NotificationItem } from '../services/notificationApi';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function NotificationsScreen() {
   const { t, locale } = useLanguage();
@@ -24,15 +25,24 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const requestId = useRef(0);
+  const [filter, setFilter] = useState<'All' | 'Today' | 'Past 7 Days'>('All');
+  const [clearedAt, setClearedAt] = useState<Date | null>(null);
+  const [userId, setUserId] = useState<string>('');
 
   const fetchNotifications = useCallback(async () => {
     const id = ++requestId.current;
     setNotifications([]);
+    setUserId('');
+    setClearedAt(null);
     setError(false);
     setLoading(true);
     try {
       const inbox = await notificationApi.list();
       if (requestId.current !== id) return;
+      const clearedTime = await AsyncStorage.getItem(`notifications_cleared_at_${inbox.userId}`).catch(() => null);
+      if (requestId.current !== id) return;
+      setUserId(inbox.userId);
+      setClearedAt(clearedTime ? new Date(clearedTime) : null);
       setNotifications(inbox.items);
       // Storage failure must not hide an otherwise valid personal inbox.
       void notificationApi.markRead(inbox).catch(() => {});
@@ -55,6 +65,31 @@ export default function NotificationsScreen() {
     setRefreshing(true);
     fetchNotifications();
   };
+
+  const handleClearAll = async () => {
+    if (!userId || loading) return;
+    const now = new Date();
+    setClearedAt(now);
+    await AsyncStorage.setItem(`notifications_cleared_at_${userId}`, now.toISOString()).catch(() => {});
+  };
+
+  const filteredNotifications = notifications.filter((n) => {
+    const nDate = new Date(n.createdAt);
+    if (clearedAt && nDate < clearedAt) return false;
+
+    if (filter === 'Today') {
+      const today = new Date();
+      return nDate.getDate() === today.getDate() &&
+             nDate.getMonth() === today.getMonth() &&
+             nDate.getFullYear() === today.getFullYear();
+    }
+    if (filter === 'Past 7 Days') {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return nDate >= sevenDaysAgo;
+    }
+    return true;
+  });
 
   const renderItem = ({ item }: { item: NotificationItem }) => {
     const date = new Date(item.createdAt).toLocaleDateString(locale);
@@ -86,7 +121,24 @@ export default function NotificationsScreen() {
           <Ionicons name="arrow-back" size={24} color={Colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t("Notifications")}</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity onPress={handleClearAll}>
+          <Text style={{ color: Colors.white, fontSize: 14 }}>{t("Clear All")}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Filters */}
+      <View style={styles.filterContainer}>
+        {['All', 'Today', 'Past 7 Days'].map((f) => (
+          <TouchableOpacity
+            key={f}
+            style={[styles.filterChip, filter === f && styles.filterChipActive]}
+            onPress={() => setFilter(f as any)}
+          >
+            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
+              {t(f)}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* List */}
@@ -94,7 +146,7 @@ export default function NotificationsScreen() {
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      ) : notifications.length === 0 ? (
+      ) : filteredNotifications.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="notifications-off-outline" size={64} color={Colors.textLight} />
           <Text style={styles.emptyText}>{t(error ? 'Could not load notifications. Please try again.' : 'No notifications yet')}</Text>
@@ -102,7 +154,7 @@ export default function NotificationsScreen() {
         </View>
       ) : (
         <FlatList
-          data={notifications}
+          data={filteredNotifications}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContainer}
@@ -140,6 +192,32 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
+    color: Colors.white,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+    marginRight: 10,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterText: {
+    fontSize: 14,
+    color: Colors.textMedium,
+    fontWeight: '500',
+  },
+  filterTextActive: {
     color: Colors.white,
   },
   listContainer: {

@@ -49,9 +49,12 @@ const getReceptionDashboard = asyncHandler(async (req, res) => {
 
   const policy = await Policy.findOne() || { targetWaitTime: 10 };
 
+  // Only consider tokens with valid, non-deleted patient records
+  const validWaitingTokens = waitingTokens.filter((t) => Boolean(t.patient));
+
   // ── 3. Waiting queue: count, mean estimated wait, next token per doctor ──
   const { avgWaitMinutes, nextTokenByDoctor } = summarizeWaitingQueue(
-    waitingTokens,
+    validWaitingTokens,
     inConsultationTokens,
     policy.targetWaitTime
   );
@@ -66,13 +69,13 @@ const getReceptionDashboard = asyncHandler(async (req, res) => {
   res.json({
     date: targetDate,
     intake: shapeIntake(intakeRows),
-    inWaiting: waitingTokens.length,
+    inWaiting: validWaitingTokens.length,
     avgWaitMinutes,
     attendedDone,
     doctorsActive,
     currentlyServing: serializeServingToken(pickCurrentToken(inConsultationTokens)),
     rooms: buildRooms(doctors, servingDoctorIds, nextTokenByDoctor),
-    nextInQueue: waitingTokens.slice(0, 3),
+    nextInQueue: validWaitingTokens.slice(0, 10),
     lastUpdated: new Date().toISOString(),
   });
 });

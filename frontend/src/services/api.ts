@@ -87,7 +87,10 @@ const getHeaders = async (
     try {
       token =
         (await AsyncStorage.getItem('token')) ||
-        (await AsyncStorage.getItem('jwt'));
+        (await AsyncStorage.getItem('jwt')) ||
+        (await AsyncStorage.getItem('mediqueue_token')) ||
+        (await AsyncStorage.getItem('authToken')) ||
+        (await AsyncStorage.getItem('auth_token'));
       if (!token) {
         const userStr = await AsyncStorage.getItem('user');
         if (userStr) {

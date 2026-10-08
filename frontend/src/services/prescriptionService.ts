@@ -23,10 +23,12 @@ export interface DiagnosisItem {
 }
 
 export interface PatientPrescriptionDetails {
+  hospitalName?: string;
   doctor: {
     name: string;
     specialization?: string;
     department?: string;
+    hospitalName?: string;
     room: string;
     isOnline: boolean;
     avatarUrl?: string;
@@ -43,15 +45,59 @@ export interface PatientPrescriptionDetails {
     vitals: {
       bloodPressure: string;
       pulseRate: string;
+      heartRate?: string;
+      temperature?: number | string;
+      spO2?: number | string;
+      spo2?: number | string;
       weight: string;
+      height?: number | string;
     };
     allergy?: PatientAllergy;
+    allergies?: any[];
   };
   diagnoses: DiagnosisItem[];
   clinicalNotes: string;
   isNotesAutoSaved: boolean;
   prescriptions: MedicineItem[];
 }
+
+// Clean default prescription data for new / active patient consultation
+export const blankPrescriptionData: PatientPrescriptionDetails = {
+  doctor: {
+    name: 'Dr. Palitha Perera',
+    specialization: 'General Physician',
+    department: 'General OPD',
+    room: 'Room 101',
+    isOnline: true,
+    avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
+  },
+  patient: {
+    id: 'pat-1',
+    opdId: 'ID #199000000001',
+    name: 'Patient Normal',
+    initials: 'PN',
+    gender: 'Male',
+    age: 30,
+    tokenNumber: 1,
+    tokenFormatted: 'Token #001',
+    vitals: {
+      bloodPressure: '--/--',
+      pulseRate: '-- bpm',
+      weight: '-- kg',
+    },
+    allergy: {
+      hasAllergy: false,
+      isHighRisk: false,
+      title: 'No Known Drug Allergies (NKDA)',
+      description: 'No known adverse drug reactions recorded.',
+    },
+    allergies: [],
+  },
+  diagnoses: [],
+  clinicalNotes: '',
+  isNotesAutoSaved: true,
+  prescriptions: [],
+};
 
 // Fallback data matching the exact design image
 export const fallbackPrescriptionData: PatientPrescriptionDetails = {
@@ -236,19 +282,28 @@ export const aureliaPrescriptionData: PatientPrescriptionDetails = {
 /**
  * Fetch prescription details for current patient
  */
-export const fetchPrescriptionDetails = async (tokenNumber?: number): Promise<PatientPrescriptionDetails> => {
+export const fetchPrescriptionDetails = async (
+  tokenNumber?: number,
+  patientName?: string,
+  patientId?: string
+): Promise<PatientPrescriptionDetails> => {
   try {
-    const targetToken = tokenNumber || 29;
-    const url = `${API_URL}/doctor/prescription?tokenNumber=${targetToken}`;
+    const queryParts: string[] = [];
+    if (tokenNumber) queryParts.push(`tokenNumber=${tokenNumber}`);
+    if (patientName) queryParts.push(`patientName=${encodeURIComponent(patientName)}`);
+    if (patientId) queryParts.push(`patientId=${encodeURIComponent(patientId)}`);
+    const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    const url = `${API_URL}/doctor/prescription${qs}`;
+
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const json = await response.json();
-    return json.data || (targetToken === 29 ? aureliaPrescriptionData : fallbackPrescriptionData);
+    return json.data || (tokenNumber === 29 ? aureliaPrescriptionData : (tokenNumber === 28 ? fallbackPrescriptionData : blankPrescriptionData));
   } catch (err) {
     console.log('Error fetching prescription details, using fallback:', err);
-    return (tokenNumber || 29) === 29 ? aureliaPrescriptionData : fallbackPrescriptionData;
+    return tokenNumber === 29 ? aureliaPrescriptionData : (tokenNumber === 28 ? fallbackPrescriptionData : blankPrescriptionData);
   }
 };
 

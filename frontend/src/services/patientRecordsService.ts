@@ -110,6 +110,7 @@ export interface PatientRecord {
   allergies?: AllergyItem[];
   chronicConditions: string[];
   medications: MedicationItem[];
+  hasVitals?: boolean;
   vitals: PatientVitalsRecord;
   vitalsHistory: VitalHistoryReading[];
   imaging: PatientImaging;
@@ -1213,4 +1214,72 @@ export const filterPatientsList = (
 
     return matchesName || matchesNic || matchesToken;
   });
+};
+
+export interface DoctorRecordsResponseData {
+  records: PatientRecord[];
+  doctor?: {
+    name: string;
+    room: string;
+    department: string;
+  };
+  currentPatientId?: string;
+}
+
+export const fetchDoctorRecordsResponseApi = async (query?: string): Promise<DoctorRecordsResponseData> => {
+  try {
+    const q = query ? `?query=${encodeURIComponent(query)}` : '';
+    const response = await fetch(`${API_URL}/doctor/records${q}`);
+    if (response.ok) {
+      const json = await response.json();
+      if (Array.isArray(json.data) && json.data.length > 0) {
+        const records = json.data.map((item: any) => ({
+          ...item,
+          status: item.status || 'Waiting',
+          hasVitals: Boolean(item.hasVitals),
+          chronicConditions: item.chronicConditions || [],
+          medications: item.medications || [],
+          imaging: item.imaging || { hasImaging: false },
+          recentVisits: item.recentVisits || [],
+          vitalsHistory: Array.isArray(item.vitalsHistory) ? item.vitalsHistory : [],
+        }));
+        return {
+          records,
+          doctor: json.doctor,
+          currentPatientId: json.currentPatientId,
+        };
+      }
+    }
+    return { records: ALL_DUMMY_PATIENTS };
+  } catch (error) {
+    console.log('Error fetching patient records, fallback to local:', error);
+    return { records: ALL_DUMMY_PATIENTS };
+  }
+};
+
+export const fetchPatientRecordsApi = async (query?: string): Promise<PatientRecord[]> => {
+  const result = await fetchDoctorRecordsResponseApi(query);
+  return result.records;
+};
+
+export const savePatientVitalsApi = async (data: {
+  patientId: string;
+  tokenNumber?: number;
+  bloodPressure: string;
+  heartRate: string;
+  temperature: number;
+  spO2: number;
+  weight: number;
+  height: number;
+}): Promise<boolean> => {
+  try {
+    const res = await fetch(`${API_URL}/doctor/vitals`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
 };

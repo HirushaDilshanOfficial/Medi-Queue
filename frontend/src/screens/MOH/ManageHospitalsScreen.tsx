@@ -10,11 +10,14 @@ import { View,
   TextInput,
   Modal,
   Alert, RefreshControl } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
+import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 import { API_URL } from '../../config';
 
 export default function ManageHospitalsScreen() {
+  const { clinicFilter } = useLocalSearchParams();
   const { t } = useLanguage();
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(() => {
@@ -25,6 +28,7 @@ export default function ManageHospitalsScreen() {
     }, 1500);
   }, []);
 
+  const [searchQuery, setSearchQuery] = React.useState('');
   const [activeFilter, setActiveFilter] = React.useState('All');
   const [hospitals, setHospitals] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -95,6 +99,26 @@ export default function ManageHospitalsScreen() {
     );
   };
 
+  const filteredHospitals = hospitals.filter(h => {
+    const matchesFilter = activeFilter === 'All' || h.type === activeFilter;
+    
+    // Clinic filter logic (checks if any department partially matches the clinicFilter)
+    let matchesClinic = true;
+    if (clinicFilter) {
+      matchesClinic = h.departments && h.departments.some((dept: string) => 
+        dept.toLowerCase().includes((clinicFilter as string).toLowerCase())
+      );
+    }
+
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = 
+      h.name?.toLowerCase().includes(searchLower) || 
+      h.code?.toLowerCase().includes(searchLower) ||
+      h.location?.toLowerCase().includes(searchLower);
+      
+    return matchesFilter && matchesSearch && matchesClinic;
+  });
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
@@ -123,13 +147,26 @@ export default function ManageHospitalsScreen() {
           </View>
 
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons name="search-outline" size={20} color={Colors.textMedium} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
               placeholder={t("Search by name, code or district...")}
               placeholderTextColor={Colors.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </View>
+
+          {clinicFilter && (
+            <View style={{ paddingHorizontal: 20, marginBottom: 15, flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, color: Colors.textMedium, marginRight: 10 }}>
+                {t("Filtering by Clinic:")} <Text style={{ fontWeight: 'bold', color: Colors.primary }}>{clinicFilter}</Text>
+              </Text>
+              <TouchableOpacity onPress={() => router.setParams({ clinicFilter: '' })}>
+                <Ionicons name="close-circle" size={20} color={Colors.error} />
+              </TouchableOpacity>
+            </View>
+          )}
 
           <ScrollView 
             horizontal 
@@ -165,15 +202,15 @@ export default function ManageHospitalsScreen() {
 
           <View style={styles.listContainer}>
             <Text style={styles.listHeader}>
-              {t("Registered Facilities (")}{activeFilter === 'All' ? hospitals.length : hospitals.filter(h => h.type === activeFilter).length})
+              {t("Registered Facilities (")}{filteredHospitals.length})
             </Text>
             
             {loading ? (
               <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("Loading hospitals...")}</Text>
-            ) : hospitals.length === 0 ? (
-              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("No hospitals registered yet.")}</Text>
+            ) : filteredHospitals.length === 0 ? (
+              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("No hospitals found.")}</Text>
             ) : (
-              (activeFilter === 'All' ? hospitals : hospitals.filter(h => h.type === activeFilter)).map((hospital) => (
+              filteredHospitals.map((hospital) => (
                 <TouchableOpacity 
                   key={hospital._id} 
                   style={styles.hospitalCard}
@@ -184,12 +221,7 @@ export default function ManageHospitalsScreen() {
                     <View style={styles.hospitalIconContainer}>
                       <Text style={styles.hospitalIcon}>🏥</Text>
                     </View>
-                    <TouchableOpacity
-                      style={styles.clinicButton}
-                      onPress={() => router.push(`/(moh)/manage-clinics?hospitalId=${hospital._id}&hospitalName=${encodeURIComponent(hospital.name)}`)}
-                    >
-                      <Text style={styles.clinicButtonText}>{t("Configure clinics")}</Text>
-                    </TouchableOpacity>
+
                     <View style={styles.hospitalInfo}>
                       <Text style={styles.hospitalName} numberOfLines={1}>{hospital.name}</Text>
                       <Text style={styles.hospitalDetails}>{t(hospital.type)} • {hospital.location}</Text>
@@ -219,9 +251,18 @@ export default function ManageHospitalsScreen() {
                       <Text style={styles.codeLabel}>{t("Code:")}</Text>
                       <Text style={styles.codeValue}>{hospital.code}</Text>
                     </View>
-                    <View style={styles.deptBadge}>
-                      <Text style={styles.deptBadgeText}>
-                        {hospital.departments?.length || 0} {t("Departments")}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        style={styles.clinicButton}
+                        onPress={() => router.push(`/(moh)/manage-clinics?hospitalId=${hospital._id}&hospitalName=${encodeURIComponent(hospital.name)}`)}
+                      >
+                        <Text style={styles.clinicButtonText}>{t("Configure clinics")}</Text>
+                      </TouchableOpacity>
+                      <View style={styles.deptBadge}>
+                        <Text style={styles.deptBadgeText}>
+                          {hospital.departments?.length || 0} {t("Departments")}
+                        </Text>
+                      </View>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -279,6 +320,7 @@ export default function ManageHospitalsScreen() {
           </TouchableOpacity>
         </Modal>
 
+        <MOHBottomNav activeRoute="hospitals" />
       </SafeAreaView>
     </View>
   );
@@ -314,7 +356,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   topSection: {
     marginBottom: 20,

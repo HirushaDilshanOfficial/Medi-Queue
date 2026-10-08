@@ -22,7 +22,8 @@ function toneFor(id: string) {
 
 export function DoctorCard({ doctor, onPress }: Props) {
   const { t } = useLanguage();
-  const initials = doctor.initials || doctor.firstName.slice(0, 2).toUpperCase();
+  const fallbackName = doctor.firstName || doctor.name || 'Dr';
+  const initials = doctor.initials || fallbackName.slice(0, 2).toUpperCase();
 
   return (
     <Pressable

@@ -4,13 +4,14 @@ import React, { useState, useEffect } from 'react';
 import { View,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   TouchableOpacity,
   Switch, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 
 import { getPolicies, updatePolicy } from '../../services/policyService';
 
@@ -292,6 +293,7 @@ export default function MOHPolicyDashboardScreen() {
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
+      <MOHBottomNav activeRoute="home" />
     </View>
   );
 }

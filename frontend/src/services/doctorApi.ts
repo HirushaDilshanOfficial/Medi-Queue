@@ -61,7 +61,7 @@ export const doctorApi = {
       sort: query.sort,
     }).then(normalizeDoctorList),
 
-  departments: () => http.get<{ departments: string[] }>('/doctors/departments'),
+  departments: () => http.get<string[]>('/doctors/departments').then(departments => ({ departments })),
 
   getById: (id: string) =>
     http.get<DoctorResponse>(`/doctors/${id}`).then(normalizeDoctorResponse),

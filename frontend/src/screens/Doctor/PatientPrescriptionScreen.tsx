@@ -15,10 +15,12 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  useColorScheme,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchDoctorDashboard } from '../../services/doctorService';
 import {
   fetchPrescriptionDetails,
   savePrescriptionApi,
@@ -29,6 +31,7 @@ import {
   COMMON_MEDICINES,
   COMMON_DIAGNOSES,
   fallbackPrescriptionData,
+  blankPrescriptionData,
   aureliaPrescriptionData,
 } from '../../services/prescriptionService';
 import {
@@ -43,13 +46,18 @@ import { downloadPrescription } from '../../utils/prescriptionPdfGenerator';
 
 export default function PatientPrescriptionScreen() {
   const { t } = useLanguage();
-  const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string }>();
-  const initialToken = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
-  const isAurelia = !params?.tokenNumber || initialToken === 29 || (params?.patientName ? String(params.patientName).includes('Aurelia') : true);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string; patientId?: string }>();
+  const initialToken = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : undefined;
+  const isAurelia = params?.patientName
+    ? String(params.patientName).toLowerCase().includes('aurelia')
+    : initialToken === 29;
 
   const [data, setData] = useState<PatientPrescriptionDetails>(
-    isAurelia ? aureliaPrescriptionData : fallbackPrescriptionData
+    isAurelia ? aureliaPrescriptionData : blankPrescriptionData
   );
+  const [currentHospital, setCurrentHospital] = useState<string>('Colombo Teaching Hospital 1');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('rx');
 
@@ -60,12 +68,11 @@ export default function PatientPrescriptionScreen() {
   const [selectedDuration, setSelectedDuration] = useState<number>(5);
   const [mealTiming, setMealTiming] = useState<'After meal' | 'Before meal'>('After meal');
   const [takeMorning, setTakeMorning] = useState(true);
-  const [takeLunch, setTakeLunch] = useState(false);
-  const [takeDinner, setTakeDinner] = useState(true);
-  const [takeNight, setTakeNight] = useState(false);
+  const [takeAfternoon, setTakeAfternoon] = useState(false);
+  const [takeNight, setTakeNight] = useState(true);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [clinicalNotes, setClinicalNotes] = useState(
-    isAurelia ? aureliaPrescriptionData.clinicalNotes : fallbackPrescriptionData.clinicalNotes
+    isAurelia ? aureliaPrescriptionData.clinicalNotes : ''
   );
   const [isSaving, setIsSaving] = useState(false);
   const [addMedError, setAddMedError] = useState<string | null>(null);
@@ -78,6 +85,15 @@ export default function PatientPrescriptionScreen() {
   const [referralType, setReferralType] = useState('Physiotherapy');
   const [referralNotes, setReferralNotes] = useState('');
   const [isSaveSuccessModalOpen, setIsSaveSuccessModalOpen] = useState(false);
+
+  // In-app confirmation dialog states (no browser window.confirm)
+  const [deleteMedTarget, setDeleteMedTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteDiagTarget, setDeleteDiagTarget] = useState<{ id: string; name: string } | null>(null);
+  const [pendingAllergyConflictMed, setPendingAllergyConflictMed] = useState<{
+    med: MedicineItem;
+    allergen: string;
+    note: string;
+  } | null>(null);
 
   // Edit Medicine Modal State
   const [isEditMedModalOpen, setIsEditMedModalOpen] = useState(false);
@@ -147,11 +163,41 @@ export default function PatientPrescriptionScreen() {
   // Load prescription details
   const loadData = useCallback(async () => {
     try {
-      const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
-      const cacheKey = `@medi_queue_prescription_${tokenNum}`;
+      let tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : undefined;
+      let patientName = params?.patientName;
+      let patientId = params?.patientId;
+
+      if (!tokenNum && !patientName && !patientId) {
+        try {
+          const dash = await fetchDoctorDashboard();
+          if (dash?.currentPatient) {
+            tokenNum = dash.currentPatient.tokenNumber;
+            patientName = dash.currentPatient.patientName;
+            patientId = dash.currentPatient.patientId;
+          }
+        } catch (e) {}
+
+        if (!tokenNum && !patientName && !patientId) {
+          try {
+            const cachedToken = await AsyncStorage.getItem('active_record_patient_token');
+            if (cachedToken) tokenNum = parseInt(cachedToken, 10);
+            const cachedName = await AsyncStorage.getItem('active_record_patient_name');
+            if (cachedName && !patientName) patientName = cachedName;
+          } catch (e) {}
+        }
+      }
+
+      const cacheKey = tokenNum ? `@medi_queue_prescription_${tokenNum}` : '@medi_queue_prescription_active';
+
+      // 0. Read active hospital assigned to doctor
+      try {
+        const storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
+        if (storedHosp) {
+          setCurrentHospital(storedHosp);
+        }
+      } catch (hospErr) {}
 
       // 1. Immediately read local cache if available
-      let localFound = false;
       try {
         let raw = await AsyncStorage.getItem(cacheKey);
         if (!raw && typeof window !== 'undefined' && window.localStorage) {
@@ -160,18 +206,10 @@ export default function PatientPrescriptionScreen() {
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && Array.isArray(parsed.diagnoses) && Array.isArray(parsed.prescriptions)) {
-            // If prescriptions list is empty, populate from patient records
-            if (parsed.prescriptions.length === 0) {
-              const defaultMeds = getRecordMeds();
-              if (defaultMeds.length > 0) {
-                parsed.prescriptions = defaultMeds;
-              }
-            }
             setData(parsed);
             if (parsed.clinicalNotes !== undefined) {
               setClinicalNotes(parsed.clinicalNotes);
             }
-            localFound = true;
           }
         }
       } catch (cacheErr) {
@@ -179,15 +217,8 @@ export default function PatientPrescriptionScreen() {
       }
 
       // 2. Fetch from backend API
-      const res = await fetchPrescriptionDetails(tokenNum);
+      const res = await fetchPrescriptionDetails(tokenNum, patientName, patientId);
       if (res) {
-        // If backend prescriptions list is empty, populate from patient records
-        if (!res.prescriptions || res.prescriptions.length === 0) {
-          const defaultMeds = getRecordMeds();
-          if (defaultMeds.length > 0) {
-            res.prescriptions = defaultMeds;
-          }
-        }
         setData(res);
         setClinicalNotes(res.clinicalNotes || '');
         await AsyncStorage.setItem(cacheKey, JSON.stringify(res));
@@ -200,7 +231,7 @@ export default function PatientPrescriptionScreen() {
     } finally {
       setLoading(false);
     }
-  }, [params?.tokenNumber, getRecordMeds]);
+  }, [params?.tokenNumber, params?.patientName, params?.patientId]);
 
   useEffect(() => {
     loadData();
@@ -232,15 +263,26 @@ export default function PatientPrescriptionScreen() {
         }, 120);
       }
     } else if (tab === 'records') {
-      try {
-        router.push('/(doctor)/records' as any);
-      } catch (e) {
-        router.push('/records' as any);
-      }
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
+      const p = data?.patient;
+      if (p) {
+        try {
+          router.push({
+            pathname: '/(doctor)/records' as any,
+            params: {
+              patientId: (p as any).patientId || '',
+              patientName: p.name,
+              tokenNumber: String(p.tokenNumber),
+            },
+          });
+        } catch (e) {
           router.push('/(doctor)/records' as any);
-        }, 120);
+        }
+      } else {
+        try {
+          router.push('/(doctor)/records' as any);
+        } catch (e) {
+          router.push('/records' as any);
+        }
       }
     } else if (tab === 'schedule') {
       try {
@@ -258,36 +300,21 @@ export default function PatientPrescriptionScreen() {
     }
   };
 
-  // Remove diagnosis chip
+  // Remove diagnosis chip (triggers custom in-app modal)
   const handleRemoveDiagnosis = (id: string, name?: string) => {
-    const doRemove = () => {
-      setData((prev) => {
-        const nextDiagnoses = prev.diagnoses.filter((d) => d.id !== id);
-        const nextData = { ...prev, diagnoses: nextDiagnoses, clinicalNotes };
-        persistPrescription(nextData);
-        return nextData;
-      });
-    };
+    setDeleteDiagTarget({ id, name: name || 'this diagnosis' });
+  };
 
-    // On web, Alert.alert multi-button callbacks don't fire — use window.confirm instead
-    if (Platform.OS === 'web') {
-      const ok = (window as any).confirm(`Remove "${name || 'this diagnosis'}" from the diagnosis list?`);
-      if (!ok) return;
-      doRemove();
-      return;
-    }
-    Alert.alert(
-      t('Remove Diagnosis'),
-      t("Remove \"{value0}\"?", { value0: String(name || 'this diagnosis') }),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        {
-          text: t('Remove'),
-          style: 'destructive',
-          onPress: doRemove,
-        },
-      ]
-    );
+  const confirmRemoveDiagnosis = () => {
+    if (!deleteDiagTarget) return;
+    const { id } = deleteDiagTarget;
+    setData((prev) => {
+      const nextDiagnoses = prev.diagnoses.filter((d) => d.id !== id);
+      const nextData = { ...prev, diagnoses: nextDiagnoses, clinicalNotes };
+      persistPrescription(nextData);
+      return nextData;
+    });
+    setDeleteDiagTarget(null);
   };
 
   // Add diagnosis
@@ -312,60 +339,50 @@ export default function PatientPrescriptionScreen() {
     setIsAddDiagnosisModalOpen(false);
   };
 
-  // Remove medicine item
+  // Remove medicine item (triggers custom in-app modal)
   const handleRemoveMedicine = (id: string, name: string) => {
-    const doRemove = () => {
-      setData((prev) => {
-        const nextPrescriptions = prev.prescriptions.filter((m) => m.id !== id);
-        const nextData = { ...prev, prescriptions: nextPrescriptions, clinicalNotes };
-        persistPrescription(nextData);
-        return nextData;
-      });
-    };
+    setDeleteMedTarget({ id, name });
+  };
 
-    // On web, Alert.alert multi-button callbacks don't fire — use window.confirm instead
-    if (Platform.OS === 'web') {
-      const ok = (window as any).confirm(`Remove ${name} from this prescription?`);
-      if (!ok) return;
-      doRemove();
-      return;
-    }
-    Alert.alert(
-      t('Remove Medicine'),
-      t("Are you sure you want to remove {value0} from this prescription?", { value0: String(name) }),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        {
-          text: t('Remove'),
-          style: 'destructive',
-          onPress: doRemove,
-        },
-      ]
-    );
+  const confirmRemoveMedicine = () => {
+    if (!deleteMedTarget) return;
+    const { id } = deleteMedTarget;
+    setData((prev) => {
+      const nextPrescriptions = prev.prescriptions.filter((m) => m.id !== id);
+      const nextData = { ...prev, prescriptions: nextPrescriptions, clinicalNotes };
+      persistPrescription(nextData);
+      return nextData;
+    });
+    setDeleteMedTarget(null);
   };
 
   // Helper to format medicine instructions with meal timing and times of day
   const formatInstructions = (
     timing: 'After meal' | 'Before meal',
     morning: boolean,
-    lunch: boolean,
-    dinner: boolean,
+    slot2: boolean,
+    slot3: boolean,
     nightOrNote?: boolean | string,
     extraNote?: string
   ): string => {
-    let night = false;
-    let note = extraNote;
-    if (typeof nightOrNote === 'boolean') {
-      night = nightOrNote;
-    } else if (typeof nightOrNote === 'string') {
-      note = nightOrNote;
-    }
-
+    let note: string | undefined = undefined;
     const times: string[] = [];
     if (morning) times.push('Morning');
-    if (lunch) times.push('Lunch');
-    if (dinner) times.push('Dinner');
-    if (night) times.push('Night');
+
+    if (typeof nightOrNote === 'boolean') {
+      // Legacy call: morning, lunch/afternoon, dinner, night
+      if (slot2) times.push('Afternoon');
+      if (slot3) times.push('Dinner');
+      if (nightOrNote) times.push('Night');
+      note = extraNote;
+    } else {
+      // 3-time-of-day slots: morning, afternoon (slot2), night (slot3)
+      if (slot2) times.push('Afternoon');
+      if (slot3) times.push('Night');
+      if (typeof nightOrNote === 'string') {
+        note = nightOrNote;
+      }
+    }
 
     let res = timing;
     if (times.length > 0) {
@@ -385,23 +402,19 @@ export default function PatientPrescriptionScreen() {
     setSelectedFrequency(freq);
     if (freq === 'OD') {
       setTakeMorning(true);
-      setTakeLunch(false);
-      setTakeDinner(false);
+      setTakeAfternoon(false);
       setTakeNight(false);
     } else if (freq === 'BD') {
       setTakeMorning(true);
-      setTakeLunch(false);
-      setTakeDinner(true);
-      setTakeNight(false);
+      setTakeAfternoon(false);
+      setTakeNight(true);
     } else if (freq === 'TDS') {
       setTakeMorning(true);
-      setTakeLunch(true);
-      setTakeDinner(true);
-      setTakeNight(false);
+      setTakeAfternoon(true);
+      setTakeNight(true);
     } else if (freq === 'QDS') {
       setTakeMorning(true);
-      setTakeLunch(true);
-      setTakeDinner(true);
+      setTakeAfternoon(true);
       setTakeNight(true);
     }
   };
@@ -504,7 +517,7 @@ export default function PatientPrescriptionScreen() {
     setEditingMed(null);
   };
 
-  const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : 29;
+  const tokenNum = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : (data?.patient?.tokenNumber || 1);
   const currentPatientRecord = useMemo(() => {
     return (
       ALL_DUMMY_PATIENTS.find(
@@ -512,15 +525,28 @@ export default function PatientPrescriptionScreen() {
           p.tokenNumber === tokenNum ||
           (params?.patientName && p.name.includes(params.patientName)) ||
           (data?.patient && p.name === data.patient.name)
-      ) || ALL_DUMMY_PATIENTS[0]
+      ) || undefined
     );
-  }, [params?.tokenNumber, params?.patientName, data?.patient]);
+  }, [tokenNum, params?.patientName, data?.patient]);
 
   const patientAllergy = data?.patient?.allergy || currentPatientRecord?.allergy;
 
   const [currentAllergies, setCurrentAllergies] = useState<AllergyItem[]>(() => {
-    return currentPatientRecord ? getDefaultAllergiesForPatient(currentPatientRecord) : [];
+    return (data?.patient as any)?.allergies || (currentPatientRecord ? getDefaultAllergiesForPatient(currentPatientRecord) : []);
   });
+
+  useEffect(() => {
+    if (data?.patient) {
+      const pAllergies = (data.patient as any)?.allergies;
+      if (Array.isArray(pAllergies)) {
+        setCurrentAllergies(pAllergies);
+      } else if (currentPatientRecord) {
+        setCurrentAllergies(getDefaultAllergiesForPatient(currentPatientRecord));
+      } else {
+        setCurrentAllergies([]);
+      }
+    }
+  }, [data?.patient?.tokenNumber, data?.patient?.name, currentPatientRecord]);
 
   const handleAllergiesChange = useCallback((updatedList: AllergyItem[]) => {
     setCurrentAllergies(updatedList);
@@ -570,6 +596,18 @@ export default function PatientPrescriptionScreen() {
     return null;
   }, [searchQuery, currentAllergies, currentPatientRecord]);
 
+  // Commit a new medicine to prescription
+  const commitAddMedicine = (itemToSave: MedicineItem) => {
+    setData((prev) => {
+      const nextPrescriptions = [...prev.prescriptions, itemToSave];
+      const nextData = { ...prev, prescriptions: nextPrescriptions, clinicalNotes };
+      persistPrescription(nextData);
+      return nextData;
+    });
+    setSearchQuery('');
+    setShowSuggestions(false);
+  };
+
   // Add medicine to prescription
   const handleAddMedicine = () => {
     const trimmed = searchQuery.trim();
@@ -584,7 +622,7 @@ export default function PatientPrescriptionScreen() {
     }
     setAddMedError(null);
 
-    const selectedSlotsCount = [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length;
+    const selectedSlotsCount = [takeMorning, takeAfternoon, takeNight].filter(Boolean).length;
     if (selectedSlotsCount === 0) {
       setAddMedError('Please select at least one time of day');
       return;
@@ -611,7 +649,7 @@ export default function PatientPrescriptionScreen() {
       ? ('INHALER' as any)
       : 'TABLET';
     const dosage = matchedCatalog ? matchedCatalog.defaultDosage : '1 dose';
-    const instructions = formatInstructions(mealTiming, takeMorning, takeLunch, takeDinner, takeNight);
+    const instructions = formatInstructions(mealTiming, takeMorning, takeAfternoon, takeNight);
     const tagType = 'food';
 
     const newItem: MedicineItem = {
@@ -627,50 +665,45 @@ export default function PatientPrescriptionScreen() {
       tagType,
     };
 
-    const commitAddMedicine = (itemToSave: MedicineItem) => {
-      const nextPrescriptions = [...data.prescriptions, itemToSave];
-      const nextData = { ...data, prescriptions: nextPrescriptions, clinicalNotes };
-      setData(nextData);
-      persistPrescription(nextData);
-      setSearchQuery('');
-      setShowSuggestions(false);
-    };
-
     if (allergyConflict) {
-      if (Platform.OS === 'web') {
-        const confirmAdd = (window as any).confirm(
-          `⚠️ ALLERGY CONFLICT WARNING!\n\n${allergyConflict.allergen} detected!\n${allergyConflict.note}\n\nDo you want to override and prescribe this medication anyway?`
-        );
-        if (!confirmAdd) return;
-        commitAddMedicine(newItem);
-        return;
-      } else {
-        Alert.alert(
-          '⚠️ Allergy Conflict Warning',
-          `${allergyConflict.allergen} detected!\n\n${allergyConflict.note}\n\nDo you want to override and prescribe this medication anyway?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Override & Prescribe',
-              style: 'destructive',
-              onPress: () => commitAddMedicine(newItem),
-            },
-          ]
-        );
-        return;
-      }
+      setPendingAllergyConflictMed({
+        med: newItem,
+        allergen: allergyConflict.allergen || 'Known Allergen',
+        note: allergyConflict.note || '',
+      });
+      return;
     }
 
     commitAddMedicine(newItem);
+  };
+
+  const confirmOverrideAllergyConflict = () => {
+    if (!pendingAllergyConflictMed) return;
+    commitAddMedicine(pendingAllergyConflictMed.med);
+    setPendingAllergyConflictMed(null);
   };
 
   // Save Prescription & Download PDF
   const handleSavePrescription = async () => {
     setIsSaving(true);
     try {
-      const nextData = { ...data, clinicalNotes };
+      let activeHospital = currentHospital;
+      try {
+        const h = await AsyncStorage.getItem('doctor_current_hospital');
+        if (h) activeHospital = h;
+      } catch (e) {}
+
+      const nextData: PatientPrescriptionDetails = {
+        ...data,
+        clinicalNotes,
+        hospitalName: activeHospital,
+        doctor: {
+          ...data.doctor,
+          hospitalName: activeHospital,
+        },
+      };
       await persistPrescription(nextData);
-      downloadPrescription(nextData, clinicalNotes);
+      await downloadPrescription(nextData, clinicalNotes);
       setIsSaveSuccessModalOpen(true);
     } catch (err) {
       Alert.alert(t('Saved Offline'), t('Prescription details saved locally and queued for dispatch.'));
@@ -722,6 +755,15 @@ export default function PatientPrescriptionScreen() {
           {/* 1. TOP PROFILE BAR                                        */}
           {/* ========================================================= */}
           <View style={styles.topProfileBar}>
+            <TouchableOpacity
+              onPress={() => router.push('/(doctor)/dashboard' as any)}
+              style={styles.homeBackBtn}
+              activeOpacity={0.7}
+              accessibilityLabel={t("Back to Home")}
+              accessibilityRole="button"
+            >
+              <Ionicons name="home" size={18} color="#0D9488" />
+            </TouchableOpacity>
             <View style={styles.profileLeft}>
               <View style={styles.avatarContainer}>
                 <Image
@@ -807,7 +849,7 @@ export default function PatientPrescriptionScreen() {
               {/* Weight */}
               <View style={styles.vitalBox}>
                 <Text style={styles.vitalLabel}>{t("Weight")}</Text>
-                <Text style={styles.vitalValue}>{patient.vitals.weight || (currentPatientRecord?.vitals?.weightNum ? `${currentPatientRecord.vitals.weightNum} kg` : '58 kg')}</Text>
+                <Text style={styles.vitalValue}>{patient.vitals.weight || (currentPatientRecord?.vitals?.weightNum ? `${currentPatientRecord.vitals.weightNum} kg` : '-- kg')}</Text>
               </View>
             </View>
           </View>
@@ -1213,120 +1255,178 @@ export default function PatientPrescriptionScreen() {
               </View>
             </View>
 
-            {/* 4. Time of Day: 4 Icon Tiles (Multi-Select) */}
+            {/* 4. Time of Day: 3 Standalone Cards (Multi-Select, No Icons) */}
             <View style={styles.fieldBlock}>
-              <View style={styles.fieldHeaderRow}>
-                <Text style={styles.fieldLabel}>{t("TIME OF DAY")}</Text>
-                {[takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ? (
-                  <View style={styles.slotWarningRow}>
-                    <Ionicons name="alert-circle" size={13} color="#d97706" style={{ marginRight: 3 }} />
-                    <Text style={styles.slotWarningText}>{t("Pick at least one")}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.slotCountBadge}>
-                    <Text style={styles.slotCountBadgeText}>
-                      {[takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length} {t("selected")}
-                    </Text>
-                  </View>
-                )}
+              {/* Header Row */}
+              <View style={styles.todHeaderRow}>
+                <Text style={[styles.todHeaderLabel, isDark && styles.todHeaderLabelDark]}>
+                  {t("TIME OF DAY")}
+                </Text>
+                <View style={[styles.todCountPill, isDark && styles.todCountPillDark]}>
+                  <Text style={[styles.todCountPillText, isDark && styles.todCountPillTextDark]}>
+                    {[takeMorning, takeAfternoon, takeNight].filter(Boolean).length} {t("selected")}
+                  </Text>
+                </View>
               </View>
 
-              <View style={styles.timeTilesGrid}>
-                {/* Morning */}
+              {/* 3 Standalone Cards Row (equal-width 3-column, 10px gap) */}
+              <View style={styles.todCardsRow}>
+                {/* 1. Morning */}
                 <TouchableOpacity
-                  style={[styles.timeTile, takeMorning && styles.timeTileSelected]}
+                  style={[
+                    styles.todCard,
+                    isDark && styles.todCardDark,
+                    takeMorning && (isDark ? styles.todCardSelectedDark : styles.todCardSelected),
+                  ]}
                   onPress={() => setTakeMorning(!takeMorning)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.75}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: takeMorning }}
+                  accessibilityLabel={`${t("Morning")}, 8:00 AM`}
                 >
-                  <View style={styles.timeTileTopRow}>
-                    <View style={[styles.timeTileIconWrap, takeMorning && styles.timeTileIconWrapSelected]}>
-                      <MaterialCommunityIcons
-                        name="weather-sunset-up"
-                        size={17}
-                        color={takeMorning ? '#ffffff' : '#475569'}
-                      />
-                    </View>
+                  <View
+                    style={[
+                      styles.todRadioDot,
+                      isDark && styles.todRadioDotDark,
+                      takeMorning && (isDark ? styles.todRadioDotSelectedDark : styles.todRadioDotSelected),
+                    ]}
+                  >
                     {takeMorning && (
-                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
+                      <View style={[styles.todRadioInnerDot, isDark && styles.todRadioInnerDotDark]} />
                     )}
                   </View>
-                  <Text style={[styles.timeTileTitle, takeMorning && styles.timeTileTitleSelected]}>{t("Morning")}</Text>
-                  <Text style={[styles.timeTileSub, takeMorning && styles.timeTileSubSelected]}>8:00 AM</Text>
+                  <Text
+                    style={[
+                      styles.todCardTitle,
+                      isDark && styles.todCardTitleDark,
+                      takeMorning && (isDark ? styles.todCardTitleSelectedDark : styles.todCardTitleSelected),
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {t("Morning")}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.todCardTime,
+                      isDark && styles.todCardTimeDark,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    8:00 AM
+                  </Text>
                 </TouchableOpacity>
 
-                {/* Lunch */}
+                {/* 2. Afternoon */}
                 <TouchableOpacity
-                  style={[styles.timeTile, takeLunch && styles.timeTileSelected]}
-                  onPress={() => setTakeLunch(!takeLunch)}
-                  activeOpacity={0.8}
+                  style={[
+                    styles.todCard,
+                    isDark && styles.todCardDark,
+                    takeAfternoon && (isDark ? styles.todCardSelectedDark : styles.todCardSelected),
+                  ]}
+                  onPress={() => setTakeAfternoon(!takeAfternoon)}
+                  activeOpacity={0.75}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: takeLunch }}
+                  accessibilityState={{ checked: takeAfternoon }}
+                  accessibilityLabel={`${t("Afternoon")}, 1:00 PM`}
                 >
-                  <View style={styles.timeTileTopRow}>
-                    <View style={[styles.timeTileIconWrap, takeLunch && styles.timeTileIconWrapSelected]}>
-                      <MaterialCommunityIcons
-                        name="weather-sunny"
-                        size={17}
-                        color={takeLunch ? '#ffffff' : '#475569'}
-                      />
-                    </View>
-                    {takeLunch && (
-                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
+                  <View
+                    style={[
+                      styles.todRadioDot,
+                      isDark && styles.todRadioDotDark,
+                      takeAfternoon && (isDark ? styles.todRadioDotSelectedDark : styles.todRadioDotSelected),
+                    ]}
+                  >
+                    {takeAfternoon && (
+                      <View style={[styles.todRadioInnerDot, isDark && styles.todRadioInnerDotDark]} />
                     )}
                   </View>
-                  <Text style={[styles.timeTileTitle, takeLunch && styles.timeTileTitleSelected]}>{t("Lunch")}</Text>
-                  <Text style={[styles.timeTileSub, takeLunch && styles.timeTileSubSelected]}>1:00 PM</Text>
+                  <Text
+                    style={[
+                      styles.todCardTitle,
+                      isDark && styles.todCardTitleDark,
+                      takeAfternoon && (isDark ? styles.todCardTitleSelectedDark : styles.todCardTitleSelected),
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {t("Afternoon")}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.todCardTime,
+                      isDark && styles.todCardTimeDark,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    1:00 PM
+                  </Text>
                 </TouchableOpacity>
 
-                {/* Dinner */}
+                {/* 3. Night */}
                 <TouchableOpacity
-                  style={[styles.timeTile, takeDinner && styles.timeTileSelected]}
-                  onPress={() => setTakeDinner(!takeDinner)}
-                  activeOpacity={0.8}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: takeDinner }}
-                >
-                  <View style={styles.timeTileTopRow}>
-                    <View style={[styles.timeTileIconWrap, takeDinner && styles.timeTileIconWrapSelected]}>
-                      <MaterialCommunityIcons
-                        name="weather-sunset-down"
-                        size={17}
-                        color={takeDinner ? '#ffffff' : '#475569'}
-                      />
-                    </View>
-                    {takeDinner && (
-                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
-                    )}
-                  </View>
-                  <Text style={[styles.timeTileTitle, takeDinner && styles.timeTileTitleSelected]}>{t("Dinner")}</Text>
-                  <Text style={[styles.timeTileSub, takeDinner && styles.timeTileSubSelected]}>8:00 PM</Text>
-                </TouchableOpacity>
-
-                {/* Night */}
-                <TouchableOpacity
-                  style={[styles.timeTile, takeNight && styles.timeTileSelected]}
+                  style={[
+                    styles.todCard,
+                    isDark && styles.todCardDark,
+                    takeNight && (isDark ? styles.todCardSelectedDark : styles.todCardSelected),
+                  ]}
                   onPress={() => setTakeNight(!takeNight)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.75}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: takeNight }}
+                  accessibilityLabel={`${t("Night")}, 9:00 PM`}
                 >
-                  <View style={styles.timeTileTopRow}>
-                    <View style={[styles.timeTileIconWrap, takeNight && styles.timeTileIconWrapSelected]}>
-                      <MaterialCommunityIcons
-                        name="weather-night"
-                        size={17}
-                        color={takeNight ? '#ffffff' : '#475569'}
-                      />
-                    </View>
+                  <View
+                    style={[
+                      styles.todRadioDot,
+                      isDark && styles.todRadioDotDark,
+                      takeNight && (isDark ? styles.todRadioDotSelectedDark : styles.todRadioDotSelected),
+                    ]}
+                  >
                     {takeNight && (
-                      <Ionicons name="checkmark-circle" size={17} color="#064e59" />
+                      <View style={[styles.todRadioInnerDot, isDark && styles.todRadioInnerDotDark]} />
                     )}
                   </View>
-                  <Text style={[styles.timeTileTitle, takeNight && styles.timeTileTitleSelected]}>{t("Night")}</Text>
-                  <Text style={[styles.timeTileSub, takeNight && styles.timeTileSubSelected]}>10:30 PM</Text>
+                  <Text
+                    style={[
+                      styles.todCardTitle,
+                      isDark && styles.todCardTitleDark,
+                      takeNight && (isDark ? styles.todCardTitleSelectedDark : styles.todCardTitleSelected),
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {t("Night")}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.todCardTime,
+                      isDark && styles.todCardTimeDark,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    9:00 PM
+                  </Text>
                 </TouchableOpacity>
+              </View>
+
+              {/* Summary Line */}
+              <View style={styles.todSummaryRow}>
+                {[takeMorning, takeAfternoon, takeNight].some(Boolean) ? (
+                  <Text style={[styles.todSummaryText, isDark && styles.todSummaryTextDark]}>
+                    {t("Take at")}{' '}
+                    <Text style={[styles.todSummaryBold, isDark && styles.todSummaryBoldDark]}>
+                      {[
+                        takeMorning && '8:00 AM',
+                        takeAfternoon && '1:00 PM',
+                        takeNight && '9:00 PM',
+                      ]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </Text>
+                  </Text>
+                ) : (
+                  <Text style={[styles.todSummaryText, styles.todSummaryEmpty, isDark && styles.todSummaryEmptyDark]}>
+                    {t("Pick at least one time")}
+                  </Text>
+                )}
               </View>
             </View>
 
@@ -1379,34 +1479,26 @@ export default function PatientPrescriptionScreen() {
               </View>
             </View>
 
-            {/* 6. Live Summary Strip */}
-            <View style={styles.liveSummaryStrip}>
-              <View style={styles.liveSummaryIconWrap}>
-                <MaterialCommunityIcons name="pill" size={15} color="#064e59" />
+            {/* 6. Live Summary Strip - only shown when medicine name is typed/selected */}
+            {Boolean(searchQuery.trim()) && (
+              <View style={styles.liveSummaryStrip}>
+                <View style={styles.liveSummaryIconWrap}>
+                  <MaterialCommunityIcons name="pill" size={15} color="#064e59" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.liveSummaryLabel}>{t("PRESCRIPTION PREVIEW")}</Text>
+                  <Text style={styles.liveSummaryText} numberOfLines={2}>
+                    {`${searchQuery.trim()} – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
+                      takeMorning && 'Morning',
+                      takeAfternoon && 'Afternoon',
+                      takeNight && 'Night',
+                    ]
+                      .filter(Boolean)
+                      .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`}
+                  </Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.liveSummaryLabel}>{t("PRESCRIPTION PREVIEW")}</Text>
-                <Text style={styles.liveSummaryText} numberOfLines={2}>
-                  {searchQuery.trim()
-                    ? `${searchQuery.trim()} – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
-                        takeMorning && 'Morning',
-                        takeLunch && 'Lunch',
-                        takeDinner && 'Dinner',
-                        takeNight && 'Night',
-                      ]
-                        .filter(Boolean)
-                        .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`
-                    : `Paracetamol 500mg – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
-                        takeMorning && 'Morning',
-                        takeLunch && 'Lunch',
-                        takeDinner && 'Dinner',
-                        takeNight && 'Night',
-                      ]
-                        .filter(Boolean)
-                        .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`}
-                </Text>
-              </View>
-            </View>
+            )}
 
             {addMedError && (
               <View style={styles.addMedErrorWrap}>
@@ -1420,7 +1512,7 @@ export default function PatientPrescriptionScreen() {
               style={[
                 styles.addToPrescriptionBtnRedesigned,
                 (!searchQuery.trim() ||
-                  [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                  [takeMorning, takeAfternoon, takeNight].filter(Boolean).length === 0 ||
                   selectedDuration <= 0) &&
                   styles.addToPrescriptionBtnDisabled,
               ]}
@@ -1428,7 +1520,7 @@ export default function PatientPrescriptionScreen() {
               activeOpacity={0.85}
               disabled={
                 !searchQuery.trim() ||
-                [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                [takeMorning, takeAfternoon, takeNight].filter(Boolean).length === 0 ||
                 selectedDuration <= 0
               }
             >
@@ -1437,7 +1529,7 @@ export default function PatientPrescriptionScreen() {
                 size={21}
                 color={
                   !searchQuery.trim() ||
-                  [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                  [takeMorning, takeAfternoon, takeNight].filter(Boolean).length === 0 ||
                   selectedDuration <= 0
                     ? '#94a3b8'
                     : '#ffffff'
@@ -1448,7 +1540,7 @@ export default function PatientPrescriptionScreen() {
                 style={[
                   styles.addToPrescriptionBtnTextRedesigned,
                   (!searchQuery.trim() ||
-                    [takeMorning, takeLunch, takeDinner, takeNight].filter(Boolean).length === 0 ||
+                    [takeMorning, takeAfternoon, takeNight].filter(Boolean).length === 0 ||
                     selectedDuration <= 0) &&
                     styles.addToPrescriptionBtnTextDisabled,
                 ]}
@@ -1926,7 +2018,21 @@ export default function PatientPrescriptionScreen() {
 
             <TouchableOpacity
               style={styles.downloadRxModalBtn}
-              onPress={() => downloadPrescription(data, clinicalNotes)}
+              onPress={async () => {
+                let activeHospital = currentHospital;
+                try {
+                  const h = await AsyncStorage.getItem('doctor_current_hospital');
+                  if (h) activeHospital = h;
+                } catch (e) {}
+                downloadPrescription(
+                  {
+                    ...data,
+                    hospitalName: activeHospital,
+                    doctor: { ...data.doctor, hospitalName: activeHospital },
+                  },
+                  clinicalNotes
+                );
+              }}
               activeOpacity={0.85}
             >
               <MaterialCommunityIcons
@@ -1945,6 +2051,152 @@ export default function PatientPrescriptionScreen() {
             >
               <Text style={styles.successDoneBtnText}>{t("Done")}</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* MODAL: DELETE MEDICINE IN-APP CONFIRMATION                */}
+      {/* ========================================================= */}
+      <Modal
+        visible={Boolean(deleteMedTarget)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeleteMedTarget(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmDeleteCard}>
+            <View style={styles.confirmDeleteIconCircle}>
+              <MaterialCommunityIcons name="trash-can-outline" size={32} color="#ef4444" />
+            </View>
+
+            <Text style={styles.confirmDeleteTitle}>{t("Remove Medicine?")}</Text>
+
+            <Text style={styles.confirmDeleteDesc}>
+              {t("Are you sure you want to remove")}{' '}
+              <Text style={{ fontWeight: '700', color: '#0f172a' }}>
+                {deleteMedTarget?.name}
+              </Text>{' '}
+              {t("from this prescription?")}
+            </Text>
+
+            <View style={styles.confirmDeleteButtonsRow}>
+              <TouchableOpacity
+                style={styles.confirmDeleteCancelBtn}
+                onPress={() => setDeleteMedTarget(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmDeleteCancelBtnText}>{t("Cancel")}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmDeleteRemoveBtn}
+                onPress={confirmRemoveMedicine}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="trash-can-outline" size={17} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.confirmDeleteRemoveBtnText}>{t("Remove")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* MODAL: DELETE DIAGNOSIS IN-APP CONFIRMATION               */}
+      {/* ========================================================= */}
+      <Modal
+        visible={Boolean(deleteDiagTarget)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeleteDiagTarget(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmDeleteCard}>
+            <View style={styles.confirmDeleteIconCircle}>
+              <MaterialCommunityIcons name="close-circle-outline" size={32} color="#ef4444" />
+            </View>
+
+            <Text style={styles.confirmDeleteTitle}>{t("Remove Diagnosis?")}</Text>
+
+            <Text style={styles.confirmDeleteDesc}>
+              {t("Remove")}{' '}
+              <Text style={{ fontWeight: '700', color: '#0f172a' }}>
+                {deleteDiagTarget?.name}
+              </Text>{' '}
+              {t("from the diagnosis list?")}
+            </Text>
+
+            <View style={styles.confirmDeleteButtonsRow}>
+              <TouchableOpacity
+                style={styles.confirmDeleteCancelBtn}
+                onPress={() => setDeleteDiagTarget(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmDeleteCancelBtnText}>{t("Cancel")}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmDeleteRemoveBtn}
+                onPress={confirmRemoveDiagnosis}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close" size={18} color="#ffffff" style={{ marginRight: 4 }} />
+                <Text style={styles.confirmDeleteRemoveBtnText}>{t("Remove")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* MODAL: ALLERGY CONFLICT IN-APP CONFIRMATION               */}
+      {/* ========================================================= */}
+      <Modal
+        visible={Boolean(pendingAllergyConflictMed)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPendingAllergyConflictMed(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmDeleteCard}>
+            <View style={[styles.confirmDeleteIconCircle, { backgroundColor: '#fef2f2' }]}>
+              <MaterialCommunityIcons name="alert-decagram" size={34} color="#dc2626" />
+            </View>
+
+            <Text style={[styles.confirmDeleteTitle, { color: '#991b1b' }]}>
+              {t("Allergy Conflict Warning")}
+            </Text>
+
+            <Text style={styles.confirmDeleteDesc}>
+              <Text style={{ fontWeight: '700', color: '#b91c1c' }}>
+                {pendingAllergyConflictMed?.med?.name}
+              </Text>{' '}
+              {t("conflicts with known patient allergy:")}{' '}
+              <Text style={{ fontWeight: '700', color: '#0f172a' }}>
+                {pendingAllergyConflictMed?.allergen}
+              </Text>.{'\n'}
+              {pendingAllergyConflictMed?.note ? `${pendingAllergyConflictMed.note}\n\n` : '\n'}
+              {t("Do you want to override and prescribe this medication anyway?")}
+            </Text>
+
+            <View style={styles.confirmDeleteButtonsRow}>
+              <TouchableOpacity
+                style={styles.confirmDeleteCancelBtn}
+                onPress={() => setPendingAllergyConflictMed(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmDeleteCancelBtnText}>{t("Cancel")}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.confirmDeleteRemoveBtn, { backgroundColor: '#dc2626' }]}
+                onPress={confirmOverrideAllergyConflict}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmDeleteRemoveBtnText}>{t("Override & Prescribe")}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1970,6 +2222,15 @@ const styles = StyleSheet.create({
   },
 
   // 1. TOP PROFILE BAR
+  homeBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
   topProfileBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2686,62 +2947,153 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0e7490',
   },
-  timeTilesGrid: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  timeTile: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    padding: 10,
-    minHeight: 88,
-    justifyContent: 'space-between',
-  },
-  timeTileSelected: {
-    borderColor: '#064e59',
-    backgroundColor: '#f0fdfa',
-    shadowColor: 'rgba(6, 78, 89, 0.1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  timeTileTopRow: {
+  // TIME OF DAY SECTION
+  todHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 10,
   },
-  timeTileIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+  todHeaderLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: '#5B7078',
+    textTransform: 'uppercase',
+  },
+  todHeaderLabelDark: {
+    color: '#9DB2B8',
+  },
+  todCountPill: {
+    backgroundColor: '#E6F6F5',
+    borderWidth: 1,
+    borderColor: '#0E8F9A',
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  todCountPillDark: {
+    backgroundColor: '#1B3A40',
+    borderColor: '#0E8F9A',
+  },
+  todCountPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0E8F9A',
+  },
+  todCountPillTextDark: {
+    color: '#2AA8B4',
+  },
+  todCardsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  todCard: {
+    flex: 1,
+    minHeight: 76,
+    paddingTop: 16,
+    paddingBottom: 14,
+    paddingHorizontal: 6,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#D5E0E3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  todCardDark: {
+    backgroundColor: '#13262B',
+    borderColor: '#2B474D',
+  },
+  todCardSelected: {
+    backgroundColor: '#E6F6F5',
+    borderColor: '#0E8F9A',
+  },
+  todCardSelectedDark: {
+    backgroundColor: '#1B3A40',
+    borderColor: '#0E8F9A',
+  },
+  todRadioDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#D5E0E3',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timeTileIconWrapSelected: {
-    backgroundColor: '#064e59',
+  todRadioDotDark: {
+    borderColor: '#2B474D',
   },
-  timeTileTitle: {
-    fontSize: 11,
+  todRadioDotSelected: {
+    backgroundColor: '#0B4F59',
+    borderColor: '#0B4F59',
+  },
+  todRadioDotSelectedDark: {
+    backgroundColor: '#2AA8B4',
+    borderColor: '#2AA8B4',
+  },
+  todRadioInnerDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E6F6F5',
+  },
+  todRadioInnerDotDark: {
+    backgroundColor: '#1B3A40',
+  },
+  todCardTitle: {
+    fontSize: 14,
     fontWeight: '800',
-    color: '#334155',
+    color: '#0F1F24',
+    textAlign: 'center',
   },
-  timeTileTitleSelected: {
-    color: '#064e59',
+  todCardTitleDark: {
+    color: '#EAF4F6',
   },
-  timeTileSub: {
-    fontSize: 9,
+  todCardTitleSelected: {
+    color: '#0B4F59',
+  },
+  todCardTitleSelectedDark: {
+    color: '#2AA8B4',
+  },
+  todCardTime: {
+    fontSize: 11,
     fontWeight: '600',
-    color: '#94a3b8',
-    marginTop: 1,
+    color: '#5B6B73',
+    marginTop: 4,
+    textAlign: 'center',
   },
-  timeTileSubSelected: {
-    color: '#0d9488',
+  todCardTimeDark: {
+    color: '#9DB2B8',
+  },
+  todSummaryRow: {
+    marginTop: 10,
+  },
+  todSummaryText: {
+    fontSize: 12.5,
+    color: '#5B6B73',
+  },
+  todSummaryTextDark: {
+    color: '#9DB2B8',
+  },
+  todSummaryBold: {
+    fontWeight: '700',
+    color: '#0F1F24',
+  },
+  todSummaryBoldDark: {
+    color: '#EAF4F6',
+  },
+  todSummaryEmpty: {
+    color: '#5B6B73',
+  },
+  todSummaryEmptyDark: {
+    color: '#9DB2B8',
   },
   durationControlRow: {
     flexDirection: 'row',
@@ -3231,5 +3583,81 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#475569',
+  },
+
+  // IN-APP DELETE / CONFIRMATION DIALOG STYLES
+  confirmDeleteCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    padding: 24,
+    alignItems: 'center',
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
+    shadowColor: 'rgba(0, 0, 0, 0.15)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  confirmDeleteIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fef2f2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  confirmDeleteTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  confirmDeleteDesc: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 22,
+  },
+  confirmDeleteButtonsRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  confirmDeleteCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  confirmDeleteRemoveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: 'rgba(239, 68, 68, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  confirmDeleteRemoveBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSegments } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LANGUAGES, useLanguage, type Language } from './LanguageContext';
 import { LocalizedText as Text } from './LocalizedText';
@@ -21,15 +22,24 @@ export function LanguageSwitcher() {
     finally { setSaving(false); }
   };
 
+  const segments = useSegments();
+  const isDark = ['(moh)', '(doctor)', '(reception)', 'notifications'].includes(segments[0]);
+  const bgColor = isDark ? '#0a6e7e' : '#f3faff';
+  const textColor = isDark ? '#ffffff' : '#004c5b';
+  
+  if (segments[0] === '(auth)' || segments[0] === 'index' || segments.length === 0) {
+    return null;
+  }
+
   return <>
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.toolbar}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.toolbar, { backgroundColor: bgColor }]}>
       <Pressable accessibilityRole="button" accessibilityLabel={t('Change language')}
         accessibilityState={{ disabled: !ready, expanded: open }} disabled={!ready}
         onPress={() => { setSelected(language); setError(false); setOpen(true); }} style={styles.control}>
-        <ProfileIcon name="language" size={18} />
-        <Text style={styles.controlLabel}>{t('Language')}</Text>
-        <Text style={styles.nativeLabel}>{LANGUAGES.find(item => item.code === language)!.name}</Text>
-        <ProfileIcon name="arrow" size={14} />
+        <ProfileIcon name="language" size={18} color={textColor} />
+        <Text style={[styles.controlLabel, { color: textColor }]}>{t('Language')}</Text>
+        <Text style={[styles.nativeLabel, { color: textColor }]}>{LANGUAGES.find(item => item.code === language)!.name}</Text>
+        <ProfileIcon name="arrow" size={14} color={textColor} />
       </Pressable>
     </SafeAreaView>
     <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
@@ -65,10 +75,10 @@ export function LanguageSwitcher() {
 }
 
 const styles = StyleSheet.create({
-  toolbar: { backgroundColor: '#f3faff', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#d5e5ed', alignItems: 'flex-end' },
+  toolbar: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#d5e5ed', alignItems: 'flex-end' },
   control: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  controlLabel: { color: '#004c5b', fontSize: 12 },
-  nativeLabel: { fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif', color: '#004c5b', fontSize: 15, lineHeight: 26 },
+  controlLabel: { fontSize: 12 },
+  nativeLabel: { fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif', fontSize: 15, lineHeight: 26 },
   overlay: { flex: 1, backgroundColor: 'rgba(36,51,57,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   dialog: { width: '100%', maxWidth: 440, maxHeight: '100%', borderRadius: 24, padding: 24, backgroundColor: '#fff', gap: 12 },
   heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
