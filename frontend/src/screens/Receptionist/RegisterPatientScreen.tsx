@@ -1,3 +1,4 @@
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -81,6 +82,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
   route,
   onNavigate,
 }) => {
+  const { t } = useLanguage();
   const { isShiftClosed } = useShiftContext();
   const form = useWalkInForm(route?.params);
   const [searchQuery, setSearchQuery] = useState<string>(
@@ -213,7 +215,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         }
       }
 
-      showToast(`Prefilled with record for ${pName || 'patient'}`, 'success');
+      showToast(t("Prefilled with record for {value0}", { value0: String(pName || 'patient') }), 'success');
     }
   }, [route?.params]);
 
@@ -300,7 +302,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
       if (appt.priority) {
         form.setField('priority', appt.priority);
       }
-      showToast(`Pre-booking #${appt.bookingRef} verified!`, 'success');
+      showToast(t("Pre-booking #{value0} verified!", { value0: String(appt.bookingRef) }), 'success');
     },
     [form]
   );
@@ -470,7 +472,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             }
           }
 
-          showToast('Existing patient record found & auto-filled', 'success');
+          showToast(t("Existing patient record found & auto-filled"), 'success');
         } else {
           setMatchedPatient(null);
           setSearchStatus('not_found');
@@ -486,7 +488,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
       } catch (err: any) {
         setSearchStatus('idle');
         const msg = getErrorMessage(err);
-        showToast(msg || 'Search failed', 'error');
+        showToast(msg || t("Search failed"), 'error');
       } finally {
         setSearching(false);
       }
@@ -542,7 +544,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             gender: p.gender || form.patient.gender,
             bloodGroup: (p as any).bloodGroup || '',
           });
-          showToast(`Existing record found for ${p.fullName}`, 'info');
+          showToast(t("Existing record found for {value0}", { value0: String(p.fullName) }), 'info');
         }
       } catch {
         // Ignore lookup errors
@@ -565,8 +567,8 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     form.reset();
     showToast(
       form.intakeType === 'pre_booked'
-        ? 'Selection cleared. Select or search a pre-booked appointment.'
-        : 'Form cleared. Ready for new patient entry.',
+        ? t("Selection cleared. Select or search a pre-booked appointment.")
+        : t("Form cleared. Ready for new patient entry."),
       'info'
     );
   };
@@ -581,7 +583,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
       setConfirmedBooking(res);
       setLastIssuedToken(res);
       setShowStaffSuccessModal(true);
-      showToast(`Token #${res.token.tokenLabel} issued! SMS confirmation sent to ${res.patient.phone}`, 'success');
+      showToast(t("Token #{value0} issued! SMS confirmation sent to {value1}", { value0: String(res.token.tokenLabel), value1: String(res.patient.phone) }), 'success');
 
       // Reset form after successful submission
       form.reset();
@@ -600,7 +602,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             err.message.toLowerCase().includes('conflict')));
 
       if (is409) {
-        showToast('Slot was just taken', 'warning');
+        showToast(t("Slot was just taken"), 'warning');
         if (form.doctorId) {
           try {
             let todayDate = '';
@@ -627,7 +629,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         }
       } else {
         const msg = getErrorMessage(err);
-        showToast(msg || 'Failed to issue walk-in token', 'error');
+        showToast(msg || t("Failed to issue walk-in token"), 'error');
       }
     } finally {
       setSubmitting(false);
@@ -640,14 +642,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     // Prevent double tap / multiple submissions or if shift is closed
     if (submitting || submittingRef.current || isShiftClosed) {
       if (isShiftClosed) {
-        showToast('Shift closed. Intake is disabled.', 'warning');
+        showToast(t("Shift closed. Intake is disabled."), 'warning');
       }
       return;
     }
 
     if (form.intakeType === 'pre_booked') {
       if (!selectedPreBooking) {
-        showToast('Please search or select a pre-booked appointment first.', 'warning');
+        showToast(t("Please search or select a pre-booked appointment first."), 'warning');
         return;
       }
     } else {
@@ -655,7 +657,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
       const cleanName = (form.patient.fullName || '').trim();
       if (!cleanName) {
         form.setField('fullName', '');
-        showToast('Please enter the patient full name.', 'error');
+        showToast(t("Please enter the patient full name."), 'error');
         return;
       }
 
@@ -663,11 +665,11 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
       const cleanPhone = (form.patient.phone || '').trim();
       if (!cleanPhone) {
         form.setField('phone', '');
-        showToast('Please enter the patient telephone number.', 'error');
+        showToast(t("Please enter the patient telephone number."), 'error');
         return;
       }
       if (cleanPhone.length < 8) {
-        showToast('Please enter a valid telephone number (e.g. 0712345678).', 'error');
+        showToast(t("Please enter a valid telephone number (e.g. 0712345678)."), 'error');
         return;
       }
 
@@ -837,7 +839,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
     setSearchQuery(codeToSearch);
     form.setField('query', codeToSearch);
     executeSearch(codeToSearch);
-    showToast(`Scanned: ${codeToSearch}`, 'success');
+    showToast(t("Scanned: {value0}", { value0: String(codeToSearch) }), 'success');
   };
 
   return (
@@ -858,15 +860,15 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         <View style={styles.headerLeft}>
           <View style={styles.badgeWrap}>
             <Ionicons name="person-add" size={12} color={Colors.white} style={{ marginRight: 4 }} />
-            <Text style={styles.badgeText}>INTAKE DESK</Text>
+            <Text style={styles.badgeText}>{t("INTAKE DESK")}</Text>
           </View>
           <Text style={styles.headerTitle}>
-            {form.intakeType === 'pre_booked' ? 'Pre-Booked Check-In' : 'Patient Registration'}
+            {form.intakeType === 'pre_booked' ? 'Pre-Booked Check-In' : t("Patient Registration")}
           </Text>
           <Text style={styles.headerSubtitle}>
             {form.intakeType === 'pre_booked'
               ? 'Verify pre-booked appointment & issue token'
-              : 'Step 1 of 2: Patient Identification & Details'}
+              : t("Step 1 of 2: Patient Identification & Details")}
           </Text>
         </View>
 
@@ -898,15 +900,15 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 <View style={styles.confirmIconCircle}>
                   <Ionicons name="checkmark-circle" size={32} color={Colors.white} />
                 </View>
-                <Text style={styles.confirmTitle}>Patient Registered Successfully!</Text>
+                <Text style={styles.confirmTitle}>{t("Patient Registered Successfully!")}</Text>
                 <Text style={styles.confirmSubtitle}>
-                  Official appointment confirmed & OPD token generated.
+                  {t("Official appointment confirmed & OPD token generated.")}
                 </Text>
               </View>
 
               {/* Real Token Badge */}
               <View style={styles.confirmTokenBadgeBox}>
-                <Text style={styles.confirmTokenHeaderLabel}>OFFICIAL QUEUE TOKEN</Text>
+                <Text style={styles.confirmTokenHeaderLabel}>{t("OFFICIAL QUEUE TOKEN")}</Text>
                 <TokenBadge
                   tokenLabel={
                     confirmedBooking.token?.tokenLabel ||
@@ -920,11 +922,11 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   <View style={styles.smsDeliveredHeader}>
                     <View style={styles.smsDeliveredTitleRow}>
                       <Ionicons name="chatbubbles" size={15} color="#0D9488" style={{ marginRight: 6 }} />
-                      <Text style={styles.smsDeliveredTitle}>CONFIRMATION SMS SENT TO PATIENT</Text>
+                      <Text style={styles.smsDeliveredTitle}>{t("CONFIRMATION SMS SENT TO PATIENT")}</Text>
                     </View>
                     <View style={styles.smsSentBadge}>
                       <View style={styles.smsSentDot} />
-                      <Text style={styles.smsSentBadgeText}>Sent to {confirmedBooking.patient.phone}</Text>
+                      <Text style={styles.smsSentBadgeText}>{t("Sent to")}{' '}{confirmedBooking.patient.phone}</Text>
                     </View>
                   </View>
                   <View style={styles.smsMessageBox}>
@@ -936,7 +938,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   <View style={styles.smsFooterRow}>
                     <Ionicons name="checkmark-circle" size={13} color="#059669" style={{ marginRight: 4 }} />
                     <Text style={styles.smsTimestampText}>
-                      Status: Delivered Successfully to Patient Mobile • Just Now
+                      {t("Status: Delivered Successfully to Patient Mobile • Just Now")}
                     </Text>
                   </View>
                 </View>
@@ -950,7 +952,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <Ionicons name="person" size={16} color={Colors.primary} />
                   </View>
                   <View style={styles.confirmRowContent}>
-                    <Text style={styles.confirmRowLabel}>PATIENT</Text>
+                    <Text style={styles.confirmRowLabel}>{t("PATIENT")}</Text>
                     <Text style={styles.confirmRowMainValue}>
                       {confirmedBooking.patient.fullName}
                     </Text>
@@ -967,7 +969,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       {confirmedBooking.patient.bloodGroup
                         ? `Blood: ${confirmedBooking.patient.bloodGroup} • `
                         : ''}
-                      Phone: {confirmedBooking.patient.phone}
+                      {t("Phone:")}{' '}{confirmedBooking.patient.phone}
                     </Text>
                   </View>
                 </View>
@@ -980,13 +982,13 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <Ionicons name="medkit" size={16} color={Colors.primary} />
                   </View>
                   <View style={styles.confirmRowContent}>
-                    <Text style={styles.confirmRowLabel}>DOCTOR & ROOM</Text>
+                    <Text style={styles.confirmRowLabel}>{t("DOCTOR & ROOM")}</Text>
                     <Text style={styles.confirmRowMainValue}>
                       {confirmedBooking.doctor.name}
                     </Text>
                     <Text style={styles.confirmRowSubText}>
-                      {confirmedBooking.doctor.room || 'OPD Room'} • Department:{' '}
-                      {confirmedBooking.appointment.department || 'General OPD'}
+                      {confirmedBooking.doctor.room || 'OPD Room'}{' '}{t("• Department:")}{' '}
+                      {t(confirmedBooking.appointment.department || 'General OPD')}
                     </Text>
                   </View>
                 </View>
@@ -999,7 +1001,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <Ionicons name="calendar" size={16} color={Colors.primary} />
                   </View>
                   <View style={styles.confirmRowContent}>
-                    <Text style={styles.confirmRowLabel}>SCHEDULED SLOT</Text>
+                    <Text style={styles.confirmRowLabel}>{t("SCHEDULED SLOT")}</Text>
                     <Text style={styles.confirmRowMainValue}>
                       {confirmedBooking.appointment.slotTime} ({confirmedBooking.appointment.date})
                     </Text>
@@ -1011,18 +1013,18 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 {/* Queue Metrics: Estimated Wait & Patients Ahead */}
                 <View style={styles.confirmMetricsContainer}>
                   <View style={styles.confirmMetricCol}>
-                    <Text style={styles.confirmMetricTitle}>ESTIMATED WAIT</Text>
+                    <Text style={styles.confirmMetricTitle}>{t("ESTIMATED WAIT")}</Text>
                     <Text style={styles.confirmMetricNum}>
-                      ~{confirmedBooking.estimatedWaitMinutes ?? 0} mins
+                      ~{confirmedBooking.estimatedWaitMinutes ?? 0}{' '}{t("mins")}
                     </Text>
                   </View>
 
                   <View style={styles.confirmMetricSeparator} />
 
                   <View style={styles.confirmMetricCol}>
-                    <Text style={styles.confirmMetricTitle}>PATIENTS AHEAD</Text>
+                    <Text style={styles.confirmMetricTitle}>{t("PATIENTS AHEAD")}</Text>
                     <Text style={styles.confirmMetricNum}>
-                      {confirmedBooking.patientsAhead ?? 0} ahead
+                      {confirmedBooking.patientsAhead ?? 0}{' '}{t("ahead")}
                     </Text>
                   </View>
                 </View>
@@ -1033,7 +1035,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                 style={styles.confirmNewEntryBtn}
                 onPress={handleNewEntry}
                 activeOpacity={0.8}
-                accessibilityLabel="Start New Patient Entry"
+                accessibilityLabel={t("Start New Patient Entry")}
                 accessibilityRole="button"
               >
                 <Ionicons
@@ -1042,7 +1044,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   color={Colors.white}
                   style={{ marginRight: 8 }}
                 />
-                <Text style={styles.confirmNewEntryBtnText}>New Entry</Text>
+                <Text style={styles.confirmNewEntryBtnText}>{t("New Entry")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -1051,16 +1053,16 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
               {isShiftClosed && (
                 <View style={styles.shiftClosedNoticeBanner}>
                   <Ionicons name="lock-closed" size={16} color="#92400E" style={{ marginRight: 8 }} />
-                  <Text style={styles.shiftClosedNoticeText}>Shift closed. Intake is disabled.</Text>
+                  <Text style={styles.shiftClosedNoticeText}>{t("Shift closed. Intake is disabled.")}</Text>
                 </View>
               )}
 
               {/* ── SEARCH BAR (NIC / PHONE / QR) (WALK-IN ONLY) ── */}
               {form.intakeType === 'walk_in' && (
                 <View style={styles.searchCard}>
-                  <Text style={styles.searchTitle}>Search Existing Record</Text>
+                  <Text style={styles.searchTitle}>{t("Search Existing Record")}</Text>
                   <Text style={styles.searchDesc}>
-                    Enter Patient NIC or Phone Number to check past hospital visits.
+                    {t("Enter Patient NIC or Phone Number to check past hospital visits.")}
                   </Text>
 
                   <View style={styles.searchBarRow}>
@@ -1073,7 +1075,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       />
                       <TextInput
                         style={styles.searchInput}
-                        placeholder="NIC (e.g. 199418201234 / 647891234V) or Phone"
+                        placeholder={t("NIC (e.g. 199418201234 / 647891234V) or Phone")}
                         placeholderTextColor={Colors.textLight}
                         value={searchQuery}
                         onChangeText={handleSearchChange}
@@ -1104,7 +1106,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       style={styles.qrButton}
                       onPress={handleQRScanPress}
                       activeOpacity={0.7}
-                      accessibilityLabel="Scan Patient QR Code"
+                      accessibilityLabel={t("Scan Patient QR Code")}
                     >
                       <Ionicons name="qr-code-outline" size={22} color={Colors.primary} />
                     </TouchableOpacity>
@@ -1117,9 +1119,9 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                         <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
                       </View>
                       <View style={styles.bannerTextWrap}>
-                        <Text style={styles.foundBannerTitle}>Existing record found (auto-filled)</Text>
+                        <Text style={styles.foundBannerTitle}>{t("Existing record found (auto-filled)")}</Text>
                         <Text style={styles.foundBannerSub}>
-                          Patient: {matchedPatient?.fullName || form.patient.fullName}
+                          {t("Patient:")}{' '}{matchedPatient?.fullName || form.patient.fullName}
                           {matchedPatient?.nic || form.patient.nic ? ` • NIC: ${matchedPatient?.nic || form.patient.nic}` : ''}
                         </Text>
                       </View>
@@ -1132,9 +1134,9 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                         <Ionicons name="person-add" size={16} color={Colors.primary} />
                       </View>
                       <View style={styles.bannerTextWrap}>
-                        <Text style={styles.notFoundBannerTitle}>New patient</Text>
+                        <Text style={styles.notFoundBannerTitle}>{t("New patient")}</Text>
                         <Text style={styles.notFoundBannerSub}>
-                          No previous record found. Please enter details below.
+                          {t("No previous record found. Please enter details below.")}
                         </Text>
                       </View>
                     </View>
@@ -1154,14 +1156,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     ]}
                   >
                     <Text style={styles.stepPillText}>
-                      {form.intakeType === 'pre_booked' ? 'CHECK-IN' : 'STEP 1'}
+                      {form.intakeType === 'pre_booked' ? 'CHECK-IN' : t("STEP 1")}
                     </Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.formCardTitle}>
                       {form.intakeType === 'pre_booked'
                         ? 'Pre-Booked Patient Check-In'
-                        : 'Demographics & Triage'}
+                        : t("Demographics & Triage")}
                     </Text>
                     <Text style={styles.formCardSub}>
                       {form.intakeType === 'pre_booked'
@@ -1173,7 +1175,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
 
                 {/* ── INTAKE MODE SELECTOR (WALK-IN VS PRE-BOOKED) ── */}
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Intake Mode</Text>
+                  <Text style={styles.fieldLabel}>{t("Intake Mode")}</Text>
                   <View style={styles.intakeTypeRow}>
                     <TouchableOpacity
                       style={[
@@ -1200,7 +1202,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                           form.intakeType === 'walk_in' ? styles.intakeTypeChipTextSelected : null,
                         ]}
                       >
-                        Walk-In Patient
+                        {t("Walk-In Patient")}
                       </Text>
                     </TouchableOpacity>
 
@@ -1229,7 +1231,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                           form.intakeType === 'pre_booked' ? styles.intakeTypeChipTextPreBookedSelected : null,
                         ]}
                       >
-                        Pre-Booked
+                        {t("Pre-Booked")}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1247,14 +1249,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                           <View style={styles.verifiedBadge}>
                             <Ionicons name="checkmark-circle" size={16} color={Colors.primary} style={{ marginRight: 5 }} />
                             <Text style={styles.verifiedBadgeText}>
-                              Verified Pre-Booking • #{selectedPreBooking.bookingRef}
+                              {t("Verified Pre-Booking • #")}{selectedPreBooking.bookingRef}
                             </Text>
                           </View>
                           <TouchableOpacity
                             onPress={handleClearPreBooking}
                             style={styles.changeBookingBtn}
                           >
-                            <Text style={styles.changeBookingBtnText}>Change</Text>
+                            <Text style={styles.changeBookingBtnText}>{t("Change")}</Text>
                           </TouchableOpacity>
                         </View>
 
@@ -1264,7 +1266,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                             <View style={styles.autoIssuedCheckCircle}>
                               <Ionicons name="checkmark" size={12} color="#FFFFFF" />
                             </View>
-                            <Text style={styles.autoIssuedTokenTag}>Queue Token</Text>
+                            <Text style={styles.autoIssuedTokenTag}>{t("Queue Token")}</Text>
                           </View>
                           <View style={styles.autoIssuedTokenNumberPill}>
                             <Text style={styles.autoIssuedTokenNumberText}>
@@ -1278,7 +1280,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
 
                         <View style={styles.verifiedBookingGrid}>
                           <View style={styles.verifiedBookingCol}>
-                            <Text style={styles.verifiedBookingLabel}>PATIENT</Text>
+                            <Text style={styles.verifiedBookingLabel}>{t("PATIENT")}</Text>
                             <Text style={styles.verifiedBookingValue}>
                               {selectedPreBooking.patient?.fullName || form.patient.fullName}
                             </Text>
@@ -1290,12 +1292,12 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                             </Text>
                           </View>
                           <View style={styles.verifiedBookingCol}>
-                            <Text style={styles.verifiedBookingLabel}>SCHEDULED CONSULTATION</Text>
+                            <Text style={styles.verifiedBookingLabel}>{t("SCHEDULED CONSULTATION")}</Text>
                             <Text style={styles.verifiedBookingValue}>
                               {selectedPreBooking.doctor ? `Dr. ${selectedPreBooking.doctor.name}` : selectedPreBooking.department}
                             </Text>
                             <Text style={styles.verifiedBookingSub}>
-                              {selectedPreBooking.department} • Slot: {selectedPreBooking.slotTime}
+                              {t(selectedPreBooking.department ?? '')}{' '}{t("• Slot:")}{' '}{selectedPreBooking.slotTime}
                               {selectedPreBooking.doctor?.room ? ` • ${selectedPreBooking.doctor.room}` : ''}
                             </Text>
                           </View>
@@ -1304,12 +1306,12 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                         {/* Arrival Priority Triage Option for Pre-Booked */}
                         <View style={styles.preBookedTriageWrap}>
                           <View style={styles.priorityHeaderRow}>
-                            <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Arrival Priority Triage</Text>
+                            <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>{t("Arrival Priority Triage")}</Text>
                             {form.priority === 'senior' && (
-                              <Text style={styles.seniorBadgeText}>Senior Queue (60+)</Text>
+                              <Text style={styles.seniorBadgeText}>{t("Senior Queue (60+)")}</Text>
                             )}
                             {form.priority === 'urgent' && (
-                              <Text style={styles.priorityHintUrgent}>🚨 Urgent Queue</Text>
+                              <Text style={styles.priorityHintUrgent}>{t("🚨 Urgent Queue")}</Text>
                             )}
                           </View>
                           <View style={[styles.priorityRow, { marginTop: 6 }]}>
@@ -1389,17 +1391,17 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                         <View style={styles.preBookedListWrap}>
                           <View style={styles.preBookedListHeaderRow}>
                             <Text style={styles.preBookedListTitle}>
-                              Today's Pre-Booked Appointments
+                              {t("Today's Pre-Booked Appointments")}
                             </Text>
                             <TouchableOpacity onPress={() => loadPreBooked(preBookedQuery)}>
-                              <Text style={styles.preBookedRefreshText}>Refresh</Text>
+                              <Text style={styles.preBookedRefreshText}>{t("Refresh")}</Text>
                             </TouchableOpacity>
                           </View>
 
                           {preBookedLoading ? (
                             <View style={styles.preBookedLoadingBox}>
                               <ActivityIndicator size="small" color={Colors.primary} />
-                              <Text style={styles.preBookedLoadingText}>Loading pre-bookings...</Text>
+                              <Text style={styles.preBookedLoadingText}>{t("Loading pre-bookings...")}</Text>
                             </View>
                           ) : preBookedList.length === 0 ? (
                             <View style={styles.preBookedEmptyBox}>
@@ -1459,14 +1461,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     {/* Full Name */}
                     <View style={styles.fieldGroup}>
                       <Text style={styles.fieldLabel}>
-                        Full Name <Text style={styles.requiredAsterisk}>*</Text>
+                        {t("Full Name")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
                       </Text>
                       <TextInput
                         style={[
                           styles.textInput,
                           form.errors.fullName ? styles.inputError : null,
                         ]}
-                        placeholder="Enter your full name"
+                        placeholder={t("Enter your full name")}
                         placeholderTextColor={Colors.textLight}
                         value={form.patient.fullName}
                         onChangeText={(val) => form.setField('fullName', val)}
@@ -1479,7 +1481,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
 
                     {/* NIC Number */}
                     <View style={styles.fieldGroup}>
-                      <Text style={styles.fieldLabel}>NIC Number (Optional)</Text>
+                      <Text style={styles.fieldLabel}>{t("NIC Number (Optional)")}</Text>
                       <TextInput
                         style={[
                           styles.textInput,
@@ -1501,7 +1503,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <View style={styles.fieldsRow}>
                       {/* Birthday Field */}
                       <View style={[styles.fieldGroup, { flex: 1.2, marginRight: 8 }]}>
-                        <Text style={styles.fieldLabel}>Birthday</Text>
+                        <Text style={styles.fieldLabel}>{t("Birthday")}</Text>
                         <View style={styles.inputWithIconWrap}>
                           <TextInput
                             style={[
@@ -1538,9 +1540,9 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       {/* Age Field */}
                       <View style={[styles.fieldGroup, { flex: 0.8, marginLeft: 8 }]}>
                         <View style={styles.ageLabelRow}>
-                          <Text style={styles.fieldLabel}>Age</Text>
+                          <Text style={styles.fieldLabel}>{t("Age")}</Text>
                           {Number(form.patient.age) >= 60 && (
-                            <Text style={styles.seniorBadgeText}>Senior (60+)</Text>
+                            <Text style={styles.seniorBadgeText}>{t("Senior (60+)")}</Text>
                           )}
                         </View>
                         <TextInput
@@ -1563,7 +1565,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
 
                     {/* Gender Selector */}
                     <View style={styles.fieldGroup}>
-                      <Text style={styles.fieldLabel}>Gender</Text>
+                      <Text style={styles.fieldLabel}>{t("Gender")}</Text>
                       <View style={styles.genderRow}>
                         {(['male', 'female', 'other'] as const).map((g) => {
                           const isSelected = form.patient.gender === g;
@@ -1596,7 +1598,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     {/* Telephone Number */}
                     <View style={styles.fieldGroup}>
                       <Text style={styles.fieldLabel}>
-                        Telephone Number <Text style={styles.requiredAsterisk}>*</Text>
+                        {t("Telephone Number")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
                       </Text>
                       <TextInput
                         style={[
@@ -1608,7 +1610,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                         value={form.patient.phone}
                         onChangeText={(val) => form.setField('phone', val)}
                         keyboardType="phone-pad"
-                        accessibilityLabel="Telephone Number"
+                        accessibilityLabel={t("Telephone Number")}
                       />
                       {form.errors.phone ? (
                         <Text style={styles.errorText}>{form.errors.phone}</Text>
@@ -1618,14 +1620,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     {/* Blood Group (Optional) */}
                     <View style={styles.fieldGroup}>
                       <View style={styles.bloodGroupHeaderRow}>
-                        <Text style={styles.fieldLabel}>Blood Group (Optional)</Text>
+                        <Text style={styles.fieldLabel}>{t("Blood Group (Optional)")}</Text>
                         {form.patient.bloodGroup ? (
                           <TouchableOpacity
                             onPress={() => form.setField('bloodGroup', '')}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           >
                             <Text style={styles.clearBloodGroupText}>
-                              Clear ({form.patient.bloodGroup})
+                              {t("Clear (")}{form.patient.bloodGroup})
                             </Text>
                           </TouchableOpacity>
                         ) : null}
@@ -1661,12 +1663,12 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     {/* Priority Chips (Normal / Senior / Urgent) */}
                     <View style={styles.fieldGroup}>
                       <View style={styles.priorityHeaderRow}>
-                        <Text style={styles.fieldLabel}>Priority Triage</Text>
+                        <Text style={styles.fieldLabel}>{t("Priority Triage")}</Text>
                         {form.priority === 'senior' && (
-                          <Text style={styles.priorityHintSenior}>Senior line prioritized</Text>
+                          <Text style={styles.priorityHintSenior}>{t("Senior line prioritized")}</Text>
                         )}
                         {form.priority === 'urgent' && (
-                          <Text style={styles.priorityHintUrgent}>Immediate doctor triage</Text>
+                          <Text style={styles.priorityHintUrgent}>{t("Immediate doctor triage")}</Text>
                         )}
                       </View>
                       <View style={styles.priorityRow}>
@@ -1731,12 +1733,12 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   <View style={[styles.formCard, { marginTop: 16 }]}>
                     <View style={styles.formCardHeader}>
                       <View style={[styles.stepPill, { backgroundColor: '#0284C7' }]}>
-                        <Text style={styles.stepPillText}>STEP 2</Text>
+                        <Text style={styles.stepPillText}>{t("STEP 2")}</Text>
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.formCardTitle}>Department, Doctor & Slot</Text>
+                        <Text style={styles.formCardTitle}>{t("Department, Doctor & Slot")}</Text>
                         <Text style={styles.formCardSub}>
-                          Select specialty, physician, and appointment time
+                          {t("Select specialty, physician, and appointment time")}
                         </Text>
                       </View>
                     </View>
@@ -1745,7 +1747,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       <View style={styles.preBookedReservationNotice}>
                         <Ionicons name="calendar-outline" size={16} color="#4F46E5" style={{ marginRight: 6 }} />
                         <Text style={styles.preBookedReservationNoticeText}>
-                          Pre-Booked Slot: {selectedPreBooking.slotTime} • Dr. {selectedPreBooking.doctor?.name || 'Assigned'} ({selectedPreBooking.department})
+                          {t("Pre-Booked Slot:")}{' '}{selectedPreBooking.slotTime}{' '}{t("• Dr.")}{' '}{selectedPreBooking.doctor?.name || 'Assigned'} ({t(selectedPreBooking.department ?? '')})
                         </Text>
                       </View>
                     )}
@@ -1754,11 +1756,11 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <View style={styles.fieldGroup}>
                       <View style={styles.sectionHeaderRow}>
                         <Text style={styles.fieldLabel}>
-                          Department <Text style={styles.requiredAsterisk}>*</Text>
+                          {t("Department")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
                         </Text>
                         {form.department ? (
                           <Text style={styles.selectedLabelText}>
-                            Selected: {form.department}
+                            {t("Selected:")}{' '}{t(form.department ?? '')}
                           </Text>
                         ) : null}
                       </View>
@@ -1811,7 +1813,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                         })}
                       </View>
                       {form.errors.department ? (
-                        <Text style={styles.errorText}>{form.errors.department}</Text>
+                        <Text style={styles.errorText}>{t(form.errors.department ?? '')}</Text>
                       ) : null}
                     </View>
 
@@ -1819,11 +1821,11 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <View style={styles.fieldGroup}>
                       <View style={styles.sectionHeaderRow}>
                         <Text style={styles.fieldLabel}>
-                          Consulting Doctor <Text style={styles.requiredAsterisk}>*</Text>
+                          {t("Consulting Doctor")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
                         </Text>
                         {departmentDoctors.length > 0 ? (
                           <Text style={styles.subCountText}>
-                            {departmentDoctors.length} available
+                            {departmentDoctors.length}{' '}{t("available")}
                           </Text>
                         ) : null}
                       </View>
@@ -1836,13 +1838,13 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                             color={Colors.textLight}
                           />
                           <Text style={styles.promptBoxText}>
-                            Please select a department above to view active doctors
+                            {t("Please select a department above to view active doctors")}
                           </Text>
                         </View>
                       ) : doctorsLoading ? (
                         <View style={styles.loadingBox}>
                           <ActivityIndicator size="small" color={Colors.primary} />
-                          <Text style={styles.loadingBoxText}>Loading doctors...</Text>
+                          <Text style={styles.loadingBoxText}>{t("Loading doctors...")}</Text>
                         </View>
                       ) : departmentDoctors.length === 0 ? (
                         <View style={styles.emptyBox}>
@@ -1852,7 +1854,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                             color={Colors.warning}
                           />
                           <Text style={styles.emptyBoxText}>
-                            No active doctors currently available in {form.department}
+                            {t("No active doctors currently available in")}{' '}{t(form.department ?? '')}
                           </Text>
                         </View>
                       ) : (
@@ -1907,12 +1909,12 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                                     />
                                   </View>
                                   <Text style={styles.doctorSpecialty}>
-                                    {doc.specialization || doc.department} •{' '}
+                                    {t(doc.specialization || doc.department || '')} •{' '}
                                     {doc.room || 'OPD Room'}
                                   </Text>
                                   <Text style={styles.doctorLoadText}>
-                                    {doc.todayPatients || 0} patients attended today • ~
-                                    {doc.avgConsultMinutes || 10}m/patient
+                                    {doc.todayPatients || 0}{' '}{t("patients attended today • ~")}
+                                    {doc.avgConsultMinutes || 10}{t("m/patient")}
                                   </Text>
                                 </View>
 
@@ -1938,7 +1940,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <View style={styles.fieldGroup}>
                       <View style={styles.sectionHeaderRow}>
                         <Text style={styles.fieldLabel}>
-                          Appointment Slot <Text style={styles.requiredAsterisk}>*</Text>
+                          {t("Appointment Slot")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
                         </Text>
                         {form.slotTime ? (
                           <View style={styles.slotBadge}>
@@ -1961,14 +1963,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                             color={Colors.textLight}
                           />
                           <Text style={styles.promptBoxText}>
-                            Please choose a doctor above to view today's available slots
+                            {t("Please choose a doctor above to view today's available slots")}
                           </Text>
                         </View>
                       ) : slotsLoading ? (
                         <View style={styles.loadingBox}>
                           <ActivityIndicator size="small" color={Colors.primary} />
                           <Text style={styles.loadingBoxText}>
-                            Fetching available slots for today...
+                            {t("Fetching available slots for today...")}
                           </Text>
                         </View>
                       ) : slotsError ? (
@@ -1979,9 +1981,9 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       ) : slots.length === 0 || !slots.some((s) => s.status === 'available') ? (
                         <View style={styles.emptyBox}>
                           <Ionicons name="time-outline" size={22} color={Colors.warning} />
-                          <Text style={styles.emptyBoxTitle}>No Slots Remaining</Text>
+                          <Text style={styles.emptyBoxTitle}>{t("No Slots Remaining")}</Text>
                           <Text style={styles.emptyBoxText}>
-                            All appointment slots for this doctor are booked or passed for today.
+                            {t("All appointment slots for this doctor are booked or passed for today.")}
                           </Text>
                         </View>
                       ) : (
@@ -1995,7 +1997,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                                   { backgroundColor: Colors.primary },
                                 ]}
                               />
-                              <Text style={styles.legendText}>Selected</Text>
+                              <Text style={styles.legendText}>{t("Selected")}</Text>
                             </View>
                             <View style={styles.legendItem}>
                               <View
@@ -2008,7 +2010,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                                   },
                                 ]}
                               />
-                              <Text style={styles.legendText}>Available</Text>
+                              <Text style={styles.legendText}>{t("Available")}</Text>
                             </View>
                             <View style={styles.legendItem}>
                               <View
@@ -2022,7 +2024,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                                 ]}
                               />
                               <Text style={[styles.legendText, { color: '#DC2626', fontWeight: '600' }]}>
-                                Booked
+                                {t("Booked")}
                               </Text>
                             </View>
                             <View style={styles.legendItem}>
@@ -2032,7 +2034,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                                   { backgroundColor: '#E5E7EB' },
                                 ]}
                               />
-                              <Text style={styles.legendText}>Past</Text>
+                              <Text style={styles.legendText}>{t("Past")}</Text>
                             </View>
                           </View>
 
@@ -2048,9 +2050,9 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                                 if (isAvailable) {
                                   form.setField('slotTime', slot.time);
                                 } else if (isBooked) {
-                                  showToast(`Slot ${slot.time} is already booked by a patient.`, 'warning');
+                                  showToast(t("Slot {value0} is already booked by a patient.", { value0: String(slot.time) }), 'warning');
                                 } else if (isPast) {
-                                  showToast(`Slot ${slot.time} has already passed for today.`, 'info');
+                                  showToast(t("Slot {value0} has already passed for today.", { value0: String(slot.time) }), 'info');
                                 }
                               };
 
@@ -2092,10 +2094,10 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                                   </View>
                                   {isBooked ? (
                                     <View style={styles.slotBookedTag}>
-                                      <Text style={styles.slotBookedTagText}>Booked</Text>
+                                      <Text style={styles.slotBookedTagText}>{t("Booked")}</Text>
                                     </View>
                                   ) : isPast ? (
-                                    <Text style={styles.slotPastTagText}>Past</Text>
+                                    <Text style={styles.slotPastTagText}>{t("Past")}</Text>
                                   ) : null}
                                 </TouchableOpacity>
                               );
@@ -2119,18 +2121,18 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                           color="#5EEAD4"
                           style={{ marginRight: 4 }}
                         />
-                        <Text style={styles.previewBadgeText}>LIVE TOKEN PREVIEW</Text>
+                        <Text style={styles.previewBadgeText}>{t("LIVE TOKEN PREVIEW")}</Text>
                       </View>
                       <View style={styles.previewStatusTag}>
                         <Text style={styles.previewStatusTagText}>
-                          {form.existingPatientId ? 'Existing Record' : 'New Patient'}
+                          {form.existingPatientId ? t("Existing Record") : t("New Patient")}
                         </Text>
                       </View>
                     </View>
 
                     {/* Token Callout Box */}
                     <View style={styles.previewTokenBox}>
-                      <Text style={styles.previewTokenPlaceholder}>OPD • LIVE</Text>
+                      <Text style={styles.previewTokenPlaceholder}>{t("OPD • LIVE")}</Text>
                       <View style={styles.tokenAssignTag}>
                         <Ionicons
                           name="shield-checkmark"
@@ -2139,7 +2141,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                           style={{ marginRight: 4 }}
                         />
                         <Text style={styles.tokenAssignTagText}>
-                          Token assigned on submit
+                          {t("Token assigned on submit")}
                         </Text>
                       </View>
                     </View>
@@ -2147,42 +2149,42 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     {/* Summary Data Grid */}
                     <View style={styles.previewGrid}>
                       <View style={styles.previewGridItem}>
-                        <Text style={styles.previewItemLabel}>PATIENT</Text>
+                        <Text style={styles.previewItemLabel}>{t("PATIENT")}</Text>
                         <Text style={styles.previewItemValue} numberOfLines={1}>
                           {form.patient.fullName.trim() || '---'}
                         </Text>
                       </View>
 
                       <View style={styles.previewGridItem}>
-                        <Text style={styles.previewItemLabel}>DOCTOR</Text>
+                        <Text style={styles.previewItemLabel}>{t("DOCTOR")}</Text>
                         <Text style={styles.previewItemValue} numberOfLines={1}>
                           {selectedDoctor ? selectedDoctor.name : '---'}
                         </Text>
                       </View>
 
                       <View style={styles.previewGridItem}>
-                        <Text style={styles.previewItemLabel}>ROOM</Text>
+                        <Text style={styles.previewItemLabel}>{t("ROOM")}</Text>
                         <Text style={styles.previewItemValue}>
                           {selectedDoctor?.room || '---'}
                         </Text>
                       </View>
 
                       <View style={styles.previewGridItem}>
-                        <Text style={styles.previewItemLabel}>SLOT TIME</Text>
+                        <Text style={styles.previewItemLabel}>{t("SLOT TIME")}</Text>
                         <Text style={styles.previewItemValue}>
                           {form.slotTime || '---'}
                         </Text>
                       </View>
 
                       <View style={styles.previewGridItem}>
-                        <Text style={styles.previewItemLabel}>DEPARTMENT</Text>
+                        <Text style={styles.previewItemLabel}>{t("DEPARTMENT")}</Text>
                         <Text style={styles.previewItemValue} numberOfLines={1}>
-                          {form.department || '---'}
+                          {t(form.department || '---')}
                         </Text>
                       </View>
 
                       <View style={styles.previewGridItem}>
-                        <Text style={styles.previewItemLabel}>EST. WAIT TIME</Text>
+                        <Text style={styles.previewItemLabel}>{t("EST. WAIT TIME")}</Text>
                         <Text style={[styles.previewItemValue, { color: '#5EEAD4' }]}>
                           {getEstimatedWaitForDoctor()}
                         </Text>
@@ -2193,7 +2195,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                     <View style={styles.previewTagsRow}>
                       <View style={styles.previewTagPill}>
                         <Text style={styles.previewTagPillText}>
-                          Priority: {form.priority.toUpperCase()}
+                          {t("Priority:")}{' '}{form.priority.toUpperCase()}
                         </Text>
                       </View>
                       <View style={styles.previewTagPill}>
@@ -2204,14 +2206,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                           style={{ marginRight: 4 }}
                         />
                         <Text style={styles.previewTagPillText}>
-                          Mode: Walk-In
+                          {t("Mode: Walk-In")}
                         </Text>
                       </View>
                       {form.patient.bloodGroup ? (
                         <View style={[styles.previewTagPill, { backgroundColor: 'rgba(239, 68, 68, 0.25)' }]}>
                           <Ionicons name="water" size={11} color="#F87171" style={{ marginRight: 3 }} />
                           <Text style={[styles.previewTagPillText, { color: '#FCA5A5' }]}>
-                            Blood: {form.patient.bloodGroup}
+                            {t("Blood:")}{' '}{form.patient.bloodGroup}
                           </Text>
                         </View>
                       ) : null}
@@ -2234,7 +2236,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   onPress={handlePrintAndIssueToken}
                   disabled={submitting || isShiftClosed || (form.intakeType === 'pre_booked' && !selectedPreBooking)}
                   activeOpacity={0.8}
-                  accessibilityLabel="Print Ticket and Issue Token"
+                  accessibilityLabel={t("Print Ticket and Issue Token")}
                   accessibilityRole="button"
                 >
                   {submitting ? (
@@ -2264,7 +2266,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       />
                       <Text style={styles.submitButtonText}>
                         {isShiftClosed
-                          ? 'Shift Closed (Intake Disabled)'
+                          ? t("Shift Closed (Intake Disabled)")
                           : form.intakeType === 'pre_booked'
                             ? selectedPreBooking
                               ? `Print Ticket (${selectedPreBooking.tokenLabel || (selectedPreBooking.tokenNumber ? `OPD-${String(selectedPreBooking.tokenNumber).padStart(3, '0')}` : `#${selectedPreBooking.bookingRef}`)})`
@@ -2281,7 +2283,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                   onPress={handleClearForm}
                   disabled={submitting}
                   activeOpacity={0.7}
-                  accessibilityLabel="Clear Form and New Entry"
+                  accessibilityLabel={t("Clear Form and New Entry")}
                   accessibilityRole="button"
                 >
                   <Ionicons
@@ -2295,7 +2297,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       ? selectedPreBooking
                         ? 'Clear Selection / Choose Another'
                         : 'Refresh Appointments'
-                      : 'Clear Form / New Entry'}
+                      : t("Clear Form / New Entry")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2337,29 +2339,29 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
               <Ionicons name="checkmark-done" size={32} color={Colors.white} />
             </View>
 
-            <Text style={styles.successModalTitle}>Registration Successful!</Text>
+            <Text style={styles.successModalTitle}>{t("Registration Successful!")}</Text>
             <Text style={styles.successModalSubtitle}>
-              Official walk-in appointment confirmed & OPD Token generated.
+              {t("Official walk-in appointment confirmed & OPD Token generated.")}
             </Text>
 
             <View style={styles.successSummaryBox}>
               <View style={styles.successSummaryRow}>
-                <Text style={styles.successSummaryKey}>Patient:</Text>
+                <Text style={styles.successSummaryKey}>{t("Patient:")}</Text>
                 <Text style={styles.successSummaryVal}>{confirmedBooking?.patient.fullName}</Text>
               </View>
               <View style={styles.successSummaryRow}>
-                <Text style={styles.successSummaryKey}>Mobile:</Text>
+                <Text style={styles.successSummaryKey}>{t("Mobile:")}</Text>
                 <Text style={styles.successSummaryVal}>{confirmedBooking?.patient.phone}</Text>
               </View>
               <View style={styles.successSummaryRow}>
-                <Text style={styles.successSummaryKey}>Queue Token:</Text>
+                <Text style={styles.successSummaryKey}>{t("Queue Token:")}</Text>
                 <Text style={[styles.successSummaryVal, { color: Colors.primary, fontWeight: '800' }]}>
                   {confirmedBooking?.token?.tokenLabel ||
                     `OPD-${String(confirmedBooking?.token?.tokenNumber || 1).padStart(3, '0')}`}
                 </Text>
               </View>
               <View style={styles.successSummaryRow}>
-                <Text style={styles.successSummaryKey}>Doctor:</Text>
+                <Text style={styles.successSummaryKey}>{t("Doctor:")}</Text>
                 <Text style={styles.successSummaryVal}>{confirmedBooking?.doctor.name}</Text>
               </View>
             </View>
@@ -2368,14 +2370,14 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             <View style={styles.smsAlertCard}>
               <View style={styles.smsAlertHeader}>
                 <Ionicons name="paper-plane" size={13} color="#0D9488" style={{ marginRight: 6 }} />
-                <Text style={styles.smsAlertTitle}>SMS SENT TO PATIENT</Text>
+                <Text style={styles.smsAlertTitle}>{t("SMS SENT TO PATIENT")}</Text>
               </View>
               <Text style={styles.smsAlertText}>
                 {confirmedBooking?.smsNotification?.message ||
                   `[Medi-Queue Hospital] Dear ${confirmedBooking?.patient.fullName}, your registration is SUCCESSFUL! Queue Token: ${confirmedBooking?.token?.tokenLabel}. Doctor: ${confirmedBooking?.doctor?.name}.`}
               </Text>
               <Text style={styles.smsAlertSub}>
-                ✓ Sent to {confirmedBooking?.patient.phone} • Delivered
+                {t("✓ Sent to")}{' '}{confirmedBooking?.patient.phone}{' '}{t("• Delivered")}
               </Text>
             </View>
 
@@ -2384,7 +2386,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
               onPress={() => setShowStaffSuccessModal(false)}
               activeOpacity={0.8}
             >
-              <Text style={styles.successModalCloseBtnText}>View Ticket & Continue</Text>
+              <Text style={styles.successModalCloseBtnText}>{t("View Ticket & Continue")}</Text>
             </TouchableOpacity>
           </View>
         </View>

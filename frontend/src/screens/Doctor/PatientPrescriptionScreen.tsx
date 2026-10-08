@@ -1083,7 +1083,7 @@ export default function PatientPrescriptionScreen() {
                   <Ionicons name="alert-circle" size={19} color="#dc2626" style={{ marginRight: 8, marginTop: 1 }} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.allergyConflictTitle}>
-                      Allergy conflict detected: {allergyConflict.allergen}
+                      {t("Allergy conflict detected:")}{' '}{allergyConflict.allergen}
                     </Text>
                     <Text style={styles.allergyConflictNote}>
                       {allergyConflict.note}
@@ -1494,7 +1494,7 @@ export default function PatientPrescriptionScreen() {
                       color="#ffffff"
                       style={{ marginRight: 8 }}
                     />
-                    <Text style={styles.saveFilledBtnText}>Save and download</Text>
+                    <Text style={styles.saveFilledBtnText}>{t("Save and download")}</Text>
                   </>
                 )}
               </TouchableOpacity>

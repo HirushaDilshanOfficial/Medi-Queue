@@ -1,3 +1,4 @@
+import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -89,6 +90,7 @@ export default function AllergyAlertSection({
   initialAllergies,
   onAllergiesChange,
 }: AllergyAlertSectionProps) {
+  const { t } = useLanguage();
   // Local allergies state
   const [allergies, setAllergies] = useState<AllergyItem[]>(() => {
     if (initialAllergies && initialAllergies.length > 0) {
@@ -366,9 +368,9 @@ export default function AllergyAlertSection({
               <Ionicons name="shield-checkmark" size={26} color="#16a34a" />
             </View>
             <View style={styles.emptyGreenTextWrap}>
-              <Text style={styles.emptyGreenTitle}>No known allergies</Text>
+              <Text style={styles.emptyGreenTitle}>{t("No known allergies")}</Text>
               <Text style={styles.emptyGreenSubtitle}>
-                Confirm with the patient before prescribing
+                {t("Confirm with the patient before prescribing")}
               </Text>
             </View>
           </View>
@@ -378,10 +380,10 @@ export default function AllergyAlertSection({
             onPress={handleOpenAdd}
             activeOpacity={0.75}
             accessibilityRole="button"
-            accessibilityLabel="Add allergy"
+            accessibilityLabel={t("Add allergy")}
           >
             <Ionicons name="add" size={17} color="#065f46" style={{ marginRight: 3 }} />
-            <Text style={styles.emptyGreenAddText}>Add allergy</Text>
+            <Text style={styles.emptyGreenAddText}>{t("Add allergy")}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -403,10 +405,10 @@ export default function AllergyAlertSection({
               onPress={handleOpenAdd}
               activeOpacity={0.75}
               accessibilityRole="button"
-              accessibilityLabel="Add allergy"
+              accessibilityLabel={t("Add allergy")}
             >
               <Ionicons name="add" size={16} color="#dc2626" style={{ marginRight: 2 }} />
-              <Text style={styles.headerAddBtnText}>Add</Text>
+              <Text style={styles.headerAddBtnText}>{t("Add")}</Text>
             </TouchableOpacity>
           </View>
 
@@ -450,7 +452,7 @@ export default function AllergyAlertSection({
 
                       {/* Reaction line */}
                       <View style={styles.reactionRow}>
-                        <Text style={styles.reactionLabel}>Reaction: </Text>
+                        <Text style={styles.reactionLabel}>{t("Reaction:")}{' '}</Text>
                         <Text style={styles.reactionValue}>{item.reaction}</Text>
                       </View>
 
@@ -529,7 +531,7 @@ export default function AllergyAlertSection({
             <View style={styles.sheetHeaderRow}>
               <View>
                 <Text style={styles.sheetTitle}>
-                  {sheetMode === 'edit' ? 'Edit allergy' : 'Add allergy'}
+                  {sheetMode === 'edit' ? 'Edit allergy' : t("Add allergy")}
                 </Text>
                 <Text style={styles.sheetSubtitle}>
                   {sheetMode === 'edit'
@@ -557,7 +559,7 @@ export default function AllergyAlertSection({
               {/* Field 1: Allergen text input with autofocus */}
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>
-                  Allergen / Drug name <Text style={styles.requiredStar}>*</Text>
+                  {t("Allergen / Drug name")}{' '}<Text style={styles.requiredStar}>*</Text>
                 </Text>
                 <View
                   style={[
@@ -597,7 +599,7 @@ export default function AllergyAlertSection({
               {/* Field 2: Reaction as single-select chips */}
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>
-                  Reaction <Text style={styles.requiredStar}>*</Text>
+                  {t("Reaction")}{' '}<Text style={styles.requiredStar}>*</Text>
                 </Text>
                 <View
                   style={styles.chipsGrid}
@@ -644,7 +646,7 @@ export default function AllergyAlertSection({
               {/* Field 3: Severity as a 2x2 Segmented Control */}
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>
-                  Severity <Text style={styles.requiredStar}>*</Text>
+                  {t("Severity")}{' '}<Text style={styles.requiredStar}>*</Text>
                 </Text>
                 <View
                   style={styles.severityGrid2x2}
@@ -725,7 +727,7 @@ export default function AllergyAlertSection({
 
               {/* Field 4: Optional note input */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Clinical note (Optional)</Text>
+                <Text style={styles.fieldLabel}>{t("Clinical note (Optional)")}</Text>
                 <View
                   style={[
                     styles.textAreaWrap,
@@ -756,7 +758,7 @@ export default function AllergyAlertSection({
                   accessibilityRole="button"
                   accessibilityLabel="Cancel allergy changes"
                 >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                  <Text style={styles.cancelBtnText}>{t("Cancel")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -769,7 +771,7 @@ export default function AllergyAlertSection({
                   activeOpacity={0.8}
                   accessibilityRole="button"
                   accessibilityLabel={
-                    sheetMode === 'edit' ? 'Save changes' : 'Add allergy'
+                    sheetMode === 'edit' ? t("Save changes") : t("Add allergy")
                   }
                 >
                   <Ionicons
@@ -779,7 +781,7 @@ export default function AllergyAlertSection({
                     style={{ marginRight: 4 }}
                   />
                   <Text style={styles.saveBtnText}>
-                    {sheetMode === 'edit' ? 'Save changes' : 'Add allergy'}
+                    {sheetMode === 'edit' ? t("Save changes") : t("Add allergy")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -819,13 +821,13 @@ export default function AllergyAlertSection({
               <Ionicons name="alert-circle" size={32} color="#dc2626" />
             </View>
 
-            <Text style={styles.dialogTitle}>Remove this allergy?</Text>
+            <Text style={styles.dialogTitle}>{t("Remove this allergy?")}</Text>
 
             <Text style={styles.dialogBody}>
               <Text style={{ fontWeight: '700', color: '#0f172a' }}>
                 {itemToDelete?.item.allergen || 'This allergy'}{' '}
               </Text>
-              will no longer show a warning when you prescribe. Only remove it if it was entered by mistake.
+              {t("will no longer show a warning when you prescribe. Only remove it if it was entered by mistake.")}
             </Text>
 
             <View style={styles.dialogButtonsRow}>
@@ -839,7 +841,7 @@ export default function AllergyAlertSection({
                 accessibilityRole="button"
                 accessibilityLabel="Keep allergy"
               >
-                <Text style={styles.dialogKeepBtnText}>Keep</Text>
+                <Text style={styles.dialogKeepBtnText}>{t("Keep")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -849,7 +851,7 @@ export default function AllergyAlertSection({
                 accessibilityRole="button"
                 accessibilityLabel="Remove allergy"
               >
-                <Text style={styles.dialogRemoveBtnText}>Remove</Text>
+                <Text style={styles.dialogRemoveBtnText}>{t("Remove")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -881,7 +883,7 @@ export default function AllergyAlertSection({
             <View style={styles.toastIconWrap}>
               <Ionicons name="trash-bin-outline" size={17} color="#94a3b8" />
             </View>
-            <Text style={styles.toastText}>Allergy removed</Text>
+            <Text style={styles.toastText}>{t("Allergy removed")}</Text>
           </View>
 
           <View style={styles.toastRight}>
@@ -893,7 +895,7 @@ export default function AllergyAlertSection({
               accessibilityLabel="Undo allergy removal"
             >
               <Ionicons name="arrow-undo" size={14} color="#0891b2" style={{ marginRight: 4 }} />
-              <Text style={styles.undoBtnText}>Undo</Text>
+              <Text style={styles.undoBtnText}>{t("Undo")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

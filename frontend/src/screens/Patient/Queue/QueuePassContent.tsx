@@ -7,6 +7,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { ProfileIcon } from '../../../components/patient/ProfileIcon';
 import type { Doctor, QueuePass } from '../../../types/patient';
 import { C, styles } from './queueStyles';
+import { longDayLabel } from '../../../utils/opdDates';
 
 export function queueTime(value: string | null | undefined) {
   if (!value) return null;
@@ -21,14 +22,14 @@ function guidance(pass: QueuePass, t: ReturnType<typeof useLanguage>['t']) {
   if (pass.status === 'called') return t('Your number has been called. Go to {room} now and show this QR code to the staff.', { room: pass.room ?? t('the clinic administration terminal') });
   if (pass.status === 'in_consultation') return t('Your consultation is under way. Follow up at the pharmacy desk if you need a prescription.');
   if (['completed', 'cancelled', 'no_show'].includes(pass.status)) return t('This queue pass is no longer active. Ask the clinic desk if you need further assistance.');
-  return t('Scan this QR code at the {department} administration terminal when your name is announced or your number appears on the display.', { department: pass.department });
+  return t('Scan this QR code at the {department} administration terminal when your name is announced or your number appears on the display.', { department: t(pass.department) });
 }
 
 export function QueuePassContent({ pass, patientName, doctor, countdown, liveError, onHome, onWallet, onShare, onContact }: {
   pass: QueuePass; patientName: string; doctor?: Doctor | null; countdown: number; liveError: string | null;
   onHome: () => void; onWallet: () => void; onShare: () => void; onContact: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const { width } = useWindowDimensions();
   const qrSize = Math.max(120, Math.min(224, width - 120));
   const live = pass.live;
@@ -41,7 +42,7 @@ export function QueuePassContent({ pass, patientName, doctor, countdown, liveErr
     <View style={styles.card}>
       <View style={styles.clinicRow}>
         <View style={styles.clinicIcon}><ProfileIcon name={/ortho/i.test(pass.department) ? 'spine' : 'medical'} size={22} color={C.secondary} /></View>
-        <View style={styles.grow}><Text accessibilityRole="header" style={styles.title}>{pass.department}</Text><Text style={styles.small}>{t("Registration time")}{' '}{queueTime(pass.checkedInAt) ?? '—'}</Text></View>
+        <View style={styles.grow}><Text accessibilityRole="header" style={styles.title}>{t(pass.department)}</Text><Text style={styles.small}>{t("Registration time")}{' '}{queueTime(pass.checkedInAt) ?? '—'}</Text></View>
         <View style={styles.roomPill}><View style={styles.roomDot} /><Text style={styles.roomText}>{pass.room ?? t('Room pending')}</Text></View>
       </View>
       <View style={styles.numberPanel}>
@@ -60,7 +61,7 @@ export function QueuePassContent({ pass, patientName, doctor, countdown, liveErr
       <View style={styles.metadata}>
         <View style={styles.metaItem}><Text style={styles.metaLabel}>{t("Patient Name")}</Text><Text numberOfLines={1} style={styles.metaValue}>{patientName}</Text></View>
         <View style={styles.metaItem}><Text style={styles.metaLabel}>{t("Queue Number")}</Text><Text style={styles.metaNumber}>{pass.tokenNumber}</Text></View>
-        <View style={styles.metaItem}><Text style={styles.metaLabel}>{t("Reservation Date")}</Text><Text numberOfLines={1} style={styles.metaValue}>{pass.dateLong || pass.queueDate}</Text></View>
+        <View style={styles.metaItem}><Text style={styles.metaLabel}>{t("Reservation Date")}</Text><Text numberOfLines={1} style={styles.metaValue}>{longDayLabel(pass.queueDate, locale)}</Text></View>
       </View>
     </View>
     <View style={styles.pharmacy}>
@@ -70,7 +71,7 @@ export function QueuePassContent({ pass, patientName, doctor, countdown, liveErr
     </View>
     <View style={styles.specialist}>
       {doctor?.avatarUrl ? <Image source={{ uri: doctor.avatarUrl }} style={styles.doctorAvatar} /> : <View style={styles.doctorAvatar}><ProfileIcon name="stethoscope" size={24} /></View>}
-      <View style={styles.grow}><Text style={styles.specialistEyebrow}>{t("ATTENDING SPECIALIST")}</Text><Text style={styles.title}>{pass.doctorName ?? t('Assigned at the clinic')}</Text><Text style={styles.caption}>{doctor?.specialization ?? pass.department}</Text></View>
+      <View style={styles.grow}><Text style={styles.specialistEyebrow}>{t("ATTENDING SPECIALIST")}</Text><Text style={styles.title}>{pass.doctorName ?? t('Assigned at the clinic')}</Text><Text style={styles.caption}>{t(doctor?.specialization ?? pass.department)}</Text></View>
       <Pressable accessibilityRole="button" accessibilityLabel={t("Clinic contact information")} onPress={onContact} style={({ pressed }) => [styles.contactButton, pressed && styles.pressed]}><ProfileIcon name="phone" size={18} /></Pressable>
     </View>
     <View style={styles.actions}>

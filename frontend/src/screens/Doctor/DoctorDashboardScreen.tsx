@@ -612,7 +612,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={styles.departmentBadge}>
               <Ionicons name="business-outline" size={14} color="#0d6371" style={{ marginRight: 5 }} />
               <Text style={styles.departmentText}>
-                {doctor?.department || t('No department')} • {doctor?.room || 'Room 3B'}
+                {t(doctor?.department || 'No department')} • {doctor?.room || 'Room 3B'}
               </Text>
             </View>
           </View>
@@ -657,10 +657,10 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
           </View>
           <View style={styles.hospitalInfoWrap}>
             <View style={styles.hospitalLabelRow}>
-              <Text style={styles.hospitalLabelText}>CURRENT HOSPITAL</Text>
+              <Text style={styles.hospitalLabelText}>{t("CURRENT HOSPITAL")}</Text>
               <View style={styles.hospitalActivePill}>
                 <View style={styles.activeDot} />
-                <Text style={styles.hospitalActivePillText}>Active Duty</Text>
+                <Text style={styles.hospitalActivePillText}>{t("Active Duty")}</Text>
               </View>
             </View>
             <Text style={styles.hospitalTitleText} numberOfLines={1}>
@@ -669,7 +669,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={styles.hospitalDeptRow}>
               <Ionicons name="business-outline" size={13} color="#0d6371" style={{ marginRight: 4 }} />
               <Text style={styles.hospitalDeptText}>
-                {doctor?.department || 'General OPD'} • {doctor?.room || 'Room 101'}
+                {t(doctor?.department || 'General OPD')} • {doctor?.room || 'Room 101'}
               </Text>
             </View>
           </View>
@@ -698,7 +698,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                   <Text style={styles.dashboardBreakTitle}>{activeBreak.label}</Text>
                   <View style={styles.dashboardBreakLivePill}>
                     <View style={styles.dashboardBreakLiveDot} />
-                    <Text style={styles.dashboardBreakLiveText}>On Break</Text>
+                    <Text style={styles.dashboardBreakLiveText}>{t("On Break")}</Text>
                   </View>
                 </View>
                 <Text style={styles.dashboardBreakSub}>
@@ -711,7 +711,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               onPress={handleEndActiveBreakFromDashboard}
               activeOpacity={0.8}
             >
-              <Text style={styles.dashboardEndBreakBtnText}>End Break</Text>
+              <Text style={styles.dashboardEndBreakBtnText}>{t("End Break")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1126,7 +1126,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderTitleRow}>
                 <MaterialCommunityIcons name="hospital-building" size={22} color="#0d6371" style={{ marginRight: 8 }} />
-                <Text style={styles.modalTitle}>Select Hospital Duty</Text>
+                <Text style={styles.modalTitle}>{t("Select Hospital Duty")}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsHospitalModalOpen(false)} style={styles.modalCloseBtn}>
                 <Ionicons name="close" size={20} color="#64748b" />
@@ -1134,7 +1134,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             </View>
 
             <Text style={styles.modalSubtitle}>
-              Select the hospital you are currently stationed at for OPD patient consultations.
+              {t("Select the hospital you are currently stationed at for OPD patient consultations.")}
             </Text>
 
             <View style={styles.modalHospitalList}>
@@ -1195,7 +1195,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                 <View style={styles.walkInHeaderIconCircle}>
                   <Ionicons name="person-add" size={18} color="#0d6371" />
                 </View>
-                <Text style={styles.modalTitle}>Add Walk-in Patient</Text>
+                <Text style={styles.modalTitle}>{t("Add Walk-in Patient")}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsWalkInModalOpen(false)} style={styles.modalCloseBtn}>
                 <Ionicons name="close" size={20} color="#64748b" />
@@ -1203,13 +1203,13 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
             </View>
 
             <Text style={styles.modalSubtitle}>
-              Register an unscheduled or emergency walk-in patient directly to today's queue.
+              {t("Register an unscheduled or emergency walk-in patient directly to today's queue.")}
             </Text>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
               {/* Patient Full Name */}
               <View style={styles.walkInFieldGroup}>
-                <Text style={styles.walkInFieldLabel}>Patient Full Name *</Text>
+                <Text style={styles.walkInFieldLabel}>{t("Patient Full Name *")}</Text>
                 <TextInput
                   style={styles.walkInTextInput}
                   placeholder="e.g. Kasun Bandara"
@@ -1223,7 +1223,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
               {/* Age & Gender Row */}
               <View style={styles.walkInRowGroup}>
                 <View style={{ flex: 1, marginRight: 10 }}>
-                  <Text style={styles.walkInFieldLabel}>Age</Text>
+                  <Text style={styles.walkInFieldLabel}>{t("Age")}</Text>
                   <TextInput
                     style={styles.walkInTextInput}
                     placeholder="e.g. 38"
@@ -1236,7 +1236,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                 </View>
 
                 <View style={{ flex: 1.6 }}>
-                  <Text style={styles.walkInFieldLabel}>Gender</Text>
+                  <Text style={styles.walkInFieldLabel}>{t("Gender")}</Text>
                   <View style={styles.genderSelectRow}>
                     {(['Male', 'Female', 'Other'] as const).map((g) => (
                       <TouchableOpacity
@@ -1263,7 +1263,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
 
               {/* Priority Selection */}
               <View style={styles.walkInFieldGroup}>
-                <Text style={styles.walkInFieldLabel}>Priority / Category</Text>
+                <Text style={styles.walkInFieldLabel}>{t("Priority / Category")}</Text>
                 <View style={styles.prioritySelectRow}>
                   <TouchableOpacity
                     style={[
@@ -1284,7 +1284,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                         walkInPriority === 'walkin' && styles.prioritySelectPillTextActive,
                       ]}
                     >
-                      Standard Walk-in
+                      {t("Standard Walk-in")}
                     </Text>
                   </TouchableOpacity>
 
@@ -1307,7 +1307,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                         walkInPriority === 'urgent' && styles.prioritySelectPillTextActiveUrgent,
                       ]}
                     >
-                      Urgent / Emergency
+                      {t("Urgent / Emergency")}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1315,7 +1315,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
 
               {/* Reason / Complaint */}
               <View style={styles.walkInFieldGroup}>
-                <Text style={styles.walkInFieldLabel}>Reason for Visit / Complaint</Text>
+                <Text style={styles.walkInFieldLabel}>{t("Reason for Visit / Complaint")}</Text>
                 <TextInput
                   style={[styles.walkInTextInput, { height: 68, textAlignVertical: 'top', paddingTop: 8 }]}
                   placeholder="e.g. Acute abdominal pain, high fever..."
@@ -1334,7 +1334,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                 onPress={() => setIsWalkInModalOpen(false)}
                 disabled={isSubmittingWalkIn}
               >
-                <Text style={styles.walkInCancelBtnText}>Cancel</Text>
+                <Text style={styles.walkInCancelBtnText}>{t("Cancel")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1347,7 +1347,7 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
                 ) : (
                   <>
                     <Ionicons name="add-circle-outline" size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                    <Text style={styles.walkInSubmitBtnText}>Add to Queue</Text>
+                    <Text style={styles.walkInSubmitBtnText}>{t("Add to Queue")}</Text>
                   </>
                 )}
               </TouchableOpacity>

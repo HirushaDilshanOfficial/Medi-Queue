@@ -12,7 +12,7 @@ import { doctorApi } from '../../../services/doctorApi';
 import { queueApi } from '../../../services/queueApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import { usePolling } from '../../../hooks/usePolling';
-import { todayKey } from '../../../utils/opdDates';
+import { longDayLabel, todayKey } from '../../../utils/opdDates';
 import { AppointmentCard } from '../../../components/patient/AppointmentCard';
 import { ProfileIcon } from '../../../components/patient/ProfileIcon';
 import type { Appointment } from '../../../types/patient';
@@ -23,7 +23,7 @@ const POLL_INTERVAL_MS = 15_000;
 type Sheet = 'options' | 'leave' | { title: string; body: string } | null;
 
 export function LiveQueueScreen() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -146,10 +146,10 @@ export function LiveQueueScreen() {
   };
   const share = async () => {
     if (!selectedPass) return;
-    const text = `Medi-Queue pass\n${selectedPass.department}\nQueue ${selectedPass.tokenNumber}\n${selectedPass.dateLong || selectedPass.queueDate}\n${selectedPass.room ?? 'Room assigned at clinic'}\nPass code: ${selectedPass.passCode}`;
+    const text = [t('Medi-Queue pass'), t(selectedPass.department), t('Queue #{number}', { number: selectedPass.tokenNumber }), longDayLabel(selectedPass.queueDate, locale), selectedPass.room ?? t('Room assigned at clinic'), `${t('Pass code:')} ${selectedPass.passCode}`].join('\n');
     try {
       if (Platform.OS === 'web') {
-        if (navigator.share) await navigator.share({ title: 'Medi-Queue pass', text });
+        if (navigator.share) await navigator.share({ title: t('Medi-Queue pass'), text });
         else message(t('Share ticket'), text);
       } else await Share.share({ title: 'Medi-Queue pass', message: text });
     } catch (error) {
@@ -213,7 +213,7 @@ export function LiveQueueScreen() {
             <Pressable key={queuePass.id} onPress={() => { setSelectedPassId(queuePass.id); setDoctorMenuOpen(false); }} style={styles.doctorOption}>
               <View style={styles.grow}>
                 <Text style={styles.actionLabel}>{queuePass.doctorName ?? t('Assigned doctor')}</Text>
-                <Text style={styles.small}>{queuePass.department} · {queuePass.tokenLabel} · {queuePass.dateLong}</Text>
+                <Text style={styles.small}>{t(queuePass.department ?? '')} · {queuePass.tokenLabel} · {longDayLabel(queuePass.queueDate, locale)}</Text>
               </View>
               {queuePass.id === selectedPass?.id ? <ProfileIcon name="check" size={18} color={C.secondary} /> : null}
             </Pressable>

@@ -51,7 +51,7 @@ export function QueueCard({
           <View style={styles.headerText}>
             <Text style={styles.label}>{hasPass ? t('ACTIVE QUEUE') : t('LIVE QUEUE')}</Text>
             <Text style={styles.clinic} numberOfLines={1}>
-              {hasPass ? clinicName : t('No active pass today')}
+              {hasPass ? t(clinicName) : t('No active pass today')}
             </Text>
             <Text style={styles.clinicSubline} numberOfLines={1}>
               {hasPass ? clinicSubline : t('Check in on the day of your appointment')}

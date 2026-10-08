@@ -1,3 +1,4 @@
+import { useLanguage } from '../i18n/LanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -30,6 +31,7 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
   onVerified,
   onSkip,
 }) => {
+  const { t } = useLanguage();
   const [otp, setOtp] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [sending, setSending] = useState<boolean>(false);
@@ -134,8 +136,8 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
                 <Ionicons name="shield-checkmark" size={22} color={Colors.primary} />
               </View>
               <View>
-                <Text style={styles.title}>Patient Phone Verification</Text>
-                <Text style={styles.subtitle}>Enter 6-digit SMS code to confirm</Text>
+                <Text style={styles.title}>{t("Patient Phone Verification")}</Text>
+                <Text style={styles.subtitle}>{t("Enter 6-digit SMS code to confirm")}</Text>
               </View>
             </View>
 
@@ -154,11 +156,11 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
               <View style={styles.pulseDot} />
               <Ionicons name="phone-portrait-outline" size={15} color="#0F766E" style={{ marginRight: 6 }} />
               <Text style={styles.phoneBadgeText}>
-                SMS sent to: <Text style={styles.phoneNumberBold}>{phone}</Text>
+                {t("SMS sent to:")}{' '}<Text style={styles.phoneNumberBold}>{phone}</Text>
               </Text>
             </View>
             {patientName ? (
-              <Text style={styles.patientNameText}>Patient: {patientName}</Text>
+              <Text style={styles.patientNameText}>{t("Patient:")}{' '}{patientName}</Text>
             ) : null}
           </View>
 
@@ -168,7 +170,7 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
               <View style={styles.smsSimulatorHeader}>
                 <View style={styles.smsSimIconRow}>
                   <Ionicons name="chatbox-ellipses" size={14} color="#0D9488" style={{ marginRight: 5 }} />
-                  <Text style={styles.smsSimulatorTitle}>LIVE SMS GATEWAY PREVIEW</Text>
+                  <Text style={styles.smsSimulatorTitle}>{t("LIVE SMS GATEWAY PREVIEW")}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.quickFillChip}
@@ -176,7 +178,7 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
                   activeOpacity={0.7}
                 >
                   <Ionicons name="flash" size={12} color={Colors.white} style={{ marginRight: 4 }} />
-                  <Text style={styles.quickFillText}>Quick-Fill ({activeCode})</Text>
+                  <Text style={styles.quickFillText}>{t("Quick-Fill (")}{activeCode})</Text>
                 </TouchableOpacity>
               </View>
               <Text style={styles.smsSimulatorBody}>
@@ -188,7 +190,7 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
 
           {/* OTP Input Field */}
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Enter 6-Digit OTP Code:</Text>
+            <Text style={styles.inputLabel}>{t("Enter 6-Digit OTP Code:")}</Text>
             <TextInput
               ref={inputRef}
               style={[
@@ -221,7 +223,7 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
 
           {/* Resend Section */}
           <View style={styles.resendRow}>
-            <Text style={styles.resendHint}>Didn't receive code?</Text>
+            <Text style={styles.resendHint}>{t("Didn't receive code?")}</Text>
             <TouchableOpacity
               onPress={dispatchOtp}
               disabled={sending || resendCountdown > 0}
@@ -254,7 +256,7 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
             ) : (
               <View style={styles.btnInnerRow}>
                 <Ionicons name="checkmark-circle" size={18} color={Colors.white} style={{ marginRight: 8 }} />
-                <Text style={styles.verifyButtonText}>Verify & Complete Registration</Text>
+                <Text style={styles.verifyButtonText}>{t("Verify & Complete Registration")}</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -266,7 +268,7 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
               onPress={onSkip}
               activeOpacity={0.7}
             >
-              <Text style={styles.skipBtnText}>Emergency / Register Without Phone OTP</Text>
+              <Text style={styles.skipBtnText}>{t("Emergency / Register Without Phone OTP")}</Text>
             </TouchableOpacity>
           ) : null}
         </View>

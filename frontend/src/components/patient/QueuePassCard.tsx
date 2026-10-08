@@ -25,21 +25,21 @@ export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
 
   const headline = called
     ? pass.status === 'in_consultation'
-      ? 'You are in consultation'
-      : 'Your turn has come'
+      ? t('You are in consultation')
+      : t('Your turn has come')
     : live && live.position <= 1
-      ? 'You are next'
+      ? t('You are next')
       : live
-        ? `${live.peopleAhead} ${live.peopleAhead === 1 ? 'person' : 'people'} ahead`
-        : 'Please wait to be called';
+        ? t('{count} people ahead of you', { count: live.peopleAhead })
+        : t('Please wait to be called');
 
   const subline = called
     ? pass.room
-      ? `Please go to ${pass.room}`
-      : 'Please go to the doctor'
+      ? t('Please go to {room}', { room: pass.room })
+      : t('Please go to the doctor')
     : live?.estimatedTurnAt
-      ? `Estimated turn at ${live.estimatedTurnAt}`
-      : 'We will update this as the queue moves';
+      ? t('Estimated turn at {time}', { time: live.estimatedTurnAt })
+      : t('We will update this as the queue moves');
 
   return (
     <View style={styles.root}>
@@ -50,7 +50,7 @@ export function QueuePassCard({ pass, onLeave, refreshing }: Props) {
         style={styles.top}
       >
         <View style={styles.topHeader}>
-          <Text style={styles.label}>{pass.department.toUpperCase()}</Text>
+          <Text style={styles.label}>{t(pass.department).toUpperCase()}</Text>
           <View style={styles.liveBadge}>
             <View style={[styles.dot, called && styles.dotActive, finished && styles.dotMuted]} />
             <Text style={styles.liveLabel}>

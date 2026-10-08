@@ -141,7 +141,7 @@ function SummaryTile({ value, label, selected, onPress }: { value: number; label
 }
 
 function VisitCard({ visit }: { visit: VisitRecord }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const tone = STATUS_TONE[visit.status] ?? 'neutral';
   const label = STATUS_LABEL[visit.status] ?? visit.status;
 
@@ -153,7 +153,7 @@ function VisitCard({ visit }: { visit: VisitRecord }) {
             {visit.date ? visit.date.slice(8, 10) : '--'}
           </Text>
           <Text style={styles.dateMonth}>
-            {visit.dateLabel && visit.dateLabel.length <= 11 ? visit.dateLabel.slice(0, 3) : ''}
+            {visit.date ? new Date(`${visit.date}T00:00:00Z`).toLocaleDateString(locale, { month: 'short', timeZone: 'UTC' }) : ''}
           </Text>
         </View>
 
@@ -162,7 +162,7 @@ function VisitCard({ visit }: { visit: VisitRecord }) {
             {visit.doctorName}
           </Text>
           <Text style={styles.meta} numberOfLines={1}>
-            {[visit.department, visit.slotTime, visit.room].filter(Boolean).join(' · ')}
+            {[t(visit.department), visit.slotTime, visit.room].filter(Boolean).join(' · ')}
           </Text>
           {visit.reason ? (
             <Text style={styles.reason} numberOfLines={2}>

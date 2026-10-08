@@ -1,3 +1,4 @@
+import { dayLabel } from '../../../utils/opdDates';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -31,7 +32,7 @@ import { AppIcon } from '../../../components/AppIcon';
 type Tab = 'directory' | 'bookings';
 
 export function DoctorDirectoryScreen() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ department?: string; hospitalId?: string; tab?: string; search?: string; view?: string }>();
@@ -125,7 +126,7 @@ export function DoctorDirectoryScreen() {
       }
       Alert.alert(
         t('Cancel this booking?'),
-        t("{value0} · {value1} at {value2}\n\nYou can book another time from the doctor list.", { value0: String(appointment.doctorName), value1: String(appointment.dateLabel ?? appointment.date), value2: String(appointment.slotTime) }),
+        t("{value0} · {value1} at {value2}\n\nYou can book another time from the doctor list.", { value0: String(appointment.doctorName), value1: dayLabel(appointment.date, undefined, locale), value2: String(appointment.slotTime) }),
         [
           { text: t('Keep booking'), style: 'cancel' },
           {
@@ -136,7 +137,7 @@ export function DoctorDirectoryScreen() {
         ],
       );
     },
-    [bookings, router, t],
+    [bookings, router, t, locale],
   );
 
   const startReschedule = useCallback(
@@ -170,10 +171,10 @@ export function DoctorDirectoryScreen() {
         }
       };
       if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined' && window.confirm(t("Collect your queue number for {value0}?", { value0: String(appointment.department) }))) void checkInNow();
+        if (typeof window !== 'undefined' && window.confirm(t("Collect your queue number for {value0}?", { value0: t(appointment.department) }))) void checkInNow();
         return;
       }
-      Alert.alert(t('Check in now?'), t("Collect your queue number for {value0}.", { value0: String(appointment.department) }), [
+      Alert.alert(t('Check in now?'), t("Collect your queue number for {value0}.", { value0: t(appointment.department) }), [
         { text: t('Not yet'), style: 'cancel' },
         {
           text: t('Check in'),
@@ -225,7 +226,7 @@ export function DoctorDirectoryScreen() {
               {(showAllClinics ? clinics.data?.clinics ?? [] : (clinics.data?.clinics ?? []).slice(0, 16)).map((clinic: Clinic) => (
                 <Chip
                   key={clinic._id}
-                  label={clinic.name.replace(/ Clinic$/, '')}
+                  label={t(clinic.name.replace(/ Clinic$/, ''))}
                   active={department === clinic.department && hospitalId === (clinic.hospital?._id ?? null)}
                   onPress={() => {
                     const active = department === clinic.department && hospitalId === (clinic.hospital?._id ?? null);

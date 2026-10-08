@@ -174,8 +174,8 @@ export function DoctorBookingScreen() {
   }, [t]);
   const showOptions = () => Alert.alert(t('Appointment options'), t('Choose an action'), [
     { text: t('Cancel'), style: 'cancel' },
-    { text: 'About this doctor', onPress: () => setTab('About') },
-    { text: 'Refresh availability', onPress: () => { setTime(null); days.reload(); slots.reload(); } },
+    { text: t('About this doctor'), onPress: () => setTab('About') },
+    { text: t('Refresh availability'), onPress: () => { setTime(null); days.reload(); slots.reload(); } },
   ]);
   const profile = doctor.data?.doctor;
   const viewBookedPass = () => {
@@ -225,7 +225,7 @@ export function DoctorBookingScreen() {
               </View>
               <View style={styles.profileRow}>
                 <View style={styles.bio}>
-                  <Text style={styles.specialty}>{profile.specialization}</Text>
+                  <Text style={styles.specialty}>{t(profile.specialization)}</Text>
                   <Text style={styles.doctorName}>{profile.displayName || profile.name}</Text>
                   <View style={styles.tags}>{services.map(service => <View key={service} style={styles.tag}><Text style={styles.tagText}>{service}</Text></View>)}</View>
                 </View>
@@ -252,7 +252,7 @@ export function DoctorBookingScreen() {
                 <Text style={styles.sectionTitle}>{t("About")}{' '}{profile.displayName || profile.name}</Text>
                 <Text style={styles.aboutText}>{profile.about || t('Contact the clinic for more information about this doctor.')}</Text>
                 {!!profile.qualifications && <Text style={styles.aboutText}>{profile.qualifications}</Text>}
-                {!!profile.languages.length && <Text style={styles.hint}>{t("Languages:")}{' '}{profile.languages.join(', ')}</Text>}
+                {!!profile.languages.length && <Text style={styles.hint}>{t("Languages:")}{' '}{profile.languages.map(value => t(value)).join(', ')}</Text>}
                 {!!profile.room && <Text style={styles.hint}>{t("Clinic room:")}{' '}{profile.room}</Text>}
               </View>
             ) : (
@@ -297,7 +297,7 @@ export function DoctorBookingScreen() {
                   ) : date && !currentSlots.length ? <Text style={styles.hint}>{t("No clinic times for this day. Try another date.")}</Text> : (
                     <View style={styles.slotGrid}>{currentSlots.map(slot => {
                       const selected = slot.time === time;
-                      return <View key={slot.id} style={styles.slotCell}><Pressable accessibilityRole="button" accessibilityState={{ selected, disabled: !slot.available }} accessibilityLabel={`${slot.time}, ${slot.available ? `${slot.remaining} slots remaining` : 'fully booked'}`} disabled={!slot.available} onPress={() => setTime(slot.time)} style={({ pressed }) => [styles.slot, selected && styles.slotActive, !slot.available && styles.slotUnavailable, pressed && styles.pressed]}>
+                      return <View key={slot.id} style={styles.slotCell}><Pressable accessibilityRole="button" accessibilityState={{ selected, disabled: !slot.available }} accessibilityLabel={`${slot.time}, ${slot.available ? `${slot.remaining} slots remaining` : t("fully booked")}`} disabled={!slot.available} onPress={() => setTime(slot.time)} style={({ pressed }) => [styles.slot, selected && styles.slotActive, !slot.available && styles.slotUnavailable, pressed && styles.pressed]}>
                         <Text style={[styles.slotText, selected && styles.whiteText]}>{slot.time}</Text>
                       </Pressable></View>;
                     })}</View>
@@ -359,7 +359,7 @@ export function DoctorBookingScreen() {
             {bookingPass ? <PassQr value={bookingPass.qrValue} size={190} /> : null}
             {bookingPass ? <Text style={styles.confirmationToken}>{bookingPass.tokenLabel}</Text> : null}
             {bookingPass ? <Text style={styles.confirmationQueue}>{t('Queue number: {value0}', { value0: String(bookingPass.tokenNumber) })}</Text> : null}
-            {bookingPass ? <Text style={styles.confirmationMeta}>{bookingPass.doctorName || bookingPass.department} · {longDayLabel(bookingPass.queueDate, locale)}</Text> : null}
+            {bookingPass ? <Text style={styles.confirmationMeta}>{bookingPass.doctorName || t(bookingPass.department)} · {longDayLabel(bookingPass.queueDate, locale)}</Text> : null}
             {bookedTime ? <Text style={styles.confirmationMeta}>{t('Appointment time: {time}', { time: bookedTime })}</Text> : null}
             {uploadingDocument ? <View style={styles.confirmationUploading}><ActivityIndicator color={C.primary} /><Text accessibilityLiveRegion="polite" style={styles.confirmationSubtitle}>{t('Uploading your medical document...')}</Text></View> : null}
             {documentUploadError ? <Text accessibilityRole="alert" style={styles.confirmationError}>{t('The medical document could not be uploaded.')}{'\n'}{documentUploadError}</Text> : null}

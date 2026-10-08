@@ -353,7 +353,7 @@ export function AddReportScreen() {
                     {visit.doctorName}
                   </Text>
                   <Text style={styles.visitMeta} numberOfLines={1}>
-                    {[visit.department, dayLabel(visit.date, todayKey(), locale)]
+                    {[t(visit.department), dayLabel(visit.date, todayKey(), locale)]
                       .filter(Boolean)
                       .join(' · ')}
                   </Text>

@@ -54,8 +54,8 @@ export default function ManageClinicsScreen() {
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.copy}>
-                <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.description}>{item.description}</Text>
+                <Text style={styles.name}>{t(item.name)}</Text>
+                <Text style={styles.description}>{t(item.description)}</Text>
                 <Text style={styles.details}>{item.startTime}–{item.endTime} {t("· Capacity")}{' '}{item.maxPatients}</Text>
               </View>
               <Pressable onPress={() => toggle(item)} style={[styles.toggle, item.status === 'active' && styles.toggleActive]}>

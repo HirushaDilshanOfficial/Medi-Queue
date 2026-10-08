@@ -302,7 +302,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
 
     setCurrentPatientId(inConsultationPatient.id);
     setSearchQuery('');
-    showToast(`Refreshed: ${inConsultationPatient.name} (${inConsultationPatient.tokenFormatted})`);
+    showToast(t("Refreshed: {value0} ({value1})", { value0: String(inConsultationPatient.name), value1: String(inConsultationPatient.tokenFormatted) }));
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   }, [patients, showToast, triggerSpin]);
 
@@ -400,7 +400,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     );
 
     setIsAddMedicationOpen(false);
-    showToast(isOverride ? 'Added with allergy override' : 'Medication added');
+    showToast(isOverride ? t("Added with allergy override") : t("Medication added"));
 
     // Sync newly added medication to prescription cache and backend
     const cacheKey = `@medi_queue_prescription_${currentPatient.tokenNumber || 29}`;
@@ -636,7 +636,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     );
 
     setIsEditVitalsOpen(false);
-    showToast('Vitals updated');
+    showToast(t("Vitals updated"));
   };
 
   // Keyboard Escape listener on web for all modals
@@ -661,12 +661,12 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
 
   const handleSelectPatient = (patient: PatientRecord) => {
     setCurrentPatientId(patient.id);
-    showToast(`Switched active record to ${patient.name}`);
+    showToast(t("Switched active record to {value0}", { value0: String(patient.name) }));
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
   const handleStartConsultation = () => {
-    showToast(`Starting consultation with ${currentPatient.name}`);
+    showToast(t("Starting consultation with {value0}", { value0: String(currentPatient.name) }));
     try {
       router.push({
         pathname: '/(doctor)/prescription' as any,
@@ -690,32 +690,32 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   const handleTabPress = (tab: 'home' | 'queue' | 'records' | 'schedule' | 'rx') => {
     setActiveTab(tab);
     if (tab === 'records') {
-      showToast('Viewing Patient Records');
+      showToast(t("Viewing Patient Records"));
       return;
     }
     if (tab === 'home') {
       try {
         router.push('/(doctor)/dashboard' as any);
       } catch (e) {
-        showToast('Switched to Home');
+        showToast(t("Switched to Home"));
       }
     } else if (tab === 'queue') {
       try {
         router.push('/(doctor)/queue' as any);
       } catch (e) {
-        showToast('Switched to Queue');
+        showToast(t("Switched to Queue"));
       }
     } else if (tab === 'schedule') {
       try {
         router.push('/(doctor)/schedule' as any);
       } catch (e) {
-        showToast('Switched to Schedule');
+        showToast(t("Switched to Schedule"));
       }
     } else if (tab === 'rx') {
       try {
         router.push('/(doctor)/prescription' as any);
       } catch (e) {
-        showToast('Switched to Prescription');
+        showToast(t("Switched to Prescription"));
       }
     }
   };
@@ -905,9 +905,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     <View style={styles.onlineMiniDot} />
                     <Text
                       style={[styles.doctorSubtitle, { color: theme.accent }]}
-                    >
-                      Room 3B online
-                    </Text>
+                    >{t("Room 3B online")}</Text>
                   </View>
                 </View>
               </View>
@@ -944,7 +942,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     },
                   ]}
                   activeOpacity={0.7}
-                  onPress={() => showToast('Notifications: No new alerts')}
+                  onPress={() => showToast(t("Notifications: No new alerts"))}
                 >
                   <Ionicons
                     name="notifications-outline"
@@ -977,7 +975,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               />
               <TextInput
                 style={[styles.searchInput, { color: theme.textDark }]}
-                placeholder="Search patient name, token or NIC..."
+                placeholder={t("Search patient name, token or NIC...")}
                 placeholderTextColor={theme.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -1006,9 +1004,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               <View style={styles.sectionHeaderRow}>
                 <Text
                   style={[styles.sectionHeadingTitle, { color: theme.textDark }]}
-                >
-                  CURRENT PATIENT
-                </Text>
+                >{t("CURRENT PATIENT")}</Text>
 
                 <View
                   style={[
@@ -1094,7 +1090,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                             size={14}
                             color="#10b981"
                           />
-                          <Text style={styles.verifiedBadgeText}>Verified</Text>
+                          <Text style={styles.verifiedBadgeText}>{t("Verified")}</Text>
                         </View>
                       )}
                     </View>
@@ -1105,7 +1101,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                         { color: theme.textMuted },
                       ]}
                     >
-                      {currentPatient.age} yrs • {currentPatient.gender} • Blood:{' '}
+                      {currentPatient.age}{' '}{t("yrs •")}{' '}{currentPatient.gender}{' '}{t("• Blood:")}{' '}
                       {currentPatient.bloodGroup}
                     </Text>
                   </View>
@@ -1117,7 +1113,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { backgroundColor: theme.primaryDeep },
                     ]}
                   >
-                    <Text style={styles.tokenBoxLabel}>TOKEN</Text>
+                    <Text style={styles.tokenBoxLabel}>{t("TOKEN")}</Text>
                     <Text style={styles.tokenBoxNum}>
                       {currentPatient.tokenFormatted}
                     </Text>
@@ -1138,8 +1134,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     />
                     <Text
                       style={[styles.cardInfoText, { color: theme.textMuted }]}
-                    >
-                      NIC: {currentPatient.nic}
+                    >{t("NIC:")}{currentPatient.nic}
                     </Text>
                   </View>
 
@@ -1153,7 +1148,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     <Text
                       style={[styles.cardInfoText, { color: theme.textMuted }]}
                     >
-                      Reg: {currentPatient.registeredTime}
+                      {t("Reg:")}{' '}{currentPatient.registeredTime}
                     </Text>
                   </View>
                 </View>
@@ -1196,7 +1191,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: isDark ? '#86efac' : '#15803d' },
                     ]}
                   >
-                    No known drug allergies reported
+                    {t("No known drug allergies reported")}
                   </Text>
                 </View>
               )}
@@ -1206,7 +1201,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 <Text
                   style={[styles.subSectionTitle, { color: theme.textDark, marginBottom: 8 }]}
                 >
-                  Chronic conditions
+                  {t("Chronic conditions")}
                 </Text>
                 {currentPatient.chronicConditions.length > 0 ? (
                   <View style={styles.chronicChipsWrap}>
@@ -1232,7 +1227,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   </View>
                 ) : (
                   <Text style={[styles.noneRecordedText, { color: theme.textMuted }]}>
-                    None recorded.
+                    {t("None recorded.")}
                   </Text>
                 )}
               </View>
@@ -1243,7 +1238,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   <Text
                     style={[styles.subSectionTitle, { color: theme.textDark }]}
                   >
-                    Current medications
+                    {t("Current medications")}
                   </Text>
                   <TouchableOpacity
                     style={[
@@ -1267,9 +1262,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                         styles.addMedicationPillText,
                         { color: theme.primaryDeep },
                       ]}
-                    >
-                      Add
-                    </Text>
+                    >{t("Add")}</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -1321,7 +1314,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                               {med.hasAllergyOverride && (
                                 <View style={styles.allergyOverrideTag}>
                                   <Text style={styles.allergyOverrideTagText}>
-                                    Allergy override
+                                    {t("Allergy override")}
                                   </Text>
                                 </View>
                               )}
@@ -1357,7 +1350,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     <Text
                       style={[styles.emptySubStateText, { color: theme.textMuted }]}
                     >
-                      No active medications.
+                      {t("No active medications.")}
                     </Text>
                   </View>
                 )}
@@ -1368,9 +1361,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 <View style={styles.vitalsTitleGroup}>
                   <Text
                     style={[styles.subSectionTitle, { color: theme.textDark }]}
-                  >
-                    Current vitals
-                  </Text>
+                  >{t("Current vitals")}</Text>
                   <Text
                     style={[styles.triageTimeLabel, { color: theme.textMuted }]}
                   >
@@ -1400,9 +1391,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       styles.editVitalsText,
                       { color: theme.primaryDeep },
                     ]}
-                  >
-                    Edit
-                  </Text>
+                  >{t("Edit")}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -1432,9 +1421,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     </View>
                     <Text
                       style={[styles.vitalLabel, { color: theme.textMuted }]}
-                    >
-                      Blood Pressure
-                    </Text>
+                    >{t("Blood Pressure")}</Text>
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
                     {currentPatient.vitals.bloodPressure}{' '}
@@ -1470,9 +1457,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     </View>
                     <Text
                       style={[styles.vitalLabel, { color: theme.textMuted }]}
-                    >
-                      Heart Rate
-                    </Text>
+                    >{t("Heart Rate")}</Text>
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
                     {currentPatient.vitals.heartRate}{' '}
@@ -1512,9 +1497,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     </View>
                     <Text
                       style={[styles.vitalLabel, { color: theme.textMuted }]}
-                    >
-                      Body Temp
-                    </Text>
+                    >{t("Body Temp")}</Text>
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
                     {currentTempC.display}{' '}
@@ -1555,7 +1538,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     <Text
                       style={[styles.vitalLabel, { color: theme.textMuted }]}
                     >
-                      Oxygen Sat
+                      {t("Oxygen Sat")}
                     </Text>
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
@@ -1595,9 +1578,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     </View>
                     <Text
                       style={[styles.vitalLabel, { color: theme.textMuted }]}
-                    >
-                      Weight
-                    </Text>
+                    >{t("Weight")}</Text>
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
                     {currentWeightNum}{' '}
@@ -1609,7 +1590,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: theme.textMuted },
                     ]}
                   >
-                    Ht: {currentHeightNum} cm
+                    {t("Ht:")}{' '}{currentHeightNum} cm
                   </Text>
                 </TouchableOpacity>
 
@@ -1638,7 +1619,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     <Text
                       style={[styles.vitalLabel, { color: theme.textMuted }]}
                     >
-                      BMI Index
+                      {t("BMI Index")}
                     </Text>
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
@@ -1665,7 +1646,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   style={{ marginRight: 4 }}
                 />
                 <Text style={[styles.vitalsHintText, { color: theme.textMuted }]}>
-                  Tap a card to see its trend.
+                  {t("Tap a card to see its trend.")}
                 </Text>
               </View>
 
@@ -1674,9 +1655,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 <View style={styles.subSectionHeaderRow}>
                   <Text
                     style={[styles.subSectionTitle, { color: theme.textDark }]}
-                  >
-                    Diagnostic imaging
-                  </Text>
+                  >{t("Diagnostic imaging")}</Text>
                   {currentPatient.imaging.hasImaging && (
                     <Text
                       style={[styles.subSectionSubLabel, { color: theme.textMuted }]}
@@ -1741,7 +1720,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       activeOpacity={0.8}
                       onPress={() =>
                         showToast(
-                          `Viewing report for ${currentPatient.imaging.title}`
+                          t("Viewing report for {value0}", { value0: String(currentPatient.imaging.title) })
                         )
                       }
                     >
@@ -1750,9 +1729,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                           styles.viewReportText,
                           { color: theme.primaryDeep },
                         ]}
-                      >
-                        View report
-                      </Text>
+                      >{t("View report")}</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -1771,7 +1748,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                         { color: theme.textMuted },
                       ]}
                     >
-                      No diagnostic imaging records found
+                      {t("No diagnostic imaging records found")}
                     </Text>
                   </View>
                 )}
@@ -1782,14 +1759,10 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 <View style={styles.subSectionHeaderRow}>
                   <Text
                     style={[styles.subSectionTitle, { color: theme.textDark }]}
-                  >
-                    Recent visits & history
-                  </Text>
+                  >{t("Recent visits & history")}</Text>
                   <Text
                     style={[styles.subSectionSubLabel, { color: theme.textMuted }]}
-                  >
-                    All {currentPatient.recentVisits.length} Records
-                  </Text>
+                  >{t("All")}{currentPatient.recentVisits.length}{t("Records")}</Text>
                 </View>
 
                 <View
@@ -1892,8 +1865,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   color="#ffffff"
                   style={{ marginRight: 8 }}
                 />
-                <Text style={styles.startConsultationText}>
-                  Start consultation with {currentPatient.shortName}
+                <Text style={styles.startConsultationText}>{t("Start consultation with")}{currentPatient.shortName}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1938,9 +1910,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   { color: activeTab === 'home' ? theme.accent : theme.textMuted },
                   activeTab === 'home' && styles.tabLabelActive,
                 ]}
-              >
-                Home
-              </Text>
+              >{t("Home")}</Text>
             </TouchableOpacity>
 
             {/* 2. Queue */}
@@ -1960,9 +1930,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   { color: activeTab === 'queue' ? theme.accent : theme.textMuted },
                   activeTab === 'queue' && styles.tabLabelActive,
                 ]}
-              >
-                Queue
-              </Text>
+              >{t("Queue")}</Text>
             </TouchableOpacity>
 
             {/* 3. Records (ACTIVE) */}
@@ -1982,9 +1950,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   { color: theme.accent },
                   styles.tabLabelActive,
                 ]}
-              >
-                Records
-              </Text>
+              >{t("Records")}</Text>
             </TouchableOpacity>
 
             {/* 4. Schedule */}
@@ -2004,9 +1970,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   { color: activeTab === 'schedule' ? theme.accent : theme.textMuted },
                   activeTab === 'schedule' && styles.tabLabelActive,
                 ]}
-              >
-                Schedule
-              </Text>
+              >{t("Schedule")}</Text>
             </TouchableOpacity>
 
             {/* 5. Prescription */}
@@ -2027,9 +1991,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   { color: activeTab === 'rx' ? theme.accent : theme.textMuted },
                   activeTab === 'rx' && styles.tabLabelActive,
                 ]}
-              >
-                Prescription
-              </Text>
+              >{t("Prescription")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2067,13 +2029,13 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sheetTitle, { color: theme.textDark }]}>
-                  Add medication
+                  {t("Add medication")}
                 </Text>
                 <Text style={[styles.sheetSubTitle, { color: theme.textMuted }]}>
                   {currentPatient.name} ·{' '}
                   {currentPatient.allergy.hasAllergy
                     ? currentPatient.allergy.title
-                    : 'No known allergies'}
+                    : t("No known allergies")}
                 </Text>
               </View>
 
@@ -2103,7 +2065,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.allergyConflictTitle}>
-                      Allergy conflict detected: {allergyCheck.allergen}
+                      {t("Allergy conflict detected:")}{' '}{allergyCheck.allergen}
                     </Text>
                     <Text style={styles.allergyConflictNote}>
                       {allergyCheck.note}
@@ -2120,7 +2082,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.allergySimilarTitle}>
-                      Similar drug already listed
+                      {t("Similar drug already listed")}
                     </Text>
                     <Text style={styles.allergySimilarNote}>
                       {allergyCheck.note}
@@ -2136,7 +2098,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     style={{ marginRight: 8 }}
                   />
                   <Text style={styles.allergySafeText}>
-                    No allergy conflict found
+                    {t("No allergy conflict found")}
                   </Text>
                 </View>
               ) : null}
@@ -2144,7 +2106,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               {/* Field 1: Drug Name */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                  Drug name *
+                  {t("Drug name *")}
                 </Text>
                 <TextInput
                   ref={medDrugInputRef}
@@ -2177,7 +2139,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               {/* Field 2: Dose */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                  Dose (e.g. 500 mg, 10 ml)
+                  {t("Dose (e.g. 500 mg, 10 ml)")}
                 </Text>
                 <TextInput
                   style={[
@@ -2198,7 +2160,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               {/* Field 3: Frequency */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                  Frequency
+                  {t("Frequency")}
                 </Text>
                 <View style={styles.frequencyPillsWrap}>
                   {[
@@ -2244,7 +2206,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               {/* Field 4: Duration */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                  Duration (optional)
+                  {t("Duration (optional)")}
                 </Text>
                 <TextInput
                   style={[
@@ -2279,9 +2241,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       styles.sheetCancelBtnText,
                       { color: theme.textDark },
                     ]}
-                  >
-                    Cancel
-                  </Text>
+                  >{t("Cancel")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -2304,7 +2264,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       ? hasAllergyConflictAcknowledged
                         ? 'Confirm Override & Add'
                         : 'Add anyway'
-                      : 'Add medication'}
+                      : t("Add medication")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2348,7 +2308,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   {trendInfo.title}
                 </Text>
                 <Text style={[styles.sheetSubTitle, { color: theme.textMuted }]}>
-                  {currentPatient.name} · Last {currentPatient.vitalsHistory.length} readings
+                  {currentPatient.name}{' '}{t("· Last")}{' '}{currentPatient.vitalsHistory.length}{' '}{t("readings")}
                 </Text>
               </View>
 
@@ -2385,11 +2345,11 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     <View style={styles.chartLegendRow}>
                       <View style={[styles.legendDot, { backgroundColor: '#0e8a96' }]} />
                       <Text style={[styles.legendText, { color: theme.textMuted }]}>
-                        Sys
+                        {t("Sys")}
                       </Text>
                       <View style={[styles.legendDot, { backgroundColor: '#d97706', marginLeft: 8 }]} />
                       <Text style={[styles.legendText, { color: theme.textMuted }]}>
-                        Dia
+                        {t("Dia")}
                       </Text>
                     </View>
                   )}
@@ -2490,8 +2450,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     <Text style={[styles.trendSummaryChange, { color: theme.textDark }]}>
                       {trendInfo.changeText}
                     </Text>
-                    <Text style={[styles.trendSummarySub, { color: theme.textMuted }]}>
-                      Current: {trendInfo.latestText}
+                    <Text style={[styles.trendSummarySub, { color: theme.textMuted }]}>{t("Current:")}{trendInfo.latestText}
                     </Text>
                   </View>
 
@@ -2526,7 +2485,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 <Text
                   style={[styles.subSectionTitle, { color: theme.textDark, marginBottom: 8 }]}
                 >
-                  All Recorded Readings
+                  {t("All Recorded Readings")}
                 </Text>
 
                 <View
@@ -2611,7 +2570,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                                 { color: isAbnormal ? '#dc2626' : '#16a34a' },
                               ]}
                             >
-                              {isAbnormal ? 'Alert' : 'Normal'}
+                              {isAbnormal ? 'Alert' : t("Normal")}
                             </Text>
                           </View>
                         </View>
@@ -2638,9 +2597,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       styles.sheetCancelBtnText,
                       { color: theme.textDark },
                     ]}
-                  >
-                    Close
-                  </Text>
+                  >{t("Close")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -2655,7 +2612,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     }, 200);
                   }}
                 >
-                  <Text style={styles.sheetSaveBtnText}>Record new reading</Text>
+                  <Text style={styles.sheetSaveBtnText}>{t("Record new reading")}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -2695,7 +2652,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={[styles.sheetTitle, { color: theme.textDark }]}>
-                  Edit vitals
+                  {t("Edit vitals")}
                 </Text>
                 <Text style={[styles.sheetSubTitle, { color: theme.textMuted }]}>
                   {currentPatient.name} • {currentPatient.tokenFormatted}
@@ -2720,7 +2677,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               {/* Systolic */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                  Systolic (mmHg)
+                  {t("Systolic (mmHg)")}
                 </Text>
                 <TextInput
                   ref={systolicInputRef}
@@ -2755,7 +2712,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               {/* Diastolic */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                  Diastolic (mmHg)
+                  {t("Diastolic (mmHg)")}
                 </Text>
                 <TextInput
                   ref={diastolicInputRef}
@@ -2789,7 +2746,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               {/* Heart Rate */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                  Heart rate (bpm)
+                  {t("Heart rate (bpm)")}
                 </Text>
                 <TextInput
                   ref={heartRateInputRef}
@@ -2823,7 +2780,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               {/* Body Temp */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                  Body temp (°C)
+                  {t("Body temp (°C)")}
                 </Text>
                 <TextInput
                   ref={bodyTempInputRef}
@@ -2857,7 +2814,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               {/* SpO2 */}
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                  Oxygen sat SpO2 (%)
+                  {t("Oxygen sat SpO2 (%)")}
                 </Text>
                 <TextInput
                   ref={spO2InputRef}
@@ -2891,7 +2848,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 {/* Weight */}
                 <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
                   <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                    Weight (kg)
+                    {t("Weight (kg)")}
                   </Text>
                   <TextInput
                     ref={weightInputRef}
@@ -2923,7 +2880,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 {/* Height */}
                 <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
                   <Text style={[styles.formLabel, { color: theme.textDark }]}>
-                    Height (cm)
+                    {t("Height (cm)")}
                   </Text>
                   <TextInput
                     ref={heightInputRef}
@@ -2973,7 +2930,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       }}
                     >
                       <Text style={{ fontSize: 12, color: theme.primaryDeep, fontWeight: '600' }}>
-                        Calculated BMI: {preview.bmi} kg/m²
+                        {t("Calculated BMI:")}{' '}{preview.bmi} kg/m²
                       </Text>
                       <Text
                         style={{
@@ -3006,9 +2963,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       styles.sheetCancelBtnText,
                       { color: theme.textDark },
                     ]}
-                  >
-                    Cancel
-                  </Text>
+                  >{t("Cancel")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -3018,7 +2973,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   ]}
                   onPress={handleSaveVitals}
                 >
-                  <Text style={styles.sheetSaveBtnText}>Save vitals</Text>
+                  <Text style={styles.sheetSaveBtnText}>{t("Save vitals")}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
