@@ -403,8 +403,11 @@ const getQueue = asyncHandler(async (req, res) => {
     inQueue > 0 ? Math.round(totalConsultMinutes / inQueue) : policy.targetWaitTime;
   const avgWaitMinutes = inQueue > 0 ? inQueue * avgConsultMinutes : 0;
 
+  const activeDoctors = await Doctor.find({ status: { $in: ['active', 'on_break'] } }).lean();
+
   res.json({
     queue,
+    doctors: activeDoctors,
     totals: {
       inQueue,
       walkIns,

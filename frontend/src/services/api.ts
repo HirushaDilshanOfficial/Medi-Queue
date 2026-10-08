@@ -354,6 +354,7 @@ export interface QueueResponse {
   waiting?: number;
   serving?: number;
   queue: QueueToken[];
+  doctors?: Doctor[];
   totals?: {
     inQueue: number;
     walkIns: number;
