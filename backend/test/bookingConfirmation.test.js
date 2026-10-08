@@ -36,8 +36,11 @@ function bookingController({ full = false, publicUrl } = {}) {
     },
     './slotController': { scheduleIds: async () => ['schedule-id'], bookedCounts: async () => new Map(), isFull: () => full, isWithinHorizon: () => true },
   };
+  const queuePassContext = { module: { exports: {} }, process: { env: publicUrl ? { PUBLIC_API_URL: publicUrl } : {} }, URL, require };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../utils/queuePass.js'), 'utf8'), queuePassContext);
+  modules['../utils/queuePass'] = queuePassContext.module.exports;
   const context = {
-    module: { exports: {} }, process: { env: publicUrl ? { PUBLIC_WEB_URL: publicUrl } : {} },
+    module: { exports: {} },
     require: name => { assert.ok(name in modules, `Unexpected dependency: ${name}`); return modules[name]; },
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../controllers/bookingController.js'), 'utf8'), context);
@@ -46,7 +49,7 @@ function bookingController({ full = false, publicUrl } = {}) {
 
 async function createBooking(controller) {
   const response = { status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } };
-  await controller.create({ body: { doctorId: 'doctor-id', date: controller.date, slotTime: '09:00' }, patientProfile: { _id: 'profile-id' } }, response, error => { throw error; });
+  await controller.create({ protocol: 'http', get: () => '172.20.10.4:5001', body: { doctorId: 'doctor-id', date: controller.date, slotTime: '09:00' }, patientProfile: { _id: 'profile-id' } }, response, error => { throw error; });
   return response;
 }
 
@@ -60,13 +63,13 @@ test('booking confirmation includes the issued token and scannable pass in one r
   assert.equal(body.pass.tokenLabel, body.tokenLabel);
   assert.equal(body.pass.appointmentId, body.appointment.id);
   assert.equal(body.pass.id, body.queueEntryId);
-  assert.equal(body.pass.qrValue, `http://10.240.7.66:5001/api/v1/public/queue-pass/${body.pass.passCode}`);
+  assert.equal(body.pass.qrValue, `http://172.20.10.4:5001/api/v1/public/queue-pass/${body.pass.passCode}`);
   assert.ok(!body.pass.qrValue.includes('profile-id'));
 });
 
 test('booking QR opens the configured public pass page', async () => {
   const { body } = await createBooking(bookingController({ publicUrl: 'https://queue.example.test/' }));
-  assert.equal(body.pass.qrValue, `https://queue.example.test/pass/${body.pass.passCode}`);
+  assert.equal(body.pass.qrValue, `https://queue.example.test/api/v1/public/queue-pass/${body.pass.passCode}`);
 });
 
 test('an unavailable slot never allocates a token or returns a success pass', async () => {

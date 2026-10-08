@@ -5,8 +5,9 @@ const { nextTokenNumber, releaseTokenNumber } = require('../models/OpdQueueCount
 const { today, buildLiveState, buildBoard, ACTIVE_STATUSES } = require('../utils/opdQueue');
 const { relativeDate, humanDate, isValidObjectId } = require('../utils/opdAppointment');
 const Policy = require('../models/Policy');
-const { generatePassCode } = require('../utils/queuePass');
+const { generatePassCode, passQrValue } = require('../utils/queuePass');
 const { ensureBookingQueueEntry } = require('../utils/ensureBookingQueueEntry');
+const { queuePassPage } = require('../utils/queuePassPage');
 
 const APPOINTMENT_ACTIVE = OpdAppointment.ACTIVE_STATUSES;
 
@@ -14,44 +15,27 @@ const APPOINTMENT_ACTIVE = OpdAppointment.ACTIVE_STATUSES;
 // blurry print still scans.
 // The QR must contain a URL so a phone opens a useful pass page rather than
 // searching the opaque pass code as plain text.
-function passQrValue(entry) {
-  const base = process.env.PUBLIC_WEB_URL || 'http://10.240.7.66:5001';
-  const passPath = process.env.PUBLIC_WEB_URL ? '/pass/' : '/api/v1/public/queue-pass/';
-  return `${base.replace(/\/+$/, '')}${passPath}${entry.passCode}`;
-}
-
 const publicPass = async (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  res.set('Referrer-Policy', 'no-referrer');
+  const page = (status, details) => res.status(status).type('html').send(queuePassPage(details));
   try {
     const passCode = String(req.params.passCode || '').trim().toUpperCase();
     if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/.test(passCode)) {
-      return res.status(400).send('<h1>Invalid queue pass</h1>');
+      return page(400, { title: 'Invalid queue pass', message: 'Open your queue pass in Medi-Queue and scan its QR code again.' });
     }
 
     const entry = await OpdQueueEntry.findOne({ passCode }).lean();
-    if (!entry) return res.status(404).send('<h1>Queue pass not found</h1>');
-
-    const escapeHtml = (value) => String(value ?? '—')
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const token = `A-${String(entry.tokenNumber).padStart(3, '0')}`;
-    return res.type('html').send(`<!doctype html>
-      <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-      <title>Medi-Queue Pass</title>
-      <style>body{font-family:Arial,sans-serif;background:#eef7f7;color:#12343b;padding:24px}
-      main{max-width:420px;margin:20px auto;background:white;border-radius:18px;padding:24px;
-      box-shadow:0 4px 18px #12343b22}h1{color:#006b78;margin-top:0}strong{font-size:42px;
-      display:block;margin:12px 0;color:#006b78}p{margin:10px 0}</style></head>
-      <body><main><h1>Medi-Queue</h1><p>Queue pass verified</p>
-      <strong>${escapeHtml(token)}</strong><p><b>Department:</b> ${escapeHtml(entry.department)}</p>
-      <p><b>Doctor:</b> ${escapeHtml(entry.doctorName)}</p><p><b>Date:</b> ${escapeHtml(entry.queueDate)}</p>
-      <p><b>Status:</b> ${escapeHtml(entry.status)}</p><p>Show this page at the reception desk.</p>
-      </main></body></html>`);
+    if (!entry) return page(404, { title: 'Queue pass not found', message: 'This pass is no longer available. Open your latest queue pass in Medi-Queue.' });
+    const closed = ['completed', 'cancelled', 'no_show'].includes(entry.status);
+    return page(200, { entry, title: closed ? 'Queue pass closed' : 'Queue pass verified',
+      message: closed ? 'This pass is no longer active. Please check with the reception desk.' : 'Show this page at the reception desk.' });
   } catch (error) {
-    return next(error);
+    return page(503, { title: 'Queue pass temporarily unavailable', message: 'We could not load your pass. Please refresh this page or show your token number at reception.' });
   }
 };
 
-function mapPass(entry, { todayKey, live } = {}) {
+function mapPass(entry, { todayKey, live, req } = {}) {
   if (!entry) return null;
 
   return {
@@ -66,7 +50,7 @@ function mapPass(entry, { todayKey, live } = {}) {
     // bare number when a patient is called.
     tokenLabel: `A-${String(entry.tokenNumber).padStart(3, '0')}`,
     passCode: entry.passCode,
-    qrValue: passQrValue(entry),
+    qrValue: passQrValue(entry, req),
     doctorId: entry.doctor ? String(entry.doctor) : null,
     doctorName: entry.doctorName || null,
     room: entry.room || null,
@@ -134,7 +118,7 @@ const checkIn = async (req, res, next) => {
           await appointment.save();
         }
         const live = await buildLiveState(entry);
-        return res.json({ pass: mapPass(entry, { todayKey, live }) });
+        return res.json({ pass: mapPass(entry, { todayKey, live, req }) });
       }
     }
 
@@ -143,7 +127,7 @@ const checkIn = async (req, res, next) => {
       const live = await buildLiveState(existing);
       return res.status(409).json({
         message: 'You already have an active queue pass',
-        pass: mapPass(existing, { todayKey, live }),
+        pass: mapPass(existing, { todayKey, live, req }),
       });
     }
 
@@ -190,7 +174,7 @@ const checkIn = async (req, res, next) => {
     await appointment.save();
 
     const live = await buildLiveState(entry);
-    return res.status(201).json({ pass: mapPass(entry, { todayKey, live }) });
+    return res.status(201).json({ pass: mapPass(entry, { todayKey, live, req }) });
   } catch (error) {
     return next(error);
   }
@@ -218,7 +202,7 @@ const myPass = async (req, res, next) => {
     }
 
     const passes = await Promise.all(entries.map(async (entry) => (
-      mapPass(entry, { todayKey, live: await buildLiveState(entry) })
+      mapPass(entry, { todayKey, live: await buildLiveState(entry), req })
     )));
     return res.json({ pass: passes[0], passes });
   } catch (error) {
