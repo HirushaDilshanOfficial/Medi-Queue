@@ -11,11 +11,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StatusBar,
-  SafeAreaView
+  StatusBar
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 import { getAuthToken } from '../../services/http';
 import { BASE_URL } from '../../config';
 
@@ -151,6 +152,7 @@ export default function SendNotificationScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      <MOHBottomNav activeRoute="home" />
     </KeyboardAvoidingView>
   );
 }

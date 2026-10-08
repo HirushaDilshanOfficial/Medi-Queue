@@ -23,7 +23,7 @@ export function LanguageSwitcher() {
   };
 
   const segments = useSegments();
-  const isDark = ['(moh)', '(doctor)', '(reception)'].includes(segments[0]);
+  const isDark = ['(moh)', '(doctor)', '(reception)', 'notifications'].includes(segments[0]);
   const bgColor = isDark ? '#0a6e7e' : '#f3faff';
   const textColor = isDark ? '#ffffff' : '#004c5b';
   

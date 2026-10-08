@@ -12,6 +12,7 @@ import { View,
   Alert, RefreshControl } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
 import { API_URL } from '../../config';
 
@@ -26,6 +27,7 @@ export default function ManageHospitalsScreen() {
     }, 1500);
   }, []);
 
+  const [searchQuery, setSearchQuery] = React.useState('');
   const [activeFilter, setActiveFilter] = React.useState('All');
   const [hospitals, setHospitals] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -96,6 +98,16 @@ export default function ManageHospitalsScreen() {
     );
   };
 
+  const filteredHospitals = hospitals.filter(h => {
+    const matchesFilter = activeFilter === 'All' || h.type === activeFilter;
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = 
+      h.name?.toLowerCase().includes(searchLower) || 
+      h.code?.toLowerCase().includes(searchLower) ||
+      h.location?.toLowerCase().includes(searchLower);
+    return matchesFilter && matchesSearch;
+  });
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
@@ -124,11 +136,13 @@ export default function ManageHospitalsScreen() {
           </View>
 
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons name="search-outline" size={20} color={Colors.textMedium} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
               placeholder={t("Search by name, code or district...")}
               placeholderTextColor={Colors.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </View>
 
@@ -166,15 +180,15 @@ export default function ManageHospitalsScreen() {
 
           <View style={styles.listContainer}>
             <Text style={styles.listHeader}>
-              {t("Registered Facilities (")}{activeFilter === 'All' ? hospitals.length : hospitals.filter(h => h.type === activeFilter).length})
+              {t("Registered Facilities (")}{filteredHospitals.length})
             </Text>
             
             {loading ? (
               <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("Loading hospitals...")}</Text>
-            ) : hospitals.length === 0 ? (
-              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("No hospitals registered yet.")}</Text>
+            ) : filteredHospitals.length === 0 ? (
+              <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("No hospitals found.")}</Text>
             ) : (
-              (activeFilter === 'All' ? hospitals : hospitals.filter(h => h.type === activeFilter)).map((hospital) => (
+              filteredHospitals.map((hospital) => (
                 <TouchableOpacity 
                   key={hospital._id} 
                   style={styles.hospitalCard}

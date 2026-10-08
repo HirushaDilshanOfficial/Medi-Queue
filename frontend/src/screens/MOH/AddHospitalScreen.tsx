@@ -38,6 +38,7 @@ export default function AddHospitalScreen() {
     code: '',
     type: '',
     contact: '',
+    email: '',
     location: '',
     departments: '', // Comma separated for now
   });
@@ -53,6 +54,7 @@ export default function AddHospitalScreen() {
           code: hospital.code || '',
           type: hospital.type || '',
           contact: hospital.contact || '',
+          email: hospital.email || '',
           location: hospital.location || '',
           departments: hospital.departments ? hospital.departments.join(', ') : '',
         });
@@ -67,11 +69,11 @@ export default function AddHospitalScreen() {
   };
 
   const validatePhone = (phone: string) => {
-    return /^\+?[0-9\s-]{9,15}$/.test(phone);
+    return /^(0)[0-9]{9}$/.test(phone);
   };
 
   const handleSave = async () => {
-    if (!formData.name || !formData.code || !formData.type || !formData.contact || !formData.location) {
+    if (!formData.name || !formData.code || !formData.type || !formData.contact || !formData.email || !formData.location) {
       alert('Please fill all required fields');
       return;
     }
@@ -81,13 +83,24 @@ export default function AddHospitalScreen() {
       return;
     }
 
-    const contact = formData.contact.trim();
-    const isEmail = contact.includes('@');
-    if (isEmail && !validateEmail(contact)) {
-      alert('Please enter a valid email address');
+    if (!/^[a-zA-Z\s]+$/.test(formData.name)) {
+      alert('Hospital Name can only contain letters and spaces.');
       return;
-    } else if (!isEmail && !validatePhone(contact)) {
-      alert('Please enter a valid phone number');
+    }
+
+    if (!/^[a-zA-Z0-9-]+$/.test(formData.code)) {
+      alert('Hospital Code can only contain letters, numbers, and dashes.');
+      return;
+    }
+
+    const contact = formData.contact.trim();
+    if (!validatePhone(contact)) {
+      alert('Please enter a valid 10-digit phone number starting with 0.');
+      return;
+    }
+
+    if (!validateEmail(formData.email.trim())) {
+      alert('Please enter a valid email address.');
       return;
     }
     
@@ -194,14 +207,28 @@ export default function AddHospitalScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>{t("Contact Information")}</Text>
+                <Text style={styles.label}>{t("Contact Number")}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder={t("Phone or Email")}
+                  placeholder={t("e.g. 0112345678")}
                   placeholderTextColor={Colors.textLight}
                   keyboardType="phone-pad"
                   value={formData.contact}
-                  onChangeText={(text) => setFormData({ ...formData, contact: text })}
+                  onChangeText={(text) => setFormData({ ...formData, contact: text.replace(/[^0-9]/g, '') })}
+                  maxLength={10}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>{t("Email Address")}</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t("e.g. contact@hospital.com")}
+                  placeholderTextColor={Colors.textLight}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={formData.email}
+                  onChangeText={(text) => setFormData({ ...formData, email: text.replace(/\s/g, '') })}
                 />
               </View>
 
