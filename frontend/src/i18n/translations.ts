@@ -20,9 +20,162 @@ const displayLabels: Record<string, string> = {
 };
 
 export function translate(language: Language, text: string, values?: TranslationValues): string {
+  if (!text || typeof text !== 'string') return text;
+  if (language === 'en') {
+    return values ? text.replace(/\{(\w+)\}/g, (match, key: string) => String(values[key] ?? match)) : text;
+  }
+
+  const idx = language === 'si' ? 0 : 1;
   const canonical = displayLabels[text.toLowerCase().replace(/ /g, '_')];
-  const translated = language === 'en' ? text : (translations[text] ?? normalizedTranslations[normalizeLabel(text)] ?? translations[canonical])?.[language === 'si' ? 0 : 1] ?? text;
-  return values ? translated.replace(/\{(\w+)\}/g, (match, key: string) => String(values[key] ?? match)) : translated;
+
+  // 1. Direct or normalized match
+  const direct = (translations[text] ?? normalizedTranslations[normalizeLabel(text)] ?? (canonical ? translations[canonical] : undefined))?.[idx];
+  if (direct) {
+    return values ? direct.replace(/\{(\w+)\}/g, (match, key: string) => String(values[key] ?? match)) : direct;
+  }
+
+  // 2. Trailing punctuation: ":", "…", "...", "?", ".", ",", "!"
+  const punctMatch = text.match(/^(.*?)([:\.\…\?\,\!]+)$/);
+  if (punctMatch) {
+    const base = punctMatch[1];
+    const punct = punctMatch[2];
+    const baseTranslated = (translations[base] ?? normalizedTranslations[normalizeLabel(base)])?.[idx];
+    if (baseTranslated) {
+      return baseTranslated + punct;
+    }
+  }
+
+  // 3. Delimited by " · " or " • "
+  if (text.includes(' · ')) {
+    return text.split(' · ').map(part => translate(language, part.trim(), values)).join(' · ');
+  }
+  if (text.includes(' • ')) {
+    return text.split(' • ').map(part => translate(language, part.trim(), values)).join(' • ');
+  }
+
+  // 4. Pattern: "{number} patient" or "{number} patients"
+  const patMatch = text.match(/^(\d+)\s+(patients?)$/i);
+  if (patMatch) {
+    const num = patMatch[1];
+    const word = num === '1' ? 'patient' : 'patients';
+    return `${num} ${translate(language, word)}`;
+  }
+
+  // 5. Pattern: "Consultation elapsed: {N} min"
+  const elapsedMatch = text.match(/^Consultation elapsed:\s*(\d+)\s*min$/i);
+  if (elapsedMatch) {
+    return `${translate(language, 'Consultation elapsed:')} ${elapsedMatch[1]} ${translate(language, 'min')}`;
+  }
+
+  // 6. Pattern: "Elapsed {N} min"
+  const elMatch = text.match(/^Elapsed\s*(\d+)\s*min$/i);
+  if (elMatch) {
+    return `${translate(language, 'Elapsed')} ${elMatch[1]} ${translate(language, 'min')}`;
+  }
+
+  // 7. Pattern: "Allergy: {name}"
+  const allergyMatch = text.match(/^Allergy:\s*(.+)$/i);
+  if (allergyMatch) {
+    return `${translate(language, 'Allergy')}: ${translate(language, allergyMatch[1])}`;
+  }
+
+  // 8. Pattern: "Since {month} {day}"
+  const sinceMatch = text.match(/^Since\s+([A-Za-z]+)\s+(\d+)$/i);
+  if (sinceMatch) {
+    const monthKey = sinceMatch[1].slice(0, 3).toLowerCase();
+    const months: Record<string, [string, string]> = {
+      jan: ['ජන', 'ஜன'], feb: ['පෙබ', 'பிப்'], mar: ['මාර්තු', 'மார்ச்'],
+      apr: ['අප්‍රේල්', 'ஏப்'], may: ['මැයි', 'மே'], jun: ['ජූනි', 'ஜூன்'],
+      jul: ['ජූලි', 'ஜூலை'], aug: ['අගෝ', 'ஆக'], sep: ['සැප්', 'செப்'],
+      oct: ['ඔක්', 'அக்'], nov: ['නොවැ', 'நவ'], dec: ['දෙසැ', 'டிச'],
+    };
+    const m = months[monthKey]?.[idx] || sinceMatch[1];
+    return language === 'si' ? `${m} ${sinceMatch[2]} සිට` : `${m} ${sinceMatch[2]} முதல்`;
+  }
+
+  // 9. Pattern: "{N} report(s) filed"
+  const rptMatch = text.match(/^(\d+)\s+reports?\s*(\(s\))?\s*filed$/i);
+  if (rptMatch) {
+    return language === 'si' ? `වාර්තා ${rptMatch[1]}ක් ගොනු කර ඇත` : `${rptMatch[1]} அறிக்கைகள் பதிவு செய்யப்பட்டுள்ளன`;
+  }
+
+  // 10. Pattern: "Est. wait: {time}"
+  const estMatch = text.match(/^Est\.\s*wait:\s*(.+)$/i);
+  if (estMatch) {
+    const waitVal = estMatch[1].replace(/~0m/i, '~මිනි 0').replace(/~(\d+)\s*min/i, '~මිනි $1');
+    return language === 'si' ? `ඇස්තමේන්තුගත රැඳී සිටීම: ${waitVal}` : `மதிப்பிடப்பட்ட காத்திருப்பு: ${estMatch[1]}`;
+  }
+
+  // 11. Pattern: "All ({count})"
+  const allMatch = text.match(/^All\s*\((.+)\)$/i);
+  if (allMatch) {
+    const inside = values ? allMatch[1].replace(/\{(\w+)\}/g, (_, k) => String(values[k] ?? _)) : allMatch[1];
+    return language === 'si' ? `සියල්ල (${inside})` : `அனைத்தும் (${inside})`;
+  }
+
+  // 12. Pattern: Header Date e.g. "THURSDAY, OCT 8, 2026"
+  const headerDateMatch = text.match(/^([A-Za-z]+),\s*([A-Za-z]+)\s+(\d+),\s*(\d+)$/);
+  if (headerDateMatch) {
+    const days: Record<string, [string, string]> = {
+      monday: ['සඳුදා', 'திங்கள்'], tuesday: ['අඟහරුවාදා', 'செவ்வாய்'],
+      wednesday: ['බදාදා', 'புதன்'], thursday: ['බ්‍රහස්පතින්දා', 'வியாழன்'],
+      friday: ['සිකුරාදා', 'வெள்ளி'], saturday: ['සෙනසුරාදා', 'சனி'],
+      sunday: ['ඉරිදා', 'ஞாயிறு'],
+      mon: ['සඳුදා', 'திங்கள்'], tue: ['අඟහරුවාදා', 'செவ்வாய்'],
+      wed: ['බදාදා', 'புதன்'], thu: ['බ්‍රහස්පතින්දා', 'வியாழன்'],
+      fri: ['සිකුරාදා', 'வெள்ளி'], sat: ['සෙනසුරාදා', 'சனி'],
+      sun: ['ඉරිදා', 'ஞாயிறு'],
+    };
+    const months: Record<string, [string, string]> = {
+      jan: ['ජනවාරි', 'ஜனவரி'], feb: ['පෙබරවාරි', 'பிப்ரவரி'], mar: ['මාර්තු', 'மார்ச்'],
+      apr: ['අප්‍රේල්', 'ஏப்ரல்'], may: ['මැයි', 'மே'], jun: ['ජූනි', 'ஜூன்'],
+      jul: ['ජූලි', 'ஜூலை'], aug: ['අගෝස්තු', 'ஆகஸ்ட்'], sep: ['සැප්තැම්බර්', 'செப்டம்பர்'],
+      oct: ['ඔක්තෝබර්', 'அக்டோபர்'], nov: ['නොවැම්බර්', 'நவம்பர்'], dec: ['දෙසැම්බර්', 'டிசம்பர்'],
+    };
+    const d = days[headerDateMatch[1].toLowerCase()]?.[idx] || headerDateMatch[1];
+    const m = months[headerDateMatch[2].slice(0, 3).toLowerCase()]?.[idx] || headerDateMatch[2];
+    return `${d}, ${m} ${headerDateMatch[3]}, ${headerDateMatch[4]}`;
+  }
+
+  // 13. Pattern: Week range e.g. "Oct 5 – 11, 2026"
+  const weekRangeMatch = text.match(/^([A-Za-z]+)\s+(\d+)\s*–\s*(\d+),\s*(\d+)$/);
+  if (weekRangeMatch) {
+    const months: Record<string, [string, string]> = {
+      jan: ['ජන', 'ஜன'], feb: ['පෙබ', 'பிப்'], mar: ['මාර්තු', 'மார்ச்'],
+      apr: ['අප්‍රේල්', 'ஏப்'], may: ['මැයි', 'மே'], jun: ['ජූනි', 'ஜூன்'],
+      jul: ['ජූලි', 'ஜூலை'], aug: ['අගෝ', 'ஆக'], sep: ['සැප්', 'செப்'],
+      oct: ['ඔක්', 'அக்'], nov: ['නොවැ', 'நவ'], dec: ['දෙසැ', 'டிச'],
+    };
+    const m = months[weekRangeMatch[1].slice(0, 3).toLowerCase()]?.[idx] || weekRangeMatch[1];
+    return `${m} ${weekRangeMatch[2]} – ${weekRangeMatch[3]}, ${weekRangeMatch[4]}`;
+  }
+
+  // 14. Pattern: "Token #{number}"
+  const tokenMatch = text.match(/^Token\s*#(\d+)$/i);
+  if (tokenMatch) {
+    return language === 'si' ? `පෝලිම් අංකය #${tokenMatch[1]}` : `வரிசை எண் #${tokenMatch[1]}`;
+  }
+
+  // 15. Pattern: "Dr. {Name}" or "Dr {Name}"
+  const drMatch = text.match(/^Dr\.?\s+(.+)$/i);
+  if (drMatch) {
+    const rest = drMatch[1].trim();
+    const prefix = language === 'si' ? 'වෛද්‍ය ' : 'மருத்துவர் ';
+    return `${prefix}${translate(language, rest, values)}`;
+  }
+
+  // 16. Pattern: Multi-word names composed of known tokens
+  if (text.includes(' ') && !text.includes('\n')) {
+    const parts = text.split(/\s+/);
+    if (parts.length >= 2 && parts.length <= 4) {
+      const translatedParts = parts.map(p => (translations[p] ?? normalizedTranslations[normalizeLabel(p)])?.[idx]);
+      if (translatedParts.every(Boolean)) {
+        return (translatedParts as string[]).join(' ');
+      }
+    }
+  }
+
+  return values ? text.replace(/\{(\w+)\}/g, (match, key: string) => String(values[key] ?? match)) : text;
 }
 
 export const translations: Record<string, readonly [string, string]> = {

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { DOCTOR_TOKENS as C } from './doctorTheme';
 
 export const StatusPill = ({ label, style }: { label: string; style?: StyleProp<ViewStyle> }) => (

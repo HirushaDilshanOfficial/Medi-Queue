@@ -360,34 +360,28 @@ const HOSPITAL_DATA_MAP = {
   'City General Hospital': {
     room: 'Room 3B',
     currentPatient: {
-      tokenNumber: 4,
-      patientName: 'Imantha kaniska',
-      age: 28,
-      gender: 'Male',
+      tokenNumber: 2,
+      patientName: 'Heshani Wickramasinghe',
+      age: 22,
+      gender: 'Female',
       priority: 'normal',
       status: 'in_consultation',
       reason: 'General OPD Consultation',
-      bloodPressure: '118/76',
-      heartRate: '72 bpm',
-      fileRecord: 'REC-004',
-      checkedInTime: '08:50 AM',
-      calledAtTime: '08:59',
+      bloodPressure: '120/80',
+      heartRate: '74 bpm',
+      fileRecord: 'NIC: 200382013019',
+      checkedInTime: '01:20 PM',
+      calledAtTime: '01:20 PM',
       allergy: null,
     },
-    upcomingQueue: [
-      { tokenNumber: 5, patientName: 'Nihal Jayawardena', age: 60, gender: 'Male', priority: 'elderly', category: 'priority', status: 'next', reason: 'Chest Discomfort Checkup', location: 'Ready at Lobby', arrivedTime: '09:05', vitalsVerified: true, slotTime: '09:15 AM' },
-      { tokenNumber: 6, patientName: 'Anoma Wickramasinghe', age: 39, gender: 'Female', priority: 'normal', category: 'all', status: 'Checked In • Ready', reason: 'Migraine Consultation', location: 'Waiting Area', arrivedTime: '09:12', vitalsVerified: true, slotTime: '09:30 AM' },
-      { tokenNumber: 7, patientName: 'Dhammika Perera', age: 50, gender: 'Male', priority: 'normal', category: 'all', status: 'Waiting', reason: 'Cholesterol Review', location: 'Waiting Area', arrivedTime: '09:20', vitalsVerified: true, slotTime: '09:45 AM' },
-      { tokenNumber: 8, patientName: 'Sujatha Alwis', age: 57, gender: 'Female', priority: 'elderly', category: 'priority', status: 'Waiting', reason: 'Thyroid Medication Review', location: 'Waiting Area', arrivedTime: '09:30', vitalsVerified: false, slotTime: '10:00 AM' },
-      { tokenNumber: 9, patientName: 'Sanduni Perera', age: 41, gender: 'Female', priority: 'walkin', category: 'walkin', status: 'Waiting', reason: 'Routine Ortho Review', location: 'Waiting Area', arrivedTime: '09:45', vitalsVerified: true, slotTime: '10:15 AM' },
-    ],
+    upcomingQueue: [],
     metrics: {
-      currentCallingToken: 4,
-      waitingCount: 5,
-      completedCount: 12,
-      totalToday: 18,
-      avgWaitMinutes: 8,
-      estimatedWaitTime: '~28m',
+      currentCallingToken: 2,
+      waitingCount: 0,
+      completedCount: 2,
+      totalToday: 3,
+      avgWaitMinutes: 15,
+      estimatedWaitTime: '~0m',
     },
   },
   'National Hospital Sri Lanka': {
@@ -2759,8 +2753,9 @@ const getPatientRecords = async (req, res) => {
     const cleanDocName = (doctor?.name || '').replace(/^Dr\.\s*/i, '').trim();
 
     const OpdMedicalReport = require('../models/OpdMedicalReport');
+    const OpdPatientProfile = require('../models/OpdPatientProfile');
 
-    const [dbOpdAppts, dbAppts, allReports] = await Promise.all([
+    const [dbOpdAppts, dbAppts, allReports, allOpdProfiles] = await Promise.all([
       OpdAppointment.find({
         $or: [
           ...(doctor?._id ? [{ doctor: doctor._id }] : []),
@@ -2782,6 +2777,10 @@ const getPatientRecords = async (req, res) => {
 
       OpdMedicalReport.find()
         .sort({ createdAt: -1 })
+        .lean()
+        .catch(() => []),
+
+      OpdPatientProfile.find()
         .lean()
         .catch(() => []),
     ]);
@@ -2957,13 +2956,60 @@ const getPatientRecords = async (req, res) => {
           height: pat.vitals?.height ? `${pat.vitals.height} cm` : '170 cm',
         },
         vitalsHistory: [],
-        imaging: {
-          hasImaging: false,
-          title: 'No diagnostic imaging',
-          subtitle: 'None',
-          description: 'No diagnostic imaging records found',
-        },
-        reports: [],
+        imaging: (() => {
+          const matchingProfiles = (allOpdProfiles || []).filter(
+            (p) => (pat._id && String(p.patient) === String(pat._id)) ||
+                   (pat.nic && p.nic && p.nic.toLowerCase() === pat.nic.toLowerCase())
+          );
+          const matchedProfileIds = matchingProfiles.map((p) => String(p._id));
+          const patReports = (allReports || []).filter((r) =>
+            matchedProfileIds.includes(String(r.profile)) ||
+            (pat._id && String(r.profile) === String(pat._id))
+          );
+          const topPatReport = patReports.length > 0 ? patReports[0] : null;
+          return topPatReport
+            ? {
+                hasImaging: true,
+                id: String(topPatReport._id),
+                title: topPatReport.title,
+                subtitle: `${topPatReport.category || 'Lab result'} • ${topPatReport.reportDate ? new Date(topPatReport.reportDate).toLocaleDateString() : 'Recent'}`,
+                description: topPatReport.fileName ? `File: ${topPatReport.fileName}` : (topPatReport.notes || 'Patient uploaded medical report'),
+                fileName: topPatReport.fileName || `${topPatReport.title}.pdf`,
+                fileMimeType: topPatReport.fileMimeType || 'application/pdf',
+                imageUrl: (topPatReport.fileMimeType || '').startsWith('image/')
+                  ? `/api/v1/doctor/reports/${topPatReport._id}/file`
+                  : undefined,
+                reportSummary: topPatReport.notes || `${topPatReport.title} uploaded by patient for consultation review.`,
+                fileUrl: `/api/v1/doctor/reports/${topPatReport._id}/file`,
+              }
+            : {
+                hasImaging: false,
+                title: 'No diagnostic imaging',
+                subtitle: 'None',
+                description: 'No diagnostic imaging records found',
+              };
+        })(),
+        reports: (() => {
+          const matchingProfiles = (allOpdProfiles || []).filter(
+            (p) => (pat._id && String(p.patient) === String(pat._id)) ||
+                   (pat.nic && p.nic && p.nic.toLowerCase() === pat.nic.toLowerCase())
+          );
+          const matchedProfileIds = matchingProfiles.map((p) => String(p._id));
+          const patReports = (allReports || []).filter((r) =>
+            matchedProfileIds.includes(String(r.profile)) ||
+            (pat._id && String(r.profile) === String(pat._id))
+          );
+          return patReports.map((r) => ({
+            id: String(r._id),
+            title: r.title,
+            category: r.category || 'Lab result',
+            reportDate: r.reportDate ? new Date(r.reportDate).toLocaleDateString() : new Date(r.createdAt).toLocaleDateString(),
+            fileName: r.fileName || 'Report document',
+            fileMimeType: r.fileMimeType,
+            fileUrl: `/api/v1/doctor/reports/${r._id}/file`,
+            notes: r.notes || '',
+          }));
+        })(),
         recentVisits: [
           {
             id: `vis-appt-${appt._id}`,
@@ -3722,7 +3768,21 @@ const getDoctorReportFile = async (req, res) => {
     }
 
     if (foundPath) {
-      const mime = report.fileMimeType || (foundPath.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
+      let mime = report.fileMimeType || (foundPath.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
+      try {
+        const buf = Buffer.alloc(4);
+        const fd = fs.openSync(foundPath, 'r');
+        fs.readSync(fd, buf, 0, 4, 0);
+        fs.closeSync(fd);
+        if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+          mime = 'image/jpeg';
+        } else if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+          mime = 'image/png';
+        } else if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) {
+          mime = 'application/pdf';
+        }
+      } catch (e) {}
+
       res.setHeader('Content-Type', mime);
       res.setHeader(
         'Content-Disposition',

@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   TouchableOpacity,
-  Text,
   StyleSheet,
   ActivityIndicator,
   ViewStyle,
@@ -9,6 +8,7 @@ import {
   TextStyle,
   View,
 } from 'react-native';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { DOCTOR_TOKENS as C } from './doctorTheme';
 
 interface ButtonProps {
@@ -51,7 +51,7 @@ export const PrimaryButton = ({
       ) : (
         <>
           {icon && <View style={styles.iconLeft}>{icon}</View>}
-          <Text style={[styles.btnText, styles.primaryText, textStyle]}>{text}</Text>
+          <Text style={[styles.btnText, styles.primaryText, textStyle]} numberOfLines={1}>{text}</Text>
           {right && <View style={styles.iconRight}>{right}</View>}
         </>
       )}
@@ -86,7 +86,7 @@ export const SecondaryButton = ({
       ) : (
         <>
           {icon && <View style={styles.iconLeft}>{icon}</View>}
-          <Text style={[styles.btnText, styles.secondaryText, textStyle]}>{text}</Text>
+          <Text style={[styles.btnText, styles.secondaryText, textStyle]} numberOfLines={1}>{text}</Text>
           {right && <View style={styles.iconRight}>{right}</View>}
         </>
       )}
@@ -121,7 +121,7 @@ export const OutlineButton = ({
       ) : (
         <>
           {icon && <View style={styles.iconLeft}>{icon}</View>}
-          <Text style={[styles.btnText, styles.outlineText, textStyle]}>{text}</Text>
+          <Text style={[styles.btnText, styles.outlineText, textStyle]} numberOfLines={1}>{text}</Text>
           {right && <View style={styles.iconRight}>{right}</View>}
         </>
       )}
@@ -131,16 +131,18 @@ export const OutlineButton = ({
 
 const styles = StyleSheet.create({
   baseBtn: {
-    height: 48,
+    minHeight: 48,
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   btnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
+    textAlign: 'center',
   },
   primaryBtn: {
     backgroundColor: C.teal,

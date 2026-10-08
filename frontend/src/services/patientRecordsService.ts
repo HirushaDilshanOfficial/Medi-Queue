@@ -227,7 +227,8 @@ export interface AllergyCheckResult {
   note?: string;
 }
 
-export const getDefaultAllergiesForPatient = (patient: PatientRecord): AllergyItem[] => {
+export const getDefaultAllergiesForPatient = (patient?: PatientRecord): AllergyItem[] => {
+  if (!patient) return [];
   if (patient.allergies && patient.allergies.length > 0) {
     return patient.allergies;
   }
@@ -340,10 +341,11 @@ export const checkMedicationAllergyWithList = (
 
 export const checkMedicationAllergy = (
   drugNameInput: string,
-  patient: PatientRecord
+  patient?: PatientRecord
 ): AllergyCheckResult => {
+  if (!patient) return { status: 'safe' };
   const allergies = getDefaultAllergiesForPatient(patient);
-  return checkMedicationAllergyWithList(drugNameInput, allergies, patient.medications);
+  return checkMedicationAllergyWithList(drugNameInput, allergies, patient.medications || []);
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -1318,19 +1320,19 @@ export const makeHospitalRecord = (
 // Records for City General Hospital
 const CITY_GENERAL_PATIENTS: PatientRecord[] = [
   makeHospitalRecord(
-    'pat-cg-004',
-    'Imantha kaniska',
-    4,
+    '6ac784bcf6016d97868f5e59',
+    'Heshani Wickramasinghe',
+    2,
     'City General Hospital',
     'In consultation',
-    28,
-    'Male',
+    22,
+    'Female',
     'B+',
-    '1998-1029384',
+    '200382013019',
     'General OPD Consultation',
-    '118/76',
-    72,
-    36.9,
+    '120/80',
+    74,
+    36.8,
     99,
     undefined,
     undefined,
