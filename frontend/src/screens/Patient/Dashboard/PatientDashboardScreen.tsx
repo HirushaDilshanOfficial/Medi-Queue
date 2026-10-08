@@ -14,6 +14,10 @@ import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import { ACTION_TILES, EVENTS } from './dashboardContent';
 import { clinicApi } from '../../../services/clinicApi';
 import { C, styles } from './dashboardStyles';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuthToken } from '../../../services/http';
+import { BASE_URL } from '../../../config';
+import EmergencyBanner from '../../../components/EmergencyBanner';
 
 function StatCard({ value, label, icon, onPress }: { value: number | null | undefined; label: string; icon: DesignImageName; onPress: () => void }) {
   const { t } = useLanguage();
@@ -101,6 +105,7 @@ export function PatientDashboardScreen() {
   if (!fontsLoaded && !fontError) return <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator color={C.primary} accessibilityLabel={t("Loading dashboard")} /></View>;
 
   return <View style={styles.root}>
+    <EmergencyBanner />
     <View style={[styles.headerSafe, { paddingTop: insets.top }]}><View style={styles.header}>
       <View style={styles.logo}><DesignImage name="medical" size={22} color="#fff" /></View>
       <View style={styles.grow}><Text style={styles.eyebrow}>MEDI-QUEUE</Text><Text style={styles.headerTitle}>{t("Home Dashboard")}</Text></View>

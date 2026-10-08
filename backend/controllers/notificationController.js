@@ -10,7 +10,7 @@ const canonicalRole = role => ROLES.find(value => value.toLowerCase() === String
 // @access  Private (MOH only)
 const createNotification = async (req, res) => {
   try {
-    const { title, message, targetRole, recipient, kind } = req.body;
+    const { title, message, targetRole, recipient, kind, isEmergency } = req.body;
 
     if (typeof title !== 'string' || !title.trim() || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ message: 'Title and message are required' });
@@ -45,6 +45,7 @@ const createNotification = async (req, res) => {
       targetRole: audience,
       recipient: recipient || null,
       kind: recipient ? 'personal' : 'announcement',
+      isEmergency: isEmergency || false,
       sender: req.user._id,
     });
 

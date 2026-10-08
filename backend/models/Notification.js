@@ -32,6 +32,10 @@ const notificationSchema = new mongoose.Schema(
       enum: ['personal', 'announcement'],
       default: function () { return this.recipient ? 'personal' : 'announcement'; },
     },
+    isEmergency: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
