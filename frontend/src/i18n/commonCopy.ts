@@ -1,5 +1,15 @@
 // English | Sinhala | Tamil. Proper names, codes and clinical data are not catalogued.
 const copy = `
+Seen appointments|සම්පූර්ණ කළ හමුවීම්|நிறைவடைந்த சந்திப்புகள்
+Missed appointments|මඟ හැරුණු හමුවීම්|தவறவிட்ட சந்திப்புகள்
+Cancelled appointments|අවලංගු කළ හමුවීම්|ரத்து செய்யப்பட்ட சந்திப்புகள்
+No seen appointments|සම්පූර්ණ කළ හමුවීම් නැත|நிறைவடைந்த சந்திப்புகள் இல்லை
+No missed appointments|මඟ හැරුණු හමුවීම් නැත|தவறவிட்ட சந்திப்புகள் இல்லை
+No cancelled appointments|අවලංගු කළ හමුවීම් නැත|ரத்து செய்யப்பட்ட சந்திப்புகள் இல்லை
+Your completed appointments will appear here.|ඔබේ සම්පූර්ණ කළ හමුවීම් මෙහි දිස්වනු ඇත.|உங்கள் நிறைவடைந்த சந்திப்புகள் இங்கே தோன்றும்.
+Appointments you did not attend will appear here.|ඔබ සහභාගී නොවූ හමුවීම් මෙහි දිස්වනු ඇත.|நீங்கள் கலந்து கொள்ளாத சந்திப்புகள் இங்கே தோன்றும்.
+Appointments you cancel will appear here immediately.|ඔබ අවලංගු කරන හමුවීම් වහාම මෙහි දිස්වනු ඇත.|நீங்கள் ரத்து செய்யும் சந்திப்புகள் உடனடியாக இங்கே தோன்றும்.
+Show all appointments|සියලු හමුවීම් පෙන්වන්න|அனைத்து சந்திப்புகளையும் காட்டு
 Clinic Registration|සායන ලියාපදිංචිය|மருத்துவமனைப் பதிவு
 Doctor Schedule|වෛද්‍ය කාලසටහන|மருத்துவர் அட்டவணை
 Select a doctor to view available dates and times|ලබා ගත හැකි දින සහ වේලාවන් බැලීමට වෛද්‍යවරයෙකු තෝරන්න|கிடைக்கும் தேதிகளையும் நேரங்களையும் பார்க்க ஒரு மருத்துவரைத் தேர்ந்தெடுக்கவும்

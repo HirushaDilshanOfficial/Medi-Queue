@@ -110,7 +110,9 @@ export function DoctorDirectoryScreen() {
         setWorking(appointment.id);
         try {
           await bookingApi.cancel(appointment.id, 'Cancelled by patient');
-          await bookings.reload();
+          bookings.setData(current => current ? { ...current, appointments: current.appointments.filter(item => item.id !== appointment.id) } : current);
+          bookings.reload();
+          router.push({ pathname: '/(patient)/profile/history', params: { status: 'cancelled' } });
         } catch (error) {
           Alert.alert(t('Could not cancel'), error instanceof Error ? error.message : t('Please try again.'));
         } finally {
@@ -134,7 +136,7 @@ export function DoctorDirectoryScreen() {
         ],
       );
     },
-    [bookings, t],
+    [bookings, router, t],
   );
 
   const startReschedule = useCallback(
