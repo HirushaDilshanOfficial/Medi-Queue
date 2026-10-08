@@ -912,6 +912,56 @@ const getAutoAdvance = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Complete consultation for serving/called token: status -> 'done'
+ * @route   POST /api/reception/queue/:id/complete
+ *          POST /api/reception/queue/complete
+ * @access  Private — receptionist, doctor
+ */
+const completeToken = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  let query;
+  if (id) {
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      query = { _id: id };
+    } else if (/^\d+$/.test(id)) {
+      query = { tokenNumber: Number(id) };
+    } else {
+      query = { tokenLabel: id };
+    }
+  } else {
+    query = { status: { $in: ['called', 'serving'] } };
+  }
+
+  const token = await QueueToken.findOne(query).populate('appointment');
+
+  if (!token) {
+    throw createError('Serving queue token not found to complete', 404);
+  }
+
+  const now = new Date();
+  token.status = 'done';
+  token.servedAt = now;
+  await token.save();
+
+  if (token.appointment) {
+    const appointmentId = token.appointment._id || token.appointment;
+    await Appointment.findByIdAndUpdate(appointmentId, {
+      $set: {
+        status: 'completed',
+        isActive: false,
+      },
+    });
+  }
+
+  res.json({
+    success: true,
+    tokenLabel: token.tokenLabel,
+    status: 'done',
+  });
+});
+
 module.exports = {
   checkIn,
   myPass,
@@ -927,6 +977,7 @@ module.exports = {
   getQueue,
   getNextInQueue,
   callNext,
+  completeToken,
   recallToken,
   markNoShow,
   moveBackToken,

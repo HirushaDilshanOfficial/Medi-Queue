@@ -714,4 +714,22 @@ export const updateAutoAdvance = async (
   );
 };
 
+/**
+ * Complete serving token consultation at counter.
+ */
+export const completeToken = async (
+  tokenLabelOrId?: string,
+  token?: string
+): Promise<{ success: boolean; tokenLabel: string; status: string }> => {
+  const endpoint = tokenLabelOrId
+    ? `/api/reception/queue/${encodeURIComponent(tokenLabelOrId)}/complete`
+    : '/api/reception/queue/complete';
+  return api.post<{ success: boolean; tokenLabel: string; status: string }>(
+    endpoint,
+    {},
+    { token }
+  );
+};
+
 export default api;
+

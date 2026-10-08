@@ -3,6 +3,9 @@ const Slot = require('../models/Slot');
 const Schedule = require('../models/Schedule');
 const OpdAppointment = require('../models/OpdAppointment');
 const OpdQueueEntry = require('../models/OpdQueueEntry');
+const Appointment = require('../models/Appointment');
+const QueueToken = require('../models/QueueToken');
+const { ensurePatientForProfile } = require('../utils/patientSync');
 const { nextTokenNumber, releaseTokenNumber } = require('../models/OpdQueueCounter');
 const { ensureBookingQueueEntry } = require('../utils/ensureBookingQueueEntry');
 const { passQrValue } = require('../utils/queuePass');
@@ -168,6 +171,39 @@ const createBooking = async (req, res, next) => {
     appointment.queueEntry = queueEntry._id;
     await appointment.save();
 
+    // Sync to shared Appointment & QueueToken so Receptionist & Doctor screens immediately see the booking
+    try {
+      const patientDoc = await ensurePatientForProfile(req.patientProfile);
+      if (patientDoc) {
+        const sharedAppt = await Appointment.create({
+          patient: patientDoc._id,
+          doctor: doctor._id,
+          department: doctor.department || 'General OPD',
+          date: String(date),
+          slotTime: String(slotTime),
+          type: type === 'walk_in' ? 'walk_in' : 'pre_booked',
+          status: 'booked',
+          tokenNumber: allocatedToken,
+          notes: reason ? String(reason).trim() : undefined,
+          isActive: true,
+        });
+
+        await QueueToken.create({
+          appointment: sharedAppt._id,
+          patient: patientDoc._id,
+          department: doctor.department || 'General OPD',
+          date: String(date),
+          tokenNumber: allocatedToken,
+          tokenLabel: `A-${String(allocatedToken).padStart(3, '0')}`,
+          status: 'waiting',
+          priority: 'normal',
+          assignedDoctor: doctor._id,
+        });
+      }
+    } catch (syncErr) {
+      console.log('Shared Appointment / QueueToken sync note:', syncErr.message);
+    }
+
     return res.status(201).json({
       appointment: mapAppointment(appointment, { todayKey: today() }),
       tokenLabel: `A-${String(queueEntry.tokenNumber).padStart(3, '0')}`,
@@ -302,6 +338,29 @@ const cancelBooking = async (req, res, next) => {
       tokenReleased = true;
     }
 
+    // Sync cancellation to shared Appointment and QueueToken
+    try {
+      const patientDoc = await ensurePatientForProfile(req.patientProfile);
+      if (patientDoc) {
+        await Appointment.updateMany(
+          {
+            patient: patientDoc._id,
+            doctor: appointment.doctor,
+            date: appointment.date,
+            slotTime: appointment.slotTime,
+          },
+          { $set: { status: 'cancelled', isActive: false } }
+        );
+      }
+      await QueueToken.updateMany(
+        {
+          date: appointment.date,
+          tokenNumber: appointment.tokenNumber,
+        },
+        { $set: { status: 'no_show' } }
+      );
+    } catch (e) {}
+
     return res.json({
       appointment: mapAppointment(appointment, { todayKey: today() }),
       tokenReleased,
@@ -384,6 +443,27 @@ const rescheduleBooking = async (req, res, next) => {
     appointment.endsAt = match.slot.endsAt || null;
     if (match.schedule && match.schedule.room) appointment.room = match.schedule.room;
     await appointment.save();
+
+    // Sync reschedule to shared Appointment
+    try {
+      const patientDoc = await ensurePatientForProfile(req.patientProfile);
+      if (patientDoc) {
+        await Appointment.updateMany(
+          {
+            patient: patientDoc._id,
+            doctor: appointment.doctor,
+            date: appointment.rescheduledFrom || appointment.date,
+          },
+          {
+            $set: {
+              date: String(date),
+              slotTime: String(slotTime),
+              notes: `Rescheduled to ${date} ${slotTime}`,
+            },
+          }
+        );
+      }
+    } catch (e) {}
 
     return res.json({
       appointment: mapAppointment(appointment, { todayKey }),

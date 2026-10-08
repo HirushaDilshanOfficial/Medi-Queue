@@ -579,95 +579,43 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
             </View>
           </View>
 
-          {/* Buttons Stack */}
+          {/* Actions / Status Stack */}
           <View style={styles.nextActionsStack}>
-            {/* Primary Action: Call Next to Room <room> */}
-            <TouchableOpacity
-              style={[
-                styles.primaryCallBtn,
-                (actionLoading || isShiftClosed) && styles.btnDisabled,
-              ]}
-              onPress={() =>
-                handleCallNext(
-                  roomNumber,
-                  doctorObj?._id || doctorObj?.id,
-                  nextInLine.department
-                )
-              }
-              disabled={actionLoading || isShiftClosed}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel={t("Call Next to {value0}", { value0: String(roomLabel) })}
-            >
-              <Ionicons
-                name={isShiftClosed ? 'lock-closed' : 'play-forward'}
-                size={18}
-                color={Colors.white}
-                style={styles.btnIcon}
-              />
-              <Text style={styles.primaryCallBtnText}>
-                {isShiftClosed ? t('Shift Closed (Intake Disabled)') : t("Call Next to {value0}", { value0: String(roomLabel) })}
-              </Text>
-            </TouchableOpacity>
+            {/* OPD Queue Status: View Only for Receptionist */}
+            <View style={styles.opdMonitorInfoBox}>
+              <View style={styles.opdMonitorPill}>
+                <Ionicons name="eye-outline" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.opdMonitorPillText}>{t('OPD QUEUE MONITOR')}</Text>
+              </View>
+              <Text style={styles.opdMonitorRoomText}>{roomLabel}</Text>
+            </View>
 
-            {/* Secondary Action Row: Mark No-Show & Move Back (n) */}
-            <View style={styles.secondaryActionsRow}>
-              {/* Move Back (n) - Hidden for urgent tokens */}
-              {!isUrgent ? (
-                <TouchableOpacity
-                  style={[
-                    styles.secondaryActionBtn,
-                    styles.moveBackBtn,
-                    actionLoading && styles.btnDisabled,
-                  ]}
-                  onPress={() => handleMoveBack(nextInLine)}
-                  disabled={actionLoading}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("Move back token {value0}", { value0: String(tokenLabel) })}
-                >
-                  <Ionicons
-                    name="swap-vertical"
-                    size={16}
-                    color={Colors.secondary}
-                    style={styles.btnIcon}
-                  />
-                  <Text style={styles.moveBackBtnText}>
-                    {t("Move Back (")}{moveBackCount})
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-
-              {/* Mark No-Show */}
+            {/* Move Back in Line (n) */}
+            {!isUrgent ? (
               <TouchableOpacity
                 style={[
                   styles.secondaryActionBtn,
-                  styles.noShowBtn,
+                  styles.moveBackBtn,
+                  { width: '100%', marginTop: 8 },
                   actionLoading && styles.btnDisabled,
-                  isUrgent && { flex: 1 }, // Take full width if Move Back is hidden
                 ]}
-                onPress={() => handleMarkNoShow(nextInLine, patientName)}
+                onPress={() => handleMoveBack(nextInLine)}
                 disabled={actionLoading}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel={t("Mark token {value0} as no show", { value0: String(tokenLabel) })}
+                accessibilityLabel={t("Move back token {value0}", { value0: String(tokenLabel) })}
               >
                 <Ionicons
-                  name="close-circle-outline"
+                  name="swap-vertical"
                   size={16}
-                  color={Colors.danger}
+                  color={Colors.secondary}
                   style={styles.btnIcon}
                 />
-                <Text style={styles.noShowBtnText}>{t("Mark No-Show")}</Text>
+                <Text style={styles.moveBackBtnText}>
+                  {t("Move Back in Line (")}{moveBackCount})
+                </Text>
               </TouchableOpacity>
-            </View>
-
-            {/* Automatic update helper notice */}
-            <View style={styles.callNextHelperNoticeRow}>
-              <Ionicons name="sync-outline" size={13} color={Colors.textLight} style={{ marginRight: 5 }} />
-              <Text style={styles.callNextHelperNoticeText}>
-                {t("Patient display and doctor queue update automatically.")}</Text>
-            </View>
+            ) : null}
           </View>
         </View>
       </View>
@@ -757,41 +705,17 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
           </View>
         </View>
 
-        {/* Action Buttons Row */}
+        {/* Action: Change Doctor (Receptionist Re-assignment) */}
         <View style={styles.cardActionsRow}>
           <TouchableOpacity
-            style={[styles.cardCallBtn, (actionLoading || isShiftClosed) && styles.btnDisabled]}
-            onPress={() => handleCallNext(roomNumber, groupDocId, groupDept)}
-            disabled={actionLoading || isShiftClosed}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel={t('Call {value0} to {value1}', { value0: tokenLabel, value1: roomLabel })}
-          >
-            <Ionicons name="megaphone-outline" size={13} color={Colors.white} style={{ marginRight: 4 }} />
-            <Text style={styles.cardCallBtnText}>{t('Call to Desk')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.cardChangeDocBtn}
+            style={[styles.cardChangeDocBtn, { flex: 1 }]}
             onPress={() => openDoctorModal(token)}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={t('Change doctor for {value0}', { value0: tokenLabel })}
           >
             <Ionicons name="repeat-outline" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
-            <Text style={styles.cardChangeDocBtnText}>{t('Change Doctor')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.cardNoShowBtn, actionLoading && styles.btnDisabled]}
-            onPress={() => handleMarkNoShow(token, patientName)}
-            disabled={actionLoading}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel={t('Mark {value0} as no show', { value0: tokenLabel })}
-          >
-            <Ionicons name="close-circle-outline" size={13} color="#DC2626" style={{ marginRight: 3 }} />
-            <Text style={styles.cardNoShowBtnText}>{t('No-Show')}</Text>
+            <Text style={styles.cardChangeDocBtnText}>{t('Reassign Doctor')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -813,7 +737,6 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
       <View style={styles.doctorQueueSection}>
         <SectionHeader
           title={t("Doctor Queue Breakdown")}
-          subtitle={t("Walk-in and pre-booked patient queues separated by doctor")}
           rightElement={
             <View style={styles.doctorQueueTotalPill}>
               <Text style={styles.doctorQueueTotalPillText}>
@@ -951,26 +874,7 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
                         {group.totalCount} {t('Waiting')}
                       </Text>
                     </View>
-                    {group.totalCount > 0 ? (
-                      <TouchableOpacity
-                        style={[
-                          styles.doctorQuickCallBtn,
-                          (actionLoading || isShiftClosed) && styles.btnDisabled,
-                        ]}
-                        onPress={() =>
-                          handleCallNext(
-                            roomNumber,
-                            group.id !== 'unassigned' ? group.id : undefined,
-                            group.department
-                          )
-                        }
-                        disabled={actionLoading || isShiftClosed}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="play-forward" size={11} color={Colors.white} style={{ marginRight: 3 }} />
-                        <Text style={styles.doctorQuickCallBtnText}>{t('Call Next')}</Text>
-                      </TouchableOpacity>
-                    ) : null}
+
                   </View>
                 </View>
 
@@ -1439,16 +1343,6 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
           </View>
         ) : null}
 
-        {/* ======================================================== */}
-        {/* 7. TIP BANNER                                             */}
-        {/* ======================================================== */}
-        <View style={styles.tipBanner}>
-          <View style={styles.tipIconWrap}>
-            <Ionicons name="information-circle" size={20} color={Colors.primary} />
-          </View>
-          <Text style={styles.tipText}>
-            {t("Pressing Call Next alerts the patient display and doctor queue automatically.")}</Text>
-        </View>
 
         {/* Bottom padding for tab bar / safe layout */}
         <View style={styles.bottomSpacer} />
@@ -2583,30 +2477,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // ─────────────────────────────────────────────────────────
-  // Tip Banner Styles
-  // ─────────────────────────────────────────────────────────
-  tipBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  tipIconWrap: {
-    marginRight: 10,
-  },
-  tipText: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.textMedium,
-    lineHeight: 17,
-    fontWeight: '500',
-  },
 
   // ─────────────────────────────────────────────────────────
   // Shared Chip & State Handling
@@ -2659,6 +2529,42 @@ const styles = StyleSheet.create({
     color: Colors.textMedium,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  opdMonitorInfoBox: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#99F6E4',
+    padding: 10,
+    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  opdMonitorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  opdMonitorPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F766E',
+    letterSpacing: 0.3,
+  },
+  opdMonitorRoomText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F766E',
+    backgroundColor: Colors.white,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
   },
 });
 

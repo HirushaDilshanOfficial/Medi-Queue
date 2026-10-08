@@ -379,6 +379,56 @@ const getDoctorDashboard = async (req, res) => {
       .lean()
       .catch(() => []);
 
+    // Also fetch patient-booked OpdAppointments for this doctor
+    const OpdAppointment = require('../models/OpdAppointment');
+    const opdAppointments = await OpdAppointment.find({
+      doctor: doctor._id,
+      $or: [
+        { date: today },
+        { status: { $in: activeStatuses } },
+      ],
+    })
+      .populate('profile')
+      .sort({ priority: -1, tokenNumber: 1 })
+      .lean()
+      .catch(() => []);
+
+    const existingSlotKeys = new Set(
+      appointments.map((a) => `${a.date}_${a.slotTime}`)
+    );
+
+    for (const oa of opdAppointments) {
+      const key = `${oa.date}_${oa.slotTime}`;
+      if (!existingSlotKeys.has(key)) {
+        existingSlotKeys.add(key);
+        appointments.push({
+          _id: oa._id,
+          date: oa.date,
+          slotTime: oa.slotTime,
+          status: oa.status,
+          type: oa.type || 'pre_booked',
+          priority: 'normal',
+          tokenNumber: oa.tokenNumber || 1,
+          department: oa.department,
+          notes: oa.reason || '',
+          patient: oa.profile ? {
+            _id: oa.profile._id,
+            fullName: oa.profile.fullName,
+            name: oa.profile.fullName,
+            phone: oa.profile.phone,
+            nic: oa.profile.nic,
+            gender: oa.profile.gender,
+            dob: oa.profile.birthday,
+            age: oa.profile.age,
+            bloodPressure: '120/80',
+            heartRate: '72 bpm',
+          } : null,
+        });
+      }
+    }
+
+    appointments.sort((a, b) => (a.tokenNumber || 0) - (b.tokenNumber || 0));
+
     // If no appointments for this doctor specifically, check if active appointments exist in same department
     if (appointments.length === 0 && doctor.department) {
       appointments = await Appointment.find({
@@ -405,12 +455,15 @@ const getDoctorDashboard = async (req, res) => {
         .catch(() => []);
     }
 
-    const completedCount = await Appointment.countDocuments({
+    const completedCount = (await Appointment.countDocuments({
       $or: [
         { doctor: doctor._id, status: 'completed' },
         { status: 'completed', date: today },
       ],
-    }).catch(() => 0);
+    }).catch(() => 0)) + (await OpdAppointment.countDocuments({
+      doctor: doctor._id,
+      status: 'completed',
+    }).catch(() => 0));
 
     if (appointments.length > 0) {
       let inConsultationAppt = appointments.find((a) => ['called', 'in_consultation'].includes(a.status));

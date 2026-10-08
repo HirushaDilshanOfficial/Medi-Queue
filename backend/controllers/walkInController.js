@@ -3,6 +3,9 @@ const Patient = require('../models/Patient');
 const Doctor = require('../models/Doctor');
 const Appointment = require('../models/Appointment');
 const QueueToken = require('../models/QueueToken');
+const OpdAppointment = require('../models/OpdAppointment');
+const OpdPatientProfile = require('../models/OpdPatientProfile');
+const { ensurePatientForProfile } = require('../utils/patientSync');
 const { normalizePhone, isValidDate, isValidSlot } = require('../utils/validators');
 const { findOrCreatePatient } = require('../services/patientService');
 const { getNextToken } = require('../utils/tokenGenerator');
@@ -655,67 +658,95 @@ const getPreBookedAppointments = asyncHandler(async (req, res) => {
       day: '2-digit',
     }).format(now);
 
-  const appointments = await Appointment.find({
-    date: todayStr,
-    $or: [{ type: 'pre_booked' }, { status: 'booked' }],
-  })
-    .populate('patient', 'fullName nic phone age gender')
-    .populate('doctor', 'name department room specialization')
-    .sort({ slotTime: 1 })
-    .lean();
+  const [appointments, opdList] = await Promise.all([
+    Appointment.find({
+      date: todayStr,
+      $or: [{ type: 'pre_booked' }, { status: 'booked' }],
+    })
+      .populate('patient', 'fullName nic phone age gender')
+      .populate('doctor', 'name department room specialization')
+      .sort({ slotTime: 1 })
+      .lean(),
+    OpdAppointment.find({
+      date: todayStr,
+      status: { $nin: ['cancelled'] },
+    })
+      .populate('profile', 'fullName nic phone age gender allergies birthday')
+      .populate('doctor', 'name department room specialization')
+      .sort({ slotTime: 1 })
+      .lean(),
+  ]);
 
-  let results = appointments.map((a) => ({
-    _id: a._id,
-    bookingRef: `BK-${String(a._id).slice(-4).toUpperCase()}`,
-    date: a.date,
-    slotTime: a.slotTime,
-    department: a.department,
-    status: a.status,
-    type: a.type || 'pre_booked',
-    priority: a.priority || 'normal',
-    tokenNumber: a.tokenNumber || null,
-    patient: a.patient
-      ? {
-          _id: a.patient._id,
-          fullName: a.patient.fullName,
-          nic: a.patient.nic || '',
-          phone: a.patient.phone || '',
-          age: a.patient.age,
-          gender: a.patient.gender,
-        }
-      : null,
-    doctor: a.doctor
-      ? {
-          _id: a.doctor._id,
-          name: a.doctor.name,
-          department: a.doctor.department,
-          room: a.doctor.room,
-        }
-      : null,
-  }));
+  const seenDoctorSlot = new Set();
+  let results = [];
 
-  if (results.length === 0) {
-    try {
-      const OpdAppointment = require('../models/OpdAppointment');
-      const opdList = await OpdAppointment.find({
-        date: todayStr,
-      })
-        .populate('profile', 'fullName nic phone age gender')
-        .populate('doctor', 'name department room specialization')
-        .sort({ slotTime: 1 })
-        .lean();
+  // 1. Process legacy / shared appointments
+  for (const a of appointments) {
+    const key = `${String(a.doctor?._id || a.doctor)}_${a.date}_${a.slotTime}`;
+    seenDoctorSlot.add(key);
 
-      results = opdList.map((a) => ({
-        _id: a._id,
-        bookingRef: `OPD-${String(a._id).slice(-4).toUpperCase()}`,
-        date: a.date,
-        slotTime: a.slotTime,
-        department: a.department,
-        status: a.status,
-        type: a.type || 'pre_booked',
-        priority: 'normal',
-        tokenNumber: a.tokenNumber || null,
-        patient: a.profile
+    results.push({
+      _id: a._id,
+      bookingRef: `BK-${String(a._id).slice(-4).toUpperCase()}`,
+      date: a.date,
+      slotTime: a.slotTime,
+      department: a.department || a.doctor?.department || 'General OPD',
+      status: a.status,
+      type: a.type || 'pre_booked',
+      priority: a.priority || 'normal',
+      tokenNumber: a.tokenNumber || null,
+      patient: a.patient
+        ? {
+            _id: a.patient._id,
+            fullName: a.patient.fullName,
+            nic: a.patient.nic || '',
+            phone: a.patient.phone || '',
+            age: a.patient.age,
+            gender: a.patient.gender,
+          }
+        : null,
+      doctor: a.doctor && typeof a.doctor === 'object'
+        ? {
+            _id: a.doctor._id,
+            name: a.doctor.name,
+            department: a.doctor.department,
+            room: a.doctor.room,
+          }
+        : null,
+    });
+  }
+
+  // 2. Process OpdAppointments, ensuring matching Patient doc and deduplication
+  for (const a of opdList) {
+    const key = `${String(a.doctor?._id || a.doctor)}_${a.date}_${a.slotTime}`;
+    if (seenDoctorSlot.has(key)) continue; // already covered by shared Appointment
+    seenDoctorSlot.add(key);
+
+    let patDoc = null;
+    if (a.profile) {
+      patDoc = await ensurePatientForProfile(a.profile);
+    }
+
+    results.push({
+      _id: a._id,
+      bookingRef: `OPD-${String(a._id).slice(-4).toUpperCase()}`,
+      date: a.date,
+      slotTime: a.slotTime,
+      department: a.department || a.doctor?.department || 'General OPD',
+      status: a.status,
+      type: a.type || 'pre_booked',
+      priority: 'normal',
+      tokenNumber: a.tokenNumber || null,
+      patient: patDoc
+        ? {
+            _id: patDoc._id,
+            fullName: patDoc.fullName,
+            nic: patDoc.nic || '',
+            phone: patDoc.phone || '',
+            age: patDoc.age,
+            gender: patDoc.gender,
+          }
+        : (a.profile
           ? {
               _id: a.profile._id,
               fullName: a.profile.fullName,
@@ -724,23 +755,19 @@ const getPreBookedAppointments = asyncHandler(async (req, res) => {
               age: a.profile.age,
               gender: a.profile.gender,
             }
-          : null,
-        doctor: a.doctor
-          ? {
-              _id: a.doctor._id,
-              name: a.doctor.name,
-              department: a.doctor.department,
-              room: a.doctor.room,
-            }
-          : null,
-      }));
-    } catch (e) {
-      // ignore
-    }
+          : null),
+      doctor: a.doctor && typeof a.doctor === 'object'
+        ? {
+            _id: a.doctor._id,
+            name: a.doctor.name,
+            department: a.doctor.department,
+            room: a.doctor.room,
+          }
+        : null,
+    });
   }
 
   // ── AUTO-ISSUE TOKENS FOR PRE-BOOKINGS ──
-  // Pre-booked appointments receive their queue token automatically
   for (const item of results) {
     let qt = await QueueToken.findOne({ appointment: item._id });
     if (!qt && item.patient?._id) {
@@ -758,6 +785,7 @@ const getPreBookedAppointments = asyncHandler(async (req, res) => {
           assignedDoctor: item.doctor?._id || null,
         });
         await Appointment.findByIdAndUpdate(item._id, { tokenNumber: nextTok.tokenNumber }).catch(() => {});
+        await OpdAppointment.findByIdAndUpdate(item._id, { tokenNumber: nextTok.tokenNumber }).catch(() => {});
       } catch (err) {
         qt = await QueueToken.findOne({ appointment: item._id });
       }
