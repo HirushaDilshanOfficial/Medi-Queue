@@ -1,5 +1,6 @@
 import { Stack, useSegments } from 'expo-router';
 import { LanguageProvider } from '../i18n/LanguageContext';
+import { ThemeProvider } from '../theme/ThemeContext';
 import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
 import { View, Text } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -75,8 +76,9 @@ function GlobalSafeArea() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <LanguageProvider>
-        <View style={{ flex: 1 }}>
+      <ThemeProvider>
+        <LanguageProvider>
+          <View style={{ flex: 1 }}>
           <GlobalSafeArea />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
@@ -96,7 +98,8 @@ export default function RootLayout() {
           </Stack>
           <Toast config={toastConfig} />
         </View>
-      </LanguageProvider>
+        </LanguageProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
