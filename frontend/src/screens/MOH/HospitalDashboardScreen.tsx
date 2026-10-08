@@ -11,6 +11,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
+import { Ionicons } from '@expo/vector-icons';
+import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function HospitalDashboardScreen() {
   const { t } = useLanguage();
@@ -39,7 +41,7 @@ export default function HospitalDashboardScreen() {
     }
   }, [id]);
 
-  const fetchDashboardStats = async () => {
+  async function fetchDashboardStats() {
     try {
       setLoading(true);
       const res = await fetch(`${API_URL}/hospitals/${id}/dashboard`);
@@ -221,6 +223,7 @@ export default function HospitalDashboardScreen() {
 
         <View style={{height: 30}} />
       </ScrollView>
+      <MOHBottomNav activeRoute="hospitals" />
     </View>
   );
 }

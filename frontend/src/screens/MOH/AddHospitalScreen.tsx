@@ -33,6 +33,12 @@ export default function AddHospitalScreen() {
     'Divisional Hospital'
   ];
 
+  const predefinedClinics = [
+    'General Medical', 'General Surgery', 'Orthopaedic', 'ENT', 'Eye', 
+    'Cardiology', 'Neurology', 'Paediatric', 'Oncology', 'Dental', 
+    'Gynaecology', 'Psychiatry', 'Diabetes'
+  ];
+
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -40,7 +46,7 @@ export default function AddHospitalScreen() {
     contact: '',
     email: '',
     location: '',
-    departments: '', // Comma separated for now
+    departments: [] as string[],
   });
 
   React.useEffect(() => {
@@ -56,7 +62,8 @@ export default function AddHospitalScreen() {
           contact: hospital.contact || '',
           email: hospital.email || '',
           location: hospital.location || '',
-          departments: hospital.departments ? hospital.departments.join(', ') : '',
+          departments: Array.isArray(hospital.departments) ? hospital.departments : 
+                       (typeof hospital.departments === 'string' ? hospital.departments.split(',').map((d:string)=>d.trim()) : []),
         });
       } catch (error) {
         console.error('Failed to parse edit data', error);
@@ -232,17 +239,31 @@ export default function AddHospitalScreen() {
                 />
               </View>
 
-              <Text style={[styles.sectionTitle, { marginTop: 10 }]}>{t("Medical Departments")}</Text>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>{t("Departments (Comma separated)")}</Text>
-                <TextInput
-                  style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-                  placeholder={t("e.g. OPD, Cardiology, Neurology")}
-                  placeholderTextColor={Colors.textLight}
-                  multiline
-                  value={formData.departments}
-                  onChangeText={(text) => setFormData({ ...formData, departments: text })}
-                />
+              <Text style={[styles.sectionTitle, { marginTop: 10 }]}>{t("Clinics / Departments")}</Text>
+              <Text style={styles.sectionSubtitle}>{t("Select available clinics for this hospital.")}</Text>
+              <View style={styles.chipsContainer}>
+                {predefinedClinics.map((clinic) => {
+                  const isSelected = formData.departments.includes(clinic);
+                  return (
+                    <TouchableOpacity
+                      key={clinic}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          departments: isSelected 
+                            ? prev.departments.filter(d => d !== clinic)
+                            : [...prev.departments, clinic]
+                        }));
+                      }}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                        {t(clinic)}
+                      </Text>
+                      {isSelected && <Text style={styles.chipCheck}>✓</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
             </View>
@@ -475,5 +496,40 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 16,
     fontWeight: '700',
+  },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 10,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  chipActive: {
+    backgroundColor: Colors.primary + '15',
+    borderColor: Colors.primary,
+  },
+  chipText: {
+    color: Colors.textMedium,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  chipTextActive: {
+    color: Colors.primaryDark,
+    fontWeight: '700',
+  },
+  chipCheck: {
+    color: Colors.primary,
+    fontWeight: 'bold',
+    marginLeft: 8,
+    fontSize: 14,
   },
 });
