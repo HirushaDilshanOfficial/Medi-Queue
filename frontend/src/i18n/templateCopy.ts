@@ -124,6 +124,9 @@ Appointment time: {time}|හමුවීමේ වේලාව: {time}|சந்
 Uploading your medical document...|ඔබේ වෛද්‍ය ලේඛනය උඩුගත කරමින්...|உங்கள் மருத்துவ ஆவணம் பதிவேற்றப்படுகிறது...
 The medical document could not be uploaded.|වෛද්‍ය ලේඛනය උඩුගත කළ නොහැකි විය.|மருத்துவ ஆவணத்தைப் பதிவேற்ற முடியவில்லை.
 Please add the document from your reports page.|කරුණාකර ඔබේ වාර්තා පිටුවෙන් ලේඛනය එක් කරන්න.|உங்கள் அறிக்கைகள் பக்கத்திலிருந்து ஆவணத்தைச் சேர்க்கவும்.
+Personal notification|පුද්ගලික දැනුම්දීම|தனிப்பட்ட அறிவிப்பு
+Hospital message|රෝහල් පණිවිඩය|மருத்துவமனைச் செய்தி
+Could not load notifications. Please try again.|දැනුම්දීම් ලබාගත නොහැකි විය. නැවත උත්සාහ කරන්න.|அறிவிப்புகளை ஏற்ற முடியவில்லை. மீண்டும் முயற்சிக்கவும்.
 `;
 
 export const templateCopy: Record<string, readonly [string, string]> = Object.fromEntries(

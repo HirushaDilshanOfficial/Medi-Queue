@@ -19,8 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { getAuthToken } from '../../services/http';
-import { BASE_URL } from '../../config';
+import { notificationApi } from '../../services/notificationApi';
 import {
   fetchDoctorDashboard,
   updateDoctorStatusApi,
@@ -76,19 +75,9 @@ export default function DoctorDashboardScreen({ navigation }: DoctorDashboardScr
   const [unreadCount, setUnreadCount] = useState(0);
 
   const checkUnreadNotifications = async () => {
+    setUnreadCount(0);
     try {
-      const token = await getAuthToken();
-      if (!token) return;
-      const res = await fetch(`${BASE_URL}/api/v1/notifications`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const lastReadTime = await AsyncStorage.getItem('last_notification_read_time');
-        const lastReadDate = lastReadTime ? new Date(lastReadTime) : new Date(0);
-        const unread = data.filter((n: any) => new Date(n.createdAt) > lastReadDate).length;
-        setUnreadCount(unread);
-      }
+      setUnreadCount(await notificationApi.unreadCount());
     } catch (e) {
       console.log('Failed to fetch notifications', e);
     }

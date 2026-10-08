@@ -8,13 +8,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts } from 'expo-font';
 import { DesignImage, type DesignImageName } from '../../../components/patient/DesignImage';
 import { patientApi } from '../../../services/patientApi';
+import { notificationApi } from '../../../services/notificationApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import { ACTION_TILES, EVENTS } from './dashboardContent';
 import { clinicApi } from '../../../services/clinicApi';
 import { C, styles } from './dashboardStyles';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAuthToken } from '../../../services/http';
-import { BASE_URL } from '../../../config';
 
 function StatCard({ value, label, icon, onPress }: { value: number | null | undefined; label: string; icon: DesignImageName; onPress: () => void }) {
   const { t } = useLanguage();
@@ -54,19 +52,9 @@ export function PatientDashboardScreen() {
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(timer); }, []);
 
   const checkUnreadNotifications = async () => {
+    setUnreadCount(0);
     try {
-      const token = await getAuthToken();
-      if (!token) return;
-      const res = await fetch(`${BASE_URL}/api/v1/notifications`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const lastReadTime = await AsyncStorage.getItem('last_notification_read_time');
-        const lastReadDate = lastReadTime ? new Date(lastReadTime) : new Date(0);
-        const unread = data.filter((n: any) => new Date(n.createdAt) > lastReadDate).length;
-        setUnreadCount(unread);
-      }
+      setUnreadCount(await notificationApi.unreadCount());
     } catch (e) {
       console.log('Failed to fetch notifications', e);
     }

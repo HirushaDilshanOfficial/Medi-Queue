@@ -1,6 +1,6 @@
 import { LocalizedText as Text } from '../i18n/LocalizedText';
 import { useLanguage } from '../i18n/LanguageContext';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,60 +11,54 @@ import {
   SafeAreaView,
   StatusBar
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '../constants/Colors';
-import { getAuthToken } from '../services/http';
-import { BASE_URL } from '../config';
+import { HttpError } from '../services/http';
+import { notificationApi, type NotificationItem } from '../services/notificationApi';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function NotificationsScreen() {
-  const { t } = useLanguage();
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const { t, locale } = useLanguage();
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(false);
+  const requestId = useRef(0);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
+    const id = ++requestId.current;
+    setNotifications([]);
+    setError(false);
+    setLoading(true);
     try {
-      const token = await getAuthToken();
-      if (!token) return;
-
-      const response = await fetch(`${BASE_URL}/api/v1/notifications`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data);
-        if (data && data.length > 0) {
-          // Save the latest notification's time to avoid client/server clock skew
-          await AsyncStorage.setItem('last_notification_read_time', data[0].createdAt);
-        } else {
-          await AsyncStorage.setItem('last_notification_read_time', new Date().toISOString());
-        }
-      }
+      const inbox = await notificationApi.list();
+      if (requestId.current !== id) return;
+      setNotifications(inbox.items);
+      // Storage failure must not hide an otherwise valid personal inbox.
+      void notificationApi.markRead(inbox).catch(() => {});
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+      if (requestId.current !== id) return;
+      setNotifications([]);
+      if (error instanceof HttpError && error.status === 401) router.replace('/(auth)/login');
+      else setError(true);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId.current === id) { setLoading(false); setRefreshing(false); }
     }
-  };
-
-  useEffect(() => {
-    fetchNotifications();
   }, []);
+
+  useFocusEffect(useCallback(() => {
+    void fetchNotifications();
+    return () => { requestId.current++; setNotifications([]); };
+  }, [fetchNotifications]));
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchNotifications();
   };
 
-  const renderItem = ({ item }: { item: any }) => {
-    const date = new Date(item.createdAt).toLocaleDateString();
-    const time = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const renderItem = ({ item }: { item: NotificationItem }) => {
+    const date = new Date(item.createdAt).toLocaleDateString(locale);
+    const time = new Date(item.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
     return (
       <View style={styles.notificationCard}>
@@ -72,6 +66,7 @@ export default function NotificationsScreen() {
           <Ionicons name="notifications" size={24} color={Colors.primaryDark} />
         </View>
         <View style={styles.textContainer}>
+          <Text style={styles.timestamp}>{t(item.recipient || item.kind === 'personal' ? 'Personal notification' : 'Hospital message')}</Text>
           <Text style={styles.title}>{item.title}</Text>
           <Text style={styles.message}>{item.message}</Text>
           <Text style={styles.timestamp}>{date} • {time}</Text>
@@ -102,7 +97,8 @@ export default function NotificationsScreen() {
       ) : notifications.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="notifications-off-outline" size={64} color={Colors.textLight} />
-          <Text style={styles.emptyText}>{t("No notifications yet")}</Text>
+          <Text style={styles.emptyText}>{t(error ? 'Could not load notifications. Please try again.' : 'No notifications yet')}</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={onRefresh}><Text style={styles.emptyText}>{t('Refresh')}</Text></TouchableOpacity>
         </View>
       ) : (
         <FlatList
