@@ -1,10 +1,11 @@
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, Platform, SafeAreaView } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, Platform, Switch } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../theme/ThemeContext';
 import { BASE_URL } from '../../config';
 
 import { getAuthToken, clearAuthToken } from '../../services/http';
@@ -13,6 +14,7 @@ import Toast from 'react-native-toast-message';
 
 export default function ProfileScreen() {
   const { t } = useLanguage();
+  const { isDarkMode, toggleTheme } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -86,9 +88,8 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.white }}>
+    <View style={{ flex: 1, backgroundColor: Colors.background }}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
-      <SafeAreaView style={{ flex: 0, backgroundColor: Colors.primaryDark }} />
 
       <View style={{ flex: 1, backgroundColor: Colors.background }}>
         <ScrollView 
@@ -181,6 +182,18 @@ export default function ProfileScreen() {
                 </View>
                 <Text style={styles.settingArrow}>❯</Text>
               </TouchableOpacity>
+
+              <View style={styles.settingItem}>
+                <View style={styles.settingItemLeft}>
+                  <Text style={styles.settingIcon}>{isDarkMode ? '🌙' : '☀️'}</Text>
+                  <Text style={styles.settingText}>{t("Dark Mode")}</Text>
+                </View>
+                <Switch 
+                  value={isDarkMode} 
+                  onValueChange={toggleTheme} 
+                  trackColor={{ false: '#e0e0e0', true: Colors.primaryDark }}
+                />
+              </View>
             </View>
 
             <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
