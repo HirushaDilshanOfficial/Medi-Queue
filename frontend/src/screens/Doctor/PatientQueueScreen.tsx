@@ -216,7 +216,7 @@ export default function PatientQueueScreen() {
     });
   }, []);
 
-  const [currentHospital, setCurrentHospital] = useState('Colombo Teaching Hospital 1');
+  const [currentHospital, setCurrentHospital] = useState('City General Hospital');
 
   const loadData = useCallback(async () => {
     try {
@@ -224,7 +224,7 @@ export default function PatientQueueScreen() {
       if (!savedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
         savedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
       }
-      const activeHosp = savedHosp || currentHospital || 'Colombo Teaching Hospital 1';
+      const activeHosp = savedHosp || currentHospital || 'City General Hospital';
       if (activeHosp !== currentHospital) {
         setCurrentHospital(activeHosp);
       }
@@ -233,6 +233,10 @@ export default function PatientQueueScreen() {
         setData(res);
         if (res.doctor?.hospitalName) {
           setCurrentHospital(res.doctor.hospitalName);
+          await AsyncStorage.setItem('doctor_current_hospital', res.doctor.hospitalName);
+          if (typeof window !== 'undefined' && (window as any).localStorage) {
+            (window as any).localStorage.setItem('doctor_current_hospital', res.doctor.hospitalName);
+          }
         }
       } else {
         setData(getDoctorDashboardForHospital(activeHosp));
@@ -251,21 +255,8 @@ export default function PatientQueueScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      (async () => {
-        try {
-          let storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
-          if (!storedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
-            storedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
-          }
-          if (storedHosp && storedHosp !== currentHospital) {
-            setCurrentHospital(storedHosp);
-            const res = await fetchDoctorDashboard(undefined, storedHosp);
-            if (res) setData(res);
-            else setData(getDoctorDashboardForHospital(storedHosp));
-          }
-        } catch (e) {}
-      })();
-    }, [currentHospital])
+      loadData();
+    }, [loadData])
   );
 
   const onRefresh = () => {

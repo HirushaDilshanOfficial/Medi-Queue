@@ -143,7 +143,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     room: 'Room 101 online',
     initials: 'PP',
   });
-  const [currentHospital, setCurrentHospital] = useState('Colombo Teaching Hospital 1');
+  const [currentHospital, setCurrentHospital] = useState('City General Hospital');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<PatientStatus>('All');
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('records');
@@ -322,11 +322,14 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
           if (!storedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
             storedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
           }
-          if (storedHosp && storedHosp !== currentHospital) {
-            setCurrentHospital(storedHosp);
-            loadRecordsForHospital(storedHosp);
+          const activeHosp = storedHosp || currentHospital || 'City General Hospital';
+          if (activeHosp !== currentHospital) {
+            setCurrentHospital(activeHosp);
           }
-        } catch (e) {}
+          loadRecordsForHospital(activeHosp);
+        } catch (e) {
+          loadRecordsForHospital(currentHospital);
+        }
       })();
     }, [currentHospital, loadRecordsForHospital])
   );

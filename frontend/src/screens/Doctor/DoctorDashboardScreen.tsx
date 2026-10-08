@@ -54,7 +54,7 @@ export default function DoctorDashboardScreen() {
   const [timerSeconds, setTimerSeconds] = useState(244);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [unreadCount, setUnreadCount] = useState(4);
-  const [currentHospital, setCurrentHospital] = useState('Colombo Teaching Hospital 1');
+  const [currentHospital, setCurrentHospital] = useState('City General Hospital');
   const [isHospitalModalOpen, setIsHospitalModalOpen] = useState(false);
   const [isBreakModalOpen, setIsBreakModalOpen] = useState(false);
 
@@ -81,61 +81,36 @@ export default function DoctorDashboardScreen() {
       const base = prev || {
         doctor: {
           name: 'Dr. Palitha Perera',
-          specialization: 'Consultant Physician',
-          department: 'OPD Clinic',
-          room: 'Room 101',
-          hospitalName: 'Colombo Teaching Hospital 1',
+          specialization: 'General Physician',
+          department: 'General OPD',
+          room: 'Room 3B',
+          hospitalName: 'City General Hospital',
           status: 'active' as const,
           dailyCapacity: 30,
           avgConsultMinutes: 15,
         },
         metrics: {
-          currentCallingToken: 4,
-          waitingCount: 2,
-          completedCount: 0,
-          totalToday: 30,
+          currentCallingToken: 2,
+          waitingCount: 0,
+          completedCount: 2,
+          totalToday: 3,
           avgWaitMinutes: 15,
         },
         currentPatient: {
-          tokenNumber: 4,
-          patientName: 'Imantha kaniska',
-          age: 28,
-          gender: 'Male',
+          tokenNumber: 2,
+          patientName: 'Heshani Wickramasinghe',
+          age: 22,
+          gender: 'Female',
           priority: 'normal' as const,
           status: 'in_consultation',
           reason: 'General OPD Consultation',
           bloodPressure: '120/80',
-          heartRate: '76 bpm',
-          fileRecord: 'REC-004',
-          checkedInTime: '08:59',
-          calledAtTime: '08:59',
+          heartRate: '74 bpm',
+          fileRecord: 'NIC: 200382013019',
+          checkedInTime: '01:20 PM',
+          calledAtTime: '01:20 PM',
         },
-        upcomingQueue: [
-          {
-            tokenNumber: 5,
-            patientName: 'Kasun Bandara',
-            age: 34,
-            gender: 'Male',
-            priority: 'normal' as const,
-            category: 'all' as const,
-            status: 'next',
-            reason: 'Hypertension Review',
-            location: 'Waiting Area',
-            slotTime: '09:15',
-          },
-          {
-            tokenNumber: 6,
-            patientName: 'Nadeesha Silva',
-            age: 29,
-            gender: 'Female',
-            priority: 'normal' as const,
-            category: 'all' as const,
-            status: 'Waiting',
-            reason: 'Routine Medical Checkup',
-            location: 'Waiting Area',
-            slotTime: '09:30',
-          },
-        ],
+        upcomingQueue: [],
       };
 
       const queue = [...(base.upcomingQueue || [])];
@@ -207,7 +182,7 @@ export default function DoctorDashboardScreen() {
       if (!savedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
         savedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
       }
-      const activeHosp = savedHosp || currentHospital || 'Colombo Teaching Hospital 1';
+      const activeHosp = savedHosp || currentHospital || 'City General Hospital';
       if (activeHosp !== currentHospital) {
         setCurrentHospital(activeHosp);
       }
@@ -216,6 +191,10 @@ export default function DoctorDashboardScreen() {
         setData(res);
         if (res.doctor?.hospitalName) {
           setCurrentHospital(res.doctor.hospitalName);
+          await AsyncStorage.setItem('doctor_current_hospital', res.doctor.hospitalName);
+          if (typeof window !== 'undefined' && (window as any).localStorage) {
+            (window as any).localStorage.setItem('doctor_current_hospital', res.doctor.hospitalName);
+          }
         }
       } else {
         setData(getDoctorDashboardForHospital(activeHosp));
@@ -239,20 +218,10 @@ export default function DoctorDashboardScreen() {
           const raw = await AsyncStorage.getItem('@medi_queue_doctor_break');
           if (raw) setActiveBreak(JSON.parse(raw));
           else setActiveBreak(null);
-
-          let storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
-          if (!storedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
-            storedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
-          }
-          if (storedHosp && storedHosp !== currentHospital) {
-            setCurrentHospital(storedHosp);
-            const res = await fetchDoctorDashboard(undefined, storedHosp);
-            if (res) setData(res);
-            else setData(getDoctorDashboardForHospital(storedHosp));
-          }
         } catch (e) {}
       })();
-    }, [currentHospital])
+      loadData();
+    }, [loadData])
   );
 
   useEffect(() => {
@@ -609,7 +578,7 @@ export default function DoctorDashboardScreen() {
     appointmentId: (displayQueue[0] as any).appointmentId,
   } : defaultPatientForHosp);
 
-  const waitingCount = data?.metrics?.waitingCount ?? (displayQueue.length > 0 ? displayQueue.length : 2);
+  const waitingCount = data?.metrics?.waitingCount ?? displayQueue.length;
   const completedCount = data?.metrics?.completedCount ?? 0;
   const totalCapacity = data?.doctor?.dailyCapacity ?? 30;
   const avgWaitMinutes = data?.metrics?.avgWaitMinutes ?? 15;

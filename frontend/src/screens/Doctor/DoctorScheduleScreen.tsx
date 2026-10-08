@@ -992,6 +992,33 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
     }
   };
 
+  const handleOpenEhrForPatient = useCallback(async (patient: any) => {
+    if (!patient) return;
+    const pName = patient.patientName || patient.name || '';
+    const pToken = String(patient.token || patient.tokenNumber || '').replace(/\D/g, '');
+    const pId = patient.id || patient._id || patient.patientId || '';
+
+    try {
+      if (pName) await AsyncStorage.setItem('active_record_patient_name', pName);
+      if (pToken) await AsyncStorage.setItem('active_record_patient_token', pToken);
+      if (typeof window !== 'undefined' && (window as any).localStorage) {
+        if (pName) (window as any).localStorage.setItem('active_record_patient_name', pName);
+        if (pToken) (window as any).localStorage.setItem('active_record_patient_token', pToken);
+      }
+    } catch (e) {}
+
+    showToast(t("Opening EHR for {value0}", { value0: String(pName) }));
+
+    try {
+      router.push({
+        pathname: '/(doctor)/records',
+        params: { patientName: pName, tokenNumber: pToken, patientId: pId },
+      } as any);
+    } catch (e) {
+      router.push('/(doctor)/records' as any);
+    }
+  }, [t]);
+
   // Current formatted time for timeline header (today only)
 
   return (
@@ -2176,11 +2203,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                             { backgroundColor: theme.primaryDeep },
                           ]}
                           activeOpacity={0.8}
-                          onPress={() =>
-                            showToast(
-                              t("Opening EHR for {value0}", { value0: String(nowAttendingPatient.patientName) })
-                            )
-                          }
+                          onPress={() => handleOpenEhrForPatient(nowAttendingPatient)}
                         >
                           <Text style={styles.openEhrText}>{t("Open EHR")}</Text>
                         </TouchableOpacity>
@@ -2832,10 +2855,9 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                     ]}
                     activeOpacity={0.85}
                     onPress={() => {
+                      const patientToOpen = selectedPatient;
                       setSelectedPatient(null);
-                      showToast(
-                        t("Opening EHR Record for {value0}", { value0: String(selectedPatient.patientName) })
-                      );
+                      handleOpenEhrForPatient(patientToOpen);
                     }}
                   >
                     <Ionicons
