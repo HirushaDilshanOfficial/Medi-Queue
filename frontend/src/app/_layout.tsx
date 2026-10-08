@@ -4,7 +4,7 @@ import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// Root layout - Expo Router (SDK 57+)
+// Root layout - Expo Router
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
