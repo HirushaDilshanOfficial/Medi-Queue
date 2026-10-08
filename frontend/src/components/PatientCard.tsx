@@ -68,12 +68,12 @@ export const PatientCard: React.FC<PatientCardProps> = ({
             {patient.latestType === 'pre_booked' ? (
               <View style={styles.preBookedBadge}>
                 <Ionicons name="calendar" size={10} color="#047857" style={{ marginRight: 3 }} />
-                <Text style={styles.preBookedBadgeText}>Pre-Booked</Text>
+                <Text style={styles.preBookedBadgeText}>{t("Pre-Booked")}</Text>
               </View>
             ) : (
               <View style={styles.walkInBadge}>
                 <Ionicons name="walk" size={10} color={Colors.primary} style={{ marginRight: 3 }} />
-                <Text style={styles.walkInBadgeText}>Walk-In</Text>
+                <Text style={styles.walkInBadgeText}>{t("Walk-In")}</Text>
               </View>
             )}
           </View>

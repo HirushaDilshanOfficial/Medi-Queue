@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const Hospital = require('../models/Hospital');
 const User = require('../models/User');
+const { publicPass } = require('../controllers/queueController');
+
+router.get('/queue-pass/:passCode', publicPass);
 
 router.get('/stats', async (req, res) => {
   try {

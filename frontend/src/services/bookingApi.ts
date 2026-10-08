@@ -1,5 +1,5 @@
 import { http } from './http';
-import type { Appointment, BookableDay, BookingSummary, SlotOption } from '../types/patient';
+import type { Appointment, BookableDay, BookingSummary, QueuePass, SlotOption } from '../types/patient';
 
 export type BookingScope = 'upcoming' | 'past' | 'all';
 
@@ -20,7 +20,14 @@ export const bookingApi = {
     http.get<{ date: string; slots: SlotOption[] }>(`/bookings/doctors/${doctorId}/slots`, { date }),
 
   create: (input: { doctorId: string; date: string; slotTime: string; reason?: string }) =>
-    http.post<{ appointment: Appointment }>('/bookings', input),
+    http.post<{
+      appointment: Appointment;
+      tokenNumber: number;
+      queueNumber: number;
+      tokenLabel: string;
+      queueEntryId: string;
+      pass: QueuePass;
+    }>('/bookings', input),
 
   cancel: (id: string, reason?: string) =>
     http.patch<{ appointment: Appointment; tokenReleased: boolean }>(`/bookings/${id}/cancel`, {

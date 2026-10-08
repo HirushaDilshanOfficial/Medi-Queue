@@ -1,3 +1,4 @@
+import { dayLabel } from '../../../utils/opdDates';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -10,6 +11,7 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -30,19 +32,24 @@ import { AppIcon } from '../../../components/AppIcon';
 type Tab = 'directory' | 'bookings';
 
 export function DoctorDirectoryScreen() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ department?: string; hospitalId?: string }>();
+  const params = useLocalSearchParams<{ department?: string; hospitalId?: string; tab?: string; search?: string; view?: string }>();
 
-  const [tab, setTab] = useState<Tab>('directory');
-  const [search, setSearch] = useState('');
-  const [department, setDepartment] = useState<string | null>(
-    Array.isArray(params.department) ? params.department[0] : params.department ?? null,
-  );
-  const [hospitalId, setHospitalId] = useState<string | null>(
-    Array.isArray(params.hospitalId) ? params.hospitalId[0] : params.hospitalId ?? null,
-  );
+  const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const tab: Tab = requestedTab === 'bookings' ? 'bookings' : 'directory';
+  const setTab = useCallback((next: Tab) => router.setParams({ tab: next }), [router]);
+  // Tab screens stay mounted. Read filters from the URL so subsequent dashboard
+  // links replace the previous clinic and search rather than keeping stale state.
+  const search = (Array.isArray(params.search) ? params.search[0] : params.search) ?? '';
+  const department = (Array.isArray(params.department) ? params.department[0] : params.department) || null;
+  const hospitalId = (Array.isArray(params.hospitalId) ? params.hospitalId[0] : params.hospitalId) || null;
+  const view = Array.isArray(params.view) ? params.view[0] : params.view;
+  const setSearch = useCallback((value: string) => router.setParams({ search: value }), [router]);
+  const setClinic = useCallback((department: string | null, hospitalId: string | null) => {
+    router.setParams({ department: department ?? '', hospitalId: hospitalId ?? '', search: '' });
+  }, [router]);
   const [showAllClinics, setShowAllClinics] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
@@ -74,10 +81,11 @@ export function DoctorDirectoryScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void reloadDoctors();
+      if (tab === 'bookings') void reloadBookings();
+      else void reloadDoctors();
       void reloadDepartments();
       void reloadClinics();
-    }, [reloadClinics, reloadDepartments, reloadDoctors]),
+    }, [reloadBookings, reloadClinics, reloadDepartments, reloadDoctors, tab]),
   );
 
   const onRefresh = useCallback(async () => {
@@ -92,37 +100,44 @@ export function DoctorDirectoryScreen() {
 
   const openDoctor = useCallback(
     (doctor: Doctor) => {
-      router.push({ pathname: '/(patient)/doctor/[id]', params: { id: doctor.id } });
+      router.push({ pathname: '/(patient)/doctor/[id]', params: { id: doctor.id, section: view === 'schedule' ? 'Schedule' : 'Appointment' } });
     },
-    [router],
+    [router, view],
   );
 
   const confirmCancel = useCallback(
     (appointment: Appointment) => {
+      const cancel = async () => {
+        setWorking(appointment.id);
+        try {
+          await bookingApi.cancel(appointment.id, 'Cancelled by patient');
+          bookings.setData(current => current ? { ...current, appointments: current.appointments.filter(item => item.id !== appointment.id) } : current);
+          bookings.reload();
+          router.push({ pathname: '/(patient)/profile/history', params: { status: 'cancelled' } });
+        } catch (error) {
+          Alert.alert(t('Could not cancel'), error instanceof Error ? error.message : t('Please try again.'));
+        } finally {
+          setWorking(null);
+        }
+      };
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.confirm(t('Cancel this booking?'))) void cancel();
+        return;
+      }
       Alert.alert(
         t('Cancel this booking?'),
-        t("{value0} · {value1} at {value2}\n\nYou can book another time from the doctor list.", { value0: String(appointment.doctorName), value1: String(appointment.dateLabel ?? appointment.date), value2: String(appointment.slotTime) }),
+        t("{value0} · {value1} at {value2}\n\nYou can book another time from the doctor list.", { value0: String(appointment.doctorName), value1: dayLabel(appointment.date, undefined, locale), value2: String(appointment.slotTime) }),
         [
           { text: t('Keep booking'), style: 'cancel' },
           {
             text: t('Cancel booking'),
             style: 'destructive',
-            onPress: async () => {
-              setWorking(appointment.id);
-              try {
-                await bookingApi.cancel(appointment.id, 'Cancelled by patient');
-                await bookings.reload();
-              } catch (error) {
-                Alert.alert(t('Could not cancel'), error instanceof Error ? error.message : t('Please try again.'));
-              } finally {
-                setWorking(null);
-              }
-            },
+            onPress: () => void cancel(),
           },
         ],
       );
     },
-    [bookings, t],
+    [bookings, router, t, locale],
   );
 
   const startReschedule = useCallback(
@@ -141,24 +156,29 @@ export function DoctorDirectoryScreen() {
 
   const checkIn = useCallback(
     (appointment: Appointment) => {
-      Alert.alert(t('Check in now?'), t("Collect your queue number for {value0}.", { value0: String(appointment.department) }), [
+      const checkInNow = async () => {
+        setWorking(appointment.id);
+        try {
+          await queueApi.checkIn(appointment.id);
+          router.push('/(patient)/queue');
+        } catch (error) {
+          Alert.alert(
+            t('Could not check in'),
+            error instanceof Error ? error.message : t('Please try again.'),
+          );
+        } finally {
+          setWorking(null);
+        }
+      };
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.confirm(t("Collect your queue number for {value0}?", { value0: t(appointment.department) }))) void checkInNow();
+        return;
+      }
+      Alert.alert(t('Check in now?'), t("Collect your queue number for {value0}.", { value0: t(appointment.department) }), [
         { text: t('Not yet'), style: 'cancel' },
         {
           text: t('Check in'),
-          onPress: async () => {
-            setWorking(appointment.id);
-            try {
-              await queueApi.checkIn(appointment.id);
-              router.push('/(patient)/queue');
-            } catch (error) {
-              Alert.alert(
-                t('Could not check in'),
-                error instanceof Error ? error.message : t('Please try again.'),
-              );
-            } finally {
-              setWorking(null);
-            }
-          },
+          onPress: () => void checkInNow(),
         },
       ]);
     },
@@ -196,15 +216,21 @@ export function DoctorDirectoryScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.chips}
             >
-              <Chip label={t("All")} active={!department} onPress={() => setDepartment(null)} />
+              <Chip
+                label={t("All")}
+                active={!department && !hospitalId}
+                onPress={() => {
+                  setClinic(null, null);
+                }}
+              />
               {(showAllClinics ? clinics.data?.clinics ?? [] : (clinics.data?.clinics ?? []).slice(0, 16)).map((clinic: Clinic) => (
                 <Chip
                   key={clinic._id}
-                  label={clinic.name.replace(/ Clinic$/, '')}
-                  active={department === clinic.department}
+                  label={t(clinic.name.replace(/ Clinic$/, ''))}
+                  active={department === clinic.department && hospitalId === (clinic.hospital?._id ?? null)}
                   onPress={() => {
-                    setDepartment((current) => (current === clinic.department ? null : clinic.department));
-                    setHospitalId((current) => (current === clinic.hospital?._id ? null : clinic.hospital?._id ?? null));
+                    const active = department === clinic.department && hospitalId === (clinic.hospital?._id ?? null);
+                    setClinic(active ? null : clinic.department, active ? null : clinic.hospital?._id ?? null);
                   }}
                 />
               ))}
@@ -220,7 +246,7 @@ export function DoctorDirectoryScreen() {
         ) : null}
       </View>
     ),
-    [clinics.data, department, search, showAllClinics, tab, t],
+    [clinics.data, department, hospitalId, search, setClinic, setSearch, showAllClinics, tab, t],
   );
 
   const doctorList = (
@@ -259,8 +285,11 @@ export function DoctorDirectoryScreen() {
                 ? t('Try a different name or speciality.')
                 : t('The clinic has not published its doctor list yet.')
             }
-            actionLabel={search || department ? t('Clear filters') : undefined}
-            onAction={search || department ? () => { setSearch(''); setDepartment(null); } : undefined}
+            actionLabel={search || department || hospitalId ? t('Clear filters') : undefined}
+            onAction={search || department || hospitalId ? () => {
+              setSearch('');
+              setClinic(null, null);
+            } : undefined}
           />
         )
       }
@@ -311,10 +340,10 @@ export function DoctorDirectoryScreen() {
   return (
     <View style={[styles.root, { paddingTop: insets.top + PatientTheme.spaceSm }]}>
       <ScreenHeader
-        title={tab === 'directory' ? t('Find a doctor') : t('My bookings')}
+        title={tab === 'bookings' ? t('My bookings') : view === 'schedule' ? t('Doctor Schedule') : view === 'registration' ? t('Clinic Registration') : t('Find a doctor')}
         subtitle={
           tab === 'directory'
-            ? t('Book a clinic time with a specialist')
+            ? view === 'schedule' ? t('Select a doctor to view available dates and times') : t('Book a clinic time with a specialist')
             : t('Reschedule or cancel an appointment')
         }
       />

@@ -4,7 +4,7 @@ import type { LiveDepartment, LiveQueueState, QueueBoard, QueuePass } from '../t
 export const queueApi = {
   // Returns `pass: null` when the patient holds no active pass, which is the
   // normal state rather than an error.
-  myPass: () => http.get<{ pass: QueuePass | null; message?: string }>('/queue/my-pass'),
+  myPass: () => http.get<{ pass: QueuePass | null; passes: QueuePass[]; message?: string }>('/queue/my-pass'),
 
   // Lightweight endpoint used for polling; returns nulls when there is no pass.
   live: () =>

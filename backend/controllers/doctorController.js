@@ -4,6 +4,7 @@ const Appointment = require('../models/Appointment');
 const { asyncHandler } = require('../utils/errorHandler');
 const QueueEntry = require('../models/QueueEntry');
 const Patient = require('../models/Patient');
+const Staff = require('../models/Staff');
 const Hospital = require('../models/Hospital');
 
 const ACTIVE_STATUSES = ['booked', 'checked_in', 'in_consultation'];
@@ -31,7 +32,6 @@ const getDoctors = asyncHandler(async (req, res) => {
       $regex: new RegExp(`^${department.trim()}$`, 'i'),
     };
   }
-  const Hospital = require('../models/Hospital');
   const activeHospitals = await Hospital.find({ isDeleted: false, status: 'Active' }).select('_id').lean();
   const activeHospitalIds = activeHospitals.map(h => h._id.toString());
 
@@ -39,7 +39,15 @@ const getDoctors = asyncHandler(async (req, res) => {
     if (!activeHospitalIds.includes(hospitalId.toString())) {
       return res.json([]);
     }
-    doctorFilter.hospital = hospitalId;
+    const staffAtHospital = await Staff.find({
+      hospital: hospitalId,
+      role: { $regex: /^doctor$/i },
+      isDeleted: false,
+    }).distinct('_id');
+    doctorFilter.$or = [
+      { hospital: hospitalId },
+      { staffId: { $in: staffAtHospital } },
+    ];
   } else {
     doctorFilter.hospital = { $in: activeHospitalIds };
   }
@@ -3873,4 +3881,3 @@ module.exports = {
   removeScheduleAppointment,
   getDoctorReportFile,
 };
-

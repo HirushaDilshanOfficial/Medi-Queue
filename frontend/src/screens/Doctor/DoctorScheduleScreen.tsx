@@ -304,13 +304,14 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     setOpenBreakDropdownHospId(null);
     await AsyncStorage.setItem('@medi_queue_doctor_break', JSON.stringify(breakData));
     showToast(
-      `✓ ${breakData.label} (${breakData.duration}) scheduled for ${hosp.shiftName}`
+      t("✓ {value0} ({value1}) scheduled for {value2}", { value0: String(breakData.label), value1: String(breakData.duration), value2: String(hosp.shiftName) })
     );
   };
 
   const handleEndBreak = async (hosp: HospitalInfo) => {
     setActiveBreak(null);
     setOpenBreakDropdownHospId(null);
+<<<<<<< HEAD
     try {
       await AsyncStorage.removeItem('@medi_queue_doctor_break');
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -318,6 +319,10 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
       }
     } catch (e) {}
     showToast(`Break ended. Resumed ${hosp.shiftName}`);
+=======
+    await AsyncStorage.removeItem('@medi_queue_doctor_break');
+    showToast(t("Break ended. Resumed {value0}", { value0: String(hosp.shiftName) }));
+>>>>>>> origin/dev
   };
 
   // Consultation elapsed counter for active patient
@@ -503,7 +508,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     setSelectedHospitalId('all');
     setShowAllShiftsOverview(false);
     setIsHospitalDropdownOpen(false);
-    showToast('Jumped to Today (Oct 6, 2026)');
+    showToast(t("Jumped to Today (Oct 6, 2026)"));
   };
 
   // Select day on week strip
@@ -612,15 +617,15 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
   const handleOpenWalkInModal = () => {
     if (selectedDateKey !== REFERENCE_TODAY) {
-      showToast('Walk-ins can only be added for Today (Oct 6)');
+      showToast(t("Walk-ins can only be added for Today (Oct 6)"));
       return;
     }
     if (isLeaveDay) {
-      showToast('Doctor is on leave. Walk-in slots blocked');
+      showToast(t("Doctor is on leave. Walk-in slots blocked"));
       return;
     }
     if (dayHospitals.length === 0) {
-      showToast('No clinics scheduled today');
+      showToast(t("No clinics scheduled today"));
       return;
     }
 
@@ -745,7 +750,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
     setIsWalkInModalVisible(false);
     const hosp = HOSPITALS[walkInHospitalId];
-    showToast(`✓ Added walk-in: ${trimmedName} (${tokenStr}) at ${hosp?.shortName || ''}`);
+    showToast(t("✓ Added walk-in: {value0} ({value1}) at {value2}", { value0: String(trimmedName), value1: String(tokenStr), value2: String(hosp?.shortName || '') }));
   };
 
   // ─────────────────────────────────────────────────────────
@@ -833,7 +838,11 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     setIsRemoveModalVisible(false);
     setWalkInToDelete(null);
 
+<<<<<<< HEAD
     showToast(`✓ Removed walk-in slot (${appt.token || appt.patientName}). Allocation restored.`);
+=======
+    showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value0: String(appt.token) }));
+>>>>>>> origin/dev
   };
 
   // Backward compatibility alias
@@ -867,7 +876,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
       return updated;
     });
     const hName = HOSPITALS[hospId]?.shortName || 'Clinic';
-    showToast(`Updated ${hName} available slots`);
+    showToast(t("Updated {value0} available slots", { value0: String(hName) }));
   };
 
   // Save Available Slots Modal
@@ -889,7 +898,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
     setIsEditSlotsModalVisible(false);
     const hName = HOSPITALS[editSlotsHospitalId]?.shortName || 'Clinic';
-    showToast(`✓ Available slots updated: ${hName} set to ${validCount} slots`);
+    showToast(t("✓ Available slots updated: {value0} set to {value1} slots", { value0: String(hName), value1: String(validCount) }));
   };
 
   // Open Edit Walk-in Patient Modal
@@ -909,7 +918,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     if (!editingWalkInAppt) return;
     const trimmedName = editPatientName.trim();
     if (!trimmedName) {
-      showToast('Patient name cannot be empty');
+      showToast(t("Patient name cannot be empty"));
       return;
     }
     const ageNum = parseInt(editPatientAge, 10) || editingWalkInAppt.age;
@@ -946,7 +955,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
     setIsEditWalkInModalVisible(false);
     setEditingWalkInAppt(null);
-    showToast(`✓ Updated slot for ${trimmedName}`);
+    showToast(t("✓ Updated slot for {value0}", { value0: String(trimmedName) }));
   };
 
   // ─────────────────────────────────────────────────────────
@@ -962,32 +971,32 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   const handleTabPress = (tab: 'home' | 'queue' | 'records' | 'schedule' | 'rx') => {
     setActiveTab(tab);
     if (tab === 'schedule') {
-      showToast('Viewing My Schedule');
+      showToast(t("Viewing My Schedule"));
       return;
     }
     if (tab === 'home') {
       try {
         router.push('/(doctor)/dashboard' as any);
       } catch (e) {
-        showToast('Switched to Home Dashboard');
+        showToast(t("Switched to Home Dashboard"));
       }
     } else if (tab === 'queue') {
       try {
         router.push('/(doctor)/queue' as any);
       } catch (e) {
-        showToast('Switched to Live Queue');
+        showToast(t("Switched to Live Queue"));
       }
     } else if (tab === 'records') {
       try {
         router.push('/(doctor)/records' as any);
       } catch (e) {
-        showToast('Switched to Patient Records');
+        showToast(t("Switched to Patient Records"));
       }
     } else if (tab === 'rx') {
       try {
         router.push('/(doctor)/prescription' as any);
       } catch (e) {
-        showToast('Switched to Prescription');
+        showToast(t("Switched to Prescription"));
       }
     }
   };
@@ -1031,6 +1040,75 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
+<<<<<<< HEAD
+=======
+            {/* ─────────────────────────────────────────────────────────
+                1. HEADER
+                Doctor avatar (initials) with green online dot,
+                "Dr. Emilia Emelson", "Room 3B online", notification bell
+               ───────────────────────────────────────────────────────── */}
+            <View style={styles.headerRow}>
+              <View style={styles.headerLeft}>
+                <TouchableOpacity
+                  onPress={() => router.push('/(doctor)/dashboard' as any)}
+                  style={styles.homeBackBtn}
+                  activeOpacity={0.7}
+                  accessibilityLabel={t("Back to Home")}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="home" size={18} color="#0D9488" />
+                </TouchableOpacity>
+                {/* Doctor Avatar with online badge */}
+                <View style={styles.avatarWrapper}>
+                  <View
+                    style={[
+                      styles.avatarBadge,
+                      { backgroundColor: theme.primaryDeep },
+                    ]}
+                  >
+                    <Text style={styles.avatarInitials}>EE</Text>
+                  </View>
+                  <View style={styles.onlineDot} />
+                </View>
+
+                {/* Doctor Name & Subtitle */}
+                <View style={styles.doctorInfo}>
+                  <Text
+                    style={[styles.doctorName, { color: theme.textDark }]}
+                    numberOfLines={1}
+                  >
+                    Dr. Emilia Emelson
+                  </Text>
+                  <View style={styles.doctorSubRow}>
+                    <View style={styles.onlineMiniDot} />
+                    <Text
+                      style={[styles.doctorSubtitle, { color: theme.textMuted }]}
+                    >{t("Room 3B online")}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Notification Bell */}
+              <TouchableOpacity
+                style={[
+                  styles.bellButton,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => showToast(t("Notifications: No new alerts"))}
+              >
+                <Ionicons
+                  name="notifications-outline"
+                  size={20}
+                  color={theme.textDark}
+                />
+                <View style={styles.redDot} />
+              </TouchableOpacity>
+            </View>
+>>>>>>> origin/dev
 
             {/* ─────────────────────────────────────────────────────────
                 2. TODAY'S DATE & SCREEN TITLE
@@ -1055,9 +1133,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               <View style={styles.titleRow}>
                 <Text
                   style={[styles.screenTitle, { color: theme.textDark }]}
-                >
-                  My schedule
-                </Text>
+                >{t("My schedule")}</Text>
 
                 {/* Filter icon button: shows or hides hospital dropdown */}
                 <TouchableOpacity
@@ -1218,7 +1294,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       {/* Leave "off" label tag */}
                       {item.isLeave && (
                         <View style={styles.leaveOffBadge}>
-                          <Text style={styles.leaveOffText}>off</Text>
+                          <Text style={styles.leaveOffText}>{t("off")}</Text>
                         </View>
                       )}
 
@@ -1309,7 +1385,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     style={[styles.dropdownButtonText, { color: theme.textDark }]}
                   >
                     {selectedHospitalId === 'all'
-                      ? 'All hospitals'
+                      ? t("All hospitals")
                       : HOSPITALS[selectedHospitalId]?.name || 'Hospital'}
                   </Text>
                 </View>
@@ -1349,7 +1425,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     onPress={() => {
                       setSelectedHospitalId('all');
                       setIsHospitalDropdownOpen(false);
-                      showToast('Showing shifts for all hospitals');
+                      showToast(t("Showing shifts for all hospitals"));
                     }}
                   >
                     <View style={styles.dropdownMenuLeft}>
@@ -1366,7 +1442,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                             { color: theme.textDark },
                           ]}
                         >
-                          All hospitals
+                          {t("All hospitals")}
                         </Text>
                         <Text
                           style={[
@@ -1374,7 +1450,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                             { color: theme.textMuted },
                           ]}
                         >
-                          Combined overview
+                          {t("Combined overview")}
                         </Text>
                       </View>
                     </View>
@@ -1411,7 +1487,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         onPress={() => {
                           setSelectedHospitalId(hosp.id);
                           setIsHospitalDropdownOpen(false);
-                          showToast(`Filtered: ${hosp.name}`);
+                          showToast(t("Filtered: {value0}", { value0: String(hosp.name) }));
                         }}
                       >
                         <View style={styles.dropdownMenuLeft}>
@@ -1490,7 +1566,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   <Text
                     style={[styles.stateCardTitle, { color: theme.textDark }]}
                   >
-                    On leave
+                    {t("On leave")}
                   </Text>
                   <Text
                     style={[
@@ -1509,7 +1585,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       style={{ marginRight: 4 }}
                     />
                     <Text style={styles.blockedPillText}>
-                      Bookings and walk-ins are blocked
+                      {t("Bookings and walk-ins are blocked")}
                     </Text>
                   </View>
                 </View>
@@ -1534,7 +1610,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   <Text
                     style={[styles.stateCardTitle, { color: theme.textDark }]}
                   >
-                    No clinics scheduled
+                    {t("No clinics scheduled")}
                   </Text>
                   <Text
                     style={[
@@ -1542,7 +1618,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       { color: theme.textMuted },
                     ]}
                   >
-                    There are no hospital clinic sessions allocated for this date.
+                    {t("There are no hospital clinic sessions allocated for this date.")}
                   </Text>
                 </View>
               ) : (
@@ -1696,18 +1772,14 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                               { color: theme.textDark },
                             ]}
                           >
-                            <Text style={styles.statNumber}>{consulted}</Text>{' '}
-                            consulted
-                          </Text>
+                            <Text style={styles.statNumber}>{consulted}</Text>{' '}{t("consulted")}</Text>
                           <Text
                             style={[
                               styles.statLabel,
                               { color: theme.textDark },
                             ]}
                           >
-                            <Text style={styles.statNumber}>{waiting}</Text>{' '}
-                            waiting
-                          </Text>
+                            <Text style={styles.statNumber}>{waiting}</Text>{' '}{t("waiting")}</Text>
                         </View>
 
                         <View
@@ -1749,7 +1821,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                               { color: theme.textMuted },
                             ]}
                           >
-                            Avg. 9m / patient
+                            {t("Avg. 9m / patient")}
                           </Text>
                         </View>
 
@@ -1925,7 +1997,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                                         style={{ marginRight: 6 }}
                                       />
                                       <Text style={styles.endBreakDropdownText}>
-                                        End Break & Resume Shift
+                                        {t("End Break & Resume Shift")}
                                       </Text>
                                     </TouchableOpacity>
                                   )}
@@ -1997,7 +2069,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   <Text
                     style={[styles.timelineHeading, { color: theme.textDark }]}
                   >
-                    Timeline
+                    {t("Timeline")}
                   </Text>
                   <View
                     style={[
@@ -2011,8 +2083,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         { color: theme.primaryDeep },
                       ]}
                     >
-                      {filteredAppointments.length} patients
-                    </Text>
+                      {filteredAppointments.length}{t("patients")}</Text>
                   </View>
                 </View>
 
@@ -2022,7 +2093,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     <Text
                       style={[styles.clockTimeText, { color: theme.accent }]}
                     >
-                      Current: 10:12 AM
+                      {t("Current: 10:12 AM")}
                     </Text>
                   </View>
                 )}
@@ -2098,11 +2169,9 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                                 styles.nowAttendingLabel,
                                 { color: theme.accent },
                               ]}
-                            >
-                              NOW ATTENDING •
-                            </Text>
+                            >{t("NOW ATTENDING •")}</Text>
                             <View style={styles.inRoomBadge}>
-                              <Text style={styles.inRoomText}>In room</Text>
+                              <Text style={styles.inRoomText}>{t("In room")}</Text>
                             </View>
                           </View>
 
@@ -2177,9 +2246,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                               styles.elapsedText,
                               { color: theme.textMuted },
                             ]}
-                          >
-                            Consultation elapsed: {elapsedMinutes} min
-                          </Text>
+                          >{t("Consultation elapsed:")}{elapsedMinutes}{t("min")}</Text>
                         </View>
 
                         <TouchableOpacity
@@ -2190,11 +2257,11 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                           activeOpacity={0.8}
                           onPress={() =>
                             showToast(
-                              `Opening EHR for ${nowAttendingPatient.patientName}`
+                              t("Opening EHR for {value0}", { value0: String(nowAttendingPatient.patientName) })
                             )
                           }
                         >
-                          <Text style={styles.openEhrText}>Open EHR</Text>
+                          <Text style={styles.openEhrText}>{t("Open EHR")}</Text>
                         </TouchableOpacity>
                       </View>
                     </TouchableOpacity>
@@ -2337,7 +2404,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                                 accessibilityLabel={`Edit walk-in ${appt.patientName}`}
                               >
                                 <Ionicons name="pencil" size={11} color="#0d9488" style={{ marginRight: 3 }} />
-                                <Text style={styles.editWalkInRowBadgeText}>Edit</Text>
+                                <Text style={styles.editWalkInRowBadgeText}>{t("Edit")}</Text>
                               </TouchableOpacity>
 
                               <TouchableOpacity
@@ -2349,7 +2416,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                                 accessibilityLabel={`Remove walk-in ${appt.patientName}`}
                               >
                                 <Ionicons name="trash-outline" size={11} color="#dc2626" style={{ marginRight: 3 }} />
-                                <Text style={styles.removeWalkInRowBadgeText}>Remove</Text>
+                                <Text style={styles.removeWalkInRowBadgeText}>{t("Remove")}</Text>
                               </TouchableOpacity>
                             </View>
                           )}
@@ -2361,7 +2428,65 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               )}
             </View>
 
+<<<<<<< HEAD
 
+=======
+            {/* ─────────────────────────────────────────────────────────
+                7. ADD WALK-IN SLOT
+                - Full-width dark teal pill button: "+ Add walk-in slot"
+                - Below it: small centered text per hospital:
+                - Tapping adds walk-in (today only) & reduces count
+               ───────────────────────────────────────────────────────── */}
+            <View style={styles.walkInSection}>
+              <TouchableOpacity
+                style={[
+                  styles.addWalkInButton,
+                  { backgroundColor: theme.primaryDeep },
+                ]}
+                activeOpacity={0.85}
+                onPress={handleOpenWalkInModal}
+              >
+                <Ionicons
+                  name="add"
+                  size={20}
+                  color="#ffffff"
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.addWalkInButtonText}>{t("Add walk-in slot")}</Text>
+              </TouchableOpacity>
+
+              {/* Clean Available Walk-in Slots Status Indicator (Edit button removed as edit is inside the modal) */}
+              <View
+                style={[
+                  styles.allocationsCleanBar,
+                  {
+                    backgroundColor: isDark ? '#142528' : '#f0f9fa',
+                    borderColor: isDark ? '#1f383c' : '#d4eff2',
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.allocationsDot,
+                    {
+                      backgroundColor:
+                        selectedHospitalId !== 'all'
+                          ? HOSPITALS[selectedHospitalId]?.accentColor || theme.accent
+                          : HOSPITALS[currentActiveHospitalId]?.accentColor || HOSPITALS.cgh.accentColor,
+                    },
+                  ]}
+                />
+                <Text style={[styles.allocationsCleanTitle, { color: theme.textDark }]}>
+                  {t("Available walk-in slots:")}{' '}
+                  <Text style={{ fontWeight: '800', color: theme.accent }}>
+                    {selectedHospitalId !== 'all'
+                      ? `${walkInAllocations[selectedHospitalId] ?? 0} remaining`
+                      : `${walkInAllocations[currentActiveHospitalId] ?? 5} remaining`}
+                  </Text>
+                </Text>
+              </View>
+            </View>
+>>>>>>> origin/dev
 
             {/* Bottom spacer so content is not hidden by navigation bar */}
             <View style={{ height: 100 }} />
@@ -2403,9 +2528,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   { color: activeTab === 'home' ? theme.accent : theme.textMuted },
                   activeTab === 'home' && styles.tabLabelActive,
                 ]}
-              >
-                Home
-              </Text>
+              >{t("Home")}</Text>
             </TouchableOpacity>
 
             {/* 2. Queue */}
@@ -2425,9 +2548,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   { color: activeTab === 'queue' ? theme.accent : theme.textMuted },
                   activeTab === 'queue' && styles.tabLabelActive,
                 ]}
-              >
-                Queue
-              </Text>
+              >{t("Queue")}</Text>
             </TouchableOpacity>
 
             {/* 3. Records */}
@@ -2447,9 +2568,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   { color: activeTab === 'records' ? theme.accent : theme.textMuted },
                   activeTab === 'records' && styles.tabLabelActive,
                 ]}
-              >
-                Records
-              </Text>
+              >{t("Records")}</Text>
             </TouchableOpacity>
 
             {/* 4. Schedule (ACTIVE) */}
@@ -2469,9 +2588,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   { color: theme.accent },
                   styles.tabLabelActive,
                 ]}
-              >
-                Schedule
-              </Text>
+              >{t("Schedule")}</Text>
             </TouchableOpacity>
 
             {/* 5. Prescription */}
@@ -2492,9 +2609,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   { color: activeTab === 'rx' ? theme.accent : theme.textMuted },
                   activeTab === 'rx' && styles.tabLabelActive,
                 ]}
-              >
-                Prescription
-              </Text>
+              >{t("Prescription")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2583,8 +2698,8 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                           { color: theme.textMuted },
                         ]}
                       >
-                        {selectedPatient.age} yrs · {selectedPatient.sex} ·{' '}
-                        Blood: {selectedPatient.bloodGroup}
+                        {selectedPatient.age}{' '}{t("yrs ·")}{' '}{selectedPatient.sex} ·{' '}
+                        {t("Blood:")}{' '}{selectedPatient.bloodGroup}
                       </Text>
                     </View>
                   </View>
@@ -2608,7 +2723,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.allergyAlertTitle}>
-                        CRITICAL DRUG ALLERGY ALERT
+                        {t("CRITICAL DRUG ALLERGY ALERT")}
                       </Text>
                       <Text style={styles.allergyAlertDesc}>
                         {selectedPatient.allergy}
@@ -2637,7 +2752,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         { color: isDark ? '#86efac' : '#15803d' },
                       ]}
                     >
-                      No known drug allergies reported
+                      {t("No known drug allergies reported")}
                     </Text>
                   </View>
                 )}
@@ -2657,7 +2772,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       <Text
                         style={[styles.infoLabel, { color: theme.textMuted }]}
                       >
-                        QUEUE TOKEN
+                        {t("QUEUE TOKEN")}
                       </Text>
                       <Text
                         style={[styles.infoValue, { color: theme.textDark }]}
@@ -2669,7 +2784,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       <Text
                         style={[styles.infoLabel, { color: theme.textMuted }]}
                       >
-                        APPOINTMENT TIME
+                        {t("APPOINTMENT TIME")}
                       </Text>
                       <Text
                         style={[styles.infoValue, { color: theme.textDark }]}
@@ -2690,9 +2805,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     <View style={styles.infoCol}>
                       <Text
                         style={[styles.infoLabel, { color: theme.textMuted }]}
-                      >
-                        NIC NUMBER
-                      </Text>
+                      >{t("NIC NUMBER")}</Text>
                       <Text
                         style={[styles.infoValue, { color: theme.textDark }]}
                       >
@@ -2702,9 +2815,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     <View style={styles.infoCol}>
                       <Text
                         style={[styles.infoLabel, { color: theme.textMuted }]}
-                      >
-                        PHONE NUMBER
-                      </Text>
+                      >{t("PHONE NUMBER")}</Text>
                       <Text
                         style={[styles.infoValue, { color: theme.textDark }]}
                       >
@@ -2723,9 +2834,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   <View style={{ paddingTop: 8 }}>
                     <Text
                       style={[styles.infoLabel, { color: theme.textMuted }]}
-                    >
-                      REASON FOR VISIT
-                    </Text>
+                    >{t("REASON FOR VISIT")}</Text>
                     <Text
                       style={[
                         styles.infoValueReason,
@@ -2802,7 +2911,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         style={{ marginRight: 6 }}
                       />
                       <Text style={styles.sheetBtnEditWalkInText}>
-                        Edit Walk-in Details
+                        {t("Edit Walk-in Details")}
                       </Text>
                     </TouchableOpacity>
 
@@ -2818,7 +2927,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         style={{ marginRight: 6 }}
                       />
                       <Text style={styles.sheetBtnRemoveWalkInText}>
-                        Remove Walk-in Slot
+                        {t("Remove Walk-in Slot")}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -2836,7 +2945,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     ]}
                     activeOpacity={0.8}
                     onPress={() => {
-                      showToast(`Calling ${selectedPatient.phone}...`);
+                      showToast(t("Calling {value0}...", { value0: String(selectedPatient.phone) }));
                     }}
                   >
                     <Ionicons
@@ -2851,7 +2960,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         { color: theme.primaryDeep },
                       ]}
                     >
-                      Call patient
+                      {t("Call patient")}
                     </Text>
                   </TouchableOpacity>
 
@@ -2864,7 +2973,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                     onPress={() => {
                       setSelectedPatient(null);
                       showToast(
-                        `Opening EHR Record for ${selectedPatient.patientName}`
+                        t("Opening EHR Record for {value0}", { value0: String(selectedPatient.patientName) })
                       );
                     }}
                   >
@@ -2874,7 +2983,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       color="#ffffff"
                       style={{ marginRight: 6 }}
                     />
-                    <Text style={styles.sheetBtnPrimaryText}>Open EHR</Text>
+                    <Text style={styles.sheetBtnPrimaryText}>{t("Open EHR")}</Text>
                   </TouchableOpacity>
                 </View>
               </ScrollView>
@@ -2947,16 +3056,14 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         styles.walkInModalTitle,
                         { color: theme.textDark },
                       ]}
-                    >
-                      Add Walk-in Slot
-                    </Text>
+                    >{t("Add Walk-in Slot")}</Text>
                     <Text
                       style={[
                         styles.walkInModalSubtitle,
                         { color: theme.textMuted },
                       ]}
                     >
-                      Register a walk-in patient for today's queue
+                      {t("Register a walk-in patient for today's queue")}
                     </Text>
                   </View>
                 </View>
@@ -2981,8 +3088,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 <View style={styles.walkInFieldGroup}>
                   <Text
                     style={[styles.walkInFieldLabel, { color: theme.textMuted }]}
-                  >
-                    PATIENT NAME <Text style={styles.walkInRequiredStar}>*</Text>
+                  >{t("PATIENT NAME")}<Text style={styles.walkInRequiredStar}>*</Text>
                   </Text>
                   <TextInput
                     style={[
@@ -3017,8 +3123,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         styles.walkInFieldLabel,
                         { color: theme.textMuted },
                       ]}
-                    >
-                      AGE <Text style={styles.walkInRequiredStar}>*</Text>
+                    >{t("AGE")}<Text style={styles.walkInRequiredStar}>*</Text>
                     </Text>
                     <TextInput
                       style={[
@@ -3053,8 +3158,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         styles.walkInFieldLabel,
                         { color: theme.textMuted },
                       ]}
-                    >
-                      GENDER <Text style={styles.walkInRequiredStar}>*</Text>
+                    >{t("GENDER")}<Text style={styles.walkInRequiredStar}>*</Text>
                     </Text>
                     <View style={styles.genderButtonGroup}>
                       {(['Male', 'Female', 'Other'] as const).map((g) => {
@@ -3101,7 +3205,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   <Text
                     style={[styles.walkInFieldLabel, { color: theme.textMuted }]}
                   >
-                    HOSPITAL / CLINIC <Text style={styles.walkInRequiredStar}>*</Text>
+                    {t("HOSPITAL / CLINIC")}{' '}<Text style={styles.walkInRequiredStar}>*</Text>
                   </Text>
                   <View style={styles.hospitalSelectionCol}>
                     {filteredHospitals.map((hosp: HospitalInfo) => {
@@ -3195,7 +3299,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                                 },
                               ]}
                             >
-                              {isFull ? 'Full' : `${remaining} slots left`}
+                              {isFull ? t("Full") : `${remaining} slots left`}
                             </Text>
                             <Ionicons
                               name="pencil"
@@ -3219,8 +3323,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 <View style={styles.walkInFieldGroup}>
                   <Text
                     style={[styles.walkInFieldLabel, { color: theme.textMuted }]}
-                  >
-                    REASON FOR VISIT <Text style={styles.walkInRequiredStar}>*</Text>
+                  >{t("REASON FOR VISIT")}<Text style={styles.walkInRequiredStar}>*</Text>
                   </Text>
 
                   {/* Fast quick-chips */}
@@ -3331,9 +3434,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         styles.walkInCancelBtnText,
                         { color: theme.textMedium },
                       ]}
-                    >
-                      Cancel
-                    </Text>
+                    >{t("Cancel")}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -3350,9 +3451,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       color="#ffffff"
                       style={{ marginRight: 6 }}
                     />
-                    <Text style={styles.walkInSubmitBtnText}>
-                      Confirm & Add Slot
-                    </Text>
+                    <Text style={styles.walkInSubmitBtnText}>{t("Confirm & Add Slot")}</Text>
                   </TouchableOpacity>
                 </View>
               </ScrollView>
@@ -3393,15 +3492,15 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             </View>
 
             <Text style={[styles.dialogTitle, { color: theme.textDark }]}>
-              Remove Walk-in Slot?
+              {t("Remove Walk-in Slot?")}
             </Text>
 
             <Text style={[styles.dialogBody, { color: theme.textMedium }]}>
-              Are you sure you want to remove{' '}
+              {t("Are you sure you want to remove")}{' '}
               <Text style={{ fontWeight: '700', color: theme.textDark }}>
                 {walkInToDelete?.patientName} ({walkInToDelete?.token})
               </Text>{' '}
-              from the schedule? The walk-in allocation will be restored to{' '}
+              {t("from the schedule? The walk-in allocation will be restored to")}{' '}
               {HOSPITALS[walkInToDelete?.hospitalId || 'cgh']?.shortName || 'clinic'}.
             </Text>
 
@@ -3417,10 +3516,10 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 }}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel="Keep slot"
+                accessibilityLabel={t("Keep slot")}
               >
                 <Text style={[styles.dialogKeepBtnText, { color: theme.textMedium }]}>
-                  Keep Slot
+                  {t("Keep Slot")}
                 </Text>
               </TouchableOpacity>
 
@@ -3434,7 +3533,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 accessibilityLabel="Confirm remove slot"
               >
                 <Ionicons name="trash-outline" size={16} color="#ffffff" style={{ marginRight: 4 }} />
-                <Text style={styles.dialogRemoveBtnText}>Remove</Text>
+                <Text style={styles.dialogRemoveBtnText}>{t("Remove")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -3471,10 +3570,10 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             <View style={styles.editSlotsSheetHeader}>
               <View>
                 <Text style={[styles.editSlotsSheetTitle, { color: theme.textDark }]}>
-                  Edit Available Slots
+                  {t("Edit Available Slots")}
                 </Text>
                 <Text style={[styles.editSlotsSheetSubtitle, { color: theme.textMuted }]}>
-                  Adjust walk-in queue capacity for today's clinic
+                  {t("Adjust walk-in queue capacity for today's clinic")}
                 </Text>
               </View>
 
@@ -3493,7 +3592,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
             {/* Hospital Dropdown Selector */}
             <Text style={[styles.editSlotsSectionLabel, { color: theme.textMuted }]}>
-              SELECT HOSPITAL / CLINIC
+              {t("SELECT HOSPITAL / CLINIC")}
             </Text>
 
             <View style={styles.editSlotsDropdownWrap}>
@@ -3508,7 +3607,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 onPress={() => setIsEditSlotsHospDropdownOpen((prev) => !prev)}
                 activeOpacity={0.8}
                 accessibilityRole="combobox"
-                accessibilityLabel="Select hospital"
+                accessibilityLabel={t("Select hospital")}
               >
                 <View style={styles.editSlotsDropdownTriggerLeft}>
                   <View
@@ -3536,7 +3635,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                       ]}
                     >
                       {HOSPITALS[editSlotsHospitalId]?.room} ·{' '}
-                      {walkInAllocations[editSlotsHospitalId] ?? 0} slots currently available
+                      {walkInAllocations[editSlotsHospitalId] ?? 0}{' '}{t("slots currently available")}
                     </Text>
                   </View>
                 </View>
@@ -3624,7 +3723,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                                 { color: hosp.accentColor },
                               ]}
                             >
-                              {count} slots
+                              {count}{' '}{t("slots")}
                             </Text>
                           </View>
                           {isSelected && (
@@ -3645,7 +3744,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
             {/* Stepper Count Display */}
             <Text style={[styles.editSlotsSectionLabel, { color: theme.textMuted }]}>
-              AVAILABLE WALK-IN SLOTS COUNT
+              {t("AVAILABLE WALK-IN SLOTS COUNT")}
             </Text>
             <View
               style={[
@@ -3693,7 +3792,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   selectTextOnFocus
                 />
                 <Text style={[styles.stepperSubtitle, { color: theme.textMuted }]}>
-                  slots remaining
+                  {t("slots remaining")}
                 </Text>
               </View>
 
@@ -3720,7 +3819,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
             {/* Quick Preset Buttons */}
             <Text style={[styles.editSlotsSectionLabel, { color: theme.textMuted }]}>
-              QUICK PRESETS
+              {t("QUICK PRESETS")}
             </Text>
             <View style={styles.presetsRow}>
               {[0, 3, 5, 8, 10, 15].map((preset) => {
@@ -3751,7 +3850,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                         },
                       ]}
                     >
-                      {preset} slots
+                      {preset}{' '}{t("slots")}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -3771,9 +3870,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 onPress={() => setIsEditSlotsModalVisible(false)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.editSlotsCancelBtnText, { color: theme.textMedium }]}>
-                  Cancel
-                </Text>
+                <Text style={[styles.editSlotsCancelBtnText, { color: theme.textMedium }]}>{t("Cancel")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -3786,7 +3883,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               >
                 <Ionicons name="checkmark" size={18} color="#ffffff" style={{ marginRight: 6 }} />
                 <Text style={styles.editSlotsSaveBtnText}>
-                  Save Available Slots
+                  {t("Save Available Slots")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -3830,7 +3927,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             <View style={styles.editSlotsSheetHeader}>
               <View>
                 <Text style={[styles.editSlotsSheetTitle, { color: theme.textDark }]}>
-                  Edit Walk-in Slot
+                  {t("Edit Walk-in Slot")}
                 </Text>
                 <Text style={[styles.editSlotsSheetSubtitle, { color: theme.textMuted }]}>
                   {editingWalkInAppt?.token} · {HOSPITALS[editingWalkInAppt?.hospitalId || 'cgh']?.shortName}
@@ -3859,7 +3956,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               {/* Patient Name */}
               <View style={styles.walkInFieldGroup}>
                 <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
-                  PATIENT NAME *
+                  {t("PATIENT NAME *")}
                 </Text>
                 <View
                   style={[
@@ -3872,7 +3969,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 >
                   <TextInput
                     style={[styles.walkInInput, { color: theme.textDark }]}
-                    placeholder="Patient Name"
+                    placeholder={t("Patient Name")}
                     placeholderTextColor={theme.textMuted}
                     value={editPatientName}
                     onChangeText={setEditPatientName}
@@ -3883,9 +3980,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               {/* Age & Gender */}
               <View style={styles.walkInRowGroup}>
                 <View style={[styles.walkInFieldGroup, { flex: 1, marginRight: 10 }]}>
-                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
-                    AGE
-                  </Text>
+                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>{t("AGE")}</Text>
                   <View
                     style={[
                       styles.walkInInputWrap,
@@ -3907,9 +4002,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 </View>
 
                 <View style={[styles.walkInFieldGroup, { flex: 1.5 }]}>
-                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
-                    GENDER
-                  </Text>
+                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>{t("GENDER")}</Text>
                   <View style={styles.genderRow}>
                     {(['Male', 'Female', 'Other'] as const).map((g) => {
                       const isSelected = editPatientGender === g;
@@ -3950,9 +4043,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               {/* Time & Status */}
               <View style={styles.walkInRowGroup}>
                 <View style={[styles.walkInFieldGroup, { flex: 1, marginRight: 10 }]}>
-                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
-                    TIME
-                  </Text>
+                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>{t('TIME')}</Text>
                   <View
                     style={[
                       styles.walkInInputWrap,
@@ -3973,9 +4064,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 </View>
 
                 <View style={[styles.walkInFieldGroup, { flex: 1.2 }]}>
-                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
-                    STATUS
-                  </Text>
+                  <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>{t('STATUS')}</Text>
                   <View style={{ flexDirection: 'row', gap: 6 }}>
                     {(['Waiting', 'Done'] as const).map((st) => {
                       const isSel = editPatientStatus === st;
@@ -4017,7 +4106,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
               {/* Reason */}
               <View style={styles.walkInFieldGroup}>
                 <Text style={[styles.walkInFieldLabel, { color: theme.textMuted }]}>
-                  REASON / SYMPTOMS
+                  {t("REASON / SYMPTOMS")}
                 </Text>
                 <View
                   style={[
@@ -4053,9 +4142,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                   setEditingWalkInAppt(null);
                 }}
               >
-                <Text style={[styles.editSlotsCancelBtnText, { color: theme.textMedium }]}>
-                  Cancel
-                </Text>
+                <Text style={[styles.editSlotsCancelBtnText, { color: theme.textMedium }]}>{t("Cancel")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -4066,7 +4153,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
                 onPress={handleSaveEditedWalkIn}
               >
                 <Ionicons name="checkmark" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.editSlotsSaveBtnText}>Save Changes</Text>
+                <Text style={styles.editSlotsSaveBtnText}>{t("Save Changes")}</Text>
               </TouchableOpacity>
             </View>
           </View>

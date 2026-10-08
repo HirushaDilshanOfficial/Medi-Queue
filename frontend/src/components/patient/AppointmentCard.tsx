@@ -1,3 +1,4 @@
+import { dayLabel } from '../../utils/opdDates';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
@@ -24,7 +25,7 @@ const STATUS_STYLES: Record<string, { label: string; color: string; background: 
 };
 
 export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn }: Props) {
-  const { t, language } = useLanguage();
+  const { t, language, locale } = useLanguage();
   const status = STATUS_STYLES[appointment.status] ?? STATUS_STYLES.booked;
   const live = appointment.live;
 
@@ -33,13 +34,13 @@ export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn
       <View style={styles.headerRow}>
         <View style={styles.headerText}>
           <Text style={styles.dateLabel}>
-            {appointment.dateLabel ?? appointment.date} · {appointment.slotTime}
+            {dayLabel(appointment.date, undefined, locale)} · {appointment.slotTime}
           </Text>
           <Text style={styles.doctor} numberOfLines={1}>
             {appointment.doctorName}
           </Text>
           <Text style={styles.department} numberOfLines={1}>
-            {appointment.department}
+            {t(appointment.department)}
             {appointment.room ? ` · ${appointment.room}` : ''}
           </Text>
         </View>
@@ -87,7 +88,7 @@ export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn
             </Pressable>
           ) : null}
 
-          {appointment.canCancel && onCancel ? (
+          {(appointment.canCancel || appointment.status === 'booked' || appointment.status === 'checked_in') && onCancel ? (
             <Pressable
               onPress={() => onCancel(appointment)}
               accessibilityRole="button"

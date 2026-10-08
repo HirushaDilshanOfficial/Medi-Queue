@@ -268,11 +268,16 @@ const getMyHistory = async (req, res, next) => {
     const profileId = req.patientProfile._id;
     const todayKey = today();
 
-    // A visit is "history" once its date has passed. That deliberately includes
-    // cancelled and no-show bookings, since a patient looking at their history
-    // wants the record of what they booked, not a flattering version of it.
+    // Closed appointments belong in history immediately, including cancellations
+    // for a future date and consultations completed today.
     const [appointments, reports] = await Promise.all([
-      OpdAppointment.find({ profile: profileId, date: { $lt: todayKey } })
+      OpdAppointment.find({
+        profile: profileId,
+        $or: [
+          { date: { $lt: todayKey } },
+          { status: { $in: ['completed', 'no_show', 'cancelled'] } },
+        ],
+      })
         .sort({ date: -1, slotTime: -1 })
         .limit(100)
         .lean(),
@@ -286,17 +291,22 @@ const getMyHistory = async (req, res, next) => {
       reportCountByAppointment.set(key, (reportCountByAppointment.get(key) || 0) + 1);
     }
 
-    res.json({
-      visits: appointments.map((appointment) => {
+    const visits = appointments.map((appointment) => {
         const mapped = mapAppointment(appointment, { todayKey });
         return {
           ...mapped,
-          // A past visit is not reschedulable or cancellable, whatever its status.
+          // An expired booking that was never checked in is a missed visit,
+          // even when staff have not explicitly marked it as a no-show yet.
+          status: appointment.status === 'booked' && appointment.date < todayKey ? 'no_show' : appointment.status,
+          canCheckIn: false,
           canReschedule: false,
           canCancel: false,
           reportCount: reportCountByAppointment.get(String(appointment._id)) || 0,
         };
-      }),
+      });
+
+    res.json({
+      visits,
       // Reports not tied to a visit still belong in the history view.
       reports: reports
         .filter((report) => !report.appointment)
@@ -310,9 +320,9 @@ const getMyHistory = async (req, res, next) => {
           createdAt: report.createdAt ? report.createdAt.toISOString() : null,
         })),
       summary: {
-        totalVisits: appointments.filter((a) => a.status === 'completed').length,
-        cancelled: appointments.filter((a) => a.status === 'cancelled').length,
-        noShow: appointments.filter((a) => a.status === 'no_show').length,
+        totalVisits: visits.filter((a) => a.status === 'completed').length,
+        cancelled: visits.filter((a) => a.status === 'cancelled').length,
+        noShow: visits.filter((a) => a.status === 'no_show').length,
         reports: reports.length,
       },
     });

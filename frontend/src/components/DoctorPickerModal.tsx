@@ -217,7 +217,7 @@ export const DoctorPickerModal: React.FC<DoctorPickerModalProps> = ({
 
                           <View style={styles.docMetaRow}>
                             <Text style={styles.docDept} numberOfLines={1}>
-                              {doc.department || doc.specialization || t('General OPD')}
+                              {t(doc.department || doc.specialization || 'General OPD')}
                             </Text>
                             <Text style={styles.docMetaDot}>•</Text>
                             <View style={styles.roomBadge}>
