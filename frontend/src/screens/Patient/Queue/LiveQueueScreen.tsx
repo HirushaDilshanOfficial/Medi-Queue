@@ -1,7 +1,7 @@
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Vibration, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused, useRouter } from 'expo-router';
 import { useFonts } from 'expo-font';
@@ -110,6 +110,33 @@ export function LiveQueueScreen() {
     catch (error) { message(t('Could not check in'), error instanceof Error ? error.message : t('Please try again.')); }
     finally { setCheckingIn(false); }
   };
+  const cancelAppointment = (appointment: Appointment) => {
+    const cancel = async () => {
+      try {
+        await bookingApi.cancel(appointment.id);
+        reloadUpcoming();
+        reloadPass();
+      } catch (error) {
+        message(t('Could not cancel appointment'), error instanceof Error ? error.message : t('Please try again.'));
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(t('Cancel appointment?'))) void cancel();
+      return;
+    }
+    Alert.alert(
+      t('Cancel appointment?'),
+      t('This appointment and its queue token will be cancelled.'),
+      [
+        { text: t('Keep appointment'), style: 'cancel' },
+        {
+          text: t('Cancel appointment'),
+          style: 'destructive',
+          onPress: () => void cancel(),
+        },
+      ],
+    );
+  };
   const leave = async () => {
     setLeaving(true); setActionError(null);
     try { await queueApi.leave(); setPass({ pass: null }); reloadUpcoming(); setSheet(null); }
@@ -173,7 +200,7 @@ export function LiveQueueScreen() {
             <Pressable accessibilityRole="button" disabled={checkingIn} accessibilityState={{ disabled: checkingIn }} onPress={() => checkIn(todaysAppointment)} style={[styles.homeButton, checkingIn && styles.disabled]}><Text style={styles.homeLabel}>{checkingIn ? t('Checking in…') : t('Check in for my token')}</Text></Pressable>
           </View> : <View style={styles.stateCard}><ProfileIcon name="ticket" size={32} /><Text style={styles.title}>{t("No queue pass yet")}</Text><Text style={styles.caption}>{t("Check in on the day of your appointment to collect your queue number.")}</Text><Pressable accessibilityRole="button" onPress={() => router.push('/(patient)/doctors')} style={styles.homeButton}><Text style={styles.homeLabel}>{t("Book a clinic visit")}</Text></Pressable></View>}
         {upcoming.error && !activePass ? <View style={styles.stateCard}><Text style={styles.error}>{t("Your bookings could not be loaded.")}</Text><Pressable accessibilityRole="button" onPress={reloadUpcoming} style={styles.menuButton}><Text style={styles.actionLabel}>{t("Retry bookings")}</Text></Pressable></View> : null}
-        {!activePass && Boolean(upcoming.data?.appointments.length) ? <View style={{ gap: 12 }}><Text style={styles.title}>{t("Your bookings")}</Text>{upcoming.data?.appointments.slice(0, 3).map(appointment => <AppointmentCard key={appointment.id} appointment={appointment} />)}</View> : null}
+        {Boolean(upcoming.data?.appointments.length) ? <View style={{ gap: 12 }}><Text style={styles.title}>{t("Your bookings")}</Text>{upcoming.data?.appointments.slice(0, 3).map(appointment => <AppointmentCard key={appointment.id} appointment={appointment} onCheckIn={checkIn} onCancel={cancelAppointment} />)}</View> : null}
       </View>
     </ScrollView>
     <Modal transparent visible={doctorMenuOpen} animationType="fade" onRequestClose={() => setDoctorMenuOpen(false)}>

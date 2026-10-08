@@ -87,7 +87,7 @@ export function AppointmentCard({ appointment, onReschedule, onCancel, onCheckIn
             </Pressable>
           ) : null}
 
-          {appointment.canCancel && onCancel ? (
+          {(appointment.canCancel || appointment.status === 'booked' || appointment.status === 'checked_in') && onCancel ? (
             <Pressable
               onPress={() => onCancel(appointment)}
               accessibilityRole="button"

@@ -12,12 +12,44 @@ const APPOINTMENT_ACTIVE = OpdAppointment.ACTIVE_STATUSES;
 
 // Short, unambiguous alphabet: no I/O/0/1, so a code read aloud or copied off a
 // blurry print still scans.
-// The pass QR carries a URL so a scanner at the clinic door can validate the pass
-// instead of showing a dead string. Only the code travels; no patient identity.
+// The QR must contain a URL so a phone opens a useful pass page rather than
+// searching the opaque pass code as plain text.
 function passQrValue(entry) {
-  const base = process.env.PUBLIC_WEB_URL || 'https://app.medi-queue.lk';
-  return `${base.replace(/\/+$/, '')}/pass/${entry.passCode}`;
+  const base = process.env.PUBLIC_WEB_URL || 'http://10.240.7.66:5001';
+  const passPath = process.env.PUBLIC_WEB_URL ? '/pass/' : '/api/v1/public/queue-pass/';
+  return `${base.replace(/\/+$/, '')}${passPath}${entry.passCode}`;
 }
+
+const publicPass = async (req, res, next) => {
+  try {
+    const passCode = String(req.params.passCode || '').trim().toUpperCase();
+    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/.test(passCode)) {
+      return res.status(400).send('<h1>Invalid queue pass</h1>');
+    }
+
+    const entry = await OpdQueueEntry.findOne({ passCode }).lean();
+    if (!entry) return res.status(404).send('<h1>Queue pass not found</h1>');
+
+    const escapeHtml = (value) => String(value ?? '—')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const token = `A-${String(entry.tokenNumber).padStart(3, '0')}`;
+    return res.type('html').send(`<!doctype html>
+      <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>Medi-Queue Pass</title>
+      <style>body{font-family:Arial,sans-serif;background:#eef7f7;color:#12343b;padding:24px}
+      main{max-width:420px;margin:20px auto;background:white;border-radius:18px;padding:24px;
+      box-shadow:0 4px 18px #12343b22}h1{color:#006b78;margin-top:0}strong{font-size:42px;
+      display:block;margin:12px 0;color:#006b78}p{margin:10px 0}</style></head>
+      <body><main><h1>Medi-Queue</h1><p>Queue pass verified</p>
+      <strong>${escapeHtml(token)}</strong><p><b>Department:</b> ${escapeHtml(entry.department)}</p>
+      <p><b>Doctor:</b> ${escapeHtml(entry.doctorName)}</p><p><b>Date:</b> ${escapeHtml(entry.queueDate)}</p>
+      <p><b>Status:</b> ${escapeHtml(entry.status)}</p><p>Show this page at the reception desk.</p>
+      </main></body></html>`);
+  } catch (error) {
+    return next(error);
+  }
+};
 
 function mapPass(entry, { todayKey, live } = {}) {
   if (!entry) return null;
@@ -72,15 +104,6 @@ const checkIn = async (req, res, next) => {
       return res.status(400).json({ message: 'A valid appointmentId is required' });
     }
 
-    const existing = await activePassFor(profileId);
-    if (existing) {
-      const live = await buildLiveState(existing);
-      return res.status(409).json({
-        message: 'You already have an active queue pass',
-        pass: mapPass(existing, { todayKey, live }),
-      });
-    }
-
     const appointment = await OpdAppointment.findOne({
       _id: appointmentId,
       profile: profileId,
@@ -97,12 +120,30 @@ const checkIn = async (req, res, next) => {
       });
     }
 
-    if (appointment.status === 'checked_in' && appointment.queueEntry) {
-      const entry = await OpdQueueEntry.findById(appointment.queueEntry);
+    if (appointment.queueEntry) {
+      const entry = await OpdQueueEntry.findOne({
+        _id: appointment.queueEntry,
+        appointment: appointment._id,
+        profile: profileId,
+        status: { $in: ACTIVE_STATUSES },
+      });
       if (entry) {
+        if (appointment.status !== 'checked_in') {
+          appointment.status = 'checked_in';
+          await appointment.save();
+        }
         const live = await buildLiveState(entry);
         return res.json({ pass: mapPass(entry, { todayKey, live }) });
       }
+    }
+
+    const existing = await activePassFor(profileId);
+    if (existing) {
+      const live = await buildLiveState(existing);
+      return res.status(409).json({
+        message: 'You already have an active queue pass',
+        pass: mapPass(existing, { todayKey, live }),
+      });
     }
 
     const doctor = await Doctor.findById(appointment.doctor).select('avgConsultMinutes room').lean();
@@ -282,6 +323,46 @@ const leaveQueue = async (req, res, next) => {
     );
 
     return res.json({ pass: null, released: true });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const validatePass = async (req, res, next) => {
+  try {
+    const passCode = String(req.params.passCode || '').trim().toUpperCase();
+    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{24}$/.test(passCode)) {
+      return res.status(400).json({ message: 'Invalid queue pass code' });
+    }
+
+    const entry = await OpdQueueEntry.findOne({ passCode })
+      .populate('profile', 'fullName nic phone email gender')
+      .lean();
+    if (!entry) return res.status(404).json({ message: 'Queue pass not found' });
+
+    return res.json({
+      pass: {
+        id: String(entry._id),
+        passCode: entry.passCode,
+        tokenNumber: entry.tokenNumber,
+        tokenLabel: `A-${String(entry.tokenNumber).padStart(3, '0')}`,
+        department: entry.department,
+        doctorName: entry.doctorName || null,
+        room: entry.room || null,
+        queueDate: entry.queueDate,
+        status: entry.status,
+      },
+      patient: entry.profile
+        ? {
+            id: String(entry.profile._id),
+            fullName: entry.profile.fullName,
+            nic: entry.profile.nic || null,
+            phone: entry.profile.phone || null,
+            email: entry.profile.email || null,
+            gender: entry.profile.gender || null,
+          }
+        : null,
+    });
   } catch (error) {
     return next(error);
   }
@@ -850,9 +931,11 @@ module.exports = {
   board,
   liveDepartments,
   leaveQueue,
+  validatePass,
   mapPass,
   generatePassCode,
   passQrValue,
+  publicPass,
   getQueue,
   getNextInQueue,
   callNext,

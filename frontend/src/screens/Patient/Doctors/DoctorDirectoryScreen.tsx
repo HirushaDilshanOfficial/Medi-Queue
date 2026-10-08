@@ -10,6 +10,7 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -99,6 +100,21 @@ export function DoctorDirectoryScreen() {
 
   const confirmCancel = useCallback(
     (appointment: Appointment) => {
+      const cancel = async () => {
+        setWorking(appointment.id);
+        try {
+          await bookingApi.cancel(appointment.id, 'Cancelled by patient');
+          await bookings.reload();
+        } catch (error) {
+          Alert.alert(t('Could not cancel'), error instanceof Error ? error.message : t('Please try again.'));
+        } finally {
+          setWorking(null);
+        }
+      };
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.confirm(t('Cancel this booking?'))) void cancel();
+        return;
+      }
       Alert.alert(
         t('Cancel this booking?'),
         t("{value0} · {value1} at {value2}\n\nYou can book another time from the doctor list.", { value0: String(appointment.doctorName), value1: String(appointment.dateLabel ?? appointment.date), value2: String(appointment.slotTime) }),
@@ -107,17 +123,7 @@ export function DoctorDirectoryScreen() {
           {
             text: t('Cancel booking'),
             style: 'destructive',
-            onPress: async () => {
-              setWorking(appointment.id);
-              try {
-                await bookingApi.cancel(appointment.id, 'Cancelled by patient');
-                await bookings.reload();
-              } catch (error) {
-                Alert.alert(t('Could not cancel'), error instanceof Error ? error.message : t('Please try again.'));
-              } finally {
-                setWorking(null);
-              }
-            },
+            onPress: () => void cancel(),
           },
         ],
       );
@@ -141,24 +147,29 @@ export function DoctorDirectoryScreen() {
 
   const checkIn = useCallback(
     (appointment: Appointment) => {
+      const checkInNow = async () => {
+        setWorking(appointment.id);
+        try {
+          await queueApi.checkIn(appointment.id);
+          router.push('/(patient)/queue');
+        } catch (error) {
+          Alert.alert(
+            t('Could not check in'),
+            error instanceof Error ? error.message : t('Please try again.'),
+          );
+        } finally {
+          setWorking(null);
+        }
+      };
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.confirm(t("Collect your queue number for {value0}?", { value0: String(appointment.department) }))) void checkInNow();
+        return;
+      }
       Alert.alert(t('Check in now?'), t("Collect your queue number for {value0}.", { value0: String(appointment.department) }), [
         { text: t('Not yet'), style: 'cancel' },
         {
           text: t('Check in'),
-          onPress: async () => {
-            setWorking(appointment.id);
-            try {
-              await queueApi.checkIn(appointment.id);
-              router.push('/(patient)/queue');
-            } catch (error) {
-              Alert.alert(
-                t('Could not check in'),
-                error instanceof Error ? error.message : t('Please try again.'),
-              );
-            } finally {
-              setWorking(null);
-            }
-          },
+          onPress: () => void checkInNow(),
         },
       ]);
     },
