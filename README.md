@@ -116,11 +116,11 @@ npx expo start -c
 
 | Role | Email | Password | Details |
 | :--- | :--- | :--- | :--- |
-| **Receptionist** | `dinusha@gmail.lk` | `Admin@123` | Patient registration, live queue & daily reports |
-| **Doctor (Orthopedic)** | `doctor.aruna@mediqueue.lk` | `Test@1234` | Doctor Room 3B |
+| **Receptionist** | `dinusha@gmail.com` | `Admin@123` | Patient registration, live queue & daily reports |
+| **Doctor (Orthopedic)** | `namal@gmail.com` | `Admin@123` | Doctor Room 3B |
 | **Doctor (General OPD)** | `doctor.chathura@mediqueue.lk` | `Test@1234` | Doctor Room 2A |
 | **Doctor (Pediatrics)** | `doctor.dilani@mediqueue.lk` | `Test@1234` | Doctor Room 1C |
-| **MOH Officer** | `moh@mediqueue.lk` | `Test@1234` | Hospital dashboard and queue analytics |
+| **MOH Officer** | `admin@gmail.com` | `Admin@123` | Hospital dashboard and queue analytics |
 
 ---
 
