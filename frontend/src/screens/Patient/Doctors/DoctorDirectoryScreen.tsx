@@ -28,6 +28,7 @@ import { DoctorCard } from '../../../components/patient/DoctorCard';
 import { AppointmentCard } from '../../../components/patient/AppointmentCard';
 import { DesignImage } from '../../../components/patient/DesignImage';
 import { AppIcon } from '../../../components/AppIcon';
+import { filterDoctorDirectory } from '../../../utils/doctorSearch';
 
 type Tab = 'directory' | 'bookings';
 
@@ -56,11 +57,19 @@ export function DoctorDirectoryScreen() {
 
   const departments = useAsyncResource(() => doctorApi.departments(), []);
   const clinics = useAsyncResource(() => clinicApi.list(), []);
+  const directoryScope = JSON.stringify([department, hospitalId]);
 
   const doctors = useAsyncResource(
-    () => doctorApi.list({ search: search.trim() || undefined, department: department || undefined, hospitalId: hospitalId || undefined }),
-    [search, department, hospitalId],
+    () => doctorApi.list({ department: department || undefined, hospitalId: hospitalId || undefined })
+      .then(result => ({ ...result, scope: directoryScope })),
+    [department, hospitalId],
   );
+  // The endpoint returns the complete scoped directory. Filter it as the patient
+  // types so names and translated specialties work without a request per letter.
+  const loadingDoctors = doctors.loading || (!doctors.error && doctors.data?.scope !== directoryScope);
+  const matchingDoctors = useMemo(() => filterDoctorDirectory(
+    doctors.data?.scope === directoryScope ? doctors.data.doctors : [], search, t,
+  ), [doctors.data, directoryScope, search, t]);
 
   // Only fetched while the bookings tab is open, so the directory does not pay for
   // a request the patient did not ask for.
@@ -200,6 +209,7 @@ export function DoctorDirectoryScreen() {
                   placeholderTextColor={PatientTheme.textMuted}
                   style={styles.searchInput}
                   autoCorrect={false}
+                  autoCapitalize="none"
                   returnKeyType="search"
                   accessibilityLabel={t("Search doctors")}
                 />
@@ -251,7 +261,7 @@ export function DoctorDirectoryScreen() {
 
   const doctorList = (
     <FlatList
-      data={doctors.data?.doctors ?? []}
+      data={loadingDoctors ? [] : matchingDoctors}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => <DoctorCard doctor={item} onPress={() => openDoctor(item)} />}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -266,7 +276,7 @@ export function DoctorDirectoryScreen() {
         />
       }
       ListEmptyComponent={
-        doctors.loading ? (
+        loadingDoctors ? (
           <ScreenLoader label={t("Loading doctors")} />
         ) : doctors.error ? (
           <MessageState
