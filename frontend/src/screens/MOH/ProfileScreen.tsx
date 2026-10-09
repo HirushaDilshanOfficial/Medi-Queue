@@ -88,7 +88,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+    <View style={{ flex: 1, backgroundColor: Colors.primaryDark }}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
 
       <View style={{ flex: 1, backgroundColor: Colors.background }}>
