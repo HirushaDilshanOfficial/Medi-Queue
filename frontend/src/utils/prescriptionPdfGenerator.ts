@@ -33,7 +33,7 @@ export const generatePrescriptionHtml = (
   );
   const allergiesStr = allergiesList.length > 0 ? allergiesList.join(', ') : 'None Reported';
 
-  const doctorName = doctor.name || (data as any).doctorName || 'Dr. Palitha Perera';
+  const doctorName = doctor.name || (data as any).doctorName || 'Namal Perera';
   const department = doctor.department || (data as any).department || doctor.specialization || 'General OPD';
 
   const bp = vitals.bloodPressure || (data as any).bloodPressure || '118/75';

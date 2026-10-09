@@ -64,10 +64,10 @@ export interface PatientPrescriptionDetails {
 // Clean default prescription data for new / active patient consultation
 export const blankPrescriptionData: PatientPrescriptionDetails = {
   doctor: {
-    name: 'Dr. Palitha Perera',
+    name: 'Namal Perera',
     specialization: 'General Physician',
     department: 'General OPD',
-    room: 'Room 101',
+    room: 'Room 3B',
     isOnline: true,
     avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
   },

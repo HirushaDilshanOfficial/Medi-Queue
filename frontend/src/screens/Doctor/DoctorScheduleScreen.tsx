@@ -93,15 +93,15 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
     };
   }, [isDark]);
 
-  // Inject Lexend Google font on web
+  // Inject Inter Google font on web
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      if (!document.getElementById('lexend-google-font')) {
+      if (!document.getElementById('inter-google-font')) {
         const link = document.createElement('link');
-        link.id = 'lexend-google-font';
+        link.id = 'inter-google-font';
         link.rel = 'stylesheet';
         link.href =
-          'https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap';
+          'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap';
         document.head.appendChild(link);
       }
     }
@@ -151,6 +151,10 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
   const [selectedHospitalId, setSelectedHospitalId] = useState<string>('all');
   const [isHospitalDropdownOpen, setIsHospitalDropdownOpen] = useState(false);
   const [showAllShiftsOverview, setShowAllShiftsOverview] = useState(false);
+
+  // Status filter state ('all' | 'waiting' | 'done' | 'now_attending')
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'all' | 'waiting' | 'done' | 'now_attending'>('all');
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
 
   // Selected patient for bottom detail sheet
   const [selectedPatient, setSelectedPatient] = useState<ScheduleAppointment | null>(null);
@@ -535,6 +539,10 @@ try {
     setSelectedHospitalId('all'); // Resets to "All hospitals" when day changes
     setShowAllShiftsOverview(false);
     setIsHospitalDropdownOpen(false);
+    // Clear the cached schedule for this day so we always get fresh shift assignments
+    try {
+      AsyncStorage.removeItem(`@medi_queue_doctor_schedule_${key}`);
+    } catch (e) {}
   };
 
   // ─────────────────────────────────────────────────────────
@@ -575,19 +583,22 @@ try {
     return activeHosp?.id || 'cgh';
   }, [dayHospitals, isTodaySelected]);
 
+  // Shifts that have at least 1 appointment on this day
+  const shiftsWithAppointments = useMemo(() => {
+    const ids = new Set(dayAppointments.map((a) => a.hospitalId));
+    return ['cgh', 'lakeview', 'st-lucia'].filter((id) => ids.has(id));
+  }, [dayAppointments]);
+
   // Filtered appointments based on hospital dropdown:
-  // User instruction: "time line eke show wenna one related hospital eke patints la"
-  // Shows ONLY the related hospital's patients!
+  // When 'all' is selected, show ALL day appointments (all shifts).
+  // When a specific shift is selected, show only that shift's patients.
   const filteredAppointments = useMemo(() => {
     if (selectedHospitalId !== 'all') {
       return dayAppointments.filter((a) => a.hospitalId === selectedHospitalId);
     }
-    if (showAllShiftsOverview) {
-      return dayAppointments;
-    }
-    // Default view: Show ONLY the related hospital's patients (matches current active shift)
-    return dayAppointments.filter((a) => a.hospitalId === currentActiveHospitalId);
-  }, [dayAppointments, selectedHospitalId, showAllShiftsOverview, currentActiveHospitalId]);
+    // Show all appointments for the day (all shifts visible)
+    return dayAppointments;
+  }, [dayAppointments, selectedHospitalId]);
 
   // Filtered shift cards based on hospital dropdown
   const filteredHospitals = useMemo(() => {
@@ -598,35 +609,63 @@ try {
   }, [dayHospitals, selectedHospitalId]);
 
   // Displayed shift cards:
-  // User requirement: "default current shift eka witharak show wenna thiyanna. anith ewa doctorta fileter option eken fileter kalama balanna puluwan wena vidihata"
-  // By default (when 'all' is selected), only show the CURRENT active shift!
-  // When filtered to a specific hospital, show that hospital's shift.
+  // When 'all' is selected: show all shifts that have appointments for the selected day.
+  // When a specific shift is selected: show only that shift.
   const displayedShiftHospitals = useMemo(() => {
     if (selectedHospitalId !== 'all') {
       return dayHospitals.filter((h) => h.id === selectedHospitalId);
     }
-    if (showAllShiftsOverview) {
-      return dayHospitals;
-    }
     if (dayHospitals.length === 0) return [];
+    // Show only shifts that have at least 1 patient on this day
+    const active = dayHospitals.filter((h) => shiftsWithAppointments.includes(h.id));
+    return active.length > 0 ? active : dayHospitals;
+  }, [dayHospitals, selectedHospitalId, shiftsWithAppointments]);
 
-    // Find the currently active shift (In progress on today, or first shift of the day)
-    const activeHosp =
-      dayHospitals.find((h) => (isTodaySelected ? h.id === 'cgh' : false)) ||
-      dayHospitals[0];
+  // Status counts for dropdown badges
+  const statusCounts = useMemo(() => {
+    const all = filteredAppointments.length;
+    const waiting = filteredAppointments.filter((a) => a.status === 'Waiting').length;
+    const done = filteredAppointments.filter((a) => a.status === 'Done').length;
+    const nowAttending = filteredAppointments.filter((a) => a.status === 'Now attending').length;
+    return { all, waiting, done, nowAttending };
+  }, [filteredAppointments]);
 
-    return activeHosp ? [activeHosp] : [];
-  }, [dayHospitals, selectedHospitalId, showAllShiftsOverview, isTodaySelected]);
+  // Appointments matching the selected status filter
+  const statusFilteredAppointments = useMemo(() => {
+    if (selectedStatusFilter === 'waiting') {
+      return filteredAppointments.filter((a) => a.status === 'Waiting');
+    }
+    if (selectedStatusFilter === 'done') {
+      return filteredAppointments.filter((a) => a.status === 'Done');
+    }
+    if (selectedStatusFilter === 'now_attending') {
+      return filteredAppointments.filter((a) => a.status === 'Now attending');
+    }
+    return filteredAppointments;
+  }, [filteredAppointments, selectedStatusFilter]);
 
-  // Patient now attending (if any in filtered list)
+  // Patient now attending (hidden when user explicitly filters by 'Waiting' or 'Done')
   const nowAttendingPatient = useMemo(() => {
+    if (selectedStatusFilter === 'waiting' || selectedStatusFilter === 'done') {
+      return null;
+    }
     return filteredAppointments.find((a) => a.status === 'Now attending');
-  }, [filteredAppointments]);
+  }, [filteredAppointments, selectedStatusFilter]);
 
-  // Other appointments (Done, Waiting, Scheduled)
+  // Other appointments (Done, Waiting, Scheduled) matching status filter
   const regularAppointments = useMemo(() => {
-    return filteredAppointments.filter((a) => a.status !== 'Now attending');
-  }, [filteredAppointments]);
+    const nonAttending = filteredAppointments.filter((a) => a.status !== 'Now attending');
+    if (selectedStatusFilter === 'waiting') {
+      return nonAttending.filter((a) => a.status === 'Waiting');
+    }
+    if (selectedStatusFilter === 'done') {
+      return nonAttending.filter((a) => a.status === 'Done');
+    }
+    if (selectedStatusFilter === 'now_attending') {
+      return [];
+    }
+    return nonAttending;
+  }, [filteredAppointments, selectedStatusFilter]);
 
   // ─────────────────────────────────────────────────────────
   // WALK-IN SLOT HANDLER (POPUP FORM MODAL)
@@ -1071,8 +1110,6 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
         >
           {/* SHARED TOP BAR */}
           <DoctorTopBar
-            doctorName="Dr. Palitha Perera"
-            room="Room 101"
             unreadCount={4}
           />
 
@@ -1609,32 +1646,73 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                   const progressPct =
                     total > 0 ? Math.min(100, Math.round((consulted / total) * 100)) : 0;
 
-                  // Determine status pill
+                  // Determine status pill based on actual time boundaries
                   let statusLabel = 'Upcoming';
                   let statusBg = isDark ? '#1a2e33' : '#e6f7f9';
                   let statusColor = '#0e8a96';
 
-                  if (isTodaySelected) {
+                  const selD = parseDateKey(selectedDateKey);
+                  const refD = parseDateKey(REFERENCE_TODAY);
+                  const isToday = selD.toDateString() === refD.toDateString();
+                  const isPast = selD < refD;
+
+                  if (isPast) {
+                    // Past days: all shifts completed
+                    statusLabel = 'Completed';
+                    statusBg = isDark ? '#232931' : '#f1f5f9';
+                    statusColor = '#64748b';
+                  } else if (isToday) {
+                    // Today: determine by current local hour
+                    const nowHour = new Date().getHours();
+                    const nowMin = new Date().getMinutes();
+                    const nowTotal = nowHour * 60 + nowMin;
+                    // Morning: 08:00–13:00 (cgh), Afternoon: 13:00–17:15 (lakeview), Night: 17:15+ (st-lucia)
+                    const morningEnd = 13 * 60;
+                    const afternoonEnd = 17 * 60 + 15;
                     if (hosp.id === 'cgh') {
-                      statusLabel = 'In progress';
-                      statusBg = isDark ? '#1a3328' : '#ecfdf5';
-                      statusColor = '#059669';
+                      if (nowTotal < morningEnd) {
+                        statusLabel = 'In progress';
+                        statusBg = isDark ? '#1a3328' : '#ecfdf5';
+                        statusColor = '#059669';
+                      } else {
+                        statusLabel = 'Completed';
+                        statusBg = isDark ? '#232931' : '#f1f5f9';
+                        statusColor = '#64748b';
+                      }
                     } else if (hosp.id === 'lakeview') {
-                      statusLabel = 'Upcoming';
-                      statusBg = isDark ? '#33271a' : '#fffbeb';
-                      statusColor = '#d97706';
+                      if (nowTotal < morningEnd) {
+                        statusLabel = 'Upcoming';
+                        statusBg = isDark ? '#33271a' : '#fffbeb';
+                        statusColor = '#d97706';
+                      } else if (nowTotal < afternoonEnd) {
+                        statusLabel = 'In progress';
+                        statusBg = isDark ? '#1a3328' : '#ecfdf5';
+                        statusColor = '#059669';
+                      } else {
+                        statusLabel = 'Completed';
+                        statusBg = isDark ? '#232931' : '#f1f5f9';
+                        statusColor = '#64748b';
+                      }
                     } else {
-                      statusLabel = 'Upcoming';
-                      statusBg = isDark ? '#281a38' : '#faf5ff';
-                      statusColor = '#7c3aed';
+                      // st-lucia (Night)
+                      if (nowTotal < afternoonEnd) {
+                        statusLabel = 'Upcoming';
+                        statusBg = isDark ? '#281a38' : '#faf5ff';
+                        statusColor = '#7c3aed';
+                      } else {
+                        statusLabel = 'In progress';
+                        statusBg = isDark ? '#1a3328' : '#ecfdf5';
+                        statusColor = '#059669';
+                      }
                     }
                   } else {
-                    const selD = parseDateKey(selectedDateKey);
-                    const refD = parseDateKey(REFERENCE_TODAY);
-                    if (selD < refD) {
-                      statusLabel = 'Completed';
-                      statusBg = isDark ? '#232931' : '#f1f5f9';
-                      statusColor = '#64748b';
+                    // Future days: all shifts upcoming
+                    if (hosp.id === 'lakeview') {
+                      statusBg = isDark ? '#33271a' : '#fffbeb';
+                      statusColor = '#d97706';
+                    } else if (hosp.id === 'st-lucia') {
+                      statusBg = isDark ? '#281a38' : '#faf5ff';
+                      statusColor = '#7c3aed';
                     }
                   }
 
@@ -2033,9 +2111,9 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 - Rows for other appointments with AM/PM time, patient name,
                   reason • Token #030, hospital tag with dot, status pill
                ───────────────────────────────────────────────────────── */}
-            <View style={[styles.timelineSection, { position: 'relative', zIndex: 1 }]}>
-              {/* Timeline Header */}
-              <View style={styles.timelineHeaderRow}>
+            <View style={[styles.timelineSection, { position: 'relative', zIndex: 60 }]}>
+              {/* Timeline Header Row with Status Filter Dropdown */}
+              <View style={[styles.timelineHeaderRow, { zIndex: 120, position: 'relative' }]}>
                 <View style={styles.timelineTitleGroup}>
                   <Text
                     style={[styles.timelineHeading, { fontSize: 18, fontWeight: '800', color: theme.textDark }]}
@@ -2054,25 +2132,199 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                         { color: theme.primaryDeep, fontSize: 12, fontWeight: '700' },
                       ]}
                     >
-                      {filteredAppointments.length} {filteredAppointments.length === 1 ? t("patient") : t("patients")}
+                      {statusFilteredAppointments.length} {statusFilteredAppointments.length === 1 ? t("patient") : t("patients")}
                     </Text>
                   </View>
                 </View>
 
-                {isTodaySelected && (
-                  <View style={styles.currentClockRow}>
-                    <View style={styles.clockPulseDot} />
-                    <Text
-                      style={[styles.clockTimeText, { color: theme.accent }]}
+                {/* Status Filter Dropdown Button & Menu */}
+                <View style={{ position: 'relative', zIndex: 130 }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.statusFilterDropdownBtn,
+                      {
+                        backgroundColor: isDark ? '#16272a' : '#ffffff',
+                        borderColor:
+                          selectedStatusFilter === 'waiting'
+                            ? '#d97706'
+                            : selectedStatusFilter === 'done'
+                            ? '#059669'
+                            : selectedStatusFilter === 'now_attending'
+                            ? '#0e8a96'
+                            : (isDark ? '#233d42' : '#d4e7e9'),
+                      },
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setIsStatusDropdownOpen(!isStatusDropdownOpen);
+                      setIsHospitalDropdownOpen(false);
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor:
+                            selectedStatusFilter === 'waiting'
+                              ? '#d97706'
+                              : selectedStatusFilter === 'done'
+                              ? '#059669'
+                              : selectedStatusFilter === 'now_attending'
+                              ? '#0e8a96'
+                              : theme.accent,
+                        }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: '700',
+                          color:
+                            selectedStatusFilter === 'waiting'
+                              ? (isDark ? '#fbbf24' : '#b45309')
+                              : selectedStatusFilter === 'done'
+                              ? (isDark ? '#34d399' : '#047857')
+                              : selectedStatusFilter === 'now_attending'
+                              ? theme.accent
+                              : theme.textDark,
+                        }}
+                      >
+                        {selectedStatusFilter === 'waiting'
+                          ? `${t("Waiting")} (${statusCounts.waiting})`
+                          : selectedStatusFilter === 'done'
+                          ? `${t("Done")} (${statusCounts.done})`
+                          : selectedStatusFilter === 'now_attending'
+                          ? `${t("Now attending")} (${statusCounts.nowAttending})`
+                          : `${t("All Status")} (${statusCounts.all})`}
+                      </Text>
+                      <Ionicons
+                        name={isStatusDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                        size={14}
+                        color={theme.textMuted}
+                      />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Dropdown Menu Overlay */}
+                  {isStatusDropdownOpen && (
+                    <View
+                      style={[
+                        styles.statusFilterMenu,
+                        {
+                          backgroundColor: isDark ? '#16272a' : '#ffffff',
+                          borderColor: isDark ? '#233d42' : '#d4e7e9',
+                        },
+                      ]}
                     >
-                      {t("Current: 10:12 AM")}
-                    </Text>
-                  </View>
-                )}
+                      {/* Option: All Patients */}
+                      <TouchableOpacity
+                        style={[
+                          styles.statusFilterMenuItem,
+                          selectedStatusFilter === 'all' && { backgroundColor: theme.tint },
+                          { borderBottomColor: theme.divider },
+                        ]}
+                        onPress={() => {
+                          setSelectedStatusFilter('all');
+                          setIsStatusDropdownOpen(false);
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.accent }} />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textDark }}>
+                            {t("All Patients")}
+                          </Text>
+                        </View>
+                        <View style={[styles.statusFilterBadge, { backgroundColor: isDark ? '#1f383c' : '#f1f5f9' }]}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textDark }}>
+                            {statusCounts.all}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Option: Waiting */}
+                      <TouchableOpacity
+                        style={[
+                          styles.statusFilterMenuItem,
+                          selectedStatusFilter === 'waiting' && { backgroundColor: isDark ? '#2a2412' : '#fef3c7' },
+                          { borderBottomColor: theme.divider },
+                        ]}
+                        onPress={() => {
+                          setSelectedStatusFilter('waiting');
+                          setIsStatusDropdownOpen(false);
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#d97706' }} />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: isDark && selectedStatusFilter === 'waiting' ? '#fbbf24' : theme.textDark }}>
+                            {t("Waiting")}
+                          </Text>
+                        </View>
+                        <View style={[styles.statusFilterBadge, { backgroundColor: isDark ? '#3d2e10' : '#fef3c7' }]}>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#d97706' }}>
+                            {statusCounts.waiting}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Option: Done */}
+                      <TouchableOpacity
+                        style={[
+                          styles.statusFilterMenuItem,
+                          selectedStatusFilter === 'done' && { backgroundColor: isDark ? '#142b23' : '#ecfdf5' },
+                          { borderBottomWidth: statusCounts.nowAttending > 0 ? 1 : 0, borderBottomColor: theme.divider },
+                        ]}
+                        onPress={() => {
+                          setSelectedStatusFilter('done');
+                          setIsStatusDropdownOpen(false);
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#059669' }} />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: isDark && selectedStatusFilter === 'done' ? '#34d399' : theme.textDark }}>
+                            {t("Done")}
+                          </Text>
+                        </View>
+                        <View style={[styles.statusFilterBadge, { backgroundColor: isDark ? '#17362b' : '#ecfdf5' }]}>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#059669' }}>
+                            {statusCounts.done}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Option: Now attending */}
+                      {statusCounts.nowAttending > 0 && (
+                        <TouchableOpacity
+                          style={[
+                            styles.statusFilterMenuItem,
+                            selectedStatusFilter === 'now_attending' && { backgroundColor: theme.tint },
+                            { borderBottomWidth: 0 },
+                          ]}
+                          onPress={() => {
+                            setSelectedStatusFilter('now_attending');
+                            setIsStatusDropdownOpen(false);
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#0e8a96' }} />
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textDark }}>
+                              {t("Now attending")}
+                            </Text>
+                          </View>
+                          <View style={[styles.statusFilterBadge, { backgroundColor: isDark ? '#1f383c' : '#e6f7f9' }]}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#0e8a96' }}>
+                              {statusCounts.nowAttending}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </View>
               </View>
 
               {/* Patient List */}
-              {isLoadingSchedule && filteredAppointments.length === 0 ? (
+              {isLoadingSchedule && statusFilteredAppointments.length === 0 ? (
                 <View
                   style={[
                     styles.emptyTimelineBox,
@@ -2092,7 +2344,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                     {t("Loading schedule...")}
                   </Text>
                 </View>
-              ) : filteredAppointments.length === 0 ? (
+              ) : statusFilteredAppointments.length === 0 ? (
                 <View
                   style={[
                     styles.emptyTimelineBox,
@@ -2102,14 +2354,36 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                     },
                   ]}
                 >
+                  <Ionicons
+                    name="file-tray-outline"
+                    size={28}
+                    color={theme.textMuted}
+                    style={{ marginBottom: 6 }}
+                  />
                   <Text
                     style={[
                       styles.emptyTimelineText,
                       { color: theme.textMuted },
                     ]}
                   >
-                    {t("No appointments on this timeline")}
+                    {selectedStatusFilter === 'waiting'
+                      ? t("No waiting patients in queue")
+                      : selectedStatusFilter === 'done'
+                      ? t("No completed patients yet")
+                      : selectedStatusFilter === 'now_attending'
+                      ? t("No patient currently in consultation")
+                      : t("No appointments on this timeline")}
                   </Text>
+                  {selectedStatusFilter !== 'all' && (
+                    <TouchableOpacity
+                      onPress={() => setSelectedStatusFilter('all')}
+                      style={{ marginTop: 10, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: theme.tint }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: theme.primaryDeep }}>
+                        {t("Show all patients")}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ) : (
                 <View style={styles.appointmentsList}>
@@ -2802,7 +3076,10 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 ) && (
                   <View style={styles.sheetWalkInBtnsRow}>
                     <TouchableOpacity
-                      style={styles.sheetBtnEditWalkIn}
+                      style={[
+                        styles.sheetBtnEditWalkIn,
+                        isDark && { backgroundColor: '#132e2b', borderColor: '#115e59' },
+                      ]}
                       activeOpacity={0.8}
                       onPress={() => {
                         const p = selectedPatient;
@@ -2813,26 +3090,29 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                       <Ionicons
                         name="pencil"
                         size={16}
-                        color="#0f766e"
+                        color={isDark ? '#2dd4bf' : '#0f766e'}
                         style={{ marginRight: 6 }}
                       />
-                      <Text style={styles.sheetBtnEditWalkInText}>
+                      <Text style={[styles.sheetBtnEditWalkInText, isDark && { color: '#2dd4bf' }]}>
                         {t("Edit Walk-in Details")}
                       </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.sheetBtnRemoveWalkIn}
+                      style={[
+                        styles.sheetBtnRemoveWalkIn,
+                        isDark && { backgroundColor: '#2d1515', borderColor: '#7f1d1d' },
+                      ]}
                       activeOpacity={0.8}
                       onPress={() => handleOpenRemoveModal(selectedPatient)}
                     >
                       <Ionicons
                         name="trash-outline"
                         size={16}
-                        color="#dc2626"
+                        color={isDark ? '#f87171' : '#dc2626'}
                         style={{ marginRight: 6 }}
                       />
-                      <Text style={styles.sheetBtnRemoveWalkInText}>
+                      <Text style={[styles.sheetBtnRemoveWalkInText, isDark && { color: '#f87171' }]}>
                         {t("Remove Walk-in Slot")}
                       </Text>
                     </TouchableOpacity>
@@ -4116,7 +4396,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         fontFamily:
-          'Lexend, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         boxShadow: '0 4px 24px rgba(11, 79, 90, 0.08)',
       },
     }),
@@ -4697,6 +4977,51 @@ const styles = StyleSheet.create({
   patientCountText: {
     fontSize: 11,
     fontWeight: '800',
+  },
+  statusFilterDropdownBtn: {
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  statusFilterMenu: {
+    position: 'absolute',
+    top: 42,
+    right: 0,
+    minWidth: 175,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    zIndex: 999,
+    elevation: 12,
+    shadowColor: '#000000',
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  statusFilterMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+  },
+  statusFilterBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    minWidth: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   currentClockRow: {
     flexDirection: 'row',
@@ -5474,16 +5799,15 @@ const styles = StyleSheet.create({
 
   // Patient detail sheet buttons
   sheetWalkInBtnsRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 10,
     marginBottom: 16,
   },
   sheetBtnEditWalkIn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 14,
     backgroundColor: '#f0fdfa',
     borderWidth: 1.5,
@@ -5493,6 +5817,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#0f766e',
+  },
+  sheetBtnRemoveWalkIn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: '#fff5f5',
+    borderWidth: 1.5,
+    borderColor: '#fca5a5',
+  },
+  sheetBtnRemoveWalkInText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#dc2626',
   },
 
   // ─────────────────────────────────────────────────────────
