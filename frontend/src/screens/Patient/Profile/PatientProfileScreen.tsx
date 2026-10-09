@@ -16,6 +16,7 @@ import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import { calendarDateLabel, longDayLabel } from '../../../utils/opdDates';
 import type { VisitRecord } from '../../../types/patient';
 import { ProfileIcon } from '../../../components/patient/ProfileIcon';
+import { exportVisitsAsPdf } from '../../../utils/visitPdfExporter';
 import { AccountRow, Avatar, EmptyState, IconButton, isPrescription, Metric, PersonalInfo, VisitCard } from './ProfileParts';
 import { C, styles } from './profileStyles';
 
@@ -82,17 +83,8 @@ export function PatientProfileScreen() {
   };
 
   const exportVisits = async (items: VisitRecord[]) => {
-    const text = [t('Medi-Queue · OPD visit summary'), patient?.fullName ?? '', ...items.map(visit =>
-      [t(visit.department), visit.doctorName, `${longDayLabel(visit.date, locale)} · ${visit.slotTime}`,
-        t('Status: {status}', { status: t(visit.status) }), visit.tokenNumber !== null ? t('Queue #{number}', { number: visit.tokenNumber }) : '',
-        visit.reason ? t('Visit reason: {reason}', { reason: visit.reason }) : ''].filter(Boolean).join('\n'))].join('\n\n');
     try {
-      if (Platform.OS === 'web') {
-        const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
-        const anchor = document.createElement('a');
-        anchor.href = url; anchor.download = 'mediqueue-visit-summary.txt'; anchor.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      } else { await Share.share({ title: t('OPD visit summary'), message: text }); }
+      await exportVisitsAsPdf(items, patient?.fullName ?? t('Patient'), locale);
     } catch { showMessage(t('Could not export visits'), t('Please try again.')); }
   };
 

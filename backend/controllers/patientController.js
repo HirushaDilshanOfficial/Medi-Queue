@@ -336,6 +336,112 @@ const getMyHistory = async (req, res, next) => {
   }
 };
 
+// @desc    Export OPD visit records as PDF
+// @route   GET /api/v1/patients/me/history/pdf
+// @access  Private/Patient
+const exportVisitPdf = async (req, res, next) => {
+  try {
+    const PDFDocument = require('pdfkit');
+    const { visitId } = req.query;
+    const filter = { profile: req.patientProfile._id };
+
+    if (visitId) {
+      if (!isValidObjectId(visitId)) {
+        return res.status(400).json({ message: 'Invalid visit id' });
+      }
+      filter._id = visitId;
+    }
+
+    const visits = await OpdAppointment.find(filter)
+      .sort({ date: -1, slotTime: -1 })
+      .lean();
+
+    if (!visits.length) {
+      return res.status(404).json({ message: 'No visit records found to export' });
+    }
+
+    const patientName = req.patientProfile.fullName || 'Patient';
+    const dateStr = new Date().toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Asia/Colombo',
+    });
+
+    const safeName = patientName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = visitId ? `MediQueue_Visit_${safeName}.pdf` : `MediQueue_Visit_Summary_${safeName}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    const doc = new PDFDocument({ size: 'A4', margin: 36 });
+    doc.pipe(res);
+
+    // Header Banner
+    doc.rect(0, 0, doc.page.width, 70).fill('#004c5b');
+
+    doc.fillColor('#FFFFFF').fontSize(20).font('Helvetica-Bold').text('Medi-Queue Hospital', 36, 18);
+    doc.fontSize(10).font('Helvetica').text('Official OPD Visit & Medical Encounters Summary', 36, 42);
+
+    doc.fontSize(9).font('Helvetica').text(`Generated: ${dateStr}`, doc.page.width - 180, 20, { align: 'right' });
+    doc.text(`Patient: ${patientName}`, doc.page.width - 220, 36, { align: 'right' });
+
+    doc.moveDown(3);
+
+    // Document Subheading
+    doc.fillColor('#004c5b').fontSize(13).font('Helvetica-Bold').text('PATIENT VISIT HISTORY RECORD', 36, 92);
+    doc.strokeColor('#e0f0f9').lineWidth(1).moveTo(36, 108).lineTo(doc.page.width - 36, 108).stroke();
+
+    let y = 120;
+
+    for (let i = 0; i < visits.length; i++) {
+      const v = visits[i];
+
+      // Page overflow check
+      if (y > doc.page.height - 120) {
+        doc.addPage();
+        y = 40;
+      }
+
+      const cardHeight = 100;
+      doc.roundedRect(36, y, doc.page.width - 72, cardHeight, 6).fillAndStroke('#ffffff', '#d0e4ee');
+
+      // Left Accent bar
+      doc.roundedRect(36, y, 6, cardHeight, 3).fill(v.status === 'completed' ? '#00696e' : '#6f797c');
+
+      // Department & Doctor
+      doc.fillColor('#004c5b').fontSize(13).font('Helvetica-Bold').text(v.department || 'General OPD', 52, y + 12);
+      doc.fillColor('#3f484b').fontSize(10).font('Helvetica').text(`Attending Doctor: ${v.doctorName || 'Doctor'}`, 52, y + 28);
+
+      // Status label
+      const statusText = (v.status || 'booked').toUpperCase().replace(/_/g, ' ');
+      doc.fillColor(v.status === 'completed' ? '#0d7d40' : '#49606e').fontSize(10).font('Helvetica-Bold').text(statusText, doc.page.width - 160, y + 12, { align: 'right' });
+
+      if (v.tokenNumber !== null && v.tokenNumber !== undefined) {
+        doc.fillColor('#00696e').fontSize(10).font('Helvetica-Bold').text(`Queue #${v.tokenNumber}`, doc.page.width - 160, y + 26, { align: 'right' });
+      }
+
+      // Date & Time
+      const dateLine = `Visit Date: ${v.date}   |   Time Slot: ${v.slotTime}${v.room ? `   |   Room: ${v.room}` : ''}`;
+      doc.fillColor('#3f484b').fontSize(9.5).font('Helvetica').text(dateLine, 52, y + 44);
+
+      // Reason / Notes
+      const reasonText = v.reason ? `Reason: ${v.reason}` : 'No visit reason recorded.';
+      doc.fillColor('#0e1e23').fontSize(9).font('Helvetica-Oblique').text(reasonText, 52, y + 62, { width: doc.page.width - 110 });
+
+      y += cardHeight + 12;
+    }
+
+    // Footer
+    const footerY = doc.page.height - 30;
+    doc.fillColor('#6f797c').fontSize(8.5).font('Helvetica').text('Medi-Queue Hospital Information System · Official OPD Record Document', 36, footerY);
+
+    doc.end();
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Reports the patient has lodged
 // @route   GET /api/v1/patients/me/reports
 // @access  Private/Patient
@@ -1616,6 +1722,7 @@ module.exports = {
   getMyProfile,
   updateMyProfile,
   getMyHistory,
+  exportVisitPdf,
   getMyReports,
   getMyReport,
   createMyReport,
