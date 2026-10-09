@@ -148,7 +148,7 @@ export default function ManagePatientsScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>←</Text>
+            <Ionicons name="arrow-back" size={24} color={Colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t("Patient Management")}</Text>
             <LanguageSwitcher tone="dark" />

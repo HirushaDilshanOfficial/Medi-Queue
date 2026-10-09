@@ -153,15 +153,15 @@ export default function ManageHospitalsScreen() {
         
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>←</Text>
+            <Ionicons name="arrow-back" size={24} color={Colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t("Manage Hospitals")}</Text>
             <LanguageSwitcher tone="dark" />
           </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-          
-          <View style={styles.topSection}>
+            
+            <View style={styles.topSection}>
             <Text style={styles.sectionTitle}>{t("Hospital Network")}</Text>
             <Text style={styles.sectionSubtitle}>{t("View and manage all registered healthcare facilities.")}</Text>
 

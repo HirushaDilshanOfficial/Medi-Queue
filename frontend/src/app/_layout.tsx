@@ -73,13 +73,18 @@ function GlobalSafeArea() {
 
 // Root layout - Expo Router
 export default function RootLayout() {
+  const segments = useSegments();
+  const firstSeg = (segments as any)?.[0] as string | undefined;
+  const isDark = ['(moh)', '(reception)', 'notifications', '(patient)'].includes(firstSeg || '');
+  const rootBgColor = isDark ? '#0a6e7e' : '#f3faff';
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <LanguageProvider>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: rootBgColor }}>
             <GlobalSafeArea />
-            <Stack screenOptions={{ headerShown: false }}>
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(auth)/welcome" />
               <Stack.Screen name="(auth)/login" />

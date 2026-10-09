@@ -28,6 +28,7 @@ const {
   recallToken,
   markNoShow,
   moveBackToken,
+  markUrgent,
   assignDoctor,
   updateAutoAdvance,
   getAutoAdvance,
@@ -63,6 +64,9 @@ router.post('/:id/recall', ...receptionAuth, recallToken);
 
 // POST /api/reception/queue/:id/no-show -> mark token & appointment as no_show
 router.post('/:id/no-show', ...receptionAuth, markNoShow);
+
+// POST /api/reception/queue/:id/urgent -> mark token as urgent
+router.post('/:id/urgent', ...receptionAuth, markUrgent);
 
 // POST /api/reception/queue/:id/move-back -> move waiting token 3 positions back
 router.post('/:id/move-back', ...receptionAuth, moveBackToken);

@@ -7,7 +7,7 @@ import { View,
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  ActivityIndicator, RefreshControl } from 'react-native';
+  ActivityIndicator, RefreshControl, Modal } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
@@ -17,6 +17,20 @@ import MOHBottomNav from '../../components/MOHBottomNav';
 
 export default function HospitalDashboardScreen() {
   const { t } = useLanguage();
+
+  const [currentTime, setCurrentTime] = useState(
+    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(
+        new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+      );
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -31,6 +45,32 @@ export default function HospitalDashboardScreen() {
   const name = params?.name;
   const insets = useSafeAreaInsets();
   const [chartType, setChartType] = useState('Weekly');
+
+  const [staffModalVisible, setStaffModalVisible] = useState(false);
+  const [hospitalStaff, setHospitalStaff] = useState<any[]>([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+
+  const fetchStaffSummary = async () => {
+    if (!id) return;
+    try {
+      setStaffLoading(true);
+      const res = await fetch(`${API_URL}/staff/hospital/${id}/summary`);
+      if (res.ok) {
+        const data = await res.json();
+        setHospitalStaff(data);
+      }
+    } catch (err) {
+      console.log('Error fetching staff', err);
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  const handleStaffClick = () => {
+    setStaffModalVisible(true);
+    fetchStaffSummary();
+  };
+
   const hospitalName = name || 'General Hospital';
 
   const [loading, setLoading] = useState(true);
@@ -100,7 +140,7 @@ export default function HospitalDashboardScreen() {
               <Text style={styles.syncText}>{t("Network Synced")}</Text>
             </View>
             <View style={styles.syncRight}>
-              <Text style={styles.syncTime}>{t("Today 10:23 • Live Sync")}</Text>
+              <Text style={styles.syncTime}>{`${t('Today')} ${currentTime} • ${t('Live Sync')}`}</Text>
             </View>
           </View>
           
@@ -137,12 +177,12 @@ export default function HospitalDashboardScreen() {
                 </Text>
               </View>
 
-              <View style={styles.gridCard}>
+              <TouchableOpacity style={styles.gridCard} onPress={handleStaffClick}>
                 <Text style={styles.cardTitle}>{t("STAFF ON DUTY")}</Text>
                 <Text style={styles.cardValue}>{dashboardData.staffOnDuty.total}</Text>
-                <Text style={styles.cardHighlight}>{dashboardData.staffOnDuty.activePercent}{t("% roster active")}</Text>
-                <Text style={styles.cardSubText}>{t("Doctors:")}{' '}{dashboardData.staffOnDuty.doctors} {t("• Nurses:")}{' '}{dashboardData.staffOnDuty.nurses}</Text>
-              </View>
+                <Text style={styles.cardHighlight}>{t("Click to view details")}</Text>
+                <Text style={styles.cardSubText}>{t("Doctors & Nurses")}</Text>
+              </TouchableOpacity>
 
               <View style={styles.gridCard}>
                 <Text style={styles.cardTitle}>{t("ACTIVE QUEUES")}</Text>
@@ -224,7 +264,49 @@ export default function HospitalDashboardScreen() {
         </View>
 
         <View style={{height: 30}} />
-      </ScrollView>
+      
+      {/* Staff Modal */}
+      <Modal visible={staffModalVisible} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: Colors.white, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold' }}>{t("Staff on Duty")}</Text>
+              <TouchableOpacity onPress={() => setStaffModalVisible(false)} style={{ padding: 5 }}>
+                <Ionicons name="close" size={24} color={Colors.textDark} />
+              </TouchableOpacity>
+            </View>
+            
+            {staffLoading ? (
+              <ActivityIndicator size="large" color={Colors.primary} style={{ marginVertical: 30 }} />
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {hospitalStaff.length === 0 ? (
+                  <Text style={{ textAlign: 'center', color: Colors.textMedium, marginVertical: 20 }}>{t("No staff assigned to this hospital.")}</Text>
+                ) : (
+                  hospitalStaff.map((staff, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.divider }}>
+                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryFaded, justifyContent: 'center', alignItems: 'center', marginRight: 15 }}>
+                        <Text style={{ fontSize: 18 }}>{staff.role?.toLowerCase() === 'doctor' ? '👨‍⚕️' : staff.role?.toLowerCase() === 'nurse' ? '👩‍⚕️' : '🧑‍💻'}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 15, fontWeight: 'bold', color: Colors.textDark }}>{staff.fullName}</Text>
+                        <Text style={{ fontSize: 13, color: Colors.textMedium }}>{staff.role} {staff.specialization ? `- ${staff.specialization}` : ''}</Text>
+                      </View>
+                      {staff.role?.toLowerCase() === 'doctor' && (
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.primaryDark }}>{staff.patientsToday}</Text>
+                          <Text style={{ fontSize: 10, color: Colors.textMedium }}>{t("Patients Today")}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+</ScrollView>
       <MOHBottomNav activeRoute="hospitals" />
     </View>
   );

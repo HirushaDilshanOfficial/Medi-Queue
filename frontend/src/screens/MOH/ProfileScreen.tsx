@@ -2,7 +2,7 @@ import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, Platform, Switch } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, Platform, Switch, Alert } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
@@ -76,20 +76,37 @@ export default function ProfileScreen() {
   }, []);
 
   const handleLogout = async () => {
-    await clearAuthToken();
-    await AsyncStorage.removeItem('user');
-    Toast.show({
-      type: 'info',
-      text1: t('Logged Out'),
-      text2: t('You have been successfully logged out.'),
-      position: 'top',
-      topOffset: 60,
-    });
-    router.replace('/(auth)/login');
+    Alert.alert(
+      t('Log Out'),
+      t('Are you sure you want to log out?'),
+      [
+        {
+          text: t('Cancel'),
+          style: 'cancel',
+        },
+        {
+          text: t('Log Out'),
+          style: 'destructive',
+          onPress: async () => {
+            await clearAuthToken();
+            await AsyncStorage.removeItem('user');
+            Toast.show({
+              type: 'info',
+              text1: t('Logged Out'),
+              text2: t('You have been successfully logged out.'),
+              position: 'top',
+              topOffset: 60,
+            });
+            router.replace('/(auth)/login');
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+    <View style={{ flex: 1, backgroundColor: Colors.primaryDark }}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
 
       <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -165,22 +182,6 @@ export default function ProfileScreen() {
                 <View style={styles.settingItemLeft}>
                   <Text style={styles.settingIcon}>✏️</Text>
                   <Text style={styles.settingText}>{t("Edit Profile")}</Text>
-                </View>
-                <Text style={styles.settingArrow}>❯</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.settingItem}>
-                <View style={styles.settingItemLeft}>
-                  <Text style={styles.settingIcon}>🔐</Text>
-                  <Text style={styles.settingText}>{t("Change Password")}</Text>
-                </View>
-                <Text style={styles.settingArrow}>❯</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.settingItem}>
-                <View style={styles.settingItemLeft}>
-                  <Text style={styles.settingIcon}>🔔</Text>
-                  <Text style={styles.settingText}>{t("Notifications")}</Text>
                 </View>
                 <Text style={styles.settingArrow}>❯</Text>
               </TouchableOpacity>

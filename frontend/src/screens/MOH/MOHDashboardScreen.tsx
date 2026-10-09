@@ -68,7 +68,7 @@ export default function MOHDashboardScreen() {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.white }}>
+    <View style={{ flex: 1, backgroundColor: Colors.primaryDark }}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
       
       {/* Main Safe Area */}
