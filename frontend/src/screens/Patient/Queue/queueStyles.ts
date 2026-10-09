@@ -74,6 +74,7 @@ export const styles = StyleSheet.create({
   walletButton: { flex: 1, minHeight: 44, borderRadius: 24, backgroundColor: C.icon, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   actionLabel: { fontFamily: semibold, color: C.text, fontSize: 14, lineHeight: 18 },
   shareButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.icon, alignItems: 'center', justifyContent: 'center' },
+  shareButtonRow: { height: 44, borderRadius: 22, backgroundColor: C.icon, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   stateCard: { padding: 20, borderRadius: 12, backgroundColor: C.surface, gap: 12, boxShadow: shadow },
   doctorSelect: { minHeight: 48, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: '#bfc8cc', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   doctorSelectText: { fontFamily: semibold, color: C.text, fontSize: 14, flex: 1 },

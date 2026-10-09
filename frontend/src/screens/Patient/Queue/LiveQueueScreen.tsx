@@ -193,7 +193,6 @@ export function LiveQueueScreen() {
         {pass.error ? <View style={styles.stateCard}><Text style={styles.title}>{t("Could not reach the queue")}</Text><Text style={styles.error}>{pass.error}</Text><Pressable accessibilityRole="button" onPress={reloadPass} style={styles.walletButton}><Text style={styles.actionLabel}>{t("Try again")}</Text></Pressable></View> : null}
         {selectedPass ? <QueuePassContent pass={selectedPass} patientName={profile.data?.patient.fullName ?? '—'} doctor={doctor.data?.doctor}
           countdown={countdown} liveError={liveError} onHome={home} onShare={share}
-          onWallet={() => message(t('Add to Wallet'), t('Apple Wallet and Google Wallet integration is not available yet. Keep this live pass open at check-in, or use Share ticket to share your pass details.'))}
           onContact={() => message(t('Clinic contact'), t('Ask at the clinic reception desk for assistance with your queue or consulting room. A clinic phone number has not been provided.'))} /> :
           pass.loading || (upcoming.loading && !upcoming.data) ? <View style={styles.stateCard}><ActivityIndicator color={C.primary} /><Text style={styles.caption}>{t("Checking your queue pass and bookings…")}</Text></View> :
           pass.error ? null : todaysAppointment ? <View style={styles.stateCard}>
