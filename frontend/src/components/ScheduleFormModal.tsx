@@ -24,6 +24,7 @@ import {
   getErrorMessage,
 } from '../services/api';
 import { Toast, ToastType } from './Toast';
+import { ScheduleDatePickerModal } from './ScheduleDatePickerModal';
 
 export interface ScheduleFormModalProps {
   visible: boolean;
@@ -82,6 +83,7 @@ export const ScheduleFormModal: React.FC<ScheduleFormModalProps> = ({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [deleting, setDeleting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [formCalendarVisible, setFormCalendarVisible] = useState<boolean>(false);
 
   // Toast State
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -501,12 +503,18 @@ export const ScheduleFormModal: React.FC<ScheduleFormModalProps> = ({
               {t('Date')} <Text style={{ color: '#DC2626' }}>*</Text>
             </Text>
             <View style={styles.inputWithIcon}>
-              <Ionicons
-                name="calendar-outline"
-                size={18}
-                color="#64748B"
-                style={styles.inputLeadingIcon}
-              />
+              <TouchableOpacity
+                onPress={() => !isEditMode && setFormCalendarVisible(true)}
+                disabled={isEditMode}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={18}
+                  color={isEditMode ? '#94A3B8' : '#0A5C67'}
+                  style={styles.inputLeadingIcon}
+                />
+              </TouchableOpacity>
               <TextInput
                 style={[
                   styles.textInputWithIcon,
@@ -518,6 +526,16 @@ export const ScheduleFormModal: React.FC<ScheduleFormModalProps> = ({
                 placeholderTextColor="#94A3B8"
                 editable={!isEditMode}
               />
+              {!isEditMode && (
+                <TouchableOpacity
+                  style={styles.pickDatePill}
+                  onPress={() => setFormCalendarVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="calendar" size={13} color="#0A5C67" style={{ marginRight: 3 }} />
+                  <Text style={styles.pickDatePillText}>{t('Pick Date')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* 3. Start Time & End Time */}
@@ -783,6 +801,14 @@ export const ScheduleFormModal: React.FC<ScheduleFormModalProps> = ({
         </View>
       </KeyboardAvoidingView>
 
+      {/* Full Month Calendar Date Picker */}
+      <ScheduleDatePickerModal
+        visible={formCalendarVisible}
+        selectedDate={date}
+        onSelectDate={(picked) => setDate(picked)}
+        onClose={() => setFormCalendarVisible(false)}
+      />
+
       {/* Internal Toast for notifications */}
       <Toast
         visible={toastVisible}
@@ -903,6 +929,22 @@ const styles = StyleSheet.create({
   },
   textInputDisabled: {
     color: '#64748B',
+  },
+  pickDatePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E6F4F6',
+    borderWidth: 1,
+    borderColor: '#94D2BD',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginLeft: 6,
+  },
+  pickDatePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0A5C67',
   },
   notesInput: {
     backgroundColor: '#F8FAFC',

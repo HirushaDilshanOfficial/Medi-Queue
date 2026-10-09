@@ -14,3 +14,4 @@ export * from './BirthdayCalendarModal';
 export * from './BarcodeScannerModal';
 export * from './PatientOtpModal';
 export * from './ScheduleFormModal';
+export * from './ScheduleDatePickerModal';

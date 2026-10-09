@@ -432,9 +432,7 @@ async function seed() {
 
   // 5. Seed Doctor Schedules (Today, Tomorrow, and Day After Tomorrow)
   console.log(`\nCleaning and seeding doctor schedules for ${todayString}, ${tomorrowString}, and ${dayAfterTomorrowString}...`);
-  const doctorIds = doctors.map((d) => d._id);
   await DoctorSchedule.deleteMany({
-    doctor: { $in: doctorIds },
     date: { $in: [todayString, tomorrowString, dayAfterTomorrowString] },
   });
 

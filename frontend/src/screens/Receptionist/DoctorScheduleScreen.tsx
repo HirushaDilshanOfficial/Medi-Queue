@@ -25,6 +25,7 @@ import {
   Toast,
   ToastType,
   ScheduleFormModal,
+  ScheduleDatePickerModal,
 } from '../../components';
 
 export interface DoctorScheduleScreenProps {
@@ -39,6 +40,7 @@ interface DateItem {
   dayNumber: string;
   monthName: string;
   isToday: boolean;
+  isSelected: boolean;
 }
 
 /**
@@ -54,15 +56,28 @@ const getTodayDateString = (): string => {
 };
 
 /**
- * Generate 7 days (today + next 6 days) in Asia/Colombo timezone
+ * Generate 7 days centered or starting around target date
  */
-const get7DaysList = (): DateItem[] => {
+const getDaysListAround = (targetDateStr: string): DateItem[] => {
   const result: DateItem[] = [];
-  const base = new Date();
+  const todayStr = getTodayDateString();
 
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(base);
-    d.setDate(base.getDate() + i);
+  let base = new Date();
+  if (targetDateStr && /^\d{4}-\d{2}-\d{2}$/.test(targetDateStr)) {
+    const [y, m, d] = targetDateStr.split('-').map(Number);
+    base = new Date(y, m - 1, d);
+  }
+
+  // If target date is within next 7 days from today, start from today
+  const today = new Date();
+  const diffDays = Math.round((base.getTime() - today.getTime()) / (1000 * 3600 * 24));
+
+  const startOffset = diffDays >= 0 && diffDays <= 6 ? 0 : 0;
+  const startDate = diffDays >= 0 && diffDays <= 6 ? today : base;
+
+  for (let i = startOffset; i < startOffset + 7; i++) {
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
 
     const dateString = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Colombo',
@@ -71,13 +86,14 @@ const get7DaysList = (): DateItem[] => {
       day: '2-digit',
     }).format(d);
 
-    const dayName =
-      i === 0
-        ? 'Today'
-        : new Intl.DateTimeFormat('en-US', {
-            timeZone: 'Asia/Colombo',
-            weekday: 'short',
-          }).format(d);
+    const isToday = dateString === todayStr;
+
+    const dayName = isToday
+      ? 'Today'
+      : new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Colombo',
+          weekday: 'short',
+        }).format(d);
 
     const dayNumber = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Colombo',
@@ -94,7 +110,8 @@ const get7DaysList = (): DateItem[] => {
       dayName,
       dayNumber,
       monthName,
-      isToday: i === 0,
+      isToday,
+      isSelected: dateString === targetDateStr,
     });
   }
 
@@ -108,14 +125,18 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
 }) => {
   const { t } = useLanguage();
 
-  // Date selector state (today + next 6 days)
-  const dateList = useMemo(() => get7DaysList(), []);
   const todayStr = useMemo(() => getTodayDateString(), []);
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+
+  // Dynamic 7-day selector pills
+  const dateList = useMemo(() => getDaysListAround(selectedDate), [selectedDate]);
 
   // Hook fetching schedules for selectedDate
   const { schedules, loading, error, refresh } = useSchedules(selectedDate);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  // Full Month Calendar Picker Modal State
+  const [calendarModalVisible, setCalendarModalVisible] = useState<boolean>(false);
 
   // Schedule Form Modal State (Add & Edit)
   const [modalVisible, setModalVisible] = useState<boolean>(false);
@@ -179,6 +200,11 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
     setModalVisible(true);
   };
 
+  // Calendar Date Picked
+  const handleSelectCalendarDate = (dateStr: string) => {
+    setSelectedDate(dateStr);
+  };
+
   // Modal Action Callbacks
   const handleModalSuccess = (msg: string) => {
     showToast(msg, 'success');
@@ -197,7 +223,7 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
         ? schedule.doctor.name
         : 'Doctor';
 
-    const confirmAction = async () => {
+    const performDelete = async () => {
       try {
         setDeletingId(schedule._id);
         await deleteSchedule(schedule._id);
@@ -226,7 +252,7 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
             )
           : true;
       if (confirmed) {
-        confirmAction();
+        performDelete();
       }
     } else {
       Alert.alert(
@@ -234,7 +260,7 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
         `Are you sure you want to delete the schedule for ${docName} on ${schedule.date} (${schedule.startTime} - ${schedule.endTime})?`,
         [
           { text: t('Cancel'), style: 'cancel' },
-          { text: t('Delete'), style: 'destructive', onPress: confirmAction },
+          { text: t('Delete'), style: 'destructive', onPress: performDelete },
         ]
       );
     }
@@ -243,23 +269,38 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
   // Helper to extract doctor display details
   const getDoctorDetails = (schedule: DoctorSchedule) => {
     if (typeof schedule.doctor === 'object' && schedule.doctor) {
+      const d = schedule.doctor as any;
+      const docName = d.name || d.fullName || 'Dr. Specialist';
+      const docRoom = d.room
+        ? d.room.toLowerCase().startsWith('room')
+          ? d.room
+          : `Room ${d.room}`
+        : 'Room 1A';
+
+      // Initials for avatar
+      const initials = docName
+        .replace(/^(dr\.|doctor)\s+/i, '')
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w: string) => w[0].toUpperCase())
+        .join('') || 'DR';
+
       return {
-        name: schedule.doctor.name || 'Dr. Specialist',
-        room: schedule.doctor.room
-          ? `Room ${schedule.doctor.room.replace(/^room\s+/i, '')}`
-          : 'Room 1A',
-        department:
-          schedule.doctor.department ||
-          schedule.doctor.specialization ||
-          'OPD',
-        specialization: schedule.doctor.specialization || 'Consultant',
+        name: docName,
+        initials,
+        room: docRoom,
+        department: d.department || 'General OPD',
+        specialization: d.specialization || d.department || 'Consultant',
       };
     }
+
     return {
-      name: 'Dr. Specialist',
+      name: 'Dr. OPD Duty Specialist',
+      initials: 'OP',
       room: 'Room 1A',
-      department: 'OPD',
-      specialization: 'General',
+      department: 'General OPD',
+      specialization: 'General Practice',
     };
   };
 
@@ -287,16 +328,30 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle}>{t('Doctor Roster')}</Text>
             <View style={styles.headerMetaRow}>
-              <View style={styles.headerMetaItem}>
+              {/* Tappable Date Badge to open Calendar */}
+              <TouchableOpacity
+                style={styles.headerDateBadge}
+                onPress={() => setCalendarModalVisible(true)}
+                activeOpacity={0.75}
+                accessibilityLabel="Open calendar date picker"
+              >
                 <Ionicons
-                  name="calendar-outline"
+                  name="calendar"
                   size={13}
                   color="#D0E8ED"
                   style={{ marginRight: 4 }}
                 />
                 <Text style={styles.headerSubtitle}>{selectedDate}</Text>
-              </View>
+                <Ionicons
+                  name="chevron-down"
+                  size={12}
+                  color="#D0E8ED"
+                  style={{ marginLeft: 3 }}
+                />
+              </TouchableOpacity>
+
               <View style={styles.metaDot} />
+
               <View style={styles.headerMetaItem}>
                 <Ionicons
                   name="people-outline"
@@ -328,13 +383,14 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* ── DATE SELECTOR (TODAY + NEXT 6 DAYS) ── */}
+      {/* ── DATE SELECTOR (QUICK DAYS) ── */}
       <View style={styles.dateSelectorSection}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.dateSelectorContent}
         >
+          {/* Quick Date Pills */}
           {dateList.map((item) => {
             const isSelected = item.dateString === selectedDate;
             return (
@@ -433,7 +489,7 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
             </View>
             <Text style={styles.emptyTitle}>{t('No Doctor Schedules')}</Text>
             <Text style={styles.emptySubtitle}>
-              {t('There are no doctor schedules configured for this date.')}
+              {t('There are no doctor schedules configured for')} {selectedDate}. {t('Tap below to add clinic hours.')}
             </Text>
             <TouchableOpacity
               style={styles.emptyAddBtn}
@@ -446,7 +502,7 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
                 color={Colors.white}
                 style={{ marginRight: 6 }}
               />
-              <Text style={styles.emptyAddBtnText}>{t('+ Add Schedule')}</Text>
+              <Text style={styles.emptyAddBtnText}>{t('Add Schedule')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -472,7 +528,10 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
               return (
                 <TouchableOpacity
                   key={schedule._id}
-                  style={styles.scheduleCard}
+                  style={[
+                    styles.scheduleCard,
+                    !isAvailable && styles.scheduleCardLeave,
+                  ]}
                   onPress={() => handleCardPress(schedule)}
                   activeOpacity={0.85}
                   accessibilityLabel={`Edit schedule for ${details.name}`}
@@ -481,18 +540,23 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
                   {/* Top Doctor & Status Row */}
                   <View style={styles.cardHeaderRow}>
                     <View style={styles.doctorInfoLeft}>
+                      {/* Doctor Avatar with Initials */}
                       <View
                         style={[
                           styles.doctorAvatar,
                           !isAvailable && styles.doctorAvatarLeave,
                         ]}
                       >
-                        <Ionicons
-                          name={isAvailable ? 'medkit' : 'bed-outline'}
-                          size={18}
-                          color={isAvailable ? Colors.primary : '#D97706'}
-                        />
+                        <Text
+                          style={[
+                            styles.doctorAvatarInitials,
+                            !isAvailable && styles.doctorAvatarInitialsLeave,
+                          ]}
+                        >
+                          {details.initials}
+                        </Text>
                       </View>
+
                       <View style={styles.doctorTextWrap}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           <Text style={styles.doctorName}>{details.name}</Text>
@@ -534,10 +598,25 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
                             : styles.statusChipTextLeave,
                         ]}
                       >
-                        {isAvailable ? t('Available') : t('Leave')}
+                        {isAvailable ? t('Available') : t('On Leave')}
                       </Text>
                     </View>
                   </View>
+
+                  {/* Leave Warning Banner if on leave */}
+                  {!isAvailable && (
+                    <View style={styles.leaveNoticeBanner}>
+                      <Ionicons
+                        name="alert-circle"
+                        size={14}
+                        color="#B45309"
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={styles.leaveNoticeText}>
+                        {t('Doctor is on leave. Time slots are unavailable for registration.')}
+                      </Text>
+                    </View>
+                  )}
 
                   {/* Badges Row: Room, Time Range, Slot Length, Max Patients */}
                   <View style={styles.badgesRow}>
@@ -652,22 +731,30 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
         )}
       </View>
 
-      {/* ── FLOATING "+ ADD SCHEDULE" BUTTON ── */}
+      {/* ── FLOATING "ADD SCHEDULE" BUTTON ── */}
       <TouchableOpacity
         style={styles.fabButton}
         onPress={handleOpenAddModal}
         activeOpacity={0.85}
-        accessibilityLabel={t('+ Add Schedule')}
+        accessibilityLabel={t('Add Schedule')}
         accessibilityRole="button"
       >
         <Ionicons
           name="add"
-          size={22}
+          size={20}
           color={Colors.white}
           style={{ marginRight: 6 }}
         />
-        <Text style={styles.fabButtonText}>{t('+ Add Schedule')}</Text>
+        <Text style={styles.fabButtonText}>{t('Add Schedule')}</Text>
       </TouchableOpacity>
+
+      {/* ── FULL MONTH CALENDAR DATE PICKER MODAL ── */}
+      <ScheduleDatePickerModal
+        visible={calendarModalVisible}
+        selectedDate={selectedDate}
+        onSelectDate={handleSelectCalendarDate}
+        onClose={() => setCalendarModalVisible(false)}
+      />
 
       {/* ── UNIFIED SCHEDULE FORM MODAL (ADD & EDIT) ── */}
       <ScheduleFormModal
@@ -730,7 +817,15 @@ const styles = StyleSheet.create({
   headerMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 3,
+  },
+  headerDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   headerMetaItem: {
     flexDirection: 'row',
@@ -746,7 +841,7 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 12,
     color: '#D0E8ED',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   refreshButton: {
     width: 36,
@@ -757,7 +852,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  /* Date Selector */
+  /* Date Selector Section */
   dateSelectorSection: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -766,10 +861,12 @@ const styles = StyleSheet.create({
   },
   dateSelectorContent: {
     paddingHorizontal: 12,
+    alignItems: 'center',
     gap: 8,
   },
+
   datePill: {
-    width: 64,
+    width: 62,
     height: 72,
     borderRadius: 14,
     backgroundColor: '#F8FAFC',
@@ -878,7 +975,7 @@ const styles = StyleSheet.create({
   },
   scheduleListContent: {
     padding: 16,
-    paddingBottom: 90,
+    paddingBottom: 95,
     gap: 12,
   },
 
@@ -895,11 +992,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  scheduleCardLeave: {
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFDF5',
+  },
   cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   doctorInfoLeft: {
     flexDirection: 'row',
@@ -908,23 +1009,34 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   doctorAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#E0F2FE',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
   },
   doctorAvatarLeave: {
     backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  doctorAvatarInitials: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0369A1',
+  },
+  doctorAvatarInitialsLeave: {
+    color: '#B45309',
   },
   doctorTextWrap: {
     flex: 1,
   },
   doctorName: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
     marginBottom: 2,
   },
@@ -933,7 +1045,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
 
-  /* Status Chips (Available green, Leave amber) */
+  /* Status Chips */
   statusChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -971,6 +1083,25 @@ const styles = StyleSheet.create({
   },
   statusChipTextLeave: {
     color: '#B45309',
+  },
+
+  /* Leave Notice Banner */
+  leaveNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 10,
+  },
+  leaveNoticeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#92400E',
+    flex: 1,
   },
 
   /* Badges Row */

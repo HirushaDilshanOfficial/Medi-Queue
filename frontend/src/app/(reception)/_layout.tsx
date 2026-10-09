@@ -96,6 +96,14 @@ export default function ReceptionLayout() {
           headerShown: false,
         }}
       />
+      <Tabs.Screen
+        name="schedule"
+        options={{
+          href: null,
+          headerShown: false,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
     </Tabs>
   );
 }

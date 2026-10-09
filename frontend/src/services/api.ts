@@ -36,7 +36,13 @@ export const getApiBaseUrl = (): string => {
     return `http://${hostname === 'localhost' || hostname === '127.0.0.1' ? 'localhost' : hostname}:5001`;
   }
 
-  // 1. Try Expo hostUri (exact IP phone used to connect to Metro bundler)
+  // Prefer an explicit backend URL over the Expo development-server address.
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && !envUrl.includes('192.168.56.') && !envUrl.includes('192.168.1.2')) {
+    return envUrl.includes(':5001') ? envUrl : `${envUrl.replace(/\/+$/, '')}:5001`;
+  }
+
+  // Fall back to the Expo host address for local development.
   const hostUri =
     Constants.expoConfig?.hostUri ||
     (Constants as any).manifest?.debuggerHost ||
@@ -46,12 +52,6 @@ export const getApiBaseUrl = (): string => {
     if (ip && ip !== 'localhost' && ip !== '127.0.0.1' && !ip.startsWith('192.168.56.')) {
       return `http://${ip}:5001`;
     }
-  }
-
-  // 2. Check process.env.EXPO_PUBLIC_API_URL
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && !envUrl.includes('192.168.56.') && !envUrl.includes('192.168.1.2')) {
-    return envUrl.includes(':5001') ? envUrl : `${envUrl.replace(/\/+$/, '')}:5001`;
   }
 
   return 'http://10.240.7.66:5001';
@@ -826,4 +826,3 @@ export const deleteSchedule = async (
 };
 
 export default api;
-
