@@ -1,5 +1,6 @@
 // App copy only: identifiers, personal names and entered medical notes are not translated.
 const copy = `
+Choose birthday|උපන්දිනය තෝරන්න|பிறந்த தேதியைத் தேர்ந்தெடுக்கவும்
 Allergy alerts ({value0})|ආසාත්මිකතා අනතුරු ඇඟවීම් ({value0})|ஒவ்வாமை எச்சரிக்கைகள் ({value0})
 "[Medi-Queue] Your verification OTP is {value0}. Valid for 10 minutes."|"[Medi-Queue] ඔබේ තහවුරු කිරීමේ කේතය {value0} යි. මිනිත්තු 10 ක් සඳහා වලංගුයි."|"[Medi-Queue] உங்கள் உறுதிப்படுத்தல் குறியீடு {value0}. 10 நிமிடங்களுக்கு செல்லுபடியாகும்."
 Resend in {value0}s|තත්පර {value0} කින් නැවත යවන්න|{value0} வினாடிகளில் மீண்டும் அனுப்பவும்

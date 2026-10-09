@@ -12,10 +12,11 @@ import { AppIcon } from '../../components/AppIcon';
 import { registerPatient } from '../../services/authService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from '../../components/GlobalToast';
+import { calendarDateLabel, todayKey } from '../../utils/opdDates';
 
 // Register Screen - Expo Router version
 export default function RegisterScreen() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [fullName, setFullName] = useState('');
   const [nic, setNic] = useState('');
   const [birthday, setBirthday] = useState('');
@@ -32,15 +33,24 @@ export default function RegisterScreen() {
 
   const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
+  const selectBirthday = (value: Date) => {
+    // A birthday is a calendar date; converting local midnight to UTC changes its day.
+    setBirthday(`${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`);
+  };
+
+  const openDatePicker = () => {
+    setDate(birthday ? new Date(`${birthday}T12:00:00`) : new Date());
+    setShowDatePicker(true);
+  };
+
   const onDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
-    if (selectedDate) {
+    if (selectedDate && event.type !== 'dismissed') {
       setDate(selectedDate);
       if (Platform.OS === 'android') {
-        const formattedDate = selectedDate.toISOString().split('T')[0];
-        setBirthday(formattedDate);
+        selectBirthday(selectedDate);
       }
     }
   };
@@ -69,6 +79,11 @@ export default function RegisterScreen() {
 
     if (!validateName(fullName)) {
       Toast.show({ type: 'error', text1: t('Error'), text2: t('Full Name can only contain letters and spaces.'), position: 'top', topOffset: 60 });
+      return;
+    }
+
+    if (birthday > todayKey()) {
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Your birthday cannot be in the future'), position: 'top', topOffset: 60 });
       return;
     }
 
@@ -177,12 +192,26 @@ export default function RegisterScreen() {
             placeholderTextColor={Colors.textLight} value={nic} onChangeText={(text) => setNic(text.replace(/[^0-9vVxX]/g, ''))} maxLength={12} />
 
           <Text style={styles.sectionLabel}>{t("Birthday")}</Text>
-          <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowDatePicker(true)}>
-            <Text style={birthday ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
-              {birthday || 'YYYY-MM-DD'}
-            </Text>
-            <Text style={styles.dropdownIcon}>📅</Text>
-          </TouchableOpacity>
+          {Platform.OS === 'web' ? (
+            <View style={styles.dropdownButton}>
+              <input
+                type="date"
+                value={birthday}
+                max={todayKey()}
+                lang={locale}
+                onChange={(event) => setBirthday(event.currentTarget.value)}
+                style={webDateInputStyle}
+                aria-label={t('Choose birthday')}
+              />
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.dropdownButton} onPress={openDatePicker} accessibilityRole="button" accessibilityLabel={t('Choose birthday')}>
+              <Text style={birthday ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
+                {calendarDateLabel(birthday, locale) || 'YYYY-MM-DD'}
+              </Text>
+              <Text style={styles.dropdownIcon}>📅</Text>
+            </TouchableOpacity>
+          )}
 
           <Text style={styles.sectionLabel}>{t("Gender")}</Text>
           <View style={styles.genderContainer}>
@@ -248,8 +277,8 @@ export default function RegisterScreen() {
       {renderDropdownModal(showBloodGroupDropdown, setShowBloodGroupDropdown, bloodGroups, setBloodGroup, 'Select Blood Group')}
 
       {/* Date Picker */}
-      {Platform.OS === 'ios' || Platform.OS === 'web' ? (
-        <Modal visible={showDatePicker} transparent animationType="slide">
+      {Platform.OS === 'ios' ? (
+        <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
           <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
             <View style={{ backgroundColor: Colors.white, padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 40 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
@@ -258,43 +287,25 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => {
                   setShowDatePicker(false);
-                  const formattedDate = date.toISOString().split('T')[0];
-                  setBirthday(formattedDate);
+                  selectBirthday(date);
                 }}>
                   <Text style={{ color: Colors.primary, fontWeight: 'bold', fontSize: 16 }}>{t("Done")}</Text>
                 </TouchableOpacity>
               </View>
-              {Platform.OS === 'web' ? (
-                <input
-                  type="date"
-                  value={birthday}
-                  max={new Date().toISOString().slice(0, 10)}
-                  onChange={(event) => {
-                    const value = event.currentTarget.value;
-                    if (value) {
-                      setBirthday(value);
-                      setDate(new Date(`${value}T12:00:00`));
-                    }
-                  }}
-                  style={{ width: '100%', minHeight: 52, fontSize: 16, padding: 12, border: '1px solid #D7DDE5', borderRadius: 8 }}
-                  aria-label="Choose birthday"
-                />
-              ) : (
-                <DateTimePicker
-                  value={date}
-                  mode="date"
-                  display="spinner"
-                  maximumDate={new Date()}
-                  onChange={(event, selectedDate) => {
-                    if (selectedDate) setDate(selectedDate);
-                  }}
-                />
-              )}
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display="spinner"
+                maximumDate={new Date()}
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) setDate(selectedDate);
+                }}
+              />
             </View>
           </View>
         </Modal>
       ) : (
-        showDatePicker && (
+        Platform.OS === 'android' && showDatePicker && (
           <DateTimePicker
             value={date}
             mode="date"
@@ -307,6 +318,12 @@ export default function RegisterScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+// Same inline browser control as the patient's medical-report date field.
+const webDateInputStyle: React.CSSProperties = {
+  width: '100%', minHeight: 32, border: 0, padding: 0, boxSizing: 'border-box',
+  fontSize: 16, color: Colors.textDark, backgroundColor: 'transparent', outlineStyle: 'none',
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
