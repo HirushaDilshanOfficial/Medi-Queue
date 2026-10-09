@@ -337,7 +337,6 @@ const searchPatients = asyncHandler(async (req, res) => {
         dob: prof.birthday || null,
         age: prof.birthday ? ageFrom(new Date(prof.birthday)) : null,
         bloodGroup: prof.bloodGroup || null,
-        address: prof.address || null,
         registeredVia: 'app',
       };
     });
