@@ -7,8 +7,6 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
-  Modal,
-  TextInput,
   RefreshControl,
   ActivityIndicator,
   Platform,
@@ -18,19 +16,15 @@ import { router } from 'expo-router';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { Colors } from '../../constants/Colors';
-import { DoctorSchedule, Doctor } from '../../types';
+import { DoctorSchedule } from '../../types';
 import { useSchedules } from '../../hooks/useSchedules';
-import {
-  getDoctors,
-  createSchedule,
-  deleteSchedule,
-  getErrorMessage,
-} from '../../services/api';
+import { deleteSchedule, getErrorMessage } from '../../services/api';
 import {
   LoadingState,
   ErrorState,
   Toast,
   ToastType,
+  ScheduleFormModal,
 } from '../../components';
 
 export interface DoctorScheduleScreenProps {
@@ -123,24 +117,11 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
   const { schedules, loading, error, refresh } = useSchedules(selectedDate);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  // Doctors for "+ Add Schedule" modal
-  const [availableDoctors, setAvailableDoctors] = useState<Doctor[]>([]);
-  const [loadingDoctors, setLoadingDoctors] = useState<boolean>(false);
+  // Schedule Form Modal State (Add & Edit)
+  const [modalVisible, setModalVisible] = useState<boolean>(false);
+  const [selectedSchedule, setSelectedSchedule] = useState<DoctorSchedule | null>(null);
 
-  // Add Schedule Modal state
-  const [addModalVisible, setAddModalVisible] = useState<boolean>(false);
-  const [submitting, setSubmitting] = useState<boolean>(false);
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
-  const [formDate, setFormDate] = useState<string>(selectedDate);
-  const [formStartTime, setFormStartTime] = useState<string>('08:00');
-  const [formEndTime, setFormEndTime] = useState<string>('16:30');
-  const [formSlotMinutes, setFormSlotMinutes] = useState<number>(15);
-  const [formMaxPatients, setFormMaxPatients] = useState<string>('30');
-  const [formStatus, setFormStatus] = useState<'available' | 'leave'>('available');
-  const [formNotes, setFormNotes] = useState<string>('');
-  const [formError, setFormError] = useState<string | null>(null);
-
-  // Deleting state
+  // Quick card delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Toast notification state
@@ -156,11 +137,6 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
       isMounted.current = false;
     };
   }, []);
-
-  // Sync form date when selectedDate changes
-  useEffect(() => {
-    setFormDate(selectedDate);
-  }, [selectedDate]);
 
   const showToast = (message: string, type: ToastType = 'success') => {
     setToastMessage(message);
@@ -191,101 +167,30 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
     }
   };
 
-  // Open Add Schedule Modal and fetch doctors if needed
-  const handleOpenAddModal = async () => {
-    setFormDate(selectedDate);
-    setFormStartTime('08:00');
-    setFormEndTime('16:30');
-    setFormSlotMinutes(15);
-    setFormMaxPatients('30');
-    setFormStatus('available');
-    setFormNotes('');
-    setFormError(null);
-    setAddModalVisible(true);
-
-    if (availableDoctors.length === 0) {
-      try {
-        setLoadingDoctors(true);
-        const docs = await getDoctors();
-        if (isMounted.current) {
-          const list = Array.isArray(docs) ? docs : [];
-          setAvailableDoctors(list);
-          if (list.length > 0 && !selectedDoctorId) {
-            setSelectedDoctorId(list[0]._id || list[0].id || '');
-          }
-        }
-      } catch (err: any) {
-        if (isMounted.current) {
-          showToast(getErrorMessage(err) || 'Failed to load doctors list', 'warning');
-        }
-      } finally {
-        if (isMounted.current) {
-          setLoadingDoctors(false);
-        }
-      }
-    } else if (!selectedDoctorId && availableDoctors.length > 0) {
-      setSelectedDoctorId(availableDoctors[0]._id || availableDoctors[0].id || '');
-    }
+  // Open Add Schedule Modal
+  const handleOpenAddModal = () => {
+    setSelectedSchedule(null);
+    setModalVisible(true);
   };
 
-  // Submit Create Schedule
-  const handleCreateSchedule = async () => {
-    if (!selectedDoctorId) {
-      setFormError('Please select a doctor');
-      return;
-    }
-    if (!formDate) {
-      setFormError('Date is required (YYYY-MM-DD)');
-      return;
-    }
-    if (!formStartTime || !formEndTime) {
-      setFormError('Start time and end time are required');
-      return;
-    }
-    if (formEndTime <= formStartTime) {
-      setFormError('End time must be after start time');
-      return;
-    }
-
-    const maxPts = parseInt(formMaxPatients, 10);
-    if (isNaN(maxPts) || maxPts <= 0) {
-      setFormError('Max patients must be a valid positive number');
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      setFormError(null);
-
-      await createSchedule({
-        doctor: selectedDoctorId,
-        date: formDate,
-        startTime: formStartTime,
-        endTime: formEndTime,
-        slotMinutes: formSlotMinutes,
-        maxPatients: maxPts,
-        status: formStatus,
-        notes: formNotes.trim(),
-      });
-
-      if (isMounted.current) {
-        setAddModalVisible(false);
-        showToast(t('Doctor schedule added successfully!'), 'success');
-        await refresh();
-      }
-    } catch (err: any) {
-      if (isMounted.current) {
-        const msg = getErrorMessage(err);
-        setFormError(msg || 'Failed to create schedule');
-      }
-    } finally {
-      if (isMounted.current) {
-        setSubmitting(false);
-      }
-    }
+  // Open Edit Schedule Modal when a card is tapped
+  const handleCardPress = (schedule: DoctorSchedule) => {
+    setSelectedSchedule(schedule);
+    setModalVisible(true);
   };
 
-  // Delete Schedule with Confirmation
+  // Modal Action Callbacks
+  const handleModalSuccess = (msg: string) => {
+    showToast(msg, 'success');
+    refresh();
+  };
+
+  const handleModalDeleteSuccess = (msg: string) => {
+    showToast(msg, 'success');
+    refresh();
+  };
+
+  // Direct card delete button with Confirmation Alert
   const handleDeleteSchedule = (schedule: DoctorSchedule) => {
     const docName =
       typeof schedule.doctor === 'object' && schedule.doctor?.name
@@ -303,6 +208,7 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
       } catch (err: any) {
         if (isMounted.current) {
           const msg = getErrorMessage(err);
+          // Highlight 409 conflict message clearly
           showToast(msg || 'Cannot delete schedule', 'error');
         }
       } finally {
@@ -313,13 +219,19 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
     };
 
     if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.confirm(`Delete schedule for ${docName} (${schedule.startTime} - ${schedule.endTime})?`)) {
+      const confirmed =
+        typeof window !== 'undefined'
+          ? window.confirm(
+              `Are you sure you want to delete the schedule for ${docName} (${schedule.startTime} - ${schedule.endTime})?\n\nThis will be blocked if active appointments exist.`
+            )
+          : true;
+      if (confirmed) {
         confirmAction();
       }
     } else {
       Alert.alert(
         t('Delete Schedule'),
-        `Are you sure you want to delete the schedule for ${docName} (${schedule.startTime} - ${schedule.endTime})?`,
+        `Are you sure you want to delete the schedule for ${docName} on ${schedule.date} (${schedule.startTime} - ${schedule.endTime})?`,
         [
           { text: t('Cancel'), style: 'cancel' },
           { text: t('Delete'), style: 'destructive', onPress: confirmAction },
@@ -333,8 +245,13 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
     if (typeof schedule.doctor === 'object' && schedule.doctor) {
       return {
         name: schedule.doctor.name || 'Dr. Specialist',
-        room: schedule.doctor.room ? `Room ${schedule.doctor.room.replace(/^room\s+/i, '')}` : 'Room 1A',
-        department: schedule.doctor.department || schedule.doctor.specialization || 'OPD',
+        room: schedule.doctor.room
+          ? `Room ${schedule.doctor.room.replace(/^room\s+/i, '')}`
+          : 'Room 1A',
+        department:
+          schedule.doctor.department ||
+          schedule.doctor.specialization ||
+          'OPD',
         specialization: schedule.doctor.specialization || 'Consultant',
       };
     }
@@ -371,12 +288,22 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
             <Text style={styles.headerTitle}>{t('Doctor Roster')}</Text>
             <View style={styles.headerMetaRow}>
               <View style={styles.headerMetaItem}>
-                <Ionicons name="calendar-outline" size={13} color="#D0E8ED" style={{ marginRight: 4 }} />
+                <Ionicons
+                  name="calendar-outline"
+                  size={13}
+                  color="#D0E8ED"
+                  style={{ marginRight: 4 }}
+                />
                 <Text style={styles.headerSubtitle}>{selectedDate}</Text>
               </View>
               <View style={styles.metaDot} />
               <View style={styles.headerMetaItem}>
-                <Ionicons name="people-outline" size={13} color="#D0E8ED" style={{ marginRight: 4 }} />
+                <Ionicons
+                  name="people-outline"
+                  size={13}
+                  color="#D0E8ED"
+                  style={{ marginRight: 4 }}
+                />
                 <Text style={styles.headerSubtitle}>
                   {schedules.length} {t('Rostered')}
                 </Text>
@@ -469,13 +396,21 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
         </View>
         <View style={[styles.statChip, { backgroundColor: '#DCFCE7' }]}>
           <View style={[styles.statusDot, { backgroundColor: '#16A34A' }]} />
-          <Text style={[styles.statChipLabel, { color: '#15803D' }]}>{t('Available:')}</Text>
-          <Text style={[styles.statChipValue, { color: '#15803D' }]}>{availableCount}</Text>
+          <Text style={[styles.statChipLabel, { color: '#15803D' }]}>
+            {t('Available:')}
+          </Text>
+          <Text style={[styles.statChipValue, { color: '#15803D' }]}>
+            {availableCount}
+          </Text>
         </View>
         <View style={[styles.statChip, { backgroundColor: '#FEF3C7' }]}>
           <View style={[styles.statusDot, { backgroundColor: '#F59E0B' }]} />
-          <Text style={[styles.statChipLabel, { color: '#B45309' }]}>{t('On Leave:')}</Text>
-          <Text style={[styles.statChipValue, { color: '#B45309' }]}>{leaveCount}</Text>
+          <Text style={[styles.statChipLabel, { color: '#B45309' }]}>
+            {t('On Leave:')}
+          </Text>
+          <Text style={[styles.statChipValue, { color: '#B45309' }]}>
+            {leaveCount}
+          </Text>
         </View>
       </View>
 
@@ -505,7 +440,12 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
               onPress={handleOpenAddModal}
               activeOpacity={0.8}
             >
-              <Ionicons name="add" size={18} color={Colors.white} style={{ marginRight: 6 }} />
+              <Ionicons
+                name="add"
+                size={18}
+                color={Colors.white}
+                style={{ marginRight: 6 }}
+              />
               <Text style={styles.emptyAddBtnText}>{t('+ Add Schedule')}</Text>
             </TouchableOpacity>
           </View>
@@ -530,11 +470,23 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
               const isDeleting = deletingId === schedule._id;
 
               return (
-                <View key={schedule._id} style={styles.scheduleCard}>
+                <TouchableOpacity
+                  key={schedule._id}
+                  style={styles.scheduleCard}
+                  onPress={() => handleCardPress(schedule)}
+                  activeOpacity={0.85}
+                  accessibilityLabel={`Edit schedule for ${details.name}`}
+                  accessibilityRole="button"
+                >
                   {/* Top Doctor & Status Row */}
                   <View style={styles.cardHeaderRow}>
                     <View style={styles.doctorInfoLeft}>
-                      <View style={[styles.doctorAvatar, !isAvailable && styles.doctorAvatarLeave]}>
+                      <View
+                        style={[
+                          styles.doctorAvatar,
+                          !isAvailable && styles.doctorAvatarLeave,
+                        ]}
+                      >
                         <Ionicons
                           name={isAvailable ? 'medkit' : 'bed-outline'}
                           size={18}
@@ -542,7 +494,15 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
                         />
                       </View>
                       <View style={styles.doctorTextWrap}>
-                        <Text style={styles.doctorName}>{details.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={styles.doctorName}>{details.name}</Text>
+                          <Ionicons
+                            name="create-outline"
+                            size={14}
+                            color="#94A3B8"
+                            style={{ marginLeft: 6 }}
+                          />
+                        </View>
                         <Text style={styles.doctorMeta}>
                           {t(details.department)} • {details.specialization}
                         </Text>
@@ -553,19 +513,25 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
                     <View
                       style={[
                         styles.statusChip,
-                        isAvailable ? styles.statusChipAvailable : styles.statusChipLeave,
+                        isAvailable
+                          ? styles.statusChipAvailable
+                          : styles.statusChipLeave,
                       ]}
                     >
                       <View
                         style={[
                           styles.statusChipDot,
-                          isAvailable ? styles.statusChipDotAvailable : styles.statusChipDotLeave,
+                          isAvailable
+                            ? styles.statusChipDotAvailable
+                            : styles.statusChipDotLeave,
                         ]}
                       />
                       <Text
                         style={[
                           styles.statusChipText,
-                          isAvailable ? styles.statusChipTextAvailable : styles.statusChipTextLeave,
+                          isAvailable
+                            ? styles.statusChipTextAvailable
+                            : styles.statusChipTextLeave,
                         ]}
                       >
                         {isAvailable ? t('Available') : t('Leave')}
@@ -577,21 +543,41 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
                   <View style={styles.badgesRow}>
                     {/* Room Badge */}
                     <View style={styles.metaBadge}>
-                      <Ionicons name="business-outline" size={13} color="#0A5C67" style={{ marginRight: 4 }} />
+                      <Ionicons
+                        name="business-outline"
+                        size={13}
+                        color="#0A5C67"
+                        style={{ marginRight: 4 }}
+                      />
                       <Text style={styles.metaBadgeText}>{details.room}</Text>
                     </View>
 
                     {/* Time Range */}
                     <View style={[styles.metaBadge, styles.timeBadge]}>
-                      <Ionicons name="time-outline" size={13} color="#0369A1" style={{ marginRight: 4 }} />
-                      <Text style={[styles.metaBadgeText, { color: '#0369A1', fontWeight: '700' }]}>
+                      <Ionicons
+                        name="time-outline"
+                        size={13}
+                        color="#0369A1"
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text
+                        style={[
+                          styles.metaBadgeText,
+                          { color: '#0369A1', fontWeight: '700' },
+                        ]}
+                      >
                         {schedule.startTime} - {schedule.endTime}
                       </Text>
                     </View>
 
                     {/* Slot Length */}
                     <View style={styles.metaBadge}>
-                      <Ionicons name="timer-outline" size={13} color="#4A6572" style={{ marginRight: 4 }} />
+                      <Ionicons
+                        name="timer-outline"
+                        size={13}
+                        color="#4A6572"
+                        style={{ marginRight: 4 }}
+                      />
                       <Text style={styles.metaBadgeText}>
                         {schedule.slotMinutes} {t('min slots')}
                       </Text>
@@ -599,7 +585,12 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
 
                     {/* Max Patients */}
                     <View style={styles.metaBadge}>
-                      <Ionicons name="people-outline" size={13} color="#4A6572" style={{ marginRight: 4 }} />
+                      <Ionicons
+                        name="people-outline"
+                        size={13}
+                        color="#4A6572"
+                        style={{ marginRight: 4 }}
+                      />
                       <Text style={styles.metaBadgeText}>
                         Max {schedule.maxPatients}
                       </Text>
@@ -609,7 +600,12 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
                   {/* Notes / Footer */}
                   {schedule.notes ? (
                     <View style={styles.notesBox}>
-                      <Ionicons name="information-circle-outline" size={14} color="#64748B" style={{ marginRight: 6 }} />
+                      <Ionicons
+                        name="information-circle-outline"
+                        size={14}
+                        color="#64748B"
+                        style={{ marginRight: 6 }}
+                      />
                       <Text style={styles.notesText} numberOfLines={2}>
                         {schedule.notes}
                       </Text>
@@ -619,12 +615,15 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
                   {/* Card Actions Footer */}
                   <View style={styles.cardFooterRow}>
                     <Text style={styles.scheduleDateLabel}>
-                      📅 {schedule.date}
+                      📅 {schedule.date} • {t('Tap to Edit')}
                     </Text>
 
                     <TouchableOpacity
                       style={styles.deleteButton}
-                      onPress={() => handleDeleteSchedule(schedule)}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteSchedule(schedule);
+                      }}
                       disabled={isDeleting}
                       activeOpacity={0.7}
                       accessibilityLabel="Delete schedule"
@@ -633,13 +632,20 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
                         <ActivityIndicator size="small" color="#DC2626" />
                       ) : (
                         <>
-                          <Ionicons name="trash-outline" size={14} color="#DC2626" style={{ marginRight: 4 }} />
-                          <Text style={styles.deleteButtonText}>{t('Remove')}</Text>
+                          <Ionicons
+                            name="trash-outline"
+                            size={14}
+                            color="#DC2626"
+                            style={{ marginRight: 4 }}
+                          />
+                          <Text style={styles.deleteButtonText}>
+                            {t('Remove')}
+                          </Text>
                         </>
                       )}
                     </TouchableOpacity>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </ScrollView>
@@ -654,261 +660,24 @@ export const DoctorScheduleScreen: React.FC<DoctorScheduleScreenProps> = ({
         accessibilityLabel={t('+ Add Schedule')}
         accessibilityRole="button"
       >
-        <Ionicons name="add" size={22} color={Colors.white} style={{ marginRight: 6 }} />
+        <Ionicons
+          name="add"
+          size={22}
+          color={Colors.white}
+          style={{ marginRight: 6 }}
+        />
         <Text style={styles.fabButtonText}>{t('+ Add Schedule')}</Text>
       </TouchableOpacity>
 
-      {/* ── ADD SCHEDULE MODAL ── */}
-      <Modal
-        visible={addModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setAddModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderTitleWrap}>
-                <View style={styles.modalHeaderIconBox}>
-                  <Ionicons name="calendar" size={18} color="#0A5C67" />
-                </View>
-                <Text style={styles.modalHeaderTitle}>{t('Add Doctor Schedule')}</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setAddModalVisible(false)}
-                style={styles.modalCloseBtn}
-                accessibilityLabel="Close"
-              >
-                <Ionicons name="close" size={20} color={Colors.textMedium} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalFormScroll} showsVerticalScrollIndicator={false}>
-              {/* Form Error Banner */}
-              {formError ? (
-                <View style={styles.formErrorBanner}>
-                  <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 6 }} />
-                  <Text style={styles.formErrorText}>{formError}</Text>
-                </View>
-              ) : null}
-
-              {/* 1. Doctor Picker */}
-              <Text style={styles.fieldLabel}>{t('Select Doctor *')}</Text>
-              {loadingDoctors ? (
-                <View style={styles.doctorLoadingBox}>
-                  <ActivityIndicator size="small" color={Colors.primary} />
-                  <Text style={styles.doctorLoadingText}>{t('Loading doctors...')}</Text>
-                </View>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.doctorChipsScroll}>
-                  {availableDoctors.map((doc) => {
-                    const docId = doc._id || doc.id || '';
-                    const isSelected = selectedDoctorId === docId;
-                    return (
-                      <TouchableOpacity
-                        key={docId}
-                        style={[styles.doctorChip, isSelected && styles.doctorChipSelected]}
-                        onPress={() => setSelectedDoctorId(docId)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.doctorChipName, isSelected && styles.doctorChipNameSelected]}>
-                          {doc.name}
-                        </Text>
-                        <Text style={[styles.doctorChipDept, isSelected && styles.doctorChipDeptSelected]}>
-                          {t(doc.department || 'OPD')} • {doc.room ? `Rm ${doc.room}` : 'Rm 1A'}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              )}
-
-              {/* 2. Date */}
-              <Text style={styles.fieldLabel}>{t('Date (YYYY-MM-DD) *')}</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formDate}
-                onChangeText={setFormDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#94A3B8"
-              />
-
-              {/* 3. Time Range (Start & End) */}
-              <View style={styles.formRow}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.fieldLabel}>{t('Start Time *')}</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formStartTime}
-                    onChangeText={setFormStartTime}
-                    placeholder="08:00"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-                <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.fieldLabel}>{t('End Time *')}</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formEndTime}
-                    onChangeText={setFormEndTime}
-                    placeholder="16:30"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-              </View>
-
-              {/* Quick Time Presets */}
-              <View style={styles.presetRow}>
-                <TouchableOpacity
-                  style={styles.presetChip}
-                  onPress={() => {
-                    setFormStartTime('08:00');
-                    setFormEndTime('16:30');
-                  }}
-                >
-                  <Text style={styles.presetChipText}>Full Shift (08:00 - 16:30)</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.presetChip}
-                  onPress={() => {
-                    setFormStartTime('08:30');
-                    setFormEndTime('13:00');
-                  }}
-                >
-                  <Text style={styles.presetChipText}>Morning (08:30 - 13:00)</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* 4. Slot Minutes Selection */}
-              <Text style={styles.fieldLabel}>{t('Slot Duration (minutes) *')}</Text>
-              <View style={styles.slotMinutesRow}>
-                {[10, 15, 20, 30].map((mins) => {
-                  const isSelected = formSlotMinutes === mins;
-                  return (
-                    <TouchableOpacity
-                      key={mins}
-                      style={[styles.slotMinuteChip, isSelected && styles.slotMinuteChipSelected]}
-                      onPress={() => setFormSlotMinutes(mins)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.slotMinuteChipText,
-                          isSelected && styles.slotMinuteChipTextSelected,
-                        ]}
-                      >
-                        {mins} min
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* 5. Max Patients */}
-              <Text style={styles.fieldLabel}>{t('Max Patients Capacity *')}</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formMaxPatients}
-                onChangeText={setFormMaxPatients}
-                keyboardType="numeric"
-                placeholder="30"
-                placeholderTextColor="#94A3B8"
-              />
-
-              {/* 6. Status Toggle */}
-              <Text style={styles.fieldLabel}>{t('Doctor Status *')}</Text>
-              <View style={styles.statusToggleRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.statusToggleBtn,
-                    formStatus === 'available' && styles.statusToggleBtnAvailable,
-                  ]}
-                  onPress={() => setFormStatus('available')}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={16}
-                    color={formStatus === 'available' ? '#15803D' : '#64748B'}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={[
-                      styles.statusToggleText,
-                      formStatus === 'available' && styles.statusToggleTextAvailable,
-                    ]}
-                  >
-                    {t('Available')}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.statusToggleBtn,
-                    formStatus === 'leave' && styles.statusToggleBtnLeave,
-                  ]}
-                  onPress={() => setFormStatus('leave')}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons
-                    name="pause-circle"
-                    size={16}
-                    color={formStatus === 'leave' ? '#B45309' : '#64748B'}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={[
-                      styles.statusToggleText,
-                      formStatus === 'leave' && styles.statusToggleTextLeave,
-                    ]}
-                  >
-                    {t('Leave')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* 7. Notes */}
-              <Text style={styles.fieldLabel}>{t('Notes (Optional)')}</Text>
-              <TextInput
-                style={[styles.textInput, { height: 60, textAlignVertical: 'top' }]}
-                value={formNotes}
-                onChangeText={setFormNotes}
-                placeholder={t('e.g. On-call coverage, morning rounds')}
-                placeholderTextColor="#94A3B8"
-                multiline
-              />
-            </ScrollView>
-
-            {/* Modal Actions */}
-            <View style={styles.modalActionsRow}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setAddModalVisible(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.cancelBtnText}>{t('Cancel')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.submitBtn}
-                onPress={handleCreateSchedule}
-                disabled={submitting}
-                activeOpacity={0.85}
-              >
-                {submitting ? (
-                  <ActivityIndicator size="small" color={Colors.white} />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark" size={18} color={Colors.white} style={{ marginRight: 6 }} />
-                    <Text style={styles.submitBtnText}>{t('Save Schedule')}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* ── UNIFIED SCHEDULE FORM MODAL (ADD & EDIT) ── */}
+      <ScheduleFormModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        schedule={selectedSchedule}
+        initialDate={selectedDate}
+        onSuccess={handleModalSuccess}
+        onDeleteSuccess={handleModalDeleteSuccess}
+      />
 
       {/* ── TOAST NOTIFICATION ── */}
       <Toast
@@ -1256,7 +1025,7 @@ const styles = StyleSheet.create({
   },
   scheduleDateLabel: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#64748B',
     fontWeight: '500',
   },
   deleteButton: {
@@ -1344,257 +1113,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.white,
     letterSpacing: 0.2,
-  },
-
-  /* Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  modalHeaderTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  modalHeaderIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#E0F2FE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  modalHeaderTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  modalCloseBtn: {
-    padding: 6,
-  },
-  modalFormScroll: {
-    paddingTop: 12,
-  },
-  formErrorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  formErrorText: {
-    color: '#B91C1C',
-    fontSize: 12,
-    fontWeight: '600',
-    flex: 1,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 6,
-    marginTop: 10,
-  },
-  textInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  formRow: {
-    flexDirection: 'row',
-  },
-  presetRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 6,
-  },
-  presetChip: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  presetChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#1D4ED8',
-  },
-
-  /* Doctor selection scroll */
-  doctorChipsScroll: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  doctorChip: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginRight: 8,
-  },
-  doctorChipSelected: {
-    backgroundColor: '#0A5C67',
-    borderColor: '#0A5C67',
-  },
-  doctorChipName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  doctorChipNameSelected: {
-    color: '#FFFFFF',
-  },
-  doctorChipDept: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  doctorChipDeptSelected: {
-    color: '#D0E8ED',
-  },
-  doctorLoadingBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  doctorLoadingText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginLeft: 8,
-  },
-
-  /* Slot minute selection */
-  slotMinutesRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  slotMinuteChip: {
-    flex: 1,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  slotMinuteChipSelected: {
-    backgroundColor: '#0A5C67',
-    borderColor: '#0A5C67',
-  },
-  slotMinuteChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  slotMinuteChipTextSelected: {
-    color: '#FFFFFF',
-  },
-
-  /* Status Toggle */
-  statusToggleRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  statusToggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  statusToggleBtnAvailable: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#86EFAC',
-  },
-  statusToggleBtnLeave: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#FDE68A',
-  },
-  statusToggleText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  statusToggleTextAvailable: {
-    color: '#15803D',
-  },
-  statusToggleTextLeave: {
-    color: '#B45309',
-  },
-
-  /* Modal Actions */
-  modalActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 18,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  submitBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: '#0A5C67',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0A5C67',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  submitBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.white,
   },
 });
 
