@@ -3,7 +3,7 @@ import { dayLabel } from '../../../utils/opdDates';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, ImageBackground, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -153,12 +153,11 @@ export function PatientDashboardScreen() {
         refreshControl={<RefreshControl refreshing={Boolean(data) && dashboard.loading} onRefresh={reload} tintColor={C.primary} colors={[C.primary]} />}
       >
         {/* Full-width Hospital Hero Header Section */}
-        <View style={styles.fullHeroHeaderContainer}>
-          <Image
-            source={require('../../../../assets/images/patient/patient-dashboard-hero.jpg')}
-            style={styles.heroBannerImage}
-            resizeMode="cover"
-          />
+        <ImageBackground
+          source={require('../../../../assets/images/patient/patient-dashboard-hero.jpg')}
+          style={styles.fullHeroHeaderContainer}
+          resizeMode="cover"
+        >
           <LinearGradient
             colors={['rgba(0, 43, 76, 0.76)', 'rgba(0, 76, 91, 0.88)', 'rgba(243, 250, 255, 1)']}
             locations={[0, 0.65, 1]}
@@ -239,7 +238,7 @@ export function PatientDashboardScreen() {
               </View>
             </View>
           </LinearGradient>
-        </View>
+        </ImageBackground>
 
         {/* Main Dashboard Container */}
         <View style={styles.mainContainer}>
