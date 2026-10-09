@@ -121,6 +121,7 @@ export default function RootLayout() {
               <Stack.Screen name="(auth)/welcome" />
               <Stack.Screen name="(auth)/login" />
               <Stack.Screen name="(auth)/register" />
+              <Stack.Screen name="(auth)/onboarding" />
               <Stack.Screen name="(moh)/dashboard" />
               <Stack.Screen name="(patient)" />
               <Stack.Screen name="(reception)" />

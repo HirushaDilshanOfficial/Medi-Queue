@@ -62,7 +62,12 @@ export default function LoginScreen() {
       if (userData.role === 'MOH') {
         router.replace('/(moh)/dashboard' as any);
       } else if (userData.role === 'Patient') {
-        router.replace('/(patient)' as any);
+        const hasSeenOnboarding = await AsyncStorage.getItem(`onboarding_${userData._id}`);
+        if (!hasSeenOnboarding) {
+          router.replace('/(auth)/onboarding' as any);
+        } else {
+          router.replace('/(patient)' as any);
+        }
       } else if (String(userData.role || '').toLowerCase() === 'receptionist') {
         router.replace('/(reception)/dashboard' as any);
       } else if (String(userData.role || '').toLowerCase() === 'doctor') {
