@@ -23,8 +23,8 @@ export const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 40 },
 
   // Full-width Screen Hero Header Backdrop
-  fullHeroHeaderContainer: { width: '100%', position: 'relative', overflow: 'hidden' },
-  heroBannerImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  fullHeroHeaderContainer: { width: '100%', overflow: 'hidden', backgroundColor: C.primary },
+  heroBannerImage: { width: '100%', height: '100%' },
   fullHeroOverlay: { width: '100%', paddingBottom: 24 },
   
   // Header controls on full hero backdrop
