@@ -233,3 +233,72 @@ export interface ShiftSummary {
   throughputPercent: number;
   doctors: ShiftDoctorSummary[];
 }
+
+// ─────────────────────────────────────────────────────────
+// Doctor Schedule Types
+// ─────────────────────────────────────────────────────────
+
+export interface DoctorScheduleDoctor {
+  _id: string;
+  name: string;
+  room?: string;
+  department?: string;
+  specialization?: string;
+}
+
+export interface DoctorSchedule {
+  _id: string;
+  doctor: string | DoctorScheduleDoctor;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  slotMinutes: number;
+  maxPatients: number;
+  status: 'available' | 'leave';
+  notes?: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateDoctorSchedulePayload {
+  doctor: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  slotMinutes?: number;
+  maxPatients?: number;
+  status?: 'available' | 'leave';
+  notes?: string;
+}
+
+export interface UpdateDoctorSchedulePayload {
+  startTime?: string;
+  endTime?: string;
+  slotMinutes?: number;
+  maxPatients?: number;
+  status?: 'available' | 'leave';
+  notes?: string;
+}
+
+export interface GetSchedulesParams {
+  date?: string;
+  doctorId?: string;
+}
+
+export interface SchedulesResponse {
+  success: boolean;
+  count: number;
+  data: DoctorSchedule[];
+}
+
+export interface ScheduleResponse {
+  success: boolean;
+  data: DoctorSchedule;
+}
+
+export interface DeleteScheduleResponse {
+  success: boolean;
+  message: string;
+}
+

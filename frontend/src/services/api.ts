@@ -9,7 +9,26 @@ import {
   QueueToken,
   DashboardData,
   ShiftSummary,
+  DoctorSchedule,
+  DoctorScheduleDoctor,
+  CreateDoctorSchedulePayload,
+  UpdateDoctorSchedulePayload,
+  GetSchedulesParams,
+  SchedulesResponse,
+  ScheduleResponse,
+  DeleteScheduleResponse,
 } from '../types';
+
+export type {
+  DoctorSchedule,
+  DoctorScheduleDoctor,
+  CreateDoctorSchedulePayload,
+  UpdateDoctorSchedulePayload,
+  GetSchedulesParams,
+  SchedulesResponse,
+  ScheduleResponse,
+  DeleteScheduleResponse,
+};
 
 export const getApiBaseUrl = (): string => {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
@@ -184,6 +203,21 @@ export const api = {
     const headers = await getHeaders(options?.headers, options?.token);
     const response = await fetch(targetUrl, {
       method: 'PATCH',
+      headers,
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+      ...options,
+    });
+    return handleResponse<T>(response, targetUrl);
+  },
+  put: async <T = any>(
+    url: string,
+    data?: any,
+    options?: ApiRequestOptions
+  ): Promise<T> => {
+    const targetUrl = resolveUrl(url);
+    const headers = await getHeaders(options?.headers, options?.token);
+    const response = await fetch(targetUrl, {
+      method: 'PUT',
       headers,
       body: data !== undefined ? JSON.stringify(data) : undefined,
       ...options,
@@ -727,6 +761,66 @@ export const completeToken = async (
   return api.post<{ success: boolean; tokenLabel: string; status: string }>(
     endpoint,
     {},
+    { token }
+  );
+};
+
+// ─────────────────────────────────────────────────────────
+// Doctor Schedule Management API
+// ─────────────────────────────────────────────────────────
+
+/**
+ * Create a new doctor schedule.
+ */
+export const createSchedule = async (
+  data: CreateDoctorSchedulePayload,
+  token?: string
+): Promise<ScheduleResponse> => {
+  return api.post<ScheduleResponse>('/api/reception/schedules', data, { token });
+};
+
+/**
+ * List doctor schedules filtered by date and/or doctorId.
+ */
+export const getSchedules = async (
+  params?: string | GetSchedulesParams,
+  token?: string
+): Promise<SchedulesResponse> => {
+  const query = new URLSearchParams();
+  if (typeof params === 'string') {
+    if (params) query.append('date', params);
+  } else if (params) {
+    if (params.date) query.append('date', params.date);
+    if (params.doctorId) query.append('doctorId', params.doctorId);
+  }
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return api.get<SchedulesResponse>(`/api/reception/schedules${qs}`, { token });
+};
+
+/**
+ * Update an existing doctor schedule (times, slotMinutes, maxPatients, status, notes).
+ */
+export const updateSchedule = async (
+  id: string,
+  data: UpdateDoctorSchedulePayload,
+  token?: string
+): Promise<ScheduleResponse> => {
+  return api.put<ScheduleResponse>(
+    `/api/reception/schedules/${encodeURIComponent(id)}`,
+    data,
+    { token }
+  );
+};
+
+/**
+ * Delete a doctor schedule (only if no active appointments exist in range).
+ */
+export const deleteSchedule = async (
+  id: string,
+  token?: string
+): Promise<DeleteScheduleResponse> => {
+  return api.delete<DeleteScheduleResponse>(
+    `/api/reception/schedules/${encodeURIComponent(id)}`,
     { token }
   );
 };
