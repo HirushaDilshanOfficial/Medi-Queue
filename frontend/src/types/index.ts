@@ -39,6 +39,7 @@ export interface PatientVisitHistoryItem {
   status?: string;
   type?: string;
   tokenNumber?: number;
+  priority?: QueuePriority;
   notes?: string;
   createdAt?: string;
 }
