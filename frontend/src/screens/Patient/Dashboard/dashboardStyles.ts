@@ -16,43 +16,50 @@ const regular = 'ProfileInter400';
 const medium = 'ProfileInter500';
 const semibold = 'ProfileInter600';
 const bold = 'ProfileInter700';
-const shadow = '0 4px 18px rgba(0,76,91,0.04)';
+const shadow = '0 4px 18px rgba(0,76,91,0.06)';
 
 export const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.background },
-  headerSafe: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: C.icon },
+  scrollContent: { paddingBottom: 40 },
+
+  // Full-width Screen Hero Header Backdrop
+  fullHeroHeaderContainer: { width: '100%', position: 'relative', overflow: 'hidden' },
+  heroBannerImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  fullHeroOverlay: { width: '100%', paddingBottom: 24 },
+  
+  // Header controls on full hero backdrop
   header: { width: '100%', maxWidth: 1120, alignSelf: 'center', height: 64, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 12 },
   grow: { flex: 1, minWidth: 0 },
   logo: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { fontFamily: semibold, fontSize: 9, lineHeight: 12, letterSpacing: 1.2, color: C.secondary },
-  headerTitle: { fontFamily: bold, fontSize: 16, lineHeight: 20, color: C.text },
-  iconButton: { width: 38, height: 38, borderRadius: 12, borderWidth: 1, borderColor: C.icon, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  avatar: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.pale },
-  content: { width: '100%', maxWidth: 1120, alignSelf: 'center', padding: 18, paddingBottom: 40, gap: 20 },
-
-  // Top Active Queue Hero Card
-  topHeroCard: { borderRadius: 24, overflow: 'hidden', position: 'relative', boxShadow: shadow },
-  heroBannerImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
-  heroCardContent: { padding: 20, gap: 16 },
+  eyebrowLight: { fontFamily: semibold, fontSize: 9, lineHeight: 12, letterSpacing: 1.2, color: C.aqua },
+  headerTitleLight: { fontFamily: bold, fontSize: 16, lineHeight: 20, color: '#fff' },
+  headerIconBtnLight: { width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  avatarLight: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.2)' },
+  
+  // Hero Content Floating over backdrop
+  heroContentContainer: { width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 12, gap: 14 },
   topHeroHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  topHeroGreeting: { fontFamily: bold, fontSize: 22, lineHeight: 28, color: '#fff' },
-  topHeroSubtitle: { fontFamily: regular, fontSize: 12, lineHeight: 18, color: 'rgba(255,255,255,0.8)' },
-  topHeroIconBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  activeQueueEyebrow: { fontFamily: semibold, fontSize: 10, lineHeight: 14, letterSpacing: 1.2, color: C.aqua },
+  topHeroGreeting: { fontFamily: bold, fontSize: 24, lineHeight: 30, color: '#fff' },
+  topHeroSubtitle: { fontFamily: regular, fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.85)' },
+  topHeroIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  activeQueueEyebrow: { fontFamily: semibold, fontSize: 10, lineHeight: 14, letterSpacing: 1.2, color: C.aqua, marginTop: 4 },
+  
+  // Glass Active Queue Card over Hero
+  glassActiveQueueCard: { backgroundColor: 'rgba(255, 255, 255, 0.16)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.35)', borderRadius: 22, padding: 18, gap: 12 },
   activeQueueContainer: { gap: 12 },
   activeQueueHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  activeQueueBadge: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  activeQueueTitle: { fontFamily: bold, fontSize: 14, lineHeight: 18, color: '#fff' },
-  activeQueueSubline: { fontFamily: regular, fontSize: 11, lineHeight: 15, color: 'rgba(255,255,255,0.75)' },
-  activeQueueArrowBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  whitePassBox: { backgroundColor: '#fff', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  whitePassTitle: { fontFamily: bold, fontSize: 24, lineHeight: 28, color: C.text, letterSpacing: -0.5 },
+  activeQueueBadge: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  activeQueueTitle: { fontFamily: bold, fontSize: 15, lineHeight: 20, color: '#fff' },
+  activeQueueSubline: { fontFamily: regular, fontSize: 11, lineHeight: 15, color: 'rgba(255,255,255,0.8)' },
+  activeQueueArrowBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  whitePassBox: { backgroundColor: '#fff', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', boxShadow: shadow },
+  whitePassTitle: { fontFamily: bold, fontSize: 25, lineHeight: 30, color: C.text, letterSpacing: -0.5 },
   whitePassTime: { fontFamily: medium, fontSize: 11, lineHeight: 16, color: C.muted },
   roomTag: { backgroundColor: C.pale, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   roomTagText: { fontFamily: semibold, fontSize: 11, lineHeight: 15, color: C.primary },
-  paginationDots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)' },
-  activeDot: { width: 16, backgroundColor: '#fff' },
+
+  // Main Dashboard Content Container
+  mainContainer: { width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 10, gap: 20 },
 
   // Book Doctor Appointment Card
   bookAppointmentCard: { backgroundColor: '#0a5a67', borderRadius: 20, padding: 18, gap: 12, boxShadow: shadow },
