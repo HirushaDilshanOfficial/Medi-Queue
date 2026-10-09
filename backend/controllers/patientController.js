@@ -929,6 +929,7 @@ const searchPatients = asyncHandler(async (req, res) => {
         gender: directProfile.gender || null,
         dob: directProfile.birthday || null,
         age: directProfile.birthday ? ageFrom(new Date(directProfile.birthday)) : null,
+        address: directProfile.address || null,
         registeredVia: 'app',
       };
       return res.json({
