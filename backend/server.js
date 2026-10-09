@@ -23,6 +23,7 @@ const v1DoctorRoutes = require('./routes/v1DoctorRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const mohRoutes = require('./routes/mohRoutes');
+const scheduleRoutes = require('./routes/scheduleRoutes');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -64,6 +65,8 @@ app.use('/api/reception', doctorRoutes);
 app.use('/api/reception', shiftRoutes);
 app.use('/api/reception', reportRoutes);
 app.use('/api/reception', walkInRoutes);
+app.use('/api/reception/schedules', scheduleRoutes);
+app.use('/api/reception', scheduleRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/hospitals', hospitalRoutes);
 app.use('/api/v1/clinics', clinicRoutes);

@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Patient = require('../models/Patient');
 const Doctor = require('../models/Doctor');
 const Appointment = require('../models/Appointment');
+const DoctorSchedule = require('../models/DoctorSchedule');
 const QueueToken = require('../models/QueueToken');
 const OpdAppointment = require('../models/OpdAppointment');
 const OpdPatientProfile = require('../models/OpdPatientProfile');
@@ -368,9 +369,33 @@ const getSlots = asyncHandler(async (req, res) => {
     throw createError('Doctor not found.', 404);
   }
 
-  const start = doctor.workingHours?.start || '08:00';
-  const end = doctor.workingHours?.end || '16:30';
-  const allSlots = buildSlots(start, end);
+  // Load schedule for this doctor and date
+  const schedule = await DoctorSchedule.findOne({ doctor: doctorId, date }).lean();
+
+  if (!schedule) {
+    return res.json({
+      doctor: { name: doctor.name, room: doctor.room || null, status: doctor.status },
+      date,
+      slots: [],
+      earliestAvailable: null,
+      message: 'No schedule found for this doctor on this date.',
+    });
+  }
+
+  if (schedule.status === 'leave') {
+    return res.json({
+      doctor: { name: doctor.name, room: doctor.room || null, status: doctor.status },
+      date,
+      slots: [],
+      earliestAvailable: null,
+      message: 'Doctor is on leave on this date.',
+    });
+  }
+
+  const start = schedule.startTime || '08:00';
+  const end = schedule.endTime || '16:30';
+  const slotMinutes = schedule.slotMinutes || 15;
+  const allSlots = buildSlots(start, end, slotMinutes);
 
   const OpdAppointment = require('../models/OpdAppointment');
 
@@ -478,6 +503,15 @@ const walkInBooking = asyncHandler(async (req, res) => {
     throw createError(`Doctor is currently ${doctor.status}. Please select an active doctor.`, 400);
   }
 
+  // ── 2b. Check doctor schedule for date ──
+  const schedule = await DoctorSchedule.findOne({ doctor: doctorId, date }).lean();
+  if (!schedule) {
+    throw createError('Doctor has no schedule for this date.', 400);
+  }
+  if (schedule.status === 'leave') {
+    throw createError('Doctor is on leave on this date.', 400);
+  }
+
   // ── 3. Find or create patient ──
   const { patient, isNewPatient } = await findOrCreatePatient({
     existingPatientId,
@@ -488,7 +522,7 @@ const walkInBooking = asyncHandler(async (req, res) => {
   // ── 4. Resolve slot time ──
   let resolvedSlot = slotTime;
   if (!resolvedSlot) {
-    resolvedSlot = await findEarliestAvailableSlot(doctor, doctorId, date);
+    resolvedSlot = await findEarliestAvailableSlot(doctor, doctorId, date, schedule);
     if (!resolvedSlot) {
       throw createError('No free slots left today for this doctor', 409);
     }
@@ -779,16 +813,17 @@ async function createWithRollback(appointmentData, patient, doctorId, priority) 
 }
 
 /**
- * Build "HH:mm" strings in 15-min steps (exclusive of endTime).
+ * Build "HH:mm" strings in slotMinutes steps (exclusive of endTime).
  */
-function buildSlots(startTime, endTime) {
+function buildSlots(startTime, endTime, slotMinutes = 15) {
+  const step = Number(slotMinutes) > 0 ? Number(slotMinutes) : 15;
   const slots = [];
   const [startH, startM] = startTime.split(':').map(Number);
   const [endH, endM] = endTime.split(':').map(Number);
   const startMin = startH * 60 + startM;
   const endMin = endH * 60 + endM;
 
-  for (let m = startMin; m < endMin; m += 15) {
+  for (let m = startMin; m < endMin; m += step) {
     const hh = String(Math.floor(m / 60)).padStart(2, '0');
     const mm = String(m % 60).padStart(2, '0');
     slots.push(`${hh}:${mm}`);
@@ -800,10 +835,15 @@ function buildSlots(startTime, endTime) {
  * Find the earliest available slot for a doctor on a date.
  * Skips past slots if the date is today.
  */
-async function findEarliestAvailableSlot(doctor, doctorId, date) {
-  const start = doctor.workingHours?.start || '08:00';
-  const end = doctor.workingHours?.end || '16:30';
-  const allSlots = buildSlots(start, end);
+async function findEarliestAvailableSlot(doctor, doctorId, date, schedule = null) {
+  let docSchedule = schedule;
+  if (!docSchedule) {
+    docSchedule = await DoctorSchedule.findOne({ doctor: doctorId, date }).lean();
+  }
+  const start = docSchedule?.startTime || doctor.workingHours?.start || '08:00';
+  const end = docSchedule?.endTime || doctor.workingHours?.end || '16:30';
+  const step = docSchedule?.slotMinutes || 15;
+  const allSlots = buildSlots(start, end, step);
 
   const OpdAppointment = require('../models/OpdAppointment');
   const [booked, opdBooked] = await Promise.all([
