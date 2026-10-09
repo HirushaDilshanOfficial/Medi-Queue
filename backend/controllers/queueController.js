@@ -659,6 +659,71 @@ const markNoShow = asyncHandler(async (req, res) => {
  * @route   POST /api/reception/queue/:id/move-back
  * @access  Private — receptionist, doctor
  */
+
+/**
+ * @desc    Mark a waiting token as urgent
+ * @route   POST /api/reception/queue/:id/urgent
+ * @access  Private — receptionist
+ */
+const markUrgent = asyncHandler(async (req, res) => {
+
+  const policy = await Policy.findOne() || {};
+  if (policy.priorityQueue === false) {
+    throw createError('Priority Queue feature is currently disabled by MOH', 403);
+  }
+
+  let token = await QueueToken.findById(req.params.id);
+  if (!token) {
+    token = await QueueToken.findOne({ appointment: req.params.id });
+  }
+  
+  let isOpd = false;
+  if (!token) {
+    token = await OpdQueueEntry.findById(req.params.id);
+    if (!token) {
+      token = await OpdQueueEntry.findOne({ appointment: req.params.id });
+    }
+    if (token) {
+      isOpd = true;
+    }
+  }
+
+  if (!token) {
+    throw createError('Queue token not found', 404);
+  }
+
+  if (token.status !== 'waiting') {
+    throw createError('Only waiting tokens can be marked as urgent', 400);
+  }
+
+  if (token.priority === 'urgent') {
+    return res.json({ success: true, token }); // already urgent
+  }
+
+  token.priority = 'urgent';
+  await token.save();
+
+  if (token.appointment) {
+    if (isOpd) {
+      await OpdAppointment.findByIdAndUpdate(token.appointment, {
+        $set: { priority: 'urgent' }
+      });
+    } else {
+      await Appointment.findByIdAndUpdate(token.appointment, {
+        $set: { priority: 'urgent' }
+      });
+    }
+  }
+
+  // Socket event (optional)
+  req.app.get('io')?.emit('queue-updated', {
+    message: 'Token marked as urgent',
+    tokenNumber: token.tokenNumber
+  });
+
+  res.json({ success: true, token });
+});
+
 const moveBackToken = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
@@ -981,6 +1046,7 @@ module.exports = {
   recallToken,
   markNoShow,
   moveBackToken,
+  markUrgent,
   assignDoctor,
   updateAutoAdvance,
   getAutoAdvance,
