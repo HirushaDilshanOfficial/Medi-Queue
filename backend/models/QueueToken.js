@@ -63,10 +63,10 @@ const queueTokenSchema = new mongoose.Schema(
   }
 );
 
-// One token number per date — prevents duplicate tokens
-queueTokenSchema.index({ date: 1, tokenNumber: 1 }, { unique: true });
+// One token number per department per date — prevents duplicate tokens
+queueTokenSchema.index({ department: 1, date: 1, tokenNumber: 1 }, { unique: true });
 
-// Fast queue listing filtered by date, status and priority
-queueTokenSchema.index({ date: 1, status: 1, priority: 1 });
+// Fast queue listing filtered by department, date, status and priority
+queueTokenSchema.index({ department: 1, date: 1, status: 1, priority: 1 });
 
 module.exports = mongoose.model('QueueToken', queueTokenSchema);
