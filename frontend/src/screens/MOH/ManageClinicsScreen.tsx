@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -44,7 +45,8 @@ export default function ManageClinicsScreen() {
     <View style={styles.root}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()}><Text style={styles.back}>‹</Text></Pressable>
-        <View><Text style={styles.title}>{t("Manage clinics")}</Text><Text style={styles.subtitle}>{name || t('Hospital')}</Text></View>
+        <View style={{ flex: 1, minWidth: 0 }}><Text style={styles.title}>{t("Manage clinics")}</Text><Text style={styles.subtitle}>{name || t('Hospital')}</Text></View>
+        <LanguageSwitcher tone="light" />
       </View>
       {loading ? <ActivityIndicator color={Colors.primary} style={styles.loader} /> : (
         <FlatList

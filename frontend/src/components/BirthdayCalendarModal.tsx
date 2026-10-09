@@ -1,8 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
 import { useLanguage } from '../i18n/LanguageContext';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
@@ -20,7 +20,7 @@ export interface BirthdayCalendarModalProps {
   onClose: () => void;
 }
 
-const MONTH_NAMES = [
+const EN_MONTH_NAMES = [
   'January',
   'February',
   'March',
@@ -35,7 +35,7 @@ const MONTH_NAMES = [
   'December',
 ];
 
-const MONTH_SHORT = [
+const EN_MONTH_SHORT = [
   'Jan',
   'Feb',
   'Mar',
@@ -50,7 +50,7 @@ const MONTH_SHORT = [
   'Dec',
 ];
 
-const DAY_NAMES = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const EN_DAY_NAMES = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 const CURRENT_YEAR = new Date().getFullYear();
 const MIN_YEAR = 1920;
@@ -71,7 +71,13 @@ export const BirthdayCalendarModal: React.FC<BirthdayCalendarModalProps> = ({
   onSelectDate,
   onClose,
 }) => {
-  const { t } = useLanguage();
+  const { t, locale, language } = useLanguage();
+  const MONTH_NAMES = useMemo(() => language === 'en' ? EN_MONTH_NAMES : Array.from({ length: 12 }, (_, month) =>
+    new Intl.DateTimeFormat(locale, { month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2023, month, 1)))), [language, locale]);
+  const MONTH_SHORT = useMemo(() => language === 'en' ? EN_MONTH_SHORT : Array.from({ length: 12 }, (_, month) =>
+    new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2023, month, 1)))), [language, locale]);
+  const DAY_NAMES = useMemo(() => language === 'en' ? EN_DAY_NAMES : Array.from({ length: 7 }, (_, day) =>
+    new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2023, 0, day + 1)))), [language, locale]);
   const today = useMemo(() => new Date(), []);
 
   // Parse initialDate or fallback to 30 years ago for realistic default birthday
@@ -175,7 +181,7 @@ export const BirthdayCalendarModal: React.FC<BirthdayCalendarModalProps> = ({
                     <Text style={styles.headerTitle}>{t("Select Birthday")}</Text>
                     <Text style={styles.headerSubtitle}>
                       {formattedDateStr}{' '}{t("• Age:")}{' '}{calculatedAge}{' '}{t("yrs")}
-                      {calculatedAge >= 60 ? ' (Senior)' : ''}
+                      {calculatedAge >= 60 ? t(' (Senior)') : ''}
                     </Text>
                   </View>
                 </View>

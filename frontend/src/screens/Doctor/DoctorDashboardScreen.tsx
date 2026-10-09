@@ -714,7 +714,7 @@ export default function DoctorDashboardScreen() {
               </View>
               <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={styles.darkHospitalName}>{currentHospital}</Text>
-                <Text style={styles.darkRoomSubtitle}>OPD · {currentRoom}</Text>
+                <Text style={styles.darkRoomSubtitle}>{t("OPD ·")}{currentRoom}</Text>
               </View>
             </View>
             <DarkTranslucentChip

@@ -25,6 +25,8 @@ function bookingController({ full = false, publicUrl } = {}) {
       create: async data => ({ ...data, _id: 'appointment-id', save: async () => {} }),
     },
     '../models/OpdQueueEntry': {},
+    '../models/QueueToken': {},
+    '../utils/patientSync': { ensurePatientForProfile: async () => null },
     '../models/Appointment': { findOne: () => lean(null) },
     '../models/OpdQueueCounter': { nextTokenNumber: async () => { allocations++; return 7; } },
     '../utils/ensureBookingQueueEntry': { ensureBookingQueueEntry: async () => queueEntry },

@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
@@ -289,6 +290,7 @@ export default function ReportsScreen() {
         <TouchableOpacity onPress={() => setDownloadModalVisible(true)} style={{ padding: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8 }}>
           <Ionicons name="options-outline" size={24} color={Colors.white} />
         </TouchableOpacity>
+        <LanguageSwitcher tone="dark" />
       </View>
 
       <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
@@ -446,7 +448,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   backButtonText: { fontSize: 24, color: Colors.white },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.white },
+  headerTitle: { flexShrink: 1, fontSize: 18, fontWeight: 'bold', color: Colors.white },
   headerSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   scrollArea: { flex: 1, padding: 16 },
   kpiRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },

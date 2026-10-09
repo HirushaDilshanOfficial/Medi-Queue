@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../i18n/LocalizedText';
 import { useLanguage } from '../i18n/LanguageContext';
 import React, { useState, useCallback, useRef } from 'react';
@@ -200,7 +201,7 @@ export default function NotificationsScreen() {
           style={styles.backButton}
           onPress={handleBack}
           activeOpacity={0.7}
-          accessibilityLabel="Back"
+          accessibilityLabel={t("Back")}
           accessibilityRole="button"
         >
           <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
@@ -212,11 +213,12 @@ export default function NotificationsScreen() {
           onPress={handleClearAll}
           activeOpacity={0.7}
           style={styles.clearAllBtn}
-          accessibilityLabel="Clear All"
+          accessibilityLabel={t("Clear All")}
           accessibilityRole="button"
         >
           <Text style={styles.clearAllText}>{t('Clear All')}</Text>
         </TouchableOpacity>
+        <LanguageSwitcher tone="dark" />
       </View>
 
       {/* Filter Tabs matching exact user screenshot */}
@@ -317,7 +319,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 22,
     fontWeight: '700',
     color: '#FFFFFF',

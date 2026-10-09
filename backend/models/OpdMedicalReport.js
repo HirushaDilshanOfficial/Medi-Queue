@@ -56,6 +56,7 @@ const opdMedicalReportSchema = new mongoose.Schema(
       maxlength: 160,
     },
     fileKey: { type: String, trim: true, maxlength: 260 },
+    fileUrl: { type: String, trim: true, maxlength: 500 },
     fileMimeType: { type: String, trim: true, maxlength: 100 },
     fileSize: { type: Number, min: 1 },
 

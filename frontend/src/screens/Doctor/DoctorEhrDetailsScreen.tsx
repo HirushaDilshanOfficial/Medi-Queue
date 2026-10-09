@@ -729,7 +729,7 @@ export default function DoctorEhrDetailsScreen() {
               style={styles.modalInput}
               value={newMedName}
               onChangeText={setNewMedName}
-              placeholder="e.g. Metformin"
+              placeholder={t("e.g. Metformin")}
               placeholderTextColor={EHR_TOKENS.sub}
             />
 
@@ -738,7 +738,7 @@ export default function DoctorEhrDetailsScreen() {
               style={styles.modalInput}
               value={newMedDose}
               onChangeText={setNewMedDose}
-              placeholder="e.g. 500 mg"
+              placeholder={t("e.g. 500 mg")}
               placeholderTextColor={EHR_TOKENS.sub}
             />
 
@@ -747,7 +747,7 @@ export default function DoctorEhrDetailsScreen() {
               style={styles.modalInput}
               value={newMedFreq}
               onChangeText={setNewMedFreq}
-              placeholder="e.g. Twice daily after meals"
+              placeholder={t("e.g. Twice daily after meals")}
               placeholderTextColor={EHR_TOKENS.sub}
             />
 

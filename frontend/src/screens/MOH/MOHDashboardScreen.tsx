@@ -96,7 +96,7 @@ export default function MOHDashboardScreen() {
                 <Ionicons name="notifications" size={20} color={Colors.white} />
               </TouchableOpacity>
               <View style={{ marginLeft: -8, marginRight: -10 }}>
-                <LanguageSwitcher />
+                <LanguageSwitcher tone="dark" />
               </View>
             </View>
           </View>

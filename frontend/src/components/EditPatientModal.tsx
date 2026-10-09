@@ -457,7 +457,7 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
                     style={styles.textInput}
                     value={emName}
                     onChangeText={setEmName}
-                    placeholder="e.g. Nimal Perera"
+                    placeholder={t("e.g. Nimal Perera")}
                     placeholderTextColor={Colors.textLight}
                   />
                 </View>

@@ -1,8 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
 import { useLanguage } from '../i18n/LanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
@@ -108,12 +108,12 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               </View>
               <View>
                 <Text style={styles.headerTitle}>
-                  {mode === 'camera' ? 'Camera QR Scanner' : 'Barcode Checker Machine'}
+                  {mode === 'camera' ? t('Camera QR Scanner') : t('Barcode Checker Machine')}
                 </Text>
                 <Text style={styles.headerSubtitle}>
                   {mode === 'camera'
-                    ? 'Align QR or barcode inside viewfinder'
-                    : 'USB Barcode Gun & Desk Reader Standby'}
+                    ? t('Align QR or barcode inside viewfinder')
+                    : t('USB Barcode Gun & Desk Reader Standby')}
                 </Text>
               </View>
             </View>
@@ -121,7 +121,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             <TouchableOpacity
               onPress={onClose}
               style={styles.closeBtn}
-              accessibilityLabel="Close Scanner"
+              accessibilityLabel={t("Close Scanner")}
             >
               <Ionicons name="close" size={20} color={Colors.textMedium} />
             </TouchableOpacity>
@@ -186,7 +186,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 <TextInput
                   ref={inputRef}
                   style={styles.barcodeInput}
-                  placeholder="Scan or enter Barcode / NIC / Booking Ref..."
+                  placeholder={t("Scan or enter Barcode / NIC / Booking Ref...")}
                   placeholderTextColor={Colors.textLight}
                   value={manualCode}
                   onChangeText={(text) => {
@@ -224,7 +224,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     setTimeout(() => handleBarcodeScanned('197824190V'), 100);
                   }}
                 >
-                  <Text style={styles.testChipText}>NIC: 197824190V</Text>
+                  <Text style={styles.testChipText}>{t("NIC: 197824190V")}</Text>
                 </TouchableOpacity>
               </View>
             </View>

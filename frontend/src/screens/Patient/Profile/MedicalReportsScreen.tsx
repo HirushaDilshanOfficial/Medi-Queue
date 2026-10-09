@@ -1,7 +1,7 @@
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, Pressable, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, Pressable, Alert, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { PatientTheme } from '../../../constants/PatientTheme';
@@ -29,31 +29,41 @@ export function MedicalReportsScreen() {
 
   const remove = useCallback(
     (report: MedicalReport) => {
-      Alert.alert(
-        t('Remove this report?'),
-        t("“{value0}” will be taken off your list. The clinic's own copy of your record is not affected.", { value0: String(report.title) }),
-        [
+      const executeRemove = async () => {
+        setDeleting(report.id);
+        try {
+          await patientApi.deleteReport(report.id);
+          await reports.reload();
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : t('Please try again.');
+          if (Platform.OS === 'web') {
+            window.alert(`${t('Could not remove')}: ${errMsg}`);
+          } else {
+            Alert.alert(t('Could not remove'), errMsg);
+          }
+        } finally {
+          setDeleting(null);
+        }
+      };
+
+      const message = t("“{value0}” will be taken off your list. The clinic's own copy of your record is not affected.", {
+        value0: String(report.title),
+      });
+
+      if (Platform.OS === 'web') {
+        if (window.confirm(`${t('Remove this report?')}\n\n${message}`)) {
+          void executeRemove();
+        }
+      } else {
+        Alert.alert(t('Remove this report?'), message, [
           { text: t('Keep it'), style: 'cancel' },
           {
             text: t('Remove'),
             style: 'destructive',
-            onPress: async () => {
-              setDeleting(report.id);
-              try {
-                await patientApi.deleteReport(report.id);
-                await reports.reload();
-              } catch (error) {
-                Alert.alert(
-                  t('Could not remove'),
-                  error instanceof Error ? error.message : t('Please try again.'),
-                );
-              } finally {
-                setDeleting(null);
-              }
-            },
+            onPress: executeRemove,
           },
-        ],
-      );
+        ]);
+      }
     },
     [reports, t],
   );

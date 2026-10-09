@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { LANGUAGES, useLanguage, type Language } from '../../../i18n/LanguageContext';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
@@ -136,6 +137,7 @@ export function PatientProfileScreen() {
       <View style={styles.headerIcon}><ProfileIcon name="medical" size={20} /></View><Text style={styles.headerTitle}>{t("Profile")}</Text><View style={styles.grow} />
       <IconButton icon="bell" label={t("Notifications")} onPress={notice} />
       <Pressable accessibilityRole="button" accessibilityLabel={t("View personal information")} onPress={() => setTab('Personal Info')} style={styles.headerAvatar}><Avatar patient={patient} small /></Pressable>
+      <LanguageSwitcher tone="light" />
     </View></View>
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={Boolean(patient) && (profile.loading || history.loading || queue.loading)}

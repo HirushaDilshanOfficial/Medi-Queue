@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -150,8 +151,8 @@ export default function ManagePatientsScreen() {
             <Ionicons name="arrow-back" size={24} color={Colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t("Patient Management")}</Text>
-          <View style={{ width: 40 }} />
-        </View>
+            <LanguageSwitcher tone="dark" />
+          </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           
@@ -378,7 +379,7 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: 'bold',
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 20,
     fontWeight: '800',
     color: Colors.white,

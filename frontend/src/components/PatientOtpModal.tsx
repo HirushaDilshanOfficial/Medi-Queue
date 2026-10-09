@@ -1,8 +1,8 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
 import { useLanguage } from '../i18n/LanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
@@ -144,7 +144,7 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
             <TouchableOpacity
               onPress={onClose}
               style={styles.closeBtn}
-              accessibilityLabel="Close OTP modal"
+              accessibilityLabel={t("Close OTP modal")}
             >
               <Ionicons name="close" size={20} color={Colors.textMedium} />
             </TouchableOpacity>
@@ -183,7 +183,7 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
               </View>
               <Text style={styles.smsSimulatorBody}>
                 {smsMessagePreview ||
-                  `"[Medi-Queue] Your verification OTP is ${activeCode}. Valid for 10 minutes."`}
+                  t("\"[Medi-Queue] Your verification OTP is {value0}. Valid for 10 minutes.\"", { value0: activeCode })}
               </Text>
             </View>
           ) : null}
@@ -236,10 +236,10 @@ export const PatientOtpModal: React.FC<PatientOtpModalProps> = ({
                 ]}
               >
                 {sending
-                  ? 'Sending...'
+                  ? t('Sending...')
                   : resendCountdown > 0
-                  ? `Resend in ${resendCountdown}s`
-                  : 'Resend OTP Now'}
+                  ? t("Resend in {value0}s", { value0: resendCountdown })
+                  : t('Resend OTP Now')}
               </Text>
             </TouchableOpacity>
           </View>

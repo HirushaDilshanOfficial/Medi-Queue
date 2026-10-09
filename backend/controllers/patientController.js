@@ -8,6 +8,11 @@ const { mapAppointment, relativeDate, isValidObjectId } = require('../utils/opdA
 const fs = require('fs');
 const path = require('path');
 const { REPORT_UPLOAD_DIR } = require('../middleware/reportUpload');
+const {
+  isCloudinaryConfigured,
+  uploadToCloudinary,
+  deleteFromCloudinary,
+} = require('../config/cloudinary');
 
 function ageFrom(birthday) {
   if (!(birthday instanceof Date) || Number.isNaN(birthday.getTime())) return null;
@@ -361,6 +366,7 @@ const getMyReport = async (req, res, next) => {
 };
 
 function toReportDto(report) {
+  const fileUrl = report.fileUrl || (report.fileKey ? `/api/v1/patients/me/reports/${String(report._id)}/file` : null);
   return {
     id: String(report._id),
     appointmentId: report.appointment ? String(report.appointment) : null,
@@ -372,7 +378,7 @@ function toReportDto(report) {
     fileName: report.fileName || null,
     fileMimeType: report.fileMimeType || null,
     fileSize: report.fileSize || null,
-    fileUrl: report.fileKey ? `/api/v1/patients/me/reports/${String(report._id)}/file` : null,
+    fileUrl,
     status: report.status,
     createdAt: report.createdAt ? report.createdAt.toISOString() : null,
   };
@@ -474,22 +480,43 @@ const createMyReport = async (req, res, next) => {
     }
 
     delete patch.appointmentId;
+
+    let fileData = {};
+    if (req.file) {
+      if (isCloudinaryConfigured()) {
+        const fileSource = req.file.buffer || req.file.path;
+        const cloudResult = await uploadToCloudinary(fileSource);
+        fileData = {
+          fileName: req.file.originalname,
+          fileKey: cloudResult.publicId,
+          fileUrl: cloudResult.url,
+          fileMimeType: req.file.mimetype,
+          fileSize: req.file.size,
+        };
+      } else {
+        const fileKey = req.file.filename || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const filePath = path.join(REPORT_UPLOAD_DIR, fileKey);
+        if (req.file.buffer) {
+          fs.writeFileSync(filePath, req.file.buffer);
+        }
+        fileData = {
+          fileName: req.file.originalname,
+          fileKey,
+          fileMimeType: req.file.mimetype,
+          fileSize: req.file.size,
+        };
+      }
+    }
+
     const report = await OpdMedicalReport.create({
       ...patch,
       appointment: appointmentId || null,
       profile: req.patientProfile._id,
-      ...(req.file ? {
-        fileName: req.file.originalname,
-        fileKey: req.file.filename,
-        fileMimeType: req.file.mimetype,
-        fileSize: req.file.size,
-      } : {}),
+      ...fileData,
     });
 
     res.status(201).json({ report: toReportDto(report.toObject()) });
   } catch (error) {
-    if (req.file) fs.rm(req.file.path, { force: true }, () => {});
-    // A schema validation error is the caller's fault, not a server fault.
     if (error.name === 'ValidationError') {
       return res.status(400).json({ message: error.message });
     }
@@ -498,11 +525,11 @@ const createMyReport = async (req, res, next) => {
 };
 
 const updateMyReport = async (req, res, next) => {
-  let previousFile;
+  let previousFileKey;
+  let previousFileUrl;
   try {
     const { patch, error } = buildReportPatch(req.body);
     if (error) {
-      if (req.file) fs.rm(req.file.path, { force: true }, () => {});
       return res.status(400).json({ message: error });
     }
 
@@ -511,7 +538,6 @@ const updateMyReport = async (req, res, next) => {
       profile: req.patientProfile._id,
     });
     if (!report) {
-      if (req.file) fs.rm(req.file.path, { force: true }, () => {});
       return res.status(404).json({ message: 'Report not found' });
     }
 
@@ -521,33 +547,62 @@ const updateMyReport = async (req, res, next) => {
         profile: req.patientProfile._id,
       });
       if (!owned) {
-        if (req.file) fs.rm(req.file.path, { force: true }, () => {});
         return res.status(404).json({ message: 'That visit was not found in your history' });
       }
     }
 
-    previousFile = report.fileKey;
+    previousFileKey = report.fileKey;
+    previousFileUrl = report.fileUrl;
+
+    let fileData = {};
+    if (req.file) {
+      if (isCloudinaryConfigured()) {
+        const fileSource = req.file.buffer || req.file.path;
+        const cloudResult = await uploadToCloudinary(fileSource);
+        fileData = {
+          fileName: req.file.originalname,
+          fileKey: cloudResult.publicId,
+          fileUrl: cloudResult.url,
+          fileMimeType: req.file.mimetype,
+          fileSize: req.file.size,
+        };
+      } else {
+        const fileKey = req.file.filename || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const filePath = path.join(REPORT_UPLOAD_DIR, fileKey);
+        if (req.file.buffer) {
+          fs.writeFileSync(filePath, req.file.buffer);
+        }
+        fileData = {
+          fileName: req.file.originalname,
+          fileKey,
+          fileMimeType: req.file.mimetype,
+          fileSize: req.file.size,
+        };
+      }
+    }
+
     const appointmentWasSubmitted = Object.prototype.hasOwnProperty.call(req.body, 'appointmentId');
     const appointmentId = appointmentWasSubmitted ? (patch.appointmentId || null) : report.appointment;
     delete patch.appointmentId;
     Object.assign(report, {
       ...patch,
       appointment: appointmentId || null,
-      ...(req.file ? {
-        fileName: req.file.originalname,
-        fileKey: req.file.filename,
-        fileMimeType: req.file.mimetype,
-        fileSize: req.file.size,
-      } : {}),
+      ...fileData,
     });
     await report.save();
 
-    if (req.file && previousFile) {
-      fs.rm(path.join(REPORT_UPLOAD_DIR, previousFile), { force: true }, () => {});
+    if (req.file && previousFileKey) {
+      if (previousFileUrl && previousFileUrl.includes('cloudinary.com')) {
+        await deleteFromCloudinary(previousFileKey);
+      } else {
+        const oldPath = path.join(REPORT_UPLOAD_DIR, previousFileKey);
+        if (fs.existsSync(oldPath)) {
+          fs.unlinkSync(oldPath);
+        }
+      }
     }
     return res.json({ report: toReportDto(report.toObject()) });
   } catch (error) {
-    if (req.file) fs.rm(req.file.path, { force: true }, () => {});
     if (error.name === 'ValidationError') {
       return res.status(400).json({ message: error.message });
     }
@@ -565,7 +620,11 @@ const getMyReportFile = async (req, res, next) => {
       profile: req.patientProfile._id,
     }).lean();
     if (!report) return res.status(404).json({ message: 'Report not found' });
-    if (!report.fileKey) return res.status(404).json({ message: 'This report has no uploaded file' });
+    if (!report.fileKey && !report.fileUrl) return res.status(404).json({ message: 'This report has no uploaded file' });
+
+    if (report.fileUrl && (report.fileUrl.startsWith('http://') || report.fileUrl.startsWith('https://'))) {
+      return res.redirect(report.fileUrl);
+    }
 
     const filePath = path.join(REPORT_UPLOAD_DIR, report.fileKey);
     if (!filePath.startsWith(REPORT_UPLOAD_DIR + path.sep) || !fs.existsSync(filePath)) {
@@ -584,8 +643,6 @@ const getMyReportFile = async (req, res, next) => {
 // @access  Private/Patient
 const deleteMyReport = async (req, res, next) => {
   try {
-    // Scoped by `profile` in the query, so a patient cannot delete someone
-    // else's report even by guessing the id.
     const removed = await OpdMedicalReport.findOneAndDelete({
       _id: req.params.id,
       profile: req.patientProfile._id,
@@ -596,7 +653,11 @@ const deleteMyReport = async (req, res, next) => {
     }
 
     if (removed.fileKey) {
-      fs.rm(path.join(REPORT_UPLOAD_DIR, removed.fileKey), { force: true }, () => {});
+      if (removed.fileUrl && removed.fileUrl.includes('cloudinary.com')) {
+        await deleteFromCloudinary(removed.fileKey);
+      } else {
+        fs.rm(path.join(REPORT_UPLOAD_DIR, removed.fileKey), { force: true }, () => {});
+      }
     }
     res.json({ message: 'Report removed' });
   } catch (error) {

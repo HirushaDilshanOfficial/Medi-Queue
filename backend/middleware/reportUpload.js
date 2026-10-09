@@ -7,8 +7,10 @@ fs.mkdirSync(REPORT_UPLOAD_DIR, { recursive: true });
 
 const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
 
+const storage = multer.memoryStorage();
+
 const reportUpload = multer({
-  dest: REPORT_UPLOAD_DIR,
+  storage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, callback) => {
     if (!allowedTypes.has(file.mimetype)) {
@@ -22,3 +24,4 @@ const reportUpload = multer({
 });
 
 module.exports = { reportUpload, REPORT_UPLOAD_DIR, allowedTypes };
+

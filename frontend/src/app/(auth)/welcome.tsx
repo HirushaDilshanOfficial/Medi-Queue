@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
@@ -43,6 +44,7 @@ export default function WelcomeScreen() {
         <View style={{ flex: 1 }}>
           {/* ---- TEAL HEADER SECTION ---- */}
         <View style={styles.header}>
+<View style={{ position: 'absolute', top: 16, right: 16, zIndex: 2 }}><LanguageSwitcher tone="dark" /></View>
           <View style={styles.circleTopRight} />
           <View style={styles.circleBottomLeft} />
 

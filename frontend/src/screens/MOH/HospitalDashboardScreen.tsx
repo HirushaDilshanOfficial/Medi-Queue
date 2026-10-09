@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
@@ -125,6 +126,7 @@ export default function HospitalDashboardScreen() {
           <View style={styles.userIconContainer}>
             <Text style={styles.userIconText}>M</Text>
           </View>
+          <LanguageSwitcher tone="dark" />
         </View>
       </View>
 
@@ -347,7 +349,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: Colors.white,
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 18,
     fontWeight: '700',
     color: Colors.white,

@@ -126,8 +126,7 @@ export const PatientCard: React.FC<PatientCardProps> = ({
                 </View>
               ) : null}
               {patient.latestDoctorName ? (
-                <Text style={styles.latestDoctorText} numberOfLines={1}>
-                  Dr. {patient.latestDoctorName.replace(/^Dr\.\s*/i, '')}{patient.latestDepartment ? ` • ${patient.latestDepartment}` : ''}
+                <Text style={styles.latestDoctorText} numberOfLines={1}>{t("Dr.")}{patient.latestDoctorName.replace(/^Dr\.\s*/i, '')}{patient.latestDepartment ? ` • ${patient.latestDepartment}` : ''}
                 </Text>
               ) : null}
             </View>

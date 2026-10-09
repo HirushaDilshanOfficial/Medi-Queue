@@ -45,7 +45,7 @@ export function FormField({
       <TextInput
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder ?? label}
+        placeholder={t(placeholder ?? label)}
         placeholderTextColor={PatientTheme.textMuted}
         style={[styles.input, multiline && styles.inputMultiline, error ? styles.inputError : null]}
         keyboardType={keyboardType}
@@ -55,13 +55,13 @@ export function FormField({
         multiline={multiline}
         numberOfLines={multiline ? 3 : 1}
         textAlignVertical={multiline ? 'top' : 'center'}
-        accessibilityLabel={label}
-        accessibilityHint={hint}
+        accessibilityLabel={t(label)}
+        accessibilityHint={hint ? t(hint) : undefined}
       />
       {error ? (
         <Text style={styles.error}>{t(error)}</Text>
       ) : hint ? (
-        <Text style={styles.hint}>{hint}</Text>
+        <Text style={styles.hint}>{t(hint)}</Text>
       ) : null}
     </View>
   );

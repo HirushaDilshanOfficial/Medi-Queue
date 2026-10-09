@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -21,7 +22,7 @@ import { AppIcon } from '../../components/AppIcon';
 import { login } from '../../services/authService';
 import { setAuthToken as setHttpAuthToken } from '../../services/http';
 import { setAuthToken as setApiAuthToken } from '../../services/api';
-import Toast from 'react-native-toast-message';
+import Toast from '../../components/GlobalToast';
 
 // Actual Login Form - Email & Password
 export default function LoginScreen() {
@@ -101,6 +102,7 @@ export default function LoginScreen() {
         <View style={{ flex: 1 }}>
         {/* ---- TEAL HEADER ---- */}
         <View style={styles.header}>
+<View style={{ position: 'absolute', top: 16, right: 16, zIndex: 2 }}><LanguageSwitcher tone="dark" /></View>
           <View style={styles.circleTopRight} />
           <View style={styles.circleBottomLeft} />
 
@@ -276,7 +278,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   logoSmallIcon: { fontSize: 28 },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 26,
     fontWeight: '800',
     color: Colors.white,

@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
@@ -112,6 +113,7 @@ export default function AlertsScreen() {
           <TouchableOpacity style={styles.profileImagePlaceholder}>
             <Text style={{ color: Colors.primaryDark, fontSize: 12 }}>👤</Text>
           </TouchableOpacity>
+          <LanguageSwitcher tone="dark" />
         </View>
       </View>
 
@@ -299,14 +301,14 @@ export default function AlertsScreen() {
               <View style={styles.queueInfoCard}>
                 <Text style={styles.queueInfoLabel}>{t("Current Total Patients in Queue")}</Text>
                 <Text style={styles.queueInfoValue}>
-                  {selectedAlert?.metrics?.['Active Queue'] || t('N/A')}
+                  {selectedAlert?.metrics?.[t('Active Queue')] || t('N/A')}
                 </Text>
               </View>
               
               <View style={styles.queueInfoCard}>
                 <Text style={styles.queueInfoLabel}>{t("Available Doctors")}</Text>
                 <Text style={styles.queueInfoValue}>
-                  {selectedAlert?.metrics?.['Physician Ratio'] ? selectedAlert.metrics['Physician Ratio'].split('(')[1].replace(')', '') : t('N/A')}
+                  {selectedAlert?.metrics?.[t('Physician Ratio')] ? selectedAlert.metrics['Physician Ratio'].split('(')[1].replace(')', '') : t('N/A')}
                 </Text>
               </View>
 
@@ -363,7 +365,7 @@ const styles = StyleSheet.create({
   headerProfile: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   profileIcon: { width: 36, height: 36, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   profileIconText: { fontSize: 18 },
-  headerTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.white, marginRight: 8 },
+  headerTitle: { flexShrink: 1, fontSize: 16, fontWeight: 'bold', color: Colors.white, marginRight: 8 },
   liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 12 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF3B30', marginRight: 4 },
   liveText: { fontSize: 10, color: Colors.white, fontWeight: 'bold' },
