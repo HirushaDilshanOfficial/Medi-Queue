@@ -155,6 +155,8 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
       onNavigate(target, params);
     } else if (navigation?.navigate) {
       navigation.navigate(target, params);
+    } else if (target === 'DoctorSchedule' || target === 'schedule' || target === 'DocRoster') {
+      router.push('/(reception)/schedule' as any);
     }
   };
 
@@ -789,7 +791,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             {/* 4. Doc Roster */}
             <TouchableOpacity
               style={styles.quickActionCard}
-              onPress={() => setRosterModalVisible(true)}
+              onPress={() => handleNav('DoctorSchedule')}
               activeOpacity={0.7}
               accessibilityLabel={t("Doctor Roster")}
               accessibilityRole="button"

@@ -1084,7 +1084,6 @@ export const LiveQueueScreen: React.FC<LiveQueueScreenProps> = ({
           {/* Banner Top Row */}
           <View style={styles.bannerTopRow}>
             <View style={styles.bannerTagWrap}>
-              <Ionicons name="flash" size={13} color="#F59E0B" style={styles.bannerTagIcon} />
               <Text style={styles.bannerTagText}>{t("LIVE DISPATCH QUEUE")}</Text>
             </View>
 

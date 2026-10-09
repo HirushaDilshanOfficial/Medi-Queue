@@ -9,7 +9,26 @@ import {
   QueueToken,
   DashboardData,
   ShiftSummary,
+  DoctorSchedule,
+  DoctorScheduleDoctor,
+  CreateDoctorSchedulePayload,
+  UpdateDoctorSchedulePayload,
+  GetSchedulesParams,
+  SchedulesResponse,
+  ScheduleResponse,
+  DeleteScheduleResponse,
 } from '../types';
+
+export type {
+  DoctorSchedule,
+  DoctorScheduleDoctor,
+  CreateDoctorSchedulePayload,
+  UpdateDoctorSchedulePayload,
+  GetSchedulesParams,
+  SchedulesResponse,
+  ScheduleResponse,
+  DeleteScheduleResponse,
+};
 
 export const getApiBaseUrl = (): string => {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
@@ -17,7 +36,13 @@ export const getApiBaseUrl = (): string => {
     return `http://${hostname === 'localhost' || hostname === '127.0.0.1' ? 'localhost' : hostname}:5001`;
   }
 
-  // 1. Try Expo hostUri (exact IP phone used to connect to Metro bundler)
+  // Prefer an explicit backend URL over the Expo development-server address.
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && !envUrl.includes('192.168.56.') && !envUrl.includes('192.168.1.2')) {
+    return envUrl.includes(':5001') ? envUrl : `${envUrl.replace(/\/+$/, '')}:5001`;
+  }
+
+  // Fall back to the Expo host address for local development.
   const hostUri =
     Constants.expoConfig?.hostUri ||
     (Constants as any).manifest?.debuggerHost ||
@@ -27,12 +52,6 @@ export const getApiBaseUrl = (): string => {
     if (ip && ip !== 'localhost' && ip !== '127.0.0.1' && !ip.startsWith('192.168.56.')) {
       return `http://${ip}:5001`;
     }
-  }
-
-  // 2. Check process.env.EXPO_PUBLIC_API_URL
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && !envUrl.includes('192.168.56.') && !envUrl.includes('192.168.1.2')) {
-    return envUrl.includes(':5001') ? envUrl : `${envUrl.replace(/\/+$/, '')}:5001`;
   }
 
   return 'http://10.240.7.66:5001';
@@ -184,6 +203,21 @@ export const api = {
     const headers = await getHeaders(options?.headers, options?.token);
     const response = await fetch(targetUrl, {
       method: 'PATCH',
+      headers,
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+      ...options,
+    });
+    return handleResponse<T>(response, targetUrl);
+  },
+  put: async <T = any>(
+    url: string,
+    data?: any,
+    options?: ApiRequestOptions
+  ): Promise<T> => {
+    const targetUrl = resolveUrl(url);
+    const headers = await getHeaders(options?.headers, options?.token);
+    const response = await fetch(targetUrl, {
+      method: 'PUT',
       headers,
       body: data !== undefined ? JSON.stringify(data) : undefined,
       ...options,
@@ -746,5 +780,64 @@ export const completeToken = async (
   );
 };
 
-export default api;
+// ─────────────────────────────────────────────────────────
+// Doctor Schedule Management API
+// ─────────────────────────────────────────────────────────
 
+/**
+ * Create a new doctor schedule.
+ */
+export const createSchedule = async (
+  data: CreateDoctorSchedulePayload,
+  token?: string
+): Promise<ScheduleResponse> => {
+  return api.post<ScheduleResponse>('/api/reception/schedules', data, { token });
+};
+
+/**
+ * List doctor schedules filtered by date and/or doctorId.
+ */
+export const getSchedules = async (
+  params?: string | GetSchedulesParams,
+  token?: string
+): Promise<SchedulesResponse> => {
+  const query = new URLSearchParams();
+  if (typeof params === 'string') {
+    if (params) query.append('date', params);
+  } else if (params) {
+    if (params.date) query.append('date', params.date);
+    if (params.doctorId) query.append('doctorId', params.doctorId);
+  }
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return api.get<SchedulesResponse>(`/api/reception/schedules${qs}`, { token });
+};
+
+/**
+ * Update an existing doctor schedule (times, slotMinutes, maxPatients, status, notes).
+ */
+export const updateSchedule = async (
+  id: string,
+  data: UpdateDoctorSchedulePayload,
+  token?: string
+): Promise<ScheduleResponse> => {
+  return api.put<ScheduleResponse>(
+    `/api/reception/schedules/${encodeURIComponent(id)}`,
+    data,
+    { token }
+  );
+};
+
+/**
+ * Delete a doctor schedule (only if no active appointments exist in range).
+ */
+export const deleteSchedule = async (
+  id: string,
+  token?: string
+): Promise<DeleteScheduleResponse> => {
+  return api.delete<DeleteScheduleResponse>(
+    `/api/reception/schedules/${encodeURIComponent(id)}`,
+    { token }
+  );
+};
+
+export default api;

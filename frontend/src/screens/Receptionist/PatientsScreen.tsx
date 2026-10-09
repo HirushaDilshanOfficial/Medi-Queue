@@ -687,7 +687,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                   <View style={styles.quickDeskHeader}>
                     <View style={styles.quickDeskTitleRow}>
                       <View style={styles.quickDeskIconWrap}>
-                        <Ionicons name="flash" size={15} color={Colors.primary} />
+                        <Ionicons name="document-text-outline" size={15} color={Colors.primary} />
                       </View>
                       <Text style={styles.quickDeskTitle}>{t("Quick Desk Actions")}</Text>
                     </View>
