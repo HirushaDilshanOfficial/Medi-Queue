@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
@@ -12,6 +13,7 @@ import {
   Modal,
   Alert,
 } from 'react-native';
+import Toast from '../../components/GlobalToast';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -159,14 +161,32 @@ export default function AddStaffScreen() {
       const data = await response.json();
       
       if (response.ok) {
-        alert(isEditMode ? 'Staff updated successfully!' : 'Staff registered successfully!');
+        Toast.show({
+          type: 'success',
+          text1: isEditMode ? t('Staff Updated') : t('Staff Registered'),
+          text2: isEditMode ? t('The staff member has been updated successfully.') : t('The new staff member has been registered.'),
+          position: 'top',
+          topOffset: 60,
+        });
         router.back();
       } else {
-        alert(data.message || (isEditMode ? 'Failed to update staff' : 'Failed to register staff'));
+        Toast.show({
+          type: 'error',
+          text1: t('Error'),
+          text2: data.message || (isEditMode ? t('Failed to update staff') : t('Failed to register staff')),
+          position: 'top',
+          topOffset: 60,
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving staff:', error);
-      alert('An error occurred. Check console.');
+      Toast.show({
+        type: 'error',
+        text1: t('Network Error'),
+        text2: t('An error occurred. Check your connection.'),
+        position: 'top',
+        topOffset: 60,
+      });
     } finally {
       setLoading(false);
     }
@@ -220,7 +240,13 @@ export default function AddStaffScreen() {
   const handleNextStep1 = () => {
     const validation = validateStep1();
     if (validation !== true) {
-      Alert.alert(t('Validation Error'), t(validation as string));
+      Toast.show({
+        type: 'error',
+        text1: t('Validation Error'),
+        text2: t(validation as string),
+        position: 'top',
+        topOffset: 60,
+      });
       return;
     }
     setCurrentStep(2);
@@ -229,7 +255,13 @@ export default function AddStaffScreen() {
   const handleNextStep2 = () => {
     const validation = validateStep2();
     if (validation !== true) {
-      Alert.alert(t('Validation Error'), t(validation as string));
+      Toast.show({
+        type: 'error',
+        text1: t('Validation Error'),
+        text2: t(validation as string),
+        position: 'top',
+        topOffset: 60,
+      });
       return;
     }
     setCurrentStep(3);
@@ -296,8 +328,8 @@ export default function AddStaffScreen() {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{isEditMode ? t('Edit Staff Member') : t('Add Staff Member')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+          <LanguageSwitcher tone="light" />
+        </View>
 
       {/* Stepper Progress */}
       <View style={styles.stepperContainer}>
@@ -336,7 +368,7 @@ export default function AddStaffScreen() {
           <Text style={styles.label}>{t("Full Name*")}</Text>
           <TextInput
             style={styles.input}
-            placeholder="John Doe"
+            placeholder={t("John Doe")}
             value={formData.fullName}
             onChangeText={(text) => setFormData({ ...formData, fullName: text.replace(/[^a-zA-Z\s]/g, '') })}
           />
@@ -689,7 +721,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: Colors.textDark,
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 18,
     fontWeight: '700',
     color: Colors.textDark,

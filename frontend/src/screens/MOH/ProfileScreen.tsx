@@ -1,17 +1,21 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, Platform, SafeAreaView } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, Platform, Switch, Alert } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../theme/ThemeContext';
 import { BASE_URL } from '../../config';
 
 import { getAuthToken, clearAuthToken } from '../../services/http';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
+import Toast from '../../components/GlobalToast';
 
 export default function ProfileScreen() {
   const { t } = useLanguage();
+  const { isDarkMode, toggleTheme } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -72,15 +76,38 @@ export default function ProfileScreen() {
   }, []);
 
   const handleLogout = async () => {
-    await clearAuthToken();
-    await AsyncStorage.removeItem('user');
-    router.replace('/(auth)/login');
+    Alert.alert(
+      t('Log Out'),
+      t('Are you sure you want to log out?'),
+      [
+        {
+          text: t('Cancel'),
+          style: 'cancel',
+        },
+        {
+          text: t('Log Out'),
+          style: 'destructive',
+          onPress: async () => {
+            await clearAuthToken();
+            await AsyncStorage.removeItem('user');
+            Toast.show({
+              type: 'info',
+              text1: t('Logged Out'),
+              text2: t('You have been successfully logged out.'),
+              position: 'top',
+              topOffset: 60,
+            });
+            router.replace('/(auth)/login');
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.white }}>
+    <View style={{ flex: 1, backgroundColor: Colors.primaryDark }}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
-      <SafeAreaView style={{ flex: 0, backgroundColor: Colors.primaryDark }} />
 
       <View style={{ flex: 1, backgroundColor: Colors.background }}>
         <ScrollView 
@@ -96,6 +123,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <Text style={styles.headerTitle}>{t("My Profile")}</Text>
               <View style={{ width: 36 }} />
+              <LanguageSwitcher tone="dark" />
             </View>
 
             <View style={styles.profileSection}>
@@ -158,21 +186,17 @@ export default function ProfileScreen() {
                 <Text style={styles.settingArrow}>❯</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.settingItem}>
+              <View style={styles.settingItem}>
                 <View style={styles.settingItemLeft}>
-                  <Text style={styles.settingIcon}>🔐</Text>
-                  <Text style={styles.settingText}>{t("Change Password")}</Text>
+                  <Text style={styles.settingIcon}>{isDarkMode ? '🌙' : '☀️'}</Text>
+                  <Text style={styles.settingText}>{t("Dark Mode")}</Text>
                 </View>
-                <Text style={styles.settingArrow}>❯</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.settingItem}>
-                <View style={styles.settingItemLeft}>
-                  <Text style={styles.settingIcon}>🔔</Text>
-                  <Text style={styles.settingText}>{t("Notifications")}</Text>
-                </View>
-                <Text style={styles.settingArrow}>❯</Text>
-              </TouchableOpacity>
+                <Switch 
+                  value={isDarkMode} 
+                  onValueChange={toggleTheme} 
+                  trackColor={{ false: '#e0e0e0', true: Colors.primaryDark }}
+                />
+              </View>
             </View>
 
             <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -212,7 +236,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconText: { color: Colors.white, fontSize: 18, fontWeight: 'bold' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: Colors.white },
+  headerTitle: { flexShrink: 1, fontSize: 18, fontWeight: '700', color: Colors.white },
   
   profileSection: {
     alignItems: 'center',

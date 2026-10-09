@@ -48,6 +48,7 @@ const appointmentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
     },
+    priority: { type: String, enum: ['urgent', 'senior', 'normal'], default: 'normal' },
     tokenNumber: {
       type: Number,
     },

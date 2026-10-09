@@ -583,6 +583,21 @@ export const markNoShow = async (
 /**
  * Move a waiting token 3 positions back in the queue.
  */
+
+/**
+ * Mark a waiting token as urgent.
+ */
+export const markTokenUrgent = async (
+  tokenId: string,
+  token?: string
+): Promise<{ success: boolean; token: QueueToken }> => {
+  return api.post<{ success: boolean; token: QueueToken }>(
+    `/api/reception/queue/${tokenId}/urgent`,
+    {},
+    { token }
+  );
+};
+
 export const moveBack = async (
   tokenId: string,
   token?: string

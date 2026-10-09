@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -21,6 +22,7 @@ import { AppIcon } from '../../components/AppIcon';
 import { login } from '../../services/authService';
 import { setAuthToken as setHttpAuthToken } from '../../services/http';
 import { setAuthToken as setApiAuthToken } from '../../services/api';
+import Toast from '../../components/GlobalToast';
 
 // Actual Login Form - Email & Password
 export default function LoginScreen() {
@@ -48,22 +50,45 @@ export default function LoginScreen() {
       setApiAuthToken(userData.token);
 
       // Successfully logged in
-      Alert.alert(t('Success'), t("Welcome back, {value0}!", { value0: String(userData.fullName) }));
+      Toast.show({
+        type: 'success',
+        text1: t('Welcome back!'),
+        text2: t("{value0}, you have successfully logged in.", { value0: String(userData.fullName) }),
+        position: 'top',
+        topOffset: 60,
+      });
 
       // Navigate based on role
       if (userData.role === 'MOH') {
         router.replace('/(moh)/dashboard' as any);
       } else if (userData.role === 'Patient') {
-        router.replace('/(patient)' as any);
+        const hasSeenOnboarding = await AsyncStorage.getItem(`onboarding_${userData._id}`);
+        if (!hasSeenOnboarding) {
+          router.replace('/(auth)/onboarding' as any);
+        } else {
+          router.replace('/(patient)' as any);
+        }
       } else if (String(userData.role || '').toLowerCase() === 'receptionist') {
         router.replace('/(reception)/dashboard' as any);
       } else if (String(userData.role || '').toLowerCase() === 'doctor') {
         router.replace('/(doctor)/dashboard' as any);
       } else {
-        Alert.alert(t('Notice'), t("Logged in as {value0}, but dashboard is not created yet.", { value0: String(userData.role) }));
+        Toast.show({
+          type: 'info',
+          text1: t('Notice'),
+          text2: t("Logged in as {value0}, but dashboard is not created yet.", { value0: String(userData.role) }),
+          position: 'top',
+          topOffset: 60,
+        });
       }
     } catch (error: any) {
-      Alert.alert(t('Login Failed'), error.message);
+      Toast.show({
+        type: 'error',
+        text1: t('Login Failed'),
+        text2: error.message,
+        position: 'top',
+        topOffset: 60,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -82,6 +107,7 @@ export default function LoginScreen() {
         <View style={{ flex: 1 }}>
         {/* ---- TEAL HEADER ---- */}
         <View style={styles.header}>
+<View style={{ position: 'absolute', top: 16, right: 16, zIndex: 2 }}><LanguageSwitcher tone="dark" /></View>
           <View style={styles.circleTopRight} />
           <View style={styles.circleBottomLeft} />
 
@@ -219,20 +245,22 @@ const styles = StyleSheet.create({
   // ---- Header ----
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: 55,
-    paddingBottom: 50,
+    paddingTop: 70,
+    paddingBottom: 120, // Increased to make the teal part bigger
     paddingHorizontal: 24,
     overflow: 'hidden',
     position: 'relative',
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
   },
   circleTopRight: {
     position: 'absolute', top: -40, right: -40,
-    width: 160, height: 160, borderRadius: 80,
+    width: 180, height: 180, borderRadius: 90,
     backgroundColor: Colors.primaryLight, opacity: 0.3,
   },
   circleBottomLeft: {
-    position: 'absolute', bottom: -50, left: -50,
-    width: 160, height: 160, borderRadius: 80,
+    position: 'absolute', bottom: -20, left: -50,
+    width: 180, height: 180, borderRadius: 90,
     backgroundColor: Colors.primaryLight, opacity: 0.2,
   },
   backButton: {
@@ -255,7 +283,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   logoSmallIcon: { fontSize: 28 },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 26,
     fontWeight: '800',
     color: Colors.white,
@@ -269,8 +297,8 @@ const styles = StyleSheet.create({
   // ---- Form Card ----
   formCard: {
     backgroundColor: Colors.white,
-    marginHorizontal: 16,
-    marginTop: -24,
+    marginHorizontal: 20,
+    marginTop: -80, // Negative margin to overlap the tall header
     borderRadius: 24,
     padding: 24,
     elevation: 8,

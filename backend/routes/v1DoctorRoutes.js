@@ -16,7 +16,55 @@ const optionalAuth = async (req, res, next) => {
   next();
 };
 
+const Policy = require('../models/Policy');
+
+const maskSensitiveData = async (req, res, next) => {
+  try {
+    let policy = await Policy.findOne().catch(() => null);
+    if (!policy || policy.dataMasking) {
+      const originalJson = res.json;
+      res.json = function (data) {
+        const maskObject = (obj) => {
+          if (!obj) return obj;
+          if (Array.isArray(obj)) {
+            obj.forEach(maskObject);
+          } else if (typeof obj === 'object') {
+            for (const key in obj) {
+              if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                if (key === 'nic' && typeof obj[key] === 'string' && obj[key].length > 4 && obj[key] !== 'N/A') {
+                  obj[key] = obj[key].replace(/^(.{4})(.*)(.{2})$/, '$1****$3');
+                } else if ((key === 'phone' || key === 'contactNumber') && typeof obj[key] === 'string' && obj[key].length > 4) {
+                  obj[key] = obj[key].replace(/^(.{3})(.*)(.{2})$/, '$1****$3');
+                } else if (key === 'fileRecord' && typeof obj[key] === 'string' && obj[key].startsWith('NIC: ')) {
+                  obj[key] = obj[key].replace(/^NIC: (.{4})(.*)(.{2})$/, 'NIC: $1****$3');
+                } else {
+                  maskObject(obj[key]);
+                }
+              }
+            }
+          }
+          return obj;
+        };
+
+        if (data && typeof data === 'object') {
+          // Clone data so we don't mutate DB instances unexpectedly if they are referenced
+          try {
+            data = JSON.parse(JSON.stringify(data));
+          } catch(e){}
+          maskObject(data);
+        }
+        
+        return originalJson.call(this, data);
+      };
+    }
+  } catch (err) {
+    console.error('Masking error:', err);
+  }
+  next();
+};
+
 router.use(optionalAuth);
+router.use(maskSensitiveData);
 const {
   getDoctorDashboard,
   updateDoctorStatus,

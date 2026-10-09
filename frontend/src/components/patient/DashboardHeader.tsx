@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
@@ -52,6 +53,7 @@ export function DashboardHeader({
         >
           <Text style={styles.avatarText}>{avatarInitial}</Text>
         </Pressable>
+        <LanguageSwitcher tone="light" />
       </View>
     </View>
   );

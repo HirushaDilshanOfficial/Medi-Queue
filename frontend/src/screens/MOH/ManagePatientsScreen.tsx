@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -142,17 +143,16 @@ export default function ManagePatientsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-      <SafeAreaView style={{ flex: 1 }}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
         
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>←</Text>
+            <Ionicons name="arrow-back" size={24} color={Colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t("Patient Management")}</Text>
-          <View style={{ width: 40 }} />
-        </View>
+            <LanguageSwitcher tone="dark" />
+          </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           
@@ -344,8 +344,6 @@ export default function ManagePatientsScreen() {
             </View>
           </TouchableOpacity>
         </Modal>
-
-      </SafeAreaView>
       <MOHBottomNav activeRoute="home" />
     </View>
   );
@@ -357,24 +355,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 20,
+    backgroundColor: Colors.primaryDark,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
+    marginBottom: 10,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonText: {
     fontSize: 20,
-    color: Colors.textDark,
+    color: Colors.white,
+    fontWeight: 'bold',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textDark,
+  headerTitle: { flexShrink: 1,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.white,
   },
   scrollContent: {
     paddingBottom: 40,

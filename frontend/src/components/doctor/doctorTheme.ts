@@ -1,4 +1,4 @@
-export const DOCTOR_TOKENS = {
+export const LIGHT_DOCTOR_TOKENS = {
   bg: '#F3F6F7',
   card: '#FFFFFF',
   line: '#E3EAEC',
@@ -48,3 +48,57 @@ export const DOCTOR_TOKENS = {
     elevation: 1,
   },
 };
+
+export const DARK_DOCTOR_TOKENS = {
+  bg: '#091012',
+  card: '#142528',
+  line: '#1F383C',
+  ink: '#EEF8FA',
+  sub: '#86A4A9',
+  teal: '#149AA6',
+  tealDeep: '#0E707A',
+  tealMid: '#12838D',
+  tint: '#18383E',
+  tintBorder: '#23525B',
+  ok: '#24B667',
+  okTint: '#133522',
+  mint: '#7CF0B8',
+  warn: '#E59A24',
+  warnTint: '#382810',
+  alert: '#F2585D',
+  alertTint: '#381618',
+  white18: 'rgba(255, 255, 255, 0.18)',
+  white16: 'rgba(255, 255, 255, 0.16)',
+  white40: 'rgba(255, 255, 255, 0.40)',
+  white80: 'rgba(255, 255, 255, 0.80)',
+  black24: 'rgba(0, 0, 0, 0.35)',
+  cardRadius: 18,
+  highlightBoxRadius: 20,
+  radiusCard: 18,
+  radiusTile: 14,
+  radiusPill: 999,
+  shadow: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  cardShadow: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  cardShadowSm: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.20,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+};
+
+export const DOCTOR_TOKENS = LIGHT_DOCTOR_TOKENS;
+export const getDoctorTokens = (isDark?: boolean) => (isDark ? DARK_DOCTOR_TOKENS : LIGHT_DOCTOR_TOKENS);

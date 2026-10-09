@@ -16,11 +16,13 @@ import {
   Linking,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DoctorTopBar } from '../../components/doctor';
+import { DoctorTopBar, DoctorBottomNav } from '../../components/doctor';
+import { useTheme } from '../../theme/ThemeContext';
 import { BASE_URL } from '../../config';
 import { savePrescriptionApi } from '../../services/prescriptionService';
 import { fetchDoctorDashboard } from '../../services/doctorService';
@@ -50,8 +52,7 @@ type ActiveVitalType = 'bp' | 'hr' | 'temp' | 'spo2' | 'weight' | 'bmi';
 export default function PatientRecordsScreen({ navigation }: { navigation?: any } = {}) {
   const { t } = useLanguage();
   const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string; patientId?: string }>();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { isDark } = useTheme();
 
   // Theme definition adhering to clean clinic aesthetics
   const theme = useMemo(() => {
@@ -62,13 +63,13 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
         pageBg: '#091012',
         card: '#16272a',
         cardBorder: '#1f383c',
-        primary: '#146370',
-        primaryDeep: '#0b4f5a',
-        accent: '#22aab8',
+        primary: '#22aab8',
+        primaryDeep: '#3BD1DF',
+        accent: '#3BD1DF',
         tint: '#1a373d',
         textDark: '#eef8fa',
-        textMedium: '#b2c8cb',
-        textMuted: '#7a969a',
+        textMedium: '#c8dcde',
+        textMuted: '#9db8bc',
         divider: '#20393d',
         inputBg: '#142326',
         modalOverlay: 'rgba(0, 0, 0, 0.75)',
@@ -112,38 +113,17 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   // ─────────────────────────────────────────────────────────
   // STATE MANAGEMENT
   // ─────────────────────────────────────────────────────────
-  const [patients, setPatients] = useState<PatientRecord[]>(ALL_DUMMY_PATIENTS);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [patients, setPatients] = useState<PatientRecord[]>([]);
   const [currentPatientId, setCurrentPatientId] = useState<string>(() => {
-    const pToken = params?.tokenNumber ? Number(params.tokenNumber) : null;
-    const pName = params?.patientName ? params.patientName.trim().toLowerCase() : null;
-    const pId = params?.patientId;
-
-    if (pId) {
-      const match = ALL_DUMMY_PATIENTS.find((p) => p.id === pId);
-      if (match) return match.id;
-    }
-    if (pName) {
-      const match = ALL_DUMMY_PATIENTS.find(
-        (p) =>
-          p.name.toLowerCase().includes(pName) ||
-          pName.includes(p.name.toLowerCase()) ||
-          p.shortName.toLowerCase().includes(pName) ||
-          pName.includes(p.shortName.toLowerCase())
-      );
-      if (match) return match.id;
-    }
-    if (pToken) {
-      const match = ALL_DUMMY_PATIENTS.find((p) => p.tokenNumber === pToken);
-      if (match) return match.id;
-    }
-    return ALL_DUMMY_PATIENTS[0].id;
+    return params?.patientId || '';
   });
   const [doctorInfo, setDoctorInfo] = useState({
     name: 'Dr. Palitha Perera',
     room: 'Room 101 online',
     initials: 'PP',
   });
-  const [currentHospital, setCurrentHospital] = useState('Colombo Teaching Hospital 1');
+  const [currentHospital, setCurrentHospital] = useState('City General Hospital');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<PatientStatus>('All');
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('records');
@@ -183,7 +163,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
 
   // Currently active patient record
   const currentPatient = useMemo(() => {
-    return patients.find((p) => p.id === currentPatientId) || patients[0];
+    return patients.find((p) => p.id === currentPatientId) || patients[0] || ALL_DUMMY_PATIENTS[0];
   }, [patients, currentPatientId]);
 
   // Scroll reference for smooth scrolling to top on patient selection
@@ -192,19 +172,16 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   // Fetch real patient records for the currently selected hospital
   const loadRecordsForHospital = useCallback(
     async (hospName?: string, query?: string) => {
-      let targetHosp = hospName;
-      if (!targetHosp) {
+      let activeHosp = hospName;
+      if (!activeHosp) {
         try {
-          targetHosp = (await AsyncStorage.getItem('doctor_current_hospital')) || undefined;
-          if (!targetHosp && typeof window !== 'undefined' && (window as any).localStorage) {
-            targetHosp = (window as any).localStorage.getItem('doctor_current_hospital') || undefined;
+          activeHosp = (await AsyncStorage.getItem('doctor_current_hospital')) || undefined;
+          if (!activeHosp && typeof window !== 'undefined' && (window as any).localStorage) {
+            activeHosp = (window as any).localStorage.getItem('doctor_current_hospital') || undefined;
           }
         } catch (e) {}
       }
-      const activeHosp = targetHosp || currentHospital || 'Colombo Teaching Hospital 1';
-      if (activeHosp !== currentHospital) {
-        setCurrentHospital(activeHosp);
-      }
+      activeHosp = activeHosp || 'Colombo Teaching Hospital 1';
 
       // 1. Fetch doctor dashboard in parallel to know real doctor details & room for this hospital
       fetchDoctorDashboard(undefined, activeHosp)
@@ -228,6 +205,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
         .catch(() => {});
 
       try {
+        setLoading(true);
         const response = await fetchDoctorRecordsResponseApi(
           query !== undefined ? query : searchQuery,
           activeHosp
@@ -284,30 +262,24 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
             matched = records.find((p) => p.status === 'In consultation') || records[0];
           }
 
-          if (matched) {
-            setCurrentPatientId(matched.id);
-          } else if (response.currentPatientId) {
-            const cMatch = records.find((p) => p.id === response.currentPatientId);
-            if (cMatch) {
-              setCurrentPatientId(cMatch.id);
-            } else if (records[0]) {
-              setCurrentPatientId(records[0].id);
-            }
-          } else if (records[0]) {
-            setCurrentPatientId(records[0].id);
+          const targetId = matched?.id || response?.currentPatientId || records[0]?.id;
+          if (targetId) {
+            setCurrentPatientId((prev) => (prev !== targetId ? targetId : prev));
           }
         } else {
           const fallbackList = getHospitalRecords(activeHosp);
           setPatients(fallbackList);
-          if (fallbackList[0]) setCurrentPatientId(fallbackList[0].id);
+          if (fallbackList[0]) setCurrentPatientId((prev) => (prev !== fallbackList[0].id ? fallbackList[0].id : prev));
         }
       } catch (err) {
         const fallbackList = getHospitalRecords(activeHosp);
         setPatients(fallbackList);
-        if (fallbackList[0]) setCurrentPatientId(fallbackList[0].id);
+        if (fallbackList[0]) setCurrentPatientId((prev) => (prev !== fallbackList[0].id ? fallbackList[0].id : prev));
+      } finally {
+        setLoading(false);
       }
     },
-    [currentHospital, searchQuery, params]
+    [searchQuery, params?.tokenNumber, params?.patientName, params?.patientId]
   );
 
   useEffect(() => {
@@ -316,19 +288,26 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
 
   useFocusEffect(
     useCallback(() => {
+      let isMounted = true;
       (async () => {
         try {
           let storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
           if (!storedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
             storedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
           }
-          if (storedHosp && storedHosp !== currentHospital) {
-            setCurrentHospital(storedHosp);
-            loadRecordsForHospital(storedHosp);
+          if (isMounted) {
+            loadRecordsForHospital(storedHosp || undefined);
           }
-        } catch (e) {}
+        } catch (e) {
+          if (isMounted) {
+            loadRecordsForHospital();
+          }
+        }
       })();
-    }, [currentHospital, loadRecordsForHospital])
+      return () => {
+        isMounted = false;
+      };
+    }, [loadRecordsForHospital])
   );
 
   // Sync when route parameters change
@@ -357,8 +336,13 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     }
 
     if (matched) {
-      setCurrentPatientId(matched.id);
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      setCurrentPatientId((prev) => {
+        if (prev !== matched.id) {
+          scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+          return matched.id;
+        }
+        return prev;
+      });
     }
   }, [params?.tokenNumber, params?.patientName, params?.patientId, patients]);
 
@@ -381,7 +365,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
             return false;
           });
           if (matched) {
-            setCurrentPatientId(matched.id);
+            setCurrentPatientId((prev) => (prev !== matched.id ? matched.id : prev));
           }
         }
       } catch (e) {}
@@ -403,8 +387,14 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
         if (raw && isMounted) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            setPatients((prev) =>
-              prev.map((p) => {
+            setPatients((prev) => {
+              const target = prev.find((p) => p.tokenNumber === token);
+              if (!target) return prev;
+              const currentAlgStr = JSON.stringify(target.allergies || []);
+              const newAlgStr = JSON.stringify(parsed || []);
+              if (currentAlgStr === newAlgStr) return prev;
+
+              return prev.map((p) => {
                 if (p.tokenNumber !== token) return p;
                 if (parsed.length === 0) {
                   return {
@@ -428,8 +418,8 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                     description: `${first.allergen}${first.note ? ' – ' + first.note : ''}`,
                   },
                 };
-              })
-            );
+              });
+            });
           }
         }
       } catch (e) {}
@@ -1084,6 +1074,45 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     }
   }, [currentPatient, activeTrendVital, bpStatus, hrStatus, tempStatus, spO2Status, currentWeightNum, currentHeightNum, bmiDisplay, bmiStatusResult]);
 
+  if (loading && patients.length === 0) {
+    return (
+      <View
+        style={[
+          styles.safeArea,
+          { backgroundColor: isDark ? theme.pageBg : theme.pageBg },
+        ]}
+      >
+        <StatusBar barStyle="light-content" backgroundColor="#0E7C86" />
+        <View
+          style={[
+            styles.outerFrame,
+            { backgroundColor: isDark ? theme.pageBg : theme.pageBg },
+          ]}
+        >
+          <View
+            style={[
+              styles.mobileContainer,
+              { backgroundColor: theme.background },
+            ]}
+          >
+            <DoctorTopBar
+              doctorName={doctorInfo.name}
+              room={doctorInfo.room}
+              unreadCount={4}
+            />
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <ActivityIndicator size="large" color={theme.primaryDeep} />
+              <Text style={{ marginTop: 14, color: theme.textMuted, fontSize: 15, fontWeight: '500' }}>
+                {t('Loading patient records...')}
+              </Text>
+            </View>
+            <DoctorBottomNav activeTab="records" />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View
       style={[
@@ -1146,7 +1175,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 ]}
                 activeOpacity={0.7}
                 onPress={handleResetToCurrentPatient}
-                accessibilityLabel="Refresh Current Patient"
+                accessibilityLabel={t("Refresh Current Patient")}
               >
                 <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
 <Ionicons name="refresh-outline" size={20} color={theme.accent} />
@@ -1238,7 +1267,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       },
                     ]}
                   >
-                    {currentPatient.status}
+                    {t(currentPatient.status)}
                   </Text>
                 </View>
               </View>
@@ -1301,7 +1330,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                         { color: theme.textMuted },
                       ]}
                     >
-                      {currentPatient.age}{' '}{t("yrs •")}{' '}{currentPatient.gender}{' '}{t("• Blood:")}{' '}
+                      {currentPatient.age}{' '}{t("yrs •")}{' '}{t(currentPatient.gender)}{' '}{t("• Blood:")}{' '}
                       {currentPatient.bloodGroup}
                     </Text>
                   </View>
@@ -1424,15 +1453,13 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                           <Text
                             style={[styles.chronicChipText, { color: theme.textDark }]}
                           >
-                            {cond}
+                            {t(cond)}
                           </Text>
                         </View>
                       ))}
                     </View>
                   ) : (
-                    <Text style={[styles.noneRecordedText, { color: theme.textMuted }]}>
-                      None recorded.
-                    </Text>
+                    <Text style={[styles.noneRecordedText, { color: theme.textMuted }]}>{t("None recorded.")}</Text>
                   );
                 })()}
 
@@ -1529,15 +1556,15 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                             <Text
                               style={[styles.medFrequencyText, { color: theme.textMuted }]}
                             >
-                              {med.frequency}
-                              {med.duration ? ` · ${med.duration}` : ''}
+                              {t(med.frequency)}
+                              {med.duration ? ` · ${t(med.duration)}` : ''}
                             </Text>
                           </View>
 
                           <Text
                             style={[styles.medSinceDateText, { color: theme.textMuted }]}
                           >
-                            {med.sinceDate}
+                            {t(med.sinceDate)}
                           </Text>
                         </View>
                       );
@@ -1571,7 +1598,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   <Text
                     style={[styles.triageTimeLabel, { color: theme.textMuted }]}
                   >
-                    {hasVitals ? (currentPatient.vitals.triageTime || 'Triage: Today') : 'Triage: Not recorded'}
+                    {hasVitals ? (currentPatient.vitals.triageTime || t('Triage: Today')) : t('Triage: Not recorded')}
                   </Text>
                 </View>
 
@@ -1643,9 +1670,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       marginBottom: 4,
                       textAlign: 'center',
                     }}
-                  >
-                    No triage vitals recorded
-                  </Text>
+                  >{t("No triage vitals recorded")}</Text>
                   <Text
                     style={{
                       fontSize: 13,
@@ -1654,9 +1679,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       marginBottom: 15,
                       lineHeight: 18,
                     }}
-                  >
-                    Blood pressure, heart rate, or temperature have not been recorded for this patient yet.
-                  </Text>
+                  >{t("Blood pressure, heart rate, or temperature have not been recorded for this patient yet.")}</Text>
                   <TouchableOpacity
                     style={[
                       styles.editVitalsPill,
@@ -1682,9 +1705,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                         styles.editVitalsText,
                         { color: theme.primaryDeep, fontWeight: '700', fontSize: 13 },
                       ]}
-                    >
-                      Record Triage Vitals
-                    </Text>
+                    >{t("Record Triage Vitals")}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -1727,7 +1748,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: bpStatus.isAbnormal ? '#ef4444' : '#10b981' },
                     ]}
                   >
-                    {bpStatus.label}
+                    {t(bpStatus.label)}
                   </Text>
                 </TouchableOpacity>
 
@@ -1763,7 +1784,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: hrStatus.isAbnormal ? '#ef4444' : '#10b981' },
                     ]}
                   >
-                    {hrStatus.label}
+                    {t(hrStatus.label)}
                   </Text>
                 </TouchableOpacity>
 
@@ -1803,7 +1824,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: tempStatus.isAbnormal ? '#ef4444' : '#10b981' },
                     ]}
                   >
-                    {tempStatus.label}
+                    {t(tempStatus.label)}
                   </Text>
                 </TouchableOpacity>
 
@@ -1844,7 +1865,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: spO2Status.isAbnormal ? '#ef4444' : '#10b981' },
                     ]}
                   >
-                    {spO2Status.label}
+                    {t(spO2Status.label)}
                   </Text>
                 </TouchableOpacity>
 
@@ -1876,7 +1897,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
                     {currentWeightNum}{' '}
-                    <Text style={styles.vitalUnit}>kg</Text>
+                    <Text style={styles.vitalUnit}>{t("kg")}</Text>
                   </Text>
                   <Text
                     style={[
@@ -1884,8 +1905,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: theme.textMuted },
                     ]}
                   >
-                    {t("Ht:")}{' '}{currentHeightNum} cm
-                  </Text>
+                    {t("Ht:")}{' '}{currentHeightNum}{t("cm")}</Text>
                 </TouchableOpacity>
 
                 {/* 6. BMI (Body Mass Index) */}
@@ -1918,7 +1938,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
                     {bmiDisplay}{' '}
-                    <Text style={styles.vitalUnit}>kg/m²</Text>
+                    <Text style={styles.vitalUnit}>{t("kg/m²")}</Text>
                   </Text>
                   <Text
                     style={[
@@ -1926,7 +1946,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: bmiStatusResult.isAbnormal ? '#ef4444' : '#10b981' },
                     ]}
                   >
-                    {bmiStatusResult.label}
+                    {t(bmiStatusResult.label)}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1959,8 +1979,8 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       style={[styles.subSectionSubLabel, { color: theme.textMuted }]}
                     >
                       {currentPatient.reports && currentPatient.reports.length > 0
-                        ? `${currentPatient.reports.length} report(s) filed`
-                        : currentPatient.imaging.subtitle}
+                        ? t(`${currentPatient.reports.length} report(s) filed`)
+                        : t(currentPatient.imaging?.subtitle || '')}
                     </Text>
                   )}
                 </View>
@@ -2006,7 +2026,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                               { color: theme.textDark },
                             ]}
                           >
-                            {rpt.title}
+                            {t(rpt.title)}
                           </Text>
                           <Text
                             style={[
@@ -2015,7 +2035,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                             ]}
                             numberOfLines={1}
                           >
-                            {rpt.category || 'Lab report'} • {rpt.fileName || rpt.reportDate || 'Uploaded Document'}
+                            {rpt.category || t('Lab report')} • {rpt.fileName || rpt.reportDate || t('Uploaded Document')}
                           </Text>
                         </View>
                       </View>
@@ -2038,9 +2058,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                             styles.viewReportText,
                             { color: theme.primaryDeep },
                           ]}
-                        >
-                          View report
-                        </Text>
+                        >{t("View report")}</Text>
                       </TouchableOpacity>
                     </TouchableOpacity>
                   ))
@@ -2139,7 +2157,7 @@ setSelectedReportToView(currentPatient.imaging)
                   >{t("Recent visits & history")}</Text>
                   <Text
                     style={[styles.subSectionSubLabel, { color: theme.textMuted }]}
-                  >{t("All")}{currentPatient.recentVisits.length}{t("Records")}</Text>
+                  >{currentPatient.recentVisits.length} {t("Records")}</Text>
                 </View>
 
                 <View
@@ -2499,7 +2517,7 @@ setSelectedReportToView(currentPatient.imaging)
                       color: theme.textDark,
                     },
                   ]}
-                  placeholder="e.g. Paracetamol, Amoxicillin, Bactrim..."
+                  placeholder={t("e.g. Paracetamol, Amoxicillin, Bactrim...")}
                   placeholderTextColor={theme.textMuted}
                   value={medDrugName}
                   onChangeText={(val) => {
@@ -2527,7 +2545,7 @@ setSelectedReportToView(currentPatient.imaging)
                       color: theme.textDark,
                     },
                   ]}
-                  placeholder="e.g. 500 mg"
+                  placeholder={t("e.g. 500 mg")}
                   placeholderTextColor={theme.textMuted}
                   value={medDose}
                   onChangeText={setMedDose}
@@ -2594,7 +2612,7 @@ setSelectedReportToView(currentPatient.imaging)
                       color: theme.textDark,
                     },
                   ]}
-                  placeholder="e.g. 5 days, 1 week, Ongoing"
+                  placeholder={t("e.g. 5 days, 1 week, Ongoing")}
                   placeholderTextColor={theme.textMuted}
                   value={medDuration}
                   onChangeText={setMedDuration}
@@ -2639,8 +2657,8 @@ setSelectedReportToView(currentPatient.imaging)
                   <Text style={styles.sheetSaveBtnText}>
                     {allergyCheck.status === 'conflict'
                       ? hasAllergyConflictAcknowledged
-                        ? 'Confirm Override & Add'
-                        : 'Add anyway'
+                        ? t('Confirm Override & Add')
+                        : t('Add anyway')
                       : t("Add medication")}
                   </Text>
                 </TouchableOpacity>
@@ -2851,7 +2869,7 @@ setSelectedReportToView(currentPatient.imaging)
                         },
                       ]}
                     >
-                      {trendInfo.statusResult.label}
+                      {t(trendInfo.statusResult.label)}
                     </Text>
                   </View>
                 </View>
@@ -2947,7 +2965,7 @@ setSelectedReportToView(currentPatient.imaging)
                                 { color: isAbnormal ? '#dc2626' : '#16a34a' },
                               ]}
                             >
-                              {isAbnormal ? 'Alert' : t("Normal")}
+                              {isAbnormal ? t('Alert') : t("Normal")}
                             </Text>
                           </View>
                         </View>
@@ -3307,8 +3325,7 @@ setSelectedReportToView(currentPatient.imaging)
                       }}
                     >
                       <Text style={{ fontSize: 12, color: theme.primaryDeep, fontWeight: '600' }}>
-                        {t("Calculated BMI:")}{' '}{preview.bmi} kg/m²
-                      </Text>
+                        {t("Calculated BMI:")}{' '}{preview.bmi}{t("kg/m²")}</Text>
                       <Text
                         style={{
                           fontSize: 12,
@@ -3316,7 +3333,7 @@ setSelectedReportToView(currentPatient.imaging)
                           color: preview.status.isAbnormal ? '#ef4444' : '#059669',
                         }}
                       >
-                        {preview.status.label}
+                        {t(preview.status.label)}
                       </Text>
                     </View>
                   );
@@ -3395,7 +3412,7 @@ setSelectedReportToView(currentPatient.imaging)
               <Text
                 style={{ color: theme.textDark, marginBottom: 0, fontSize: 17, fontWeight: '700' }}
               >
-                {selectedReportToView?.title || 'Medical Report'}
+                {selectedReportToView?.title || t('Medical Report')}
               </Text>
               <TouchableOpacity
                 onPress={() => setSelectedReportToView(null)}
@@ -3422,10 +3439,9 @@ setSelectedReportToView(currentPatient.imaging)
                     marginBottom: 4,
                   }}
                 >
-                  {selectedReportToView?.category || 'Lab Result'}
+                  {selectedReportToView?.category || t('Lab Result')}
                 </Text>
-                <Text style={{ fontSize: 12, color: theme.textMedium }}>
-                  Date: {selectedReportToView?.reportDate || selectedReportToView?.date || 'Recorded recently'}
+                <Text style={{ fontSize: 12, color: theme.textMedium }}>{t("Date:")}{selectedReportToView?.reportDate || selectedReportToView?.date || t('Recorded recently')}
                 </Text>
                 {selectedReportToView?.fileName ? (
                   <Text
@@ -3435,8 +3451,7 @@ setSelectedReportToView(currentPatient.imaging)
                       marginTop: 4,
                       fontWeight: '500',
                     }}
-                  >
-                    File: {selectedReportToView.fileName}
+                  >{t("File:")}{selectedReportToView.fileName}
                   </Text>
                 ) : null}
               </View>
@@ -3488,12 +3503,12 @@ setSelectedReportToView(currentPatient.imaging)
                         style={{ fontSize: 13, fontWeight: '700', color: theme.textDark }}
                         numberOfLines={1}
                       >
-                        {selectedReportToView?.fileName || `${selectedReportToView?.title || 'Report'}.pdf`}
+                        {selectedReportToView?.fileName || `${selectedReportToView?.title || t('Report')}.pdf`}
                       </Text>
                       <Text style={{ fontSize: 11, color: theme.primaryDeep, fontWeight: '600', marginTop: 2 }}>
                         {selectedReportToView?.fileMimeType?.includes('image')
-                          ? 'Medical Image · Tap to preview'
-                          : 'PDF Report · Tap to open & view'}
+                          ? t('Medical Image · Tap to preview')
+                          : t('PDF Report · Tap to open & view')}
                       </Text>
                     </View>
                   </View>
@@ -3509,7 +3524,7 @@ setSelectedReportToView(currentPatient.imaging)
                     }}
                   >
                     <Ionicons name="open-outline" size={14} color="#fff" />
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Open</Text>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{t("Open")}</Text>
                   </View>
                 </TouchableOpacity>
               ) : null}
@@ -3519,23 +3534,35 @@ setSelectedReportToView(currentPatient.imaging)
               (selectedReportToView.fileMimeType?.includes('image') ||
                 selectedReportToView.fileName?.match(/\.(png|jpg|jpeg|webp)$/i)) ? (
                 <View style={{ marginBottom: 14 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textMuted, marginBottom: 6 }}>
-                    Attachment Preview:
-                  </Text>
-                  <Image
-                    source={{
-                      uri: selectedReportToView.fileUrl?.startsWith('http')
-                        ? selectedReportToView.fileUrl
-                        : `${BASE_URL}${selectedReportToView.fileUrl || `/api/v1/doctor/reports/${selectedReportToView.id || selectedReportToView._id}/file`}`,
-                    }}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textMuted }}>{t("Attachment Preview:")}</Text>
+                    <Text style={{ fontSize: 11, color: theme.primaryDeep, fontWeight: '600' }}>{t("Tap to open full size")}</Text>
+                  </View>
+                  <TouchableOpacity
+                    activeOpacity={0.88}
+                    onPress={() => handleOpenReportFile(selectedReportToView)}
                     style={{
-                      width: '100%',
-                      height: 180,
-                      borderRadius: 10,
-                      backgroundColor: theme.isDark ? '#1a2e35' : '#f1f5f9',
+                      borderRadius: 12,
+                      overflow: 'hidden',
+                      borderWidth: 1,
+                      borderColor: theme.cardBorder,
+                      backgroundColor: theme.isDark ? '#1a2e35' : '#f8fafc',
                     }}
-                    resizeMode="contain"
-                  />
+                  >
+                    <Image
+                      source={{
+                        uri: selectedReportToView.fileUrl?.startsWith('http')
+                          ? selectedReportToView.fileUrl
+                          : `${BASE_URL}${selectedReportToView.fileUrl || `/api/v1/doctor/reports/${selectedReportToView.id || selectedReportToView._id}/file`}`,
+                      }}
+                      style={{
+                        width: '100%',
+                        height: 240,
+                        backgroundColor: theme.isDark ? '#1a2e35' : '#f8fafc',
+                      }}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
                 </View>
               ) : null}
 
@@ -3548,9 +3575,7 @@ setSelectedReportToView(currentPatient.imaging)
                       color: theme.textMuted,
                       marginBottom: 4,
                     }}
-                  >
-                    Summary & Findings:
-                  </Text>
+                  >{t("Summary & Findings:")}</Text>
                   <Text style={{ fontSize: 13, color: theme.textDark, lineHeight: 18 }}>
                     {selectedReportToView.notes || selectedReportToView.description}
                   </Text>
@@ -3580,7 +3605,7 @@ setSelectedReportToView(currentPatient.imaging)
                 }}
                 onPress={() => setSelectedReportToView(null)}
               >
-                <Text style={{ color: theme.textMedium, fontWeight: '600', fontSize: 13 }}>Close</Text>
+                <Text style={{ color: theme.textMedium, fontWeight: '600', fontSize: 13 }}>{t("Close")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -3598,8 +3623,8 @@ setSelectedReportToView(currentPatient.imaging)
                 <Ionicons name="open-outline" size={16} color="#fff" />
                 <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
                   {selectedReportToView?.fileMimeType?.includes('image')
-                    ? 'Open Image'
-                    : 'Open PDF Document'}
+                    ? t('Open Image')
+                    : t('Open PDF Document')}
                 </Text>
               </TouchableOpacity>
             </View>

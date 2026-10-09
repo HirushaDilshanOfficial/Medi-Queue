@@ -32,9 +32,11 @@ const OpdQueueCounter = mongoose.model('OpdQueueCounter', opdQueueCounterSchema)
  * default on insert means a brand new counter starts at 1.
  */
 async function nextTokenNumber(department, queueDate) {
+  const dept = (department && String(department).trim()) || 'General OPD';
+  const date = (queueDate && String(queueDate).trim()) || new Date().toISOString().slice(0, 10);
   const counter = await OpdQueueCounter.findOneAndUpdate(
-    { department, queueDate },
-    { $inc: { lastToken: 1 }, $setOnInsert: { department, queueDate } },
+    { department: dept, queueDate: date },
+    { $inc: { lastToken: 1 }, $setOnInsert: { department: dept, queueDate: date } },
     { new: true, upsert: true, setDefaultsOnInsert: true },
   ).lean();
 

@@ -28,6 +28,7 @@ import { DoctorCard } from '../../../components/patient/DoctorCard';
 import { AppointmentCard } from '../../../components/patient/AppointmentCard';
 import { DesignImage } from '../../../components/patient/DesignImage';
 import { AppIcon } from '../../../components/AppIcon';
+import { filterDoctorDirectory } from '../../../utils/doctorSearch';
 
 type Tab = 'directory' | 'bookings';
 
@@ -56,11 +57,33 @@ export function DoctorDirectoryScreen() {
 
   const departments = useAsyncResource(() => doctorApi.departments(), []);
   const clinics = useAsyncResource(() => clinicApi.list(), []);
+  const directoryScope = JSON.stringify([department, hospitalId]);
+
+  const uniqueClinics = useMemo(() => {
+    if (!clinics.data?.clinics) return [];
+    const map = new Map<string, Clinic>();
+    for (const clinic of clinics.data.clinics) {
+      const rawName = clinic.department || clinic.name || '';
+      const cleanKey = rawName.replace(/ Clinic$/i, '').trim().toLowerCase();
+      if (!cleanKey) continue;
+      if (!map.has(cleanKey)) {
+        map.set(cleanKey, clinic);
+      }
+    }
+    return Array.from(map.values());
+  }, [clinics.data]);
 
   const doctors = useAsyncResource(
-    () => doctorApi.list({ search: search.trim() || undefined, department: department || undefined, hospitalId: hospitalId || undefined }),
-    [search, department, hospitalId],
+    () => doctorApi.list({ department: department || undefined, hospitalId: hospitalId || undefined })
+      .then(result => ({ ...result, scope: directoryScope })),
+    [department, hospitalId],
   );
+  // The endpoint returns the complete scoped directory. Filter it as the patient
+  // types so names and translated specialties work without a request per letter.
+  const loadingDoctors = doctors.loading || (!doctors.error && doctors.data?.scope !== directoryScope);
+  const matchingDoctors = useMemo(() => filterDoctorDirectory(
+    doctors.data?.scope === directoryScope ? doctors.data.doctors : [], search, t,
+  ), [doctors.data, directoryScope, search, t]);
 
   // Only fetched while the bookings tab is open, so the directory does not pay for
   // a request the patient did not ask for.
@@ -200,6 +223,7 @@ export function DoctorDirectoryScreen() {
                   placeholderTextColor={PatientTheme.textMuted}
                   style={styles.searchInput}
                   autoCorrect={false}
+                  autoCapitalize="none"
                   returnKeyType="search"
                   accessibilityLabel={t("Search doctors")}
                 />
@@ -223,18 +247,18 @@ export function DoctorDirectoryScreen() {
                   setClinic(null, null);
                 }}
               />
-              {(showAllClinics ? clinics.data?.clinics ?? [] : (clinics.data?.clinics ?? []).slice(0, 16)).map((clinic: Clinic) => (
+              {(showAllClinics ? uniqueClinics : uniqueClinics.slice(0, 16)).map((clinic: Clinic) => (
                 <Chip
                   key={clinic._id}
                   label={t(clinic.name.replace(/ Clinic$/, ''))}
-                  active={department === clinic.department && hospitalId === (clinic.hospital?._id ?? null)}
+                  active={department === clinic.department && (!hospitalId || hospitalId === (clinic.hospital?._id ?? null))}
                   onPress={() => {
-                    const active = department === clinic.department && hospitalId === (clinic.hospital?._id ?? null);
+                    const active = department === clinic.department && (!hospitalId || hospitalId === (clinic.hospital?._id ?? null));
                     setClinic(active ? null : clinic.department, active ? null : clinic.hospital?._id ?? null);
                   }}
                 />
               ))}
-              {(clinics.data?.clinics?.length ?? 0) > 16 ? (
+              {uniqueClinics.length > 16 ? (
                 <Chip
                   label={showAllClinics ? t('Featured clinics') : t('View all clinics')}
                   active={false}
@@ -246,12 +270,12 @@ export function DoctorDirectoryScreen() {
         ) : null}
       </View>
     ),
-    [clinics.data, department, hospitalId, search, setClinic, setSearch, showAllClinics, tab, t],
+    [uniqueClinics, department, hospitalId, search, setClinic, setSearch, showAllClinics, tab, t],
   );
 
   const doctorList = (
     <FlatList
-      data={doctors.data?.doctors ?? []}
+      data={loadingDoctors ? [] : matchingDoctors}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => <DoctorCard doctor={item} onPress={() => openDoctor(item)} />}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -266,7 +290,7 @@ export function DoctorDirectoryScreen() {
         />
       }
       ListEmptyComponent={
-        doctors.loading ? (
+        loadingDoctors ? (
           <ScreenLoader label={t("Loading doctors")} />
         ) : doctors.error ? (
           <MessageState

@@ -565,11 +565,18 @@ const walkInBooking = asyncHandler(async (req, res) => {
       }
       let existingToken = await QueueToken.findOne({ appointment: existing._id });
       if (!existingToken) {
-        existingToken = await getNextToken(existing.department, date, priority);
-        existingToken.appointment = existing._id;
-        existingToken.patient = existing.patient;
-        existingToken.doctor = existing.doctor;
-        await existingToken.save();
+        const nextTok = await getNextToken(existing.department || 'General OPD', date);
+        existingToken = await QueueToken.create({
+          appointment: existing._id,
+          patient: existing.patient,
+          assignedDoctor: existing.doctor,
+          department: existing.department || 'General OPD',
+          date: date,
+          tokenNumber: nextTok.tokenNumber,
+          tokenLabel: nextTok.tokenLabel,
+          status: 'waiting',
+          priority: priority || 'normal',
+        });
         existing.tokenNumber = existingToken.tokenNumber;
         await existing.save();
       }

@@ -1,12 +1,12 @@
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   StyleProp,
   ViewStyle,
 } from 'react-native';
+import { LocalizedText as Text } from '../i18n/LocalizedText';
 import { Colors } from '../constants/Colors';
 import { QueuePriority } from '../types';
 

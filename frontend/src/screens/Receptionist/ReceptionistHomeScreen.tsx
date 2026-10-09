@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { router } from 'expo-router';
 import { clearAuthToken } from '../../services/http';
 import { setAuthToken as setApiAuthToken } from '../../services/api';
@@ -398,7 +399,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             style={styles.staffProfileTouchable}
             activeOpacity={0.7}
             onPress={() => setProfileModalVisible(true)}
-            accessibilityLabel="Staff profile and desk details"
+            accessibilityLabel={t("Staff profile and desk details")}
             accessibilityRole="button"
           >
             <View style={styles.avatarWrap}>
@@ -441,6 +442,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
             <Ionicons name="notifications" size={20} color={Colors.white} />
             <View style={styles.bellBadge} />
           </TouchableOpacity>
+          <LanguageSwitcher tone="dark" />
         </View>
       </View>
 
@@ -488,7 +490,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               style={styles.statCard}
               onPress={() => handleNav('Queue')}
               activeOpacity={0.7}
-              accessibilityLabel="View In Waiting Queue"
+              accessibilityLabel={t("View In Waiting Queue")}
               accessibilityRole="button"
             >
               <View style={styles.statCardTop}>
@@ -791,7 +793,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               style={styles.quickActionCard}
               onPress={() => handleNav('DoctorSchedule')}
               activeOpacity={0.7}
-              accessibilityLabel="Doctor Roster"
+              accessibilityLabel={t("Doctor Roster")}
               accessibilityRole="button"
             >
               <View style={[styles.quickActionIconBox, { backgroundColor: '#F5F3FF' }]}>
@@ -974,7 +976,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <TouchableOpacity
                 onPress={() => setReprintModalVisible(false)}
                 style={styles.modalCloseIconBtn}
-                accessibilityLabel="Close Reprint Modal"
+                accessibilityLabel={t("Close Reprint Modal")}
               >
                 <Ionicons name="close" size={20} color={Colors.textMedium} />
               </TouchableOpacity>
@@ -987,7 +989,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 {serving?.patient?.name || topWaitingPatient.fullName || topWaitingPatient.name || t('Registered Patient')}
               </Text>
               <Text style={styles.slipMeta}>
-                {serving?.room ? `${cleanRoomDisplay(serving.room)} · ` : ''}{servingDocDept || topWaitingDoctor.department || 'General OPD'} · {currentTime}
+                {serving?.room ? `${cleanRoomDisplay(serving.room)} · ` : ''}{servingDocDept || topWaitingDoctor.department || t('General OPD')} · {currentTime}
               </Text>
             </View>
 
@@ -1033,7 +1035,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <TouchableOpacity
                 onPress={() => setRosterModalVisible(false)}
                 style={styles.modalCloseIconBtn}
-                accessibilityLabel="Close Doctor Roster"
+                accessibilityLabel={t("Close Doctor Roster")}
               >
                 <Ionicons name="close" size={20} color={Colors.textMedium} />
               </TouchableOpacity>
@@ -1091,7 +1093,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <TouchableOpacity
                 onPress={() => setNotificationModalVisible(false)}
                 style={styles.modalCloseIconBtn}
-                accessibilityLabel="Close Notifications"
+                accessibilityLabel={t("Close Notifications")}
               >
                 <Ionicons name="close" size={20} color={Colors.textMedium} />
               </TouchableOpacity>
@@ -1184,7 +1186,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <TouchableOpacity
                 onPress={() => setVerifyNicModalVisible(false)}
                 style={styles.modalCloseIconBtn}
-                accessibilityLabel="Close Verify NIC"
+                accessibilityLabel={t("Close Verify NIC")}
               >
                 <Ionicons name="close" size={20} color={Colors.textMedium} />
               </TouchableOpacity>
@@ -1206,7 +1208,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                 style={styles.verifyNicScanBtn}
                 onPress={() => setScannerModalVisible(true)}
                 activeOpacity={0.7}
-                accessibilityLabel="Scan with Barcode Machine or Camera"
+                accessibilityLabel={t("Scan with Barcode Machine or Camera")}
               >
                 <Ionicons name="barcode-outline" size={20} color={Colors.primary} />
               </TouchableOpacity>
@@ -1239,11 +1241,11 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
                   {t('NIC')}: {verifyNicResult.patient.nic} • {t('Age')}: {verifyNicResult.patient.age || 'N/A'} • {t(verifyNicResult.patient.gender || '')}
                 </Text>
                 <Text style={styles.verifyNicPatientPhone}>
-                  📞 {verifyNicResult.patient.phone || 'No phone recorded'}
+                  📞 {verifyNicResult.patient.phone || t('No phone recorded')}
                 </Text>
                 {verifyNicResult.isQueuePass && verifyNicResult.pass ? (
                   <Text style={styles.verifyNicPatientMeta}>
-                    {t("Queue:")}{' '}{verifyNicResult.pass.tokenLabel} • {t(verifyNicResult.pass.department ?? '')} • {verifyNicResult.pass.status}
+                    {t("Queue:")}{' '}{verifyNicResult.pass.tokenLabel} • {t(verifyNicResult.pass.department ?? '')} • {t(verifyNicResult.pass.status)}
                   </Text>
                 ) : null}
 
@@ -1327,7 +1329,7 @@ export const ReceptionistHomeScreen: React.FC<ReceptionistHomeScreenProps> = ({
               <TouchableOpacity
                 onPress={() => setProfileModalVisible(false)}
                 style={styles.profileModalCloseBtn}
-                accessibilityLabel="Close profile modal"
+                accessibilityLabel={t("Close profile modal")}
               >
                 <Ionicons name="close" size={20} color={Colors.textMedium} />
               </TouchableOpacity>

@@ -1,25 +1,36 @@
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { DOCTOR_TOKENS as C } from './doctorTheme';
 
-export const StatusPill = ({ label, style }: { label: string; style?: StyleProp<ViewStyle> }) => (
-  <View style={[styles.statusPill, style]}>
-    <View style={styles.statusDot} />
-    <Text style={styles.statusPillText}>{label}</Text>
-  </View>
-);
+export const StatusPill = ({ label, style }: { label: string; style?: StyleProp<ViewStyle> }) => {
+  const { t } = useLanguage();
+  return (
+    <View style={[styles.statusPill, style]}>
+      <View style={styles.statusDot} />
+      <Text style={styles.statusPillText}>{t(label)}</Text>
+    </View>
+  );
+};
 
-export const SuccessPill = ({ label, style }: { label: string; style?: StyleProp<ViewStyle> }) => (
-  <View style={[styles.successPill, style]}>
-    <Text style={styles.successPillText}>{label}</Text>
-  </View>
-);
+export const SuccessPill = ({ label, style }: { label: string; style?: StyleProp<ViewStyle> }) => {
+  const { t } = useLanguage();
+  return (
+    <View style={[styles.successPill, style]}>
+      <Text style={styles.successPillText}>{t(label)}</Text>
+    </View>
+  );
+};
 
-export const WarningPill = ({ label, style }: { label: string; style?: StyleProp<ViewStyle> }) => (
-  <View style={[styles.warningPill, style]}>
-    <Text style={styles.warningPillText}>{label}</Text>
-  </View>
-);
+export const WarningPill = ({ label, style }: { label: string; style?: StyleProp<ViewStyle> }) => {
+  const { t } = useLanguage();
+  return (
+    <View style={[styles.warningPill, style]}>
+      <Text style={styles.warningPillText}>{t(label)}</Text>
+    </View>
+  );
+};
 
 export const StrongPill = ({
   label,
@@ -34,10 +45,11 @@ export const StrongPill = ({
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }) => {
+  const { t } = useLanguage();
   const content = (
     <View style={[styles.strongPill, style]}>
       {pulse && <View style={styles.pulseDot} />}
-      <Text style={styles.strongPillText}>{label}</Text>
+      <Text style={styles.strongPillText}>{t(label)}</Text>
       {icon && <View style={styles.strongIconWrap}>{icon}</View>}
     </View>
   );
@@ -63,12 +75,15 @@ export const ChipButton = ({
   icon?: React.ReactNode;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
-}) => (
-  <TouchableOpacity style={[styles.chip, style]} activeOpacity={0.75} onPress={onPress}>
-    {icon && <View style={{ marginRight: 5 }}>{icon}</View>}
-    <Text style={styles.chipText}>{label}</Text>
-  </TouchableOpacity>
-);
+}) => {
+  const { t } = useLanguage();
+  return (
+    <TouchableOpacity style={[styles.chip, style]} activeOpacity={0.75} onPress={onPress}>
+      {icon && <View style={{ marginRight: 5 }}>{icon}</View>}
+      <Text style={styles.chipText}>{t(label)}</Text>
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
   statusPill: {

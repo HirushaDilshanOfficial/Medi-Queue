@@ -1,21 +1,24 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   Modal,
   Image,
   Alert,
   Platform,
+  Switch,
 } from 'react-native';
+import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { DOCTOR_TOKENS as C } from './doctorTheme';
-import { useLanguage, LANGUAGES } from '../../i18n/LanguageContext';
+import { useLanguage } from '../../i18n/LanguageContext';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface DoctorTopBarProps {
   doctorName?: string;
@@ -30,11 +33,11 @@ export const DoctorTopBar = ({
   roomSubtitle,
   unreadCount = 4,
 }: DoctorTopBarProps) => {
-  const { t, language, setLanguage } = useLanguage();
+  const { t } = useLanguage();
+  const { isDark, toggleTheme } = useTheme();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
-  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -126,14 +129,15 @@ export const DoctorTopBar = ({
 
           {/* Right: Language chip "EN" + Bell button with red badge */}
           <View style={styles.actionsWrap}>
+            <LanguageSwitcher tone="dark" />
+
             <TouchableOpacity
-              style={styles.langChip}
+              style={styles.themeChip}
               activeOpacity={0.75}
-              onPress={() => setIsLanguageModalOpen(true)}
-              accessibilityLabel={t('Change language')}
+              onPress={toggleTheme}
+              accessibilityLabel={isDark ? t('Light mode') : t('Dark mode')}
             >
-              <Ionicons name="globe-outline" size={15} color="#FFFFFF" />
-              <Text style={styles.langChipText}>{(language || 'en').toUpperCase()}</Text>
+              <Ionicons name={isDark ? 'sunny' : 'moon-outline'} size={17} color="#FFFFFF" />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -212,6 +216,26 @@ export const DoctorTopBar = ({
 
             <View style={styles.menuDivider} />
 
+            <View style={styles.menuThemeRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Ionicons
+                  name={isDark ? 'sunny-outline' : 'moon-outline'}
+                  size={19}
+                  color={C.tealDeep}
+                  style={styles.menuIcon}
+                />
+                <Text style={styles.menuItemText}>{t('Dark mode')}</Text>
+              </View>
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: '#cbd5e1', true: C.teal }}
+                thumbColor="#ffffff"
+              />
+            </View>
+
+            <View style={styles.menuDivider} />
+
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
@@ -267,62 +291,6 @@ export const DoctorTopBar = ({
         </View>
       </Modal>
 
-      {/* ========================================================= */}
-      {/* LANGUAGE SELECTOR MODAL */}
-      {/* ========================================================= */}
-      <Modal
-        visible={isLanguageModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsLanguageModalOpen(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsLanguageModalOpen(false)}
-        >
-          <View style={styles.langModalCard} onStartShouldSetResponder={() => true}>
-            <View style={styles.langModalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="globe-outline" size={20} color={C.tealDeep} style={{ marginRight: 8 }} />
-                <Text style={styles.langModalTitle}>{t('Language')}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsLanguageModalOpen(false)}>
-                <Ionicons name="close" size={20} color={C.sub} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.langModalSub}>{t('Choose your preferred language')}</Text>
-
-            <View style={{ gap: 8, marginTop: 6 }}>
-              {LANGUAGES.map((item) => {
-                const isSelected = language === item.code;
-                return (
-                  <TouchableOpacity
-                    key={item.code}
-                    style={[styles.langOptionRow, isSelected && styles.langOptionRowSelected]}
-                    onPress={async () => {
-                      await setLanguage(item.code);
-                      setIsLanguageModalOpen(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View>
-                      <Text style={[styles.langOptionName, isSelected && { color: C.tealDeep, fontWeight: '800' }]}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.langOptionCode}>{item.code.toUpperCase()}</Text>
-                    </View>
-                    <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                      {isSelected && <View style={styles.radioDot} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
 };
@@ -421,6 +389,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  themeChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: C.white18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bellBtn: {
     width: 36,
@@ -526,6 +502,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: C.ink,
+  },
+  menuThemeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
   },
 
   // Sign out confirmation dialog

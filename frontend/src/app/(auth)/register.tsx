@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -10,10 +11,12 @@ import { Colors } from '../../constants/Colors';
 import { AppIcon } from '../../components/AppIcon';
 import { registerPatient } from '../../services/authService';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import Toast from '../../components/GlobalToast';
+import { calendarDateLabel, todayKey } from '../../utils/opdDates';
 
 // Register Screen - Expo Router version
 export default function RegisterScreen() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [fullName, setFullName] = useState('');
   const [nic, setNic] = useState('');
   const [birthday, setBirthday] = useState('');
@@ -30,15 +33,24 @@ export default function RegisterScreen() {
 
   const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
+  const selectBirthday = (value: Date) => {
+    // A birthday is a calendar date; converting local midnight to UTC changes its day.
+    setBirthday(`${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`);
+  };
+
+  const openDatePicker = () => {
+    setDate(birthday ? new Date(`${birthday}T12:00:00`) : new Date());
+    setShowDatePicker(true);
+  };
+
   const onDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
-    if (selectedDate) {
+    if (selectedDate && event.type !== 'dismissed') {
       setDate(selectedDate);
       if (Platform.OS === 'android') {
-        const formattedDate = selectedDate.toISOString().split('T')[0];
-        setBirthday(formattedDate);
+        selectBirthday(selectedDate);
       }
     }
   };
@@ -61,36 +73,41 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!fullName || !nic || !birthday || !phone || !email || !password || !confirmPassword) {
-      Alert.alert(t('Error'), t('Please fill in all fields'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Please fill in all fields'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!validateName(fullName)) {
-      Alert.alert(t('Error'), t('Full Name can only contain letters and spaces.'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Full Name can only contain letters and spaces.'), position: 'top', topOffset: 60 });
+      return;
+    }
+
+    if (birthday > todayKey()) {
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Your birthday cannot be in the future'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!validateNIC(nic)) {
-      Alert.alert(t('Error'), t('Please enter a valid NIC (e.g. 123456789V or 123456789012).'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Please enter a valid NIC (e.g. 123456789V or 123456789012).'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!validatePhone(phone)) {
-      Alert.alert(t('Error'), t('Mobile number must be 10 digits starting with 0.'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Mobile number must be 10 digits starting with 0.'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!validateEmail(email)) {
-      Alert.alert(t('Error'), t('Please enter a valid email address.'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Please enter a valid email address.'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert(t('Error'), t('Passwords do not match'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Passwords do not match'), position: 'top', topOffset: 60 });
       return;
     }
     if (password.length < 6) {
-      Alert.alert(t('Error'), t('Password must be at least 6 characters'));
+      Toast.show({ type: 'error', text1: t('Error'), text2: t('Password must be at least 6 characters'), position: 'top', topOffset: 60 });
       return;
     }
 
@@ -100,11 +117,10 @@ export default function RegisterScreen() {
       const patientData = { fullName, nic, birthday, gender, phone, email, password, bloodGroup };
       await registerPatient(patientData);
       
-      Alert.alert(t('Success'), t('Account created! Please login.'), [
-        { text: 'OK', onPress: () => router.replace('/(auth)/login') },
-      ]);
+      Toast.show({ type: 'success', text1: t('Success'), text2: t('Account created! Please login.'), position: 'top', topOffset: 60 });
+      setTimeout(() => router.replace('/(auth)/login'), 1500);
     } catch (error: any) {
-      Alert.alert(t('Registration Failed'), error.message);
+      Toast.show({ type: 'error', text1: t('Registration Failed'), text2: error.message, position: 'top', topOffset: 60 });
     } finally {
       setIsLoading(false);
     }
@@ -148,6 +164,7 @@ export default function RegisterScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* ---- TEAL HEADER ---- */}
         <View style={styles.header}>
+<View style={{ position: 'absolute', top: 16, right: 16, zIndex: 2 }}><LanguageSwitcher tone="dark" /></View>
           <View style={styles.circleTopRight} />
           <View style={styles.circleBottomLeft} />
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -175,12 +192,26 @@ export default function RegisterScreen() {
             placeholderTextColor={Colors.textLight} value={nic} onChangeText={(text) => setNic(text.replace(/[^0-9vVxX]/g, ''))} maxLength={12} />
 
           <Text style={styles.sectionLabel}>{t("Birthday")}</Text>
-          <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowDatePicker(true)}>
-            <Text style={birthday ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
-              {birthday || 'YYYY-MM-DD'}
-            </Text>
-            <Text style={styles.dropdownIcon}>📅</Text>
-          </TouchableOpacity>
+          {Platform.OS === 'web' ? (
+            <View style={styles.dropdownButton}>
+              <input
+                type="date"
+                value={birthday}
+                max={todayKey()}
+                lang={locale}
+                onChange={(event) => setBirthday(event.currentTarget.value)}
+                style={webDateInputStyle}
+                aria-label={t('Choose birthday')}
+              />
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.dropdownButton} onPress={openDatePicker} accessibilityRole="button" accessibilityLabel={t('Choose birthday')}>
+              <Text style={birthday ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
+                {calendarDateLabel(birthday, locale) || 'YYYY-MM-DD'}
+              </Text>
+              <AppIcon name="calendar" size={16} color={Colors.textMedium} />
+            </TouchableOpacity>
+          )}
 
           <Text style={styles.sectionLabel}>{t("Gender")}</Text>
           <View style={styles.genderContainer}>
@@ -207,7 +238,7 @@ export default function RegisterScreen() {
             <Text style={bloodGroup ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
               {bloodGroup || t('Select Blood Group')}
             </Text>
-            <Text style={styles.dropdownIcon}>▼</Text>
+            <AppIcon name="forward" size={12} color={Colors.textMedium} style={{ transform: [{ rotate: '90deg' }] }} />
           </TouchableOpacity>
 
           <Text style={styles.sectionLabel}>{t("Email Address")}</Text>
@@ -246,8 +277,8 @@ export default function RegisterScreen() {
       {renderDropdownModal(showBloodGroupDropdown, setShowBloodGroupDropdown, bloodGroups, setBloodGroup, 'Select Blood Group')}
 
       {/* Date Picker */}
-      {Platform.OS === 'ios' || Platform.OS === 'web' ? (
-        <Modal visible={showDatePicker} transparent animationType="slide">
+      {Platform.OS === 'ios' ? (
+        <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
           <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
             <View style={{ backgroundColor: Colors.white, padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 40 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
@@ -256,43 +287,25 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => {
                   setShowDatePicker(false);
-                  const formattedDate = date.toISOString().split('T')[0];
-                  setBirthday(formattedDate);
+                  selectBirthday(date);
                 }}>
                   <Text style={{ color: Colors.primary, fontWeight: 'bold', fontSize: 16 }}>{t("Done")}</Text>
                 </TouchableOpacity>
               </View>
-              {Platform.OS === 'web' ? (
-                <input
-                  type="date"
-                  value={birthday}
-                  max={new Date().toISOString().slice(0, 10)}
-                  onChange={(event) => {
-                    const value = event.currentTarget.value;
-                    if (value) {
-                      setBirthday(value);
-                      setDate(new Date(`${value}T12:00:00`));
-                    }
-                  }}
-                  style={{ width: '100%', minHeight: 52, fontSize: 16, padding: 12, border: '1px solid #D7DDE5', borderRadius: 8 }}
-                  aria-label="Choose birthday"
-                />
-              ) : (
-                <DateTimePicker
-                  value={date}
-                  mode="date"
-                  display="spinner"
-                  maximumDate={new Date()}
-                  onChange={(event, selectedDate) => {
-                    if (selectedDate) setDate(selectedDate);
-                  }}
-                />
-              )}
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display="spinner"
+                maximumDate={new Date()}
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) setDate(selectedDate);
+                }}
+              />
             </View>
           </View>
         </Modal>
       ) : (
-        showDatePicker && (
+        Platform.OS === 'android' && showDatePicker && (
           <DateTimePicker
             value={date}
             mode="date"
@@ -306,25 +319,38 @@ export default function RegisterScreen() {
   );
 }
 
+// Same inline browser control as the patient's medical-report date field.
+const webDateInputStyle: React.CSSProperties = {
+  width: '100%', minHeight: 32, border: 0, padding: 0, boxSizing: 'border-box',
+  fontSize: 16, color: Colors.textDark, backgroundColor: 'transparent', outlineStyle: 'none',
+};
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
   header: {
-    backgroundColor: Colors.primary, paddingTop: 60, paddingBottom: 40,
+    backgroundColor: Colors.primary, paddingTop: 60, paddingBottom: 60,
     paddingHorizontal: 24, overflow: 'hidden', position: 'relative',
+    borderBottomLeftRadius: 40, borderBottomRightRadius: 40,
   },
   circleTopRight: {
-    position: 'absolute', top: -40, right: -40, width: 160, height: 160,
-    borderRadius: 80, backgroundColor: Colors.primaryLight, opacity: 0.3,
+    position: 'absolute', top: -40, right: -40, width: 180, height: 180,
+    borderRadius: 90, backgroundColor: Colors.primaryLight, opacity: 0.3,
   },
   circleBottomLeft: {
-    position: 'absolute', bottom: -30, left: -50, width: 140, height: 140,
-    borderRadius: 70, backgroundColor: Colors.primaryLight, opacity: 0.2,
+    position: 'absolute', bottom: -20, left: -50, width: 160, height: 160,
+    borderRadius: 80, backgroundColor: Colors.primaryLight, opacity: 0.2,
   },
   backButton: { marginBottom: 20 },
   backButtonText: { color: Colors.white, fontSize: 15, fontWeight: '600', opacity: 0.9 },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: Colors.white },
+  headerTitle: { flexShrink: 1, fontSize: 28, fontWeight: '800', color: Colors.white },
   headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 6 },
-  formContainer: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 50 },
+  formContainer: { 
+    paddingHorizontal: 20, paddingTop: 30, paddingBottom: 50, 
+    backgroundColor: Colors.white, marginHorizontal: 20, marginTop: -40, 
+    borderRadius: 24, elevation: 8, shadowColor: Colors.shadow, 
+    shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, 
+    marginBottom: 40 
+  },
   sectionLabel: {
     fontSize: 13, fontWeight: '700', color: Colors.textMedium,
     marginBottom: 8, marginTop: 4, letterSpacing: 0.3,

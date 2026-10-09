@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
@@ -275,8 +276,7 @@ export default function ReportsScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={{ backgroundColor: Colors.white }} />
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -287,9 +287,10 @@ export default function ReportsScreen() {
           <Text style={styles.headerTitle}>{t("Monthly Analytics")}</Text>
           <Text style={styles.headerSubtitle}>{t("System-wide Bottleneck Report")}</Text>
         </View>
-        <TouchableOpacity onPress={() => setDownloadModalVisible(true)} style={{ padding: 8, backgroundColor: '#E0F7FA', borderRadius: 8 }}>
-          <Ionicons name="options-outline" size={24} color={Colors.primary} />
+        <TouchableOpacity onPress={() => setDownloadModalVisible(true)} style={{ padding: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8 }}>
+          <Ionicons name="options-outline" size={24} color={Colors.white} />
         </TouchableOpacity>
+        <LanguageSwitcher tone="dark" />
       </View>
 
       <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
@@ -422,11 +423,33 @@ export default function ReportsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F9FA' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: '#EAEAEA' },
-  backButton: { paddingRight: 15 },
-  backButtonText: { fontSize: 24, color: Colors.textDark },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textDark },
-  headerSubtitle: { fontSize: 12, color: Colors.textMedium, marginTop: 2 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    backgroundColor: Colors.primaryDark,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
+    marginBottom: 10,
+  },
+  backButton: { 
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  backButtonText: { fontSize: 24, color: Colors.white },
+  headerTitle: { flexShrink: 1, fontSize: 18, fontWeight: 'bold', color: Colors.white },
+  headerSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   scrollArea: { flex: 1, padding: 16 },
   kpiRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   kpiCard: { flex: 1, padding: 20, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },

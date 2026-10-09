@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -78,7 +79,6 @@ export default function SendNotificationScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
-      <SafeAreaView style={{ flex: 0, backgroundColor: Colors.primaryDark }} />
       
       <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
         {/* Header */}
@@ -88,6 +88,7 @@ export default function SendNotificationScreen() {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t("Broadcast Notification")}</Text>
           <View style={{ width: 36 }} />
+          <LanguageSwitcher tone="dark" />
         </View>
 
         <View style={styles.formCard}>
@@ -203,7 +204,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 18,
     fontWeight: '700',
     color: Colors.white,

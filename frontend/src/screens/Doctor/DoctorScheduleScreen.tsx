@@ -1,5 +1,6 @@
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useTheme } from '../../theme/ThemeContext';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
@@ -44,8 +45,7 @@ interface DoctorScheduleScreenProps {
 
 export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScreenProps) {
   const { t } = useLanguage();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { isDark } = useTheme();
 
   // Theme definition
   const theme = useMemo(() => {
@@ -244,6 +244,21 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
 
   // Fetch real schedule from backend database for the selected dateKey
   const fetchScheduleForDate = useCallback(async (dateKey: string) => {
+    const cacheKey = `@medi_queue_doctor_schedule_${dateKey}`;
+    try {
+      // 1. Immediately read cached schedule if available so there is zero flash/delay
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && Array.isArray(parsed.appointments)) {
+          setScheduleData((prev) => ({
+            ...prev,
+            [dateKey]: parsed,
+          }));
+        }
+      }
+    } catch (e) {}
+
     try {
       setIsLoadingSchedule(true);
       const res = await fetch(`${API_URL}/doctor/schedule?dateKey=${dateKey}`);
@@ -259,6 +274,7 @@ export default function DoctorScheduleScreen({ navigation }: DoctorScheduleScree
             ...prev,
             [dateKey]: daySchedule,
           }));
+          await AsyncStorage.setItem(cacheKey, JSON.stringify(daySchedule));
           return;
         }
       }
@@ -320,8 +336,15 @@ try {
     showToast(t("Break ended. Resumed {value0}", { value0: String(hosp.shiftName) }));
   };
 
-  // Consultation elapsed counter for active patient
+  // Consultation elapsed counter for active patient (live minute updates)
   const [elapsedMinutes, setElapsedMinutes] = useState(6);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsedMinutes((prev) => prev + 1);
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Toast feedback system
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -992,6 +1015,33 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
     }
   };
 
+  const handleOpenEhrForPatient = useCallback(async (patient: any) => {
+    if (!patient) return;
+    const pName = patient.patientName || patient.name || '';
+    const pToken = String(patient.token || patient.tokenNumber || '').replace(/\D/g, '');
+    const pId = patient.id || patient._id || patient.patientId || '';
+
+    try {
+      if (pName) await AsyncStorage.setItem('active_record_patient_name', pName);
+      if (pToken) await AsyncStorage.setItem('active_record_patient_token', pToken);
+      if (typeof window !== 'undefined' && (window as any).localStorage) {
+        if (pName) (window as any).localStorage.setItem('active_record_patient_name', pName);
+        if (pToken) (window as any).localStorage.setItem('active_record_patient_token', pToken);
+      }
+    } catch (e) {}
+
+    showToast(t("Opening EHR for {value0}", { value0: String(pName) }));
+
+    try {
+      router.push({
+        pathname: '/(doctor)/ehr',
+        params: { patientName: pName, tokenNumber: pToken, patientId: pId },
+      } as any);
+    } catch (e) {
+      router.push('/(doctor)/ehr' as any);
+    }
+  }, [t]);
+
   // Current formatted time for timeline header (today only)
 
   return (
@@ -1047,7 +1097,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 <Text
                   style={[styles.headerDateLabel, { color: theme.accent }]}
                 >
-                  {formatHeaderDate(selectedDateKey)}
+                  {t(formatHeaderDate(selectedDateKey))}
                 </Text>
               </View>
 
@@ -1123,7 +1173,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                   <Text
                     style={[styles.weekRangeText, { color: theme.textDark }]}
                   >
-                    {weekRangeLabel}
+                    {t(weekRangeLabel)}
                   </Text>
 
                   <TouchableOpacity
@@ -1227,7 +1277,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                             : { color: theme.textMuted },
                         ]}
                       >
-                        {item.dayLabel}
+                        {t(item.dayLabel)}
                       </Text>
 
                       <Text
@@ -1307,7 +1357,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                   >
                     {selectedHospitalId === 'all'
                       ? t("All hospitals")
-                      : HOSPITALS[selectedHospitalId]?.name || 'Hospital'}
+                      : HOSPITALS[selectedHospitalId]?.name || t('Hospital')}
                   </Text>
                 </View>
 
@@ -1382,8 +1432,8 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                       ]}
                     >
                       {dayAppointments.length === 1
-                        ? '1 patient'
-                        : `${dayAppointments.length} patients`}
+                        ? t('1 patient')
+                        : t("{value0} patients", { value0: dayAppointments.length })}
                     </Text>
                   </TouchableOpacity>
 
@@ -1443,7 +1493,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                             { color: hosp.accentColor },
                           ]}
                         >
-                          {count === 1 ? '1 patient' : `${count} patients`}
+                          {count === 1 ? t('1 patient') : t("{value0} patients", { value0: count })}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1649,7 +1699,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                               { color: statusColor },
                             ]}
                           >
-                            {statusLabel}
+                            {t(statusLabel)}
                           </Text>
                         </View>
                       </View>
@@ -1787,7 +1837,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                                   )
                                 }
                                 accessibilityRole="button"
-                                accessibilityLabel="Take break options"
+                                accessibilityLabel={t("Take break options")}
                               >
                                 <MaterialCommunityIcons
                                   name={pillIconName}
@@ -1803,7 +1853,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                                 >
                                   {isThisShiftBreak && activeBreak
                                     ? `${activeBreak.label} (${activeBreak.type === 'tea' ? '15m' : '1h'})`
-                                    : 'Take break'}
+                                    : t('Take break')}
                                 </Text>
                                 <Ionicons
                                   name={
@@ -1871,7 +1921,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                                                 { color: theme.textDark },
                                               ]}
                                             >
-                                              {opt.label} ({opt.duration})
+                                              {t(opt.label)} ({opt.duration})
                                             </Text>
                                             <Text
                                               style={[
@@ -1964,8 +2014,8 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                       ]}
                     >
                       {showAllShiftsOverview
-                        ? 'Show current shift only'
-                        : `View all ${dayHospitals.length} shifts today (${dayHospitals.length - 1} upcoming)`}
+                        ? t('Show current shift only')
+                        : t("View all {value0} shifts today ({value1} upcoming)", { value0: dayHospitals.length, value1: dayHospitals.length - 1 })}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1988,23 +2038,24 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
               <View style={styles.timelineHeaderRow}>
                 <View style={styles.timelineTitleGroup}>
                   <Text
-                    style={[styles.timelineHeading, { color: theme.textDark }]}
+                    style={[styles.timelineHeading, { fontSize: 18, fontWeight: '800', color: theme.textDark }]}
                   >
                     {t("Timeline")}
                   </Text>
                   <View
                     style={[
                       styles.patientCountBadge,
-                      { backgroundColor: theme.tint },
+                      { backgroundColor: theme.tint, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
                     ]}
                   >
                     <Text
                       style={[
                         styles.patientCountText,
-                        { color: theme.primaryDeep },
+                        { color: theme.primaryDeep, fontSize: 12, fontWeight: '700' },
                       ]}
                     >
-                      {filteredAppointments.length}{t("patients")}</Text>
+                      {filteredAppointments.length} {filteredAppointments.length === 1 ? t("patient") : t("patients")}
+                    </Text>
                   </View>
                 </View>
 
@@ -2070,119 +2121,113 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                       style={[
                         styles.nowAttendingCard,
                         {
-                          backgroundColor: theme.card,
-                          borderColor: theme.cardBorder,
-                          borderLeftColor: theme.accent,
+                          backgroundColor: '#FFFFFF',
+                          borderColor: '#E3EAEC',
+                          borderRadius: 18,
+                          borderLeftWidth: 4,
+                          borderLeftColor: '#0E7C86',
+                          padding: 16,
                         },
                       ]}
                     >
-                      <View style={styles.nowAttendingTop}>
-                        <View style={styles.tokenCircle}>
-                          <Text style={styles.tokenCircleText}>
-                            {nowAttendingPatient.token.replace('Token #', '')}
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {/* 56px dark teal circle with token number "002" (white, bold) */}
+                        <View style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 28,
+                          backgroundColor: '#0A5A62',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 14,
+                        }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800' }}>
+                            {String(nowAttendingPatient.token || '2').replace(/\D/g, '').padStart(3, '0') || '002'}
                           </Text>
                         </View>
 
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                          <View style={styles.nowAttendingBadgeRow}>
-                            <Text
-                              style={[
-                                styles.nowAttendingLabel,
-                                { color: theme.accent },
-                              ]}
-                            >{t("NOW ATTENDING •")}</Text>
-                            <View style={styles.inRoomBadge}>
-                              <Text style={styles.inRoomText}>{t("In room")}</Text>
+                        <View style={{ flex: 1 }}>
+                          {/* next to it a small teal bold "Now attending" text and a small green "In room" pill */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#0E7C86' }}>
+                              {t("Now attending")}
+                            </Text>
+                            <Text style={{ color: '#0E7C86', fontWeight: '800', fontSize: 10 }}>•</Text>
+                            <View style={{
+                              backgroundColor: '#E6F6EC',
+                              paddingHorizontal: 8,
+                              paddingVertical: 2,
+                              borderRadius: 999,
+                            }}>
+                              <Text style={{ color: '#1E9E5A', fontSize: 11, fontWeight: '700' }}>
+                                {t("In room")}
+                              </Text>
                             </View>
                           </View>
 
-                          <Text
-                            style={[
-                              styles.nowPatientName,
-                              { color: theme.textDark },
-                            ]}
-                          >
+                          {/* the patient name (18px, 800) */}
+                          <Text style={{ fontSize: 18, fontWeight: '800', color: '#10272B' }} numberOfLines={1}>
                             {nowAttendingPatient.patientName}
                           </Text>
 
-                          <Text
-                            style={[
-                              styles.nowPatientSub,
-                              { color: theme.textMuted },
-                            ]}
-                          >
-                            {nowAttendingPatient.reason} ·{' '}
-                            {nowAttendingPatient.time}
+                          {/* "General OPD · 01:20 PM" in grey */}
+                          <Text style={{ fontSize: 13, fontWeight: '500', color: '#5F7478', marginTop: 2 }} numberOfLines={1}>
+                            {t(nowAttendingPatient.reason || 'General OPD')} · {nowAttendingPatient.time || '01:20 PM'}
                           </Text>
                         </View>
                       </View>
 
+                      {/* Divider */}
+                      <View style={{ height: 1, backgroundColor: '#E3EAEC', marginVertical: 12 }} />
+
                       {/* Hospital tag + Elapsed time + Open EHR button */}
-                      <View
-                        style={[
-                          styles.nowAttendingFooter,
-                          { borderTopColor: theme.divider },
-                        ]}
-                      >
-                        <View style={styles.nowFooterLeft}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <View style={{ flex: 1, gap: 6, marginRight: 4 }}>
                           {/* Hospital Tag */}
-                          <View
-                            style={[
-                              styles.hospitalTag,
-                              {
-                                backgroundColor: isDark
-                                  ? '#142023'
-                                  : HOSPITALS[nowAttendingPatient.hospitalId]
-                                      ?.accentLight || theme.tint,
-                              },
-                            ]}
-                          >
-                            <View
-                              style={[
-                                styles.colorDotSmall,
-                                {
-                                  backgroundColor:
-                                    HOSPITALS[nowAttendingPatient.hospitalId]
-                                      ?.accentColor || theme.accent,
-                                },
-                              ]}
-                            />
-                            <Text
-                              style={[
-                                styles.hospitalTagText,
-                                {
-                                  color:
-                                    HOSPITALS[nowAttendingPatient.hospitalId]
-                                      ?.accentColor || theme.accent,
-                                },
-                              ]}
-                            >
-                              {HOSPITALS[nowAttendingPatient.hospitalId]
-                                ?.shortName || 'Hospital'}
+                          <View style={{
+                            backgroundColor: '#E4F3F4',
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 999,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            alignSelf: 'flex-start',
+                            gap: 6,
+                          }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#0E7C86' }} />
+                            <Text style={{ color: '#0E7C86', fontSize: 12, fontWeight: '700' }}>
+                              {t(HOSPITALS[nowAttendingPatient.hospitalId]?.shortName || 'City General')}
                             </Text>
                           </View>
 
-                          <Text
-                            style={[
-                              styles.elapsedText,
-                              { color: theme.textMuted },
-                            ]}
-                          >{t("Consultation elapsed:")}{elapsedMinutes}{t("min")}</Text>
+                          {/* "Consultation elapsed: 6 min" under it (clock icon, grey; the minutes update live every minute) */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="time-outline" size={13} color="#5F7478" />
+                            <Text style={{ fontSize: 12, fontWeight: '500', color: '#5F7478' }}>
+                              {t("Consultation elapsed:")} {elapsedMinutes} {t("min")}
+                            </Text>
+                          </View>
                         </View>
 
+                        {/* on the right a solid teal button "Open EHR" with a folder icon */}
                         <TouchableOpacity
-                          style={[
-                            styles.openEhrPill,
-                            { backgroundColor: theme.primaryDeep },
-                          ]}
-                          activeOpacity={0.8}
-                          onPress={() =>
-                            showToast(
-                              t("Opening EHR for {value0}", { value0: String(nowAttendingPatient.patientName) })
-                            )
-                          }
+                          style={{
+                            height: 40,
+                            backgroundColor: '#0E7C86',
+                            borderRadius: 12,
+                            paddingHorizontal: 12,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            flexShrink: 0,
+                          }}
+                          activeOpacity={0.85}
+                          onPress={() => handleOpenEhrForPatient(nowAttendingPatient)}
                         >
-                          <Text style={styles.openEhrText}>{t("Open EHR")}</Text>
+                          <Ionicons name="folder-open-outline" size={17} color="#FFFFFF" />
+                          <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>
+                            {t("Open EHR")}
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     </TouchableOpacity>
@@ -2260,7 +2305,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                               ]}
                               numberOfLines={1}
                             >
-                              {appt.reason} · {appt.token}
+                              {t(appt.reason)} · {t(appt.token)}
                             </Text>
 
                             {/* Hospital Tag with dot */}
@@ -2310,7 +2355,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                                 { color: statusColor },
                               ]}
                             >
-                              {appt.status}
+                              {t(appt.status)}
                             </Text>
                           </TouchableOpacity>
 
@@ -2832,10 +2877,9 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                     ]}
                     activeOpacity={0.85}
                     onPress={() => {
+                      const patientToOpen = selectedPatient;
                       setSelectedPatient(null);
-                      showToast(
-                        t("Opening EHR Record for {value0}", { value0: String(selectedPatient.patientName) })
-                      );
+                      handleOpenEhrForPatient(patientToOpen);
                     }}
                   >
                     <Ionicons
@@ -2960,7 +3004,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                         color: theme.textDark,
                       },
                     ]}
-                    placeholder="e.g. Kasun Perera"
+                    placeholder={t("e.g. Kasun Perera")}
                     placeholderTextColor={theme.textMuted}
                     value={walkInName}
                     onChangeText={(val) => {
@@ -3160,7 +3204,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                                 },
                               ]}
                             >
-                              {isFull ? t("Full") : `${remaining} slots left`}
+                              {isFull ? t("Full") : t("{value0} slots left", { value0: remaining })}
                             </Text>
                             <Ionicons
                               name="pencil"
@@ -3255,7 +3299,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                         color: theme.textDark,
                       },
                     ]}
-                    placeholder="Enter symptoms or consultation reason..."
+                    placeholder={t("Enter symptoms or consultation reason...")}
                     placeholderTextColor={theme.textMuted}
                     value={walkInReason}
                     multiline
@@ -3362,7 +3406,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 {walkInToDelete?.patientName} ({walkInToDelete?.token})
               </Text>{' '}
               {t("from the schedule? The walk-in allocation will be restored to")}{' '}
-              {HOSPITALS[walkInToDelete?.hospitalId || 'cgh']?.shortName || 'clinic'}.
+              {HOSPITALS[walkInToDelete?.hospitalId || 'cgh']?.shortName || t('clinic')}.
             </Text>
 
             <View style={styles.dialogButtonsRow}>
@@ -3391,7 +3435,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 }}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel="Confirm remove slot"
+                accessibilityLabel={t("Confirm remove slot")}
               >
                 <Ionicons name="trash-outline" size={16} color="#ffffff" style={{ marginRight: 4 }} />
                 <Text style={styles.dialogRemoveBtnText}>{t("Remove")}</Text>
@@ -3445,7 +3489,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 ]}
                 onPress={() => setIsEditSlotsModalVisible(false)}
                 accessibilityRole="button"
-                accessibilityLabel="Close edit slots modal"
+                accessibilityLabel={t("Close edit slots modal")}
               >
                 <Ionicons name="close" size={20} color={theme.textMedium} />
               </TouchableOpacity>
@@ -3628,7 +3672,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 disabled={editSlotsCount <= 0}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel="Decrease slots count"
+                accessibilityLabel={t("Decrease slots count")}
               >
                 <Ionicons
                   name="remove"
@@ -3668,7 +3712,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 onPress={() => setEditSlotsCount((prev) => Math.min(50, prev + 1))}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel="Increase slots count"
+                accessibilityLabel={t("Increase slots count")}
               >
                 <Ionicons
                   name="add"
@@ -3916,7 +3960,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                   >
                     <TextInput
                       style={[styles.walkInInput, { color: theme.textDark }]}
-                      placeholder="e.g. 03:51 PM"
+                      placeholder={t("e.g. 03:51 PM")}
                       placeholderTextColor={theme.textMuted}
                       value={editPatientTime}
                       onChangeText={setEditPatientTime}
@@ -3980,7 +4024,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 >
                   <TextInput
                     style={[styles.walkInInput, { color: theme.textDark }]}
-                    placeholder="Enter reason for visit"
+                    placeholder={t("Enter reason for visit")}
                     placeholderTextColor={theme.textMuted}
                     value={editPatientReason}
                     onChangeText={setEditPatientReason}
@@ -4409,6 +4453,8 @@ const styles = StyleSheet.create({
   shiftTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
   },
   shiftIconBox: {
     width: 36,
@@ -4431,6 +4477,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    flexShrink: 0,
+    alignSelf: 'center',
   },
   statusPillText: {
     fontSize: 11,
@@ -4488,11 +4536,14 @@ const styles = StyleSheet.create({
   avgConsultRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 6,
   },
   avgConsultText: {
     fontSize: 12,
     marginLeft: 5,
     fontWeight: '500',
+    flexShrink: 1,
   },
   breakPillButton: {
     flexDirection: 'row',

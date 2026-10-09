@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -13,6 +14,7 @@ import {
   StatusBar,
   Modal,
 } from 'react-native';
+import Toast from '../../components/GlobalToast';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';
@@ -81,33 +83,33 @@ export default function AddHospitalScreen() {
 
   const handleSave = async () => {
     if (!formData.name || !formData.code || !formData.type || !formData.contact || !formData.email || !formData.location) {
-      alert('Please fill all required fields');
+      Toast.show({ type: 'error', text1: t('Validation Error'), text2: t('Please fill all required fields'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (formData.name.trim().length < 3) {
-      alert('Hospital name is too short');
+      Toast.show({ type: 'error', text1: t('Validation Error'), text2: t('Hospital name is too short'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!/^[a-zA-Z\s]+$/.test(formData.name)) {
-      alert('Hospital Name can only contain letters and spaces.');
+      Toast.show({ type: 'error', text1: t('Validation Error'), text2: t('Hospital Name can only contain letters and spaces.'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!/^[a-zA-Z0-9-]+$/.test(formData.code)) {
-      alert('Hospital Code can only contain letters, numbers, and dashes.');
+      Toast.show({ type: 'error', text1: t('Validation Error'), text2: t('Hospital Code can only contain letters, numbers, and dashes.'), position: 'top', topOffset: 60 });
       return;
     }
 
     const contact = formData.contact.trim();
     if (!validatePhone(contact)) {
-      alert('Please enter a valid 10-digit phone number starting with 0.');
+      Toast.show({ type: 'error', text1: t('Validation Error'), text2: t('Please enter a valid 10-digit phone number starting with 0.'), position: 'top', topOffset: 60 });
       return;
     }
 
     if (!validateEmail(formData.email.trim())) {
-      alert('Please enter a valid email address.');
+      Toast.show({ type: 'error', text1: t('Validation Error'), text2: t('Please enter a valid email address.'), position: 'top', topOffset: 60 });
       return;
     }
     
@@ -128,14 +130,32 @@ export default function AddHospitalScreen() {
       const data = await response.json();
       
       if (response.ok) {
-        alert(isEditMode ? 'Hospital updated successfully!' : 'Hospital registered successfully!');
+        Toast.show({
+          type: 'success',
+          text1: isEditMode ? t('Hospital Updated') : t('Hospital Registered'),
+          text2: isEditMode ? t('Hospital updated successfully!') : t('Hospital registered successfully!'),
+          position: 'top',
+          topOffset: 60,
+        });
         router.back();
       } else {
-        alert(data.message || (isEditMode ? 'Failed to update hospital' : 'Failed to register hospital'));
+        Toast.show({
+          type: 'error',
+          text1: t('Error'),
+          text2: data.message || (isEditMode ? t('Failed to update hospital') : t('Failed to register hospital')),
+          position: 'top',
+          topOffset: 60,
+        });
       }
     } catch (error) {
       console.error('Error adding hospital:', error);
-      alert('Network error. Please try again later.');
+      Toast.show({
+        type: 'error',
+        text1: t('Network Error'),
+        text2: t('Network error. Please try again later.'),
+        position: 'top',
+        topOffset: 60,
+      });
     } finally {
       setLoading(false);
     }
@@ -150,8 +170,8 @@ export default function AddHospitalScreen() {
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{isEditMode ? t('Edit Hospital') : t('Add New Hospital')}</Text>
-          <View style={{ width: 40 }} />
-        </View>
+            <LanguageSwitcher tone="light" />
+          </View>
 
         <KeyboardAvoidingView 
           style={{ flex: 1 }} 
@@ -341,7 +361,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: Colors.textDark,
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 18,
     fontWeight: '700',
     color: Colors.primaryDark,

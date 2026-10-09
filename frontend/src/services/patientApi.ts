@@ -41,7 +41,9 @@ export const patientApi = {
     const token = await getAuthToken();
     if (!token) throw new Error('Please sign in again to open this file.');
 
-    const fileUrl = `${API_URL}${report.fileUrl.replace(/^\/api\/v1/, '')}`;
+    const fileUrl = /^https?:\/\//i.test(report.fileUrl)
+      ? report.fileUrl
+      : `${API_URL}${report.fileUrl.replace(/^\/api\/v1/, '')}`;
 
     if (typeof window === 'undefined') {
       const baseDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory;

@@ -20,7 +20,8 @@ import {
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DoctorTopBar } from '../../components/doctor';
+import { DoctorTopBar, DoctorBottomNav } from '../../components/doctor';
+import { useTheme } from '../../theme/ThemeContext';
 import { fetchDoctorDashboard } from '../../services/doctorService';
 import {
   fetchPrescriptionDetails,
@@ -47,17 +48,37 @@ import { downloadPrescription } from '../../utils/prescriptionPdfGenerator';
 
 export default function PatientPrescriptionScreen() {
   const { t } = useLanguage();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { isDark } = useTheme();
+
   const params = useLocalSearchParams<{ tokenNumber?: string; patientName?: string; patientId?: string }>();
   const initialToken = params?.tokenNumber ? parseInt(params.tokenNumber, 10) : undefined;
   const isAurelia = params?.patientName
     ? String(params.patientName).toLowerCase().includes('aurelia')
     : initialToken === 29;
 
-  const [data, setData] = useState<PatientPrescriptionDetails>(
-    isAurelia ? aureliaPrescriptionData : blankPrescriptionData
-  );
+  const [data, setData] = useState<PatientPrescriptionDetails>(() => {
+    const base = isAurelia ? { ...aureliaPrescriptionData } : { ...blankPrescriptionData };
+    if (params?.patientName) {
+      base.patient = {
+        ...base.patient,
+        name: params.patientName,
+        initials: params.patientName
+          .split(' ')
+          .map((n: string) => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2) || 'PT',
+      };
+    }
+    if (initialToken) {
+      base.patient = {
+        ...base.patient,
+        tokenNumber: initialToken,
+        tokenFormatted: `Token #${String(initialToken).padStart(3, '0')}`,
+      };
+    }
+    return base;
+  });
   const [currentHospital, setCurrentHospital] = useState<string>('Colombo Teaching Hospital 1');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'home' | 'queue' | 'records' | 'schedule' | 'rx'>('rx');
@@ -783,8 +804,28 @@ export default function PatientPrescriptionScreen() {
   const patient = data.patient;
   const doctor = data.doctor;
 
+  if (loading && (!data?.patient?.name || data.patient.name === 'Patient Normal')) {
+    return (
+      <View style={[styles.safeContainer, isDark && { backgroundColor: '#091012' }]}>
+        <StatusBar barStyle="light-content" backgroundColor="#0E7C86" />
+        <DoctorTopBar
+          doctorName={doctor.name || 'Dr. Palitha Perera'}
+          room={doctor.room || 'Room 101'}
+          unreadCount={4}
+        />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#0E7C86" />
+          <Text style={{ marginTop: 14, color: isDark ? '#9db8bc' : '#688990', fontSize: 15, fontWeight: '500' }}>
+            {t('Loading consultation details...')}
+          </Text>
+        </View>
+        <DoctorBottomNav activeTab="rx" />
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.safeContainer}>
+    <View style={[styles.safeContainer, isDark && { backgroundColor: '#091012' }]}>
       <StatusBar barStyle="light-content" backgroundColor="#0E7C86" />
 
       {/* SHARED TOP BAR */}
@@ -808,12 +849,12 @@ export default function PatientPrescriptionScreen() {
           {/* 2. PAGE TITLE & OUTPATIENT CONSULTATION HEADER             */}
           {/* ========================================================= */}
           <View style={styles.headerTitleSection}>
-            <Text style={styles.kickerText}>{t("Outpatient consultation")}</Text>
+            <Text style={[styles.kickerText, isDark && { color: "#3BD1DF" }]}>{t("Outpatient consultation")}</Text>
             <View style={styles.titleRow}>
-              <Text style={styles.mainTitle}>{t("Prescription & details")}</Text>
-              <View style={styles.roomPillBadge}>
+              <Text style={[styles.mainTitle, isDark && { color: '#EEF8FA' }]}>{t("Prescription & details")}</Text>
+              <View style={[styles.roomPillBadge, isDark && { backgroundColor: "#18383E", borderColor: "#23525B" }]}>
                 <View style={styles.roomPillDot} />
-                <Text style={styles.roomPillText}>{doctor.room}</Text>
+                <Text style={[styles.roomPillText, isDark && { color: "#3BD1DF" }]}>{doctor.room}</Text>
               </View>
             </View>
           </View>
@@ -821,43 +862,43 @@ export default function PatientPrescriptionScreen() {
           {/* ========================================================= */}
           {/* 3. PATIENT PROFILE CARD                                    */}
           {/* ========================================================= */}
-          <View style={styles.card}>
+          <View style={[styles.card, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
             {/* Top row with Initials Avatar, Name/ID, and Token Badge */}
             <View style={styles.patientTopRow}>
-              <View style={styles.initialsAvatar}>
-                <Text style={styles.initialsText}>{patient.initials || 'KG'}</Text>
+              <View style={[styles.initialsAvatar, isDark && { backgroundColor: "#18383E", borderColor: "#23525B" }]}>
+                <Text style={[styles.initialsText, isDark && { color: "#3BD1DF" }]}>{patient.initials || "KG"}</Text>
               </View>
 
               <View style={styles.patientInfoCol}>
-                <Text style={styles.patientName}>{patient.name}</Text>
-                <Text style={styles.patientMeta}>
+                <Text style={[styles.patientName, isDark && { color: '#EEF8FA' }]}>{patient.name}</Text>
+                <Text style={[styles.patientMeta, isDark && { color: "#86A4A9" }]}>
                   {t(patient.gender ?? '')}, {patient.age} {t("yrs •")}{' '}{patient.opdId}
                 </Text>
               </View>
 
-              <View style={styles.tokenBadge}>
-                <Text style={styles.tokenBadgeText}>{patient.tokenFormatted || t('Token #028')}</Text>
+              <View style={[styles.tokenBadge, isDark && { backgroundColor: "#18383E", borderColor: "#23525B" }]}>
+                <Text style={[styles.tokenBadgeText, isDark && { color: "#3BD1DF" }]}>{patient.tokenFormatted || t("Token #028")}</Text>
               </View>
             </View>
 
             {/* Vitals 3-column row */}
             <View style={styles.vitalsRow}>
               {/* Blood Pressure */}
-              <View style={styles.vitalBox}>
-                <Text style={styles.vitalLabel}>{t("Blood Pressure")}</Text>
-                <Text style={styles.vitalValue}>{patient.vitals.bloodPressure}</Text>
+              <View style={[styles.vitalBox, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+                <Text style={[styles.vitalLabel, isDark && { color: '#86A4A9' }]}>{t("Blood Pressure")}</Text>
+                <Text style={[styles.vitalValue, isDark && { color: '#EEF8FA' }]}>{patient.vitals.bloodPressure}</Text>
               </View>
 
               {/* Pulse Rate */}
-              <View style={styles.vitalBox}>
-                <Text style={styles.vitalLabel}>{t("Pulse Rate")}</Text>
-                <Text style={styles.vitalValue}>{patient.vitals.pulseRate}</Text>
+              <View style={[styles.vitalBox, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+                <Text style={[styles.vitalLabel, isDark && { color: '#86A4A9' }]}>{t("Pulse Rate")}</Text>
+                <Text style={[styles.vitalValue, isDark && { color: '#EEF8FA' }]}>{patient.vitals.pulseRate}</Text>
               </View>
 
               {/* Weight */}
-              <View style={styles.vitalBox}>
-                <Text style={styles.vitalLabel}>{t("Weight")}</Text>
-                <Text style={styles.vitalValue}>{patient.vitals.weight || (currentPatientRecord?.vitals?.weightNum ? `${currentPatientRecord.vitals.weightNum} kg` : '-- kg')}</Text>
+              <View style={[styles.vitalBox, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+                <Text style={[styles.vitalLabel, isDark && { color: '#86A4A9' }]}>{t("Weight")}</Text>
+                <Text style={[styles.vitalValue, isDark && { color: '#EEF8FA' }]}>{patient.vitals.weight || (currentPatientRecord?.vitals?.weightNum ? `${currentPatientRecord.vitals.weightNum} kg` : '-- kg')}</Text>
               </View>
             </View>
           </View>
@@ -877,20 +918,20 @@ export default function PatientPrescriptionScreen() {
           {/* ========================================================= */}
           {/* 4. PRIMARY DIAGNOSIS (ICD-10) CARD                        */}
           {/* ========================================================= */}
-          <View style={styles.card}>
+          <View style={[styles.card, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardHeaderLeft}>
                 <MaterialCommunityIcons name="stethoscope" size={20} color="#0d6371" style={{ marginRight: 8 }} />
-                <Text style={styles.cardSectionTitle}>{t("Primary Diagnosis (ICD-10)")}</Text>
+                <Text style={[styles.cardSectionTitle, isDark && { color: '#EEF8FA' }]}>{t("Primary Diagnosis (ICD-10)")}</Text>
               </View>
 
               <TouchableOpacity
                 onPress={() => setIsAddDiagnosisModalOpen(true)}
-                style={styles.addDiagnosisBtn}
+                style={[styles.addDiagnosisBtn, isDark && { backgroundColor: "#18383E", borderColor: "#23525B" }]}
                 activeOpacity={0.7}
               >
                 <Ionicons name="add" size={17} color="#0d6371" style={{ marginRight: 2 }} />
-                <Text style={styles.addDiagnosisBtnText}>{t("Add Diagnosis")}</Text>
+                <Text style={[styles.addDiagnosisBtnText, isDark && { color: "#3BD1DF" }]}>{t("Add")}</Text>
               </TouchableOpacity>
             </View>
 
@@ -931,7 +972,7 @@ export default function PatientPrescriptionScreen() {
               })}
 
               {data.diagnoses.length === 0 && (
-                <Text style={styles.emptyNote}>{t("No diagnosis recorded. Tap \"+ Add Diagnosis\".")}</Text>
+                <Text style={[styles.emptyNote, isDark && { color: "#86A4A9" }]}>{t("No diagnosis recorded. Tap \"+ Add Diagnosis\".")}</Text>
               )}
             </View>
           </View>
@@ -939,7 +980,7 @@ export default function PatientPrescriptionScreen() {
           {/* ========================================================= */}
           {/* 5. CLINICAL NOTES & SYMPTOMS CARD                         */}
           {/* ========================================================= */}
-          <View style={styles.card}>
+          <View style={[styles.card, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardHeaderLeft}>
                 <MaterialCommunityIcons
@@ -948,15 +989,15 @@ export default function PatientPrescriptionScreen() {
                   color="#0d6371"
                   style={{ marginRight: 8 }}
                 />
-                <Text style={styles.cardSectionTitle}>{t("Clinical Notes & Symptoms")}</Text>
+                <Text style={[styles.cardSectionTitle, isDark && { color: '#EEF8FA' }]}>{t("Clinical Notes & Symptoms")}</Text>
               </View>
               <Text style={styles.confidentialBadge}>{t("Confidential")}</Text>
             </View>
 
             {/* Editable Notes Textbox */}
-            <View style={styles.notesBox}>
+            <View style={[styles.notesBox, isDark && { backgroundColor: "#0F1D20", borderColor: "#1F383C" }]}>
               <TextInput
-                style={styles.notesInput}
+                style={[styles.notesInput, isDark && { color: "#EEF8FA" }]}
                 multiline
                 numberOfLines={3}
                 value={clinicalNotes}
@@ -972,7 +1013,7 @@ export default function PatientPrescriptionScreen() {
           {/* ========================================================= */}
           {/* 6. PRESCRIPTION LIST (Rx) CARD                             */}
           {/* ========================================================= */}
-          <View style={styles.card}>
+          <View style={[styles.card, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardHeaderLeft}>
                 <MaterialCommunityIcons
@@ -981,11 +1022,11 @@ export default function PatientPrescriptionScreen() {
                   color="#0d6371"
                   style={{ marginRight: 8 }}
                 />
-                <Text style={styles.cardSectionTitle}>{t("Prescription List (Rx)")}</Text>
+                <Text style={[styles.cardSectionTitle, isDark && { color: '#EEF8FA' }]}>{t("Prescription List (Rx)")}</Text>
               </View>
 
-              <View style={styles.itemsCountBadge}>
-                <Text style={styles.itemsCountText}>
+              <View style={[styles.itemsCountBadge, isDark && { backgroundColor: "#18383E", borderColor: "#23525B" }]}>
+                <Text style={[styles.itemsCountText, isDark && { color: "#3BD1DF" }]}>
                   {data.prescriptions.length} {data.prescriptions.length === 1 ? t('item') : t('items')}
                 </Text>
               </View>
@@ -1014,19 +1055,19 @@ export default function PatientPrescriptionScreen() {
                     {/* Middle Info */}
                     <View style={styles.medInfoWrap}>
                       <View style={styles.medTitleRow}>
-                        <Text style={styles.medNameText}>{med.name}</Text>
+                        <Text style={[styles.medNameText, isDark && { color: "#EEF8FA" }]}>{med.name}</Text>
                         <View style={styles.medTypeBadge}>
                           <Text style={styles.medTypeBadgeText}>{med.type}</Text>
                         </View>
                       </View>
 
-                      <Text style={styles.medDetailText}>
+                      <Text style={[styles.medDetailText, isDark && { color: "#86A4A9" }]}>
                         {med.dosage} • {med.frequency} • {med.duration}
                       </Text>
 
                       {/* Tag pill */}
                       {med.instructions ? (
-                        <View style={styles.medInstructionPill}>
+                        <View style={[styles.medInstructionPill, isDark && { backgroundColor: "#18383E" }]}>
                           <MaterialCommunityIcons
                             name={
                               med.tagType === 'food'
@@ -1037,7 +1078,7 @@ export default function PatientPrescriptionScreen() {
                             color="#0d7685"
                             style={{ marginRight: 4 }}
                           />
-                          <Text style={styles.medInstructionText}>{med.instructions}</Text>
+                          <Text style={[styles.medInstructionText, isDark && { color: "#3BD1DF" }]}>{med.instructions}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -1065,9 +1106,9 @@ export default function PatientPrescriptionScreen() {
               })}
 
               {data.prescriptions.length === 0 && (
-                <View style={styles.emptyPrescriptionBox}>
-                  <Text style={styles.emptyPrescriptionText}>{t("No medicines added yet.")}</Text>
-                  <Text style={styles.emptyPrescriptionSub}>
+                <View style={[styles.emptyPrescriptionBox, isDark && { backgroundColor: "#0F1D20", borderColor: "#1F383C" }]}>
+                  <Text style={[styles.emptyPrescriptionText, isDark && { color: "#EEF8FA" }]}>{t("No medicines added yet.")}</Text>
+                  <Text style={[styles.emptyPrescriptionSub, isDark && { color: "#86A4A9" }]}>
                     {t("Use the form below to search and add medications.")}</Text>
                 </View>
               )}
@@ -1077,15 +1118,15 @@ export default function PatientPrescriptionScreen() {
           {/* ========================================================= */}
           {/* 7. ADD MEDICINE CARD (REDESIGNED)                          */}
           {/* ========================================================= */}
-          <View style={styles.cardRedesigned}>
+          <View style={[styles.cardRedesigned, isDark && { backgroundColor: "#142528", borderColor: "#1F383C" }]}>
             {/* Header */}
             <View style={styles.addMedHeaderRow}>
               <View style={styles.addMedHeaderIconWrap}>
                 <MaterialCommunityIcons name="pill" size={20} color="#064e59" />
               </View>
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.addMedHeaderTitle}>{t("Add Medicine")}</Text>
-                <Text style={styles.addMedHeaderSub}>{t("Prescribe dosage, timing & duration")}</Text>
+                <Text style={[styles.addMedHeaderTitle, isDark && { color: "#EEF8FA" }]}>{t("Add Medicine")}</Text>
+                <Text style={[styles.addMedHeaderSub, isDark && { color: "#86A4A9" }]}>{t("Prescribe dosage, timing & duration")}</Text>
               </View>
               <View style={styles.rxBadge}>
                 <Text style={styles.rxBadgeText}>{t("Rx Item")}</Text>
@@ -1094,11 +1135,11 @@ export default function PatientPrescriptionScreen() {
 
             {/* 1. Medicine Name & Strength */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>{t("MEDICINE NAME & STRENGTH")}</Text>
-              <View style={[styles.searchInputWrap, isSearchFocused && styles.searchInputWrapFocused]}>
+              <Text style={[styles.fieldLabel, isDark && { color: "#86A4A9" }]}>{t("MEDICINE NAME & STRENGTH")}</Text>
+              <View style={[styles.searchInputWrap, isDark && { backgroundColor: "#0F1D20", borderColor: "#1F383C" }, isSearchFocused && styles.searchInputWrapFocused]}>
                 <Ionicons name="search-outline" size={19} color="#64748b" style={styles.searchIcon} />
                 <TextInput
-                  style={styles.searchInput}
+                  style={[styles.searchInput, isDark && { color: "#EEF8FA" }]}
                   placeholder={t("Search e.g., Amoxicillin, Ibuprofen...")}
                   placeholderTextColor="#94a3b8"
                   value={searchQuery}
@@ -1120,7 +1161,7 @@ export default function PatientPrescriptionScreen() {
                       setShowSuggestions(false);
                     }}
                     style={{ padding: 4 }}
-                    accessibilityLabel="Clear medicine search"
+                    accessibilityLabel={t("Clear medicine search")}
                   >
                     <Ionicons name="close-circle" size={18} color="#94a3b8" />
                   </TouchableOpacity>
@@ -1176,7 +1217,7 @@ export default function PatientPrescriptionScreen() {
             {/* 2. How often: 4-Option Segmented Control */}
             <View style={styles.fieldBlock}>
               <View style={styles.fieldHeaderRow}>
-                <Text style={styles.fieldLabel}>{t("HOW OFTEN")}</Text>
+                <Text style={[styles.fieldLabel, isDark && { color: "#86A4A9" }]}>{t("HOW OFTEN")}</Text>
                 <View style={styles.syncHintRow}>
                   <Ionicons name="time-outline" size={12} color="#0891b2" />
                   <Text style={styles.syncHintText}>{t("Auto-syncs timing")}</Text>
@@ -1213,7 +1254,7 @@ export default function PatientPrescriptionScreen() {
 
             {/* 3. With Meals: 2-Option Segmented Control */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>{t("WITH MEALS")}</Text>
+              <Text style={[styles.fieldLabel, isDark && { color: "#86A4A9" }]}>{t("WITH MEALS")}</Text>
               <View style={styles.timingRow}>
                 <TouchableOpacity
                   style={[styles.mealSegment, mealTiming === 'Before meal' && styles.mealSegmentSelected]}
@@ -1319,9 +1360,7 @@ export default function PatientPrescriptionScreen() {
                       isDark && styles.todCardTimeDark,
                     ]}
                     numberOfLines={1}
-                  >
-                    8:00 AM
-                  </Text>
+                  >{t("8:00 AM")}</Text>
                 </TouchableOpacity>
 
                 {/* 2. Afternoon */}
@@ -1364,9 +1403,7 @@ export default function PatientPrescriptionScreen() {
                       isDark && styles.todCardTimeDark,
                     ]}
                     numberOfLines={1}
-                  >
-                    1:00 PM
-                  </Text>
+                  >{t("1:00 PM")}</Text>
                 </TouchableOpacity>
 
                 {/* 3. Night */}
@@ -1409,9 +1446,7 @@ export default function PatientPrescriptionScreen() {
                       isDark && styles.todCardTimeDark,
                     ]}
                     numberOfLines={1}
-                  >
-                    9:00 PM
-                  </Text>
+                  >{t("9:00 PM")}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -1440,10 +1475,10 @@ export default function PatientPrescriptionScreen() {
 
             {/* 5. Duration: Stepper + Quick Chips */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>{t("DURATION")}</Text>
+              <Text style={[styles.fieldLabel, isDark && { color: "#86A4A9" }]}>{t("DURATION")}</Text>
               <View style={styles.durationControlRow}>
                 {/* Stepper (1 to 90 days) */}
-                <View style={styles.stepperWrap}>
+                <View style={[styles.stepperWrap, isDark && { backgroundColor: "#0F1D20", borderColor: "#1F383C" }]}>
                   <TouchableOpacity
                     style={[styles.stepperBtn, selectedDuration <= 1 && styles.stepperBtnDisabled]}
                     onPress={() => setSelectedDuration((d) => Math.max(1, d - 1))}
@@ -1453,7 +1488,7 @@ export default function PatientPrescriptionScreen() {
                     <Ionicons name="remove" size={18} color={selectedDuration <= 1 ? '#cbd5e1' : '#0f172a'} />
                   </TouchableOpacity>
                   <View style={styles.stepperValueBox}>
-                    <Text style={styles.stepperValueText}>{selectedDuration}</Text>
+                    <Text style={[styles.stepperValueText, isDark && { color: "#EEF8FA" }]}>{selectedDuration}</Text>
                     <Text style={styles.stepperUnitText}>{t("days")}</Text>
                   </View>
                   <TouchableOpacity
@@ -1496,13 +1531,13 @@ export default function PatientPrescriptionScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.liveSummaryLabel}>{t("PRESCRIPTION PREVIEW")}</Text>
                   <Text style={styles.liveSummaryText} numberOfLines={2}>
-                    {`${searchQuery.trim()} – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
-                      takeMorning && 'Morning',
-                      takeAfternoon && 'Afternoon',
-                      takeNight && 'Night',
+                    {t("{value0} – {value1}, {value2} ({value3}); Duration: {value4} {value5}", { value0: searchQuery.trim(), value1: t(selectedFrequency), value2: t(mealTiming), value3: [
+                      takeMorning && t('Morning'),
+                      takeAfternoon && t('Afternoon'),
+                      takeNight && t('Night'),
                     ]
                       .filter(Boolean)
-                      .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`}
+                      .join(', ') || t('no times'), value4: selectedDuration, value5: t(selectedDuration === 1 ? 'day' : 'days') })}
                   </Text>
                 </View>
               </View>
@@ -1564,7 +1599,7 @@ export default function PatientPrescriptionScreen() {
           <View style={styles.actionButtonsRow}>
             {/* Secondary Outline: Refer */}
             <TouchableOpacity
-              style={styles.referralOutlineBtn}
+              style={[styles.referralOutlineBtn, isDark && { backgroundColor: "#18383E", borderColor: "#23525B" }]}
               onPress={() => setIsReferralModalOpen(true)}
               activeOpacity={0.8}
             >
@@ -1574,7 +1609,7 @@ export default function PatientPrescriptionScreen() {
                 color="#064e59"
                 style={{ marginRight: 6 }}
               />
-              <Text style={styles.referralOutlineBtnText}>{t("Refer")}</Text>
+              <Text style={[styles.referralOutlineBtnText, isDark && { color: "#EEF8FA" }]}>{t("Refer")}</Text>
             </TouchableOpacity>
 
               {/* Primary Filled: Save and download (Wider) */}
@@ -1608,57 +1643,7 @@ export default function PatientPrescriptionScreen() {
       {/* ========================================================= */}
       {/* 9. BOTTOM NAVIGATION BAR (5 TABS)                         */}
       {/* ========================================================= */}
-      <View style={styles.bottomTabBar}>
-        {/* Home */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('home')}>
-          <Ionicons name="home-outline" size={22} color={activeTab === 'home' ? '#0d6371' : '#64748b'} />
-          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>{t("Home")}</Text>
-        </TouchableOpacity>
-
-        {/* Queue */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('queue')}>
-          <MaterialCommunityIcons
-            name="ticket-confirmation-outline"
-            size={23}
-            color={activeTab === 'queue' ? '#0d6371' : '#64748b'}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>{t("Queue")}</Text>
-        </TouchableOpacity>
-
-        {/* Records */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('records')}>
-          <MaterialCommunityIcons
-            name="folder-account-outline"
-            size={22}
-            color={activeTab === 'records' ? '#0d6371' : '#64748b'}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'records' && styles.tabLabelActive]}>{t("Records")}</Text>
-        </TouchableOpacity>
-
-        {/* Schedule */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('schedule')}>
-          <MaterialCommunityIcons
-            name="calendar-month-outline"
-            size={22}
-            color={activeTab === 'schedule' ? '#0d6371' : '#64748b'}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'schedule' && styles.tabLabelActive]}>{t("Schedule")}</Text>
-        </TouchableOpacity>
-
-        {/* Prescription (ACTIVE) */}
-        <TouchableOpacity style={styles.tabItem} onPress={() => handleTabPress('rx')}>
-          <MaterialCommunityIcons
-            name="clipboard-edit-outline"
-            size={23}
-            color={activeTab === 'rx' ? '#0d6371' : '#64748b'}
-          />
-          <Text
-            numberOfLines={1}
-            style={[styles.tabLabel, activeTab === 'rx' && styles.tabLabelActive]}
-          >
-            {t("Prescription")}</Text>
-        </TouchableOpacity>
-      </View>
+      <DoctorBottomNav activeTab="rx" />
 
       {/* ========================================================= */}
       {/* MODAL 1: ADD DIAGNOSIS                                     */}
@@ -1691,7 +1676,7 @@ export default function PatientPrescriptionScreen() {
             </View>
 
             <View style={{ marginTop: 16 }}>
-              <Text style={styles.fieldLabel}>{t("Custom Diagnosis Name")}</Text>
+              <Text style={[styles.fieldLabel, isDark && { color: "#86A4A9" }]}>{t("Custom Diagnosis Name")}</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder={t("e.g. Cervical Disc Herniation")}
@@ -1754,7 +1739,7 @@ export default function PatientPrescriptionScreen() {
             >
               <View style={{ marginTop: 6 }}>
                 {/* Medicine Name */}
-                <Text style={styles.fieldLabel}>{t("Medicine Name & Strength")}</Text>
+                <Text style={[styles.fieldLabel, isDark && { color: "#86A4A9" }]}>{t("Medicine Name & Strength")}</Text>
                 <TextInput
                   style={styles.modalInput}
                   placeholder={t("e.g. Paracetamol 500mg")}
@@ -2386,15 +2371,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+    gap: 8,
   },
   cardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 6,
   },
   cardSectionTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
+    flexShrink: 1,
   },
 
   // 3. PATIENT PROFILE CARD
@@ -2528,6 +2517,7 @@ const styles = StyleSheet.create({
   addDiagnosisBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
   },
   addDiagnosisBtnText: {
     fontSize: 13,
@@ -2585,6 +2575,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94a3b8',
     fontWeight: '500',
+    flexShrink: 0,
+    marginLeft: 6,
   },
   notesBox: {
     backgroundColor: '#f0f9ff',
@@ -3415,6 +3407,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748b',
     marginTop: 4,
+    textAlign: 'center',
   },
   tabLabelActive: {
     color: '#0d6371',

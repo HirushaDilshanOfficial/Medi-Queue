@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -15,6 +16,10 @@ import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../../config';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
+import Toast from '../../components/GlobalToast';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export default function ManageStaffScreen() {
   const { t } = useLanguage();
@@ -67,10 +72,23 @@ export default function ManageStaffScreen() {
       if (response.ok) {
         fetchStaff();
         setShowManageModal(false);
+        Toast.show({
+          type: 'success',
+          text1: t('Status Updated'),
+          text2: t('The staff member status has been changed successfully.'),
+          position: 'top',
+          topOffset: 60,
+        });
       }
     } catch (error) {
       console.error('Error toggling status:', error);
-      Alert.alert(t('Error'), t('Could not update status'));
+      Toast.show({
+        type: 'error',
+        text1: t('Error'),
+        text2: t('Could not update status'),
+        position: 'top',
+        topOffset: 60,
+      });
     }
   };
 
@@ -91,10 +109,23 @@ export default function ManageStaffScreen() {
               if (response.ok) {
                 fetchStaff();
                 setShowManageModal(false);
+                Toast.show({
+                  type: 'success',
+                  text1: t('Staff Removed'),
+                  text2: t('The staff member has been deleted from the system.'),
+                  position: 'top',
+                  topOffset: 60,
+                });
               }
             } catch (error) {
               console.error('Error deleting staff:', error);
-              Alert.alert(t('Error'), t('Could not delete staff'));
+              Toast.show({
+                type: 'error',
+                text1: t('Error'),
+                text2: t('Could not delete staff'),
+                position: 'top',
+                topOffset: 60,
+              });
             }
           }
         }
@@ -102,7 +133,139 @@ export default function ManageStaffScreen() {
     );
   };
 
+
+  
+  const handleExportPDF = async () => {
+    try {
+      const htmlContent = `
+        <html>
+          <head>
+            <style>
+              body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
+              
+              /* Letterhead Styles */
+              .letterhead {
+                text-align: center;
+                border-bottom: 3px solid #0a6e7e;
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+              }
+              .letterhead h1 {
+                margin: 0;
+                color: #0a6e7e;
+                font-size: 28px;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+              }
+              .letterhead h2 {
+                margin: 5px 0 0 0;
+                color: #333;
+                font-size: 18px;
+                font-weight: normal;
+              }
+              .letterhead p {
+                margin: 5px 0 0 0;
+                color: #666;
+                font-size: 12px;
+              }
+              .doc-title {
+                text-align: center;
+                font-size: 20px;
+                font-weight: bold;
+                margin-bottom: 10px;
+                color: #333;
+              }
+
+              .meta { text-align: center; font-size: 12px; color: #666; margin-bottom: 40px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+              th { background-color: #0a6e7e; color: #ffffff; text-align: left; padding: 12px; border: 1px solid #0a6e7e; }
+              td { padding: 12px; border: 1px solid #ddd; }
+              tr:nth-child(even) { background-color: #f9f9f9; }
+              .status-active { color: #2E7D32; font-weight: bold; }
+              .status-inactive { color: #C62828; font-weight: bold; }
+              
+              /* Footer */
+              .footer {
+                position: fixed;
+                bottom: 30px;
+                width: 100%;
+                text-align: center;
+                font-size: 10px;
+                color: #888;
+                border-top: 1px solid #ddd;
+                padding-top: 10px;
+              }
+            </style>
+          </head>
+          <body>
+            
+            <div class="letterhead">
+              <h1>Ministry of Health</h1>
+              <h2>Medi-Queue Smart Outpatient Management System</h2>
+              <p>10, Colombo 01000, Sri Lanka | +94 11 2 694033 | info@health.gov.lk</p>
+            </div>
+
+            <div class="doc-title">Official Staff Directory</div>
+
+            <div class="meta">
+              <p>Generated on: ${new Date().toLocaleString()} | Filter Applied: <strong>${activeFilter}</strong> | Total Records: <strong>${filteredStaff.length}</strong></p>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  
+                  <th>Emp ID</th>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Hospital</th>
+                  <th>Status</th>
+                  
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredStaff.map(item => `
+                  <tr>
+                    
+                    <td>${item.employeeNo || '-'}</td>
+                    <td><strong>${item.fullName}</strong></td>
+                    <td>${item.role}</td>
+                    <td>${item.hospitalName || '-'}</td>
+                    <td class="${item.status === 'Active' ? 'status-active' : 'status-inactive'}">${item.status || 'Active'}</td>
+                    
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+
+            <div class="footer">
+              This is a computer-generated document and does not require a signature.
+            </div>
+          </body>
+        </html>
+      `;
+      
+      const { base64 } = await Print.printToFileAsync({ html: htmlContent, base64: true });
+      
+      // Fix for Expo Sharing error by writing base64 directly to document directory
+      const safeUri = FileSystem.documentDirectory + 'Official_Staff_Directory_' + Date.now() + '.pdf';
+      if (base64) {
+        await FileSystem.writeAsStringAsync(safeUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      }
+      
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(safeUri, { UTI: 'com.adobe.pdf', mimeType: 'application/pdf' });
+      } else {
+        Toast.show({ type: 'info', text1: 'Exported', text2: 'File saved to ' + safeUri, position: 'top', topOffset: 60 });
+      }
+    } catch (error) {
+      console.error(error);
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to generate PDF', position: 'top', topOffset: 60 });
+    }
+  };
+
   const filteredStaff = staff.filter(s => {
+
     const matchesFilter = activeFilter === 'All' || s.role === activeFilter;
     const matchesSearch = s.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           s.role?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -112,17 +275,16 @@ export default function ManageStaffScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-      <SafeAreaView style={{ flex: 1 }}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark} />
         
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>←</Text>
+            <Ionicons name="arrow-back" size={24} color={Colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t("Staff Management")}</Text>
-          <View style={{ width: 40 }} />
-        </View>
+            <LanguageSwitcher tone="dark" />
+          </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           
@@ -174,10 +336,18 @@ export default function ManageStaffScreen() {
             })}
           </ScrollView>
 
+
           <View style={styles.listContainer}>
-            <Text style={styles.listHeader}>
-              {t("Registered Staff (")}{filteredStaff.length})
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+              <Text style={[styles.listHeader, { marginBottom: 0 }]}>
+                {t("Registered Staff (")}{filteredStaff.length})
+              </Text>
+              <TouchableOpacity onPress={handleExportPDF} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#e0f2f1', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                <Ionicons name="download-outline" size={16} color="#0a6e7e" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#0a6e7e', fontWeight: '600', fontSize: 13 }}>Export PDF</Text>
+              </TouchableOpacity>
+            </View>
+
             
             {loading ? (
               <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMedium }}>{t("Loading staff...")}</Text>
@@ -344,7 +514,6 @@ export default function ManageStaffScreen() {
         </Modal>
 
         <MOHBottomNav activeRoute="staff" />
-      </SafeAreaView>
     </View>
   );
 }
@@ -355,24 +524,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 20,
+    backgroundColor: Colors.primaryDark,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
+    marginBottom: 10,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonText: {
     fontSize: 20,
-    color: Colors.textDark,
+    color: Colors.white,
+    fontWeight: 'bold',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textDark,
+  headerTitle: { flexShrink: 1,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.white,
   },
   scrollContent: {
     paddingBottom: 100,

@@ -4,6 +4,7 @@ const {
   getMyProfile,
   updateMyProfile,
   getMyHistory,
+  exportVisitPdf,
   getMyReports,
   getMyReport,
   createMyReport,
@@ -21,6 +22,7 @@ const patientAuth = [protect, patientOnly, loadPatientProfile];
 router.get('/me', ...patientAuth, getMyProfile);
 router.patch('/me', ...patientAuth, updateMyProfile);
 router.get('/me/dashboard', ...patientAuth, getDashboard);
+router.get('/me/history/pdf', ...patientAuth, exportVisitPdf);
 router.get('/me/history', ...patientAuth, getMyHistory);
 router.get('/me/reports', ...patientAuth, getMyReports);
 router.get('/me/reports/:id', ...patientAuth, getMyReport);

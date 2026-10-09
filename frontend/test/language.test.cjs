@@ -77,6 +77,85 @@ test('English copy and unknown text stay intact in all languages', () => {
   }
 });
 
+test('examples, doctor names and allergy values preserve supplied text', () => {
+  for (const language of ['si', 'ta']) {
+    assert.ok(translate(language, 'Dr. Eye').endsWith('Eye'));
+    assert.ok(translate(language, 'e.g. Nimal Perera').endsWith('Nimal Perera'));
+    assert.ok(translate(language, 'Allergy: Aspirin').endsWith('Aspirin'));
+    assert.equal(translate(language, 'Heshani Wickramasinghe'), 'Heshani Wickramasinghe');
+    assert.equal(translate(language, 'City General Hospital'), 'City General Hospital');
+    assert.equal(translate(language, 'SpO2 (%)'), 'SpO2 (%)');
+    assert.notEqual(translate(language, 'Est. wait: ~12 min'), 'Est. wait: ~12 min');
+    assert.ok(!translate(language, 'Est. wait: ~12 min').includes('min'));
+  }
+});
+
+test('localized text preserves a name matching a translated label on every language change', () => {
+  let language = 'en';
+  const file = path.join(__dirname, '../src/i18n/LocalizedText.tsx');
+  const context = { exports: {}, require: name => ({
+    react: { createElement: (type, props, ...children) => ({ type, props: { ...props, children } }) },
+    'react-native': { Text: 'Text', Platform: { OS: 'web' } },
+    './LanguageContext': { useLanguage: () => ({ language, t: () => { throw new Error('Entered data must not be translated'); } }) },
+  })[name] };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText, context);
+  for (language of ['en', 'si', 'ta', 'en']) {
+    assert.equal(context.exports.LocalizedText({ children: 'Eye' }).props.children[0], 'Eye');
+  }
+});
+
+test('compact language selector saves all three languages and allows retry on storage failure', async () => {
+  const file = path.join(__dirname, '../src/i18n/LanguageSwitcher.tsx');
+  let language = 'en', ready = true, fail = false, hookIndex = 0;
+  const hookState = [], saved = [];
+  const react = {
+    Fragment: 'Fragment',
+    createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat() } }),
+    useState: initial => { const slot = hookIndex++; if (!(slot in hookState)) hookState[slot] = initial;
+      return [hookState[slot], next => { hookState[slot] = typeof next === 'function' ? next(hookState[slot]) : next; }]; },
+  };
+  const modules = {
+    react,
+    'react-native': { Modal: 'Modal', Pressable: 'Pressable', ScrollView: 'ScrollView', View: 'View', Platform: { OS: 'web' }, StyleSheet: { create: value => value, hairlineWidth: 1 } },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
+    './LanguageContext': { LANGUAGES: [{ code: 'en', name: 'English' }, { code: 'si', name: 'සිංහල' }, { code: 'ta', name: 'தமிழ்' }],
+      useLanguage: () => ({ language, ready, t: (text, values) => translate(language, text, values), setLanguage: async next => {
+        if (fail) throw new Error('Storage unavailable'); saved.push(next); language = next;
+      } }) },
+    './LocalizedText': { LocalizedText: 'Text' },
+    '../components/patient/ProfileIcon': { ProfileIcon: 'Icon' },
+  };
+  const context = { exports: {}, require: name => { assert.ok(name in modules, name); return modules[name]; } };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React } }).outputText, context);
+  function render() { hookIndex = 0; return context.exports.LanguageSwitcher({ tone: 'dark' }); }
+  function nodes(tree) { return tree && typeof tree === 'object' ? [tree, ...(tree.props?.children || []).flatMap(nodes)] : []; }
+  const trigger = () => render().props.children[0];
+  assert.equal(trigger().props.style.flexShrink, 0);
+  assert.ok(trigger().props.style.minHeight >= 44);
+  assert.equal(trigger().props.style.width, undefined);
+  ready = false; assert.equal(trigger().props.disabled, true); ready = true;
+  for (const next of ['si', 'ta', 'en']) {
+    trigger().props.onPress();
+    const radios = nodes(render()).filter(node => node.props.accessibilityRole === 'radio');
+    assert.equal(radios.length, 3);
+    radios[['en', 'si', 'ta'].indexOf(next)].props.onPress();
+    const button = nodes(render()).find(node => node.props.accessibilityState?.busy === false);
+    await button.props.onPress();
+    assert.equal(language, next);
+    assert.equal(nodes(render()).find(node => node.type === 'Modal').props.visible, false);
+  }
+  assert.deepEqual(saved, ['si', 'ta', 'en']);
+  fail = true; trigger().props.onPress();
+  nodes(render()).filter(node => node.props.accessibilityRole === 'radio')[1].props.onPress();
+  await nodes(render()).find(node => node.props.accessibilityState?.busy === false).props.onPress();
+  assert.equal(language, 'en');
+  assert.equal(nodes(render()).find(node => node.type === 'Modal').props.visible, true);
+  assert.ok(nodes(render()).some(node => node.props.accessibilityRole === 'alert'));
+  fail = false;
+  await nodes(render()).find(node => node.props.accessibilityState?.busy === false).props.onPress();
+  assert.equal(language, 'si');
+});
+
 test('Sinhala and Tamil dictionaries contain both scripts and preserve placeholders', () => {
   const placeholders = text => [...text.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort();
   for (const [key, values] of Object.entries(translations)) {

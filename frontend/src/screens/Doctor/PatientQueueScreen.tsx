@@ -25,6 +25,7 @@ import {
   DoctorDashboardData,
   PatientQueueItem,
 } from '../../services/doctorService';
+import { useTheme } from '../../theme/ThemeContext';
 import {
   DOCTOR_TOKENS as C,
   DoctorTopBar,
@@ -40,6 +41,7 @@ import {
 
 export default function PatientQueueScreen() {
   const { t } = useLanguage();
+  const { isDark } = useTheme();
   const [data, setData] = useState<DoctorDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -216,7 +218,7 @@ export default function PatientQueueScreen() {
     });
   }, []);
 
-  const [currentHospital, setCurrentHospital] = useState('Colombo Teaching Hospital 1');
+  const [currentHospital, setCurrentHospital] = useState('City General Hospital');
 
   const loadData = useCallback(async () => {
     try {
@@ -224,7 +226,7 @@ export default function PatientQueueScreen() {
       if (!savedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
         savedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
       }
-      const activeHosp = savedHosp || currentHospital || 'Colombo Teaching Hospital 1';
+      const activeHosp = savedHosp || currentHospital || 'City General Hospital';
       if (activeHosp !== currentHospital) {
         setCurrentHospital(activeHosp);
       }
@@ -233,6 +235,10 @@ export default function PatientQueueScreen() {
         setData(res);
         if (res.doctor?.hospitalName) {
           setCurrentHospital(res.doctor.hospitalName);
+          await AsyncStorage.setItem('doctor_current_hospital', res.doctor.hospitalName);
+          if (typeof window !== 'undefined' && (window as any).localStorage) {
+            (window as any).localStorage.setItem('doctor_current_hospital', res.doctor.hospitalName);
+          }
         }
       } else {
         setData(getDoctorDashboardForHospital(activeHosp));
@@ -251,21 +257,8 @@ export default function PatientQueueScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      (async () => {
-        try {
-          let storedHosp = await AsyncStorage.getItem('doctor_current_hospital');
-          if (!storedHosp && typeof window !== 'undefined' && (window as any).localStorage) {
-            storedHosp = (window as any).localStorage.getItem('doctor_current_hospital');
-          }
-          if (storedHosp && storedHosp !== currentHospital) {
-            setCurrentHospital(storedHosp);
-            const res = await fetchDoctorDashboard(undefined, storedHosp);
-            if (res) setData(res);
-            else setData(getDoctorDashboardForHospital(storedHosp));
-          }
-        } catch (e) {}
-      })();
-    }, [currentHospital])
+      loadData();
+    }, [loadData])
   );
 
   const onRefresh = () => {
@@ -456,8 +449,28 @@ export default function PatientQueueScreen() {
     : String(fallbackHospData.currentPatient?.tokenNumber || '028').padStart(3, '0');
   const currentNic = (currentPatient as any)?.nic || currentPatient?.fileRecord || fallbackHospData.currentPatient?.fileRecord || 'NIC 199892084778';
 
+  if (loading && !data) {
+    return (
+      <View style={[styles.container, isDark && { backgroundColor: '#091012' }]}>
+        <StatusBar barStyle="light-content" backgroundColor={C.teal} />
+        <DoctorTopBar
+          doctorName="Dr. Palitha Perera"
+          roomSubtitle={`Room 101 · ${t('Online')}`}
+          unreadCount={2}
+        />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={C.teal} />
+          <Text style={{ marginTop: 14, color: isDark ? '#9db8bc' : '#688990', fontSize: 15, fontWeight: '500' }}>
+            {t('Loading queue...')}
+          </Text>
+        </View>
+        <DoctorBottomNav activeTab="queue" />
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDark && { backgroundColor: '#091012' }]}>
       <StatusBar barStyle="light-content" backgroundColor={C.teal} />
 
       {/* 1. SHARED TOP BAR */}
@@ -508,7 +521,7 @@ export default function PatientQueueScreen() {
         </DoctorDarkHighlightBox>
 
         {/* 3. NOW IN CONSULTATION CARD (White, 4px teal left border) */}
-        <View style={styles.consultationCard}>
+        <View style={[styles.consultationCard, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
           {/* Status pill & time pill */}
           <View style={styles.cardPillsRow}>
             <StatusPill label={t("Now in consultation")} />
@@ -523,7 +536,7 @@ export default function PatientQueueScreen() {
           {/* Patient name & Token tile */}
           <View style={styles.patientRow}>
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={styles.patientName} numberOfLines={1}>
+              <Text style={[styles.patientName, isDark && { color: '#EEF8FA' }]} numberOfLines={1}>
                 {currentPatient?.patientName || 'Kamal Gunaratne'}
               </Text>
               <View style={styles.reasonRow}>
@@ -535,36 +548,36 @@ export default function PatientQueueScreen() {
                 />
                 <Text style={styles.reasonText} numberOfLines={2}>
                   {currentPatient?.reason || t('General OPD consultation')} ·{' '}
-                  {t(currentPatient?.gender ?? 'Male')}, {currentPatient?.age || 28}y
+                  {t(currentPatient?.gender ?? 'Male')}, {currentPatient?.age || 28} {t('yrs')}
                 </Text>
               </View>
             </View>
 
             <View style={styles.tokenBox}>
-              <Text style={styles.tokenLabel}>{t("Token")}</Text>
-              <Text style={styles.tokenNumber}>#{currentTokenStr}</Text>
+              <Text style={[styles.tokenLabel, isDark && { color: '#86A4A9' }]}>{t("Token")}</Text>
+              <Text style={[styles.tokenNumber, isDark && { color: '#3BD1DF' }]}>#{currentTokenStr}</Text>
             </View>
           </View>
 
           {/* Fact Tiles: Blood pressure, Heart rate in teal, NIC (safely wraps, never cut off) */}
           <View style={styles.factsRow}>
-            <View style={styles.factTile}>
-              <Text style={styles.factLabel}>{t("Blood pressure")}</Text>
-              <Text style={styles.factValueDark}>
+            <View style={[styles.factTile, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+              <Text style={[styles.factLabel, isDark && { color: '#86A4A9' }]}>{t("Blood pressure")}</Text>
+              <Text style={[styles.factValueDark, isDark && { color: '#EEF8FA' }]}>
                 {currentPatient?.bloodPressure || '120/80'}
               </Text>
             </View>
 
-            <View style={styles.factTile}>
-              <Text style={styles.factLabel}>{t("Heart rate")}</Text>
+            <View style={[styles.factTile, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+              <Text style={[styles.factLabel, isDark && { color: '#86A4A9' }]}>{t("Heart rate")}</Text>
               <Text style={styles.factValueTeal}>
                 {currentPatient?.heartRate || '76 bpm'}
               </Text>
             </View>
 
-            <View style={[styles.factTile, { flex: 1.15 }]}>
-              <Text style={styles.factLabel}>{t("NIC")}</Text>
-              <Text style={styles.factValueNic} numberOfLines={2}>
+            <View style={[styles.factTile, { flex: 1.15 }, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+              <Text style={[styles.factLabel, isDark && { color: '#86A4A9' }]}>{t("NIC")}</Text>
+              <Text style={[styles.factValueNic, isDark && { color: '#EEF8FA' }]} numberOfLines={2}>
                 {currentNic}
               </Text>
             </View>
@@ -584,16 +597,18 @@ export default function PatientQueueScreen() {
           <View style={styles.actionRowSecondary}>
             <SecondaryButton
               title={t("Recall chime")}
-              icon={<Ionicons name="volume-medium-outline" size={18} color={C.tealDeep} />}
+              icon={<Ionicons name="volume-medium-outline" size={18} color={isDark ? '#3BD1DF' : C.tealDeep} />}
               onPress={handleRingRoomChime}
-              style={{ flex: 1 }}
+              style={[{ flex: 1 }, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
+              textStyle={isDark && { color: '#EEF8FA' }}
             />
             <SecondaryButton
               title={t("Undo previous")}
-              icon={<Ionicons name="arrow-undo-outline" size={18} color={C.tealDeep} />}
+              icon={<Ionicons name="arrow-undo-outline" size={18} color={isDark ? '#3BD1DF' : C.tealDeep} />}
               onPress={handleUndoPatient}
               disabled={isProcessing || !data?.currentPatient || data.currentPatient.tokenNumber <= 1}
-              style={{ flex: 1 }}
+              style={[{ flex: 1 }, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
+              textStyle={isDark && { color: '#EEF8FA' }}
             />
           </View>
         </View>
@@ -601,31 +616,31 @@ export default function PatientQueueScreen() {
         {/* 4. CATEGORY FILTER PILLS */}
         <View style={styles.filterPillsRow}>
           <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
+            style={[styles.filterPill, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }, activeFilter === 'all' && styles.filterPillActive]}
             onPress={() => setActiveFilter('all')}
             activeOpacity={0.75}
           >
-            <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive]}>
-              {t("All ({value0})", { value0: String(upcomingQueue.length || 14) })}
+            <Text style={[styles.filterPillText, isDark && { color: '#86A4A9' }, activeFilter === 'all' && styles.filterPillTextActive]}>
+              `${t("All")} (${upcomingQueue.length || 14})`
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'priority' && styles.filterPillActive]}
+            style={[styles.filterPill, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }, activeFilter === 'priority' && styles.filterPillActive]}
             onPress={() => setActiveFilter('priority')}
             activeOpacity={0.75}
           >
-            <Text style={[styles.filterPillText, activeFilter === 'priority' && styles.filterPillTextActive]}>
+            <Text style={[styles.filterPillText, isDark && { color: '#86A4A9' }, activeFilter === 'priority' && styles.filterPillTextActive]}>
               {t("Priority / Elderly (3)")}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'walkin' && styles.filterPillActive]}
+            style={[styles.filterPill, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }, activeFilter === 'walkin' && styles.filterPillActive]}
             onPress={() => setActiveFilter('walkin')}
             activeOpacity={0.75}
           >
-            <Text style={[styles.filterPillText, activeFilter === 'walkin' && styles.filterPillTextActive]}>
+            <Text style={[styles.filterPillText, isDark && { color: '#86A4A9' }, activeFilter === 'walkin' && styles.filterPillTextActive]}>
               {t("Walk-ins (5)")}
             </Text>
           </TouchableOpacity>
@@ -633,11 +648,11 @@ export default function PatientQueueScreen() {
 
         {/* 5. UPCOMING QUEUE HEADER */}
         <View style={styles.queueHeaderRow}>
-          <Text style={styles.queueHeaderTitle}>{t("Upcoming queue")}</Text>
+          <Text style={[styles.queueHeaderTitle, isDark && { color: '#EEF8FA' }]}>{t("Upcoming queue")}</Text>
           <View style={styles.estimatedWaitRow}>
             <Ionicons name="hourglass-outline" size={13} color={C.sub} style={{ marginRight: 4 }} />
             <Text style={styles.estimatedWaitText}>
-              {t("Est. wait: {value0}", { value0: metrics?.estimatedWaitTime || '~42 min' })}
+              `${t("Est. wait")}: ${metrics?.estimatedWaitTime || '~42 min'}`
             </Text>
           </View>
         </View>
@@ -652,7 +667,8 @@ export default function PatientQueueScreen() {
                 key={item.tokenNumber}
                 style={[
                   styles.patientItemCard,
-                  isNext && styles.patientItemCardNext,
+                  isDark && { backgroundColor: '#142528', borderColor: '#1F383C' },
+                  isNext && (isDark ? { backgroundColor: '#18383E', borderColor: '#23525B' } : styles.patientItemCardNext),
                 ]}
               >
                 <TouchableOpacity
@@ -673,7 +689,7 @@ export default function PatientQueueScreen() {
                   {/* Middle Info */}
                   <View style={styles.itemMiddle}>
                     <View style={styles.itemNameRow}>
-                      <Text style={styles.itemPatientName} numberOfLines={1}>
+                      <Text style={[styles.itemPatientName, isDark && { color: '#EEF8FA' }]} numberOfLines={1}>
                         {item.patientName}
                       </Text>
                       {isNext && (

@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useRef, useState } from 'react';
@@ -63,6 +64,7 @@ export function DoctorBookingScreen() {
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
   const [documentUploadError, setDocumentUploadError] = useState<string | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const dateStrip = useRef<ScrollView>(null);
   const submissionPending = useRef(false);
@@ -88,10 +90,12 @@ export function DoctorBookingScreen() {
   const selectDate = useCallback((next: string) => {
     setChosenDate(next);
     setTime(null);
+    setBookingError(null);
   }, []);
 
   const submit = async () => {
     if (!canSubmit || !date || !time || submissionPending.current) return;
+    setBookingError(null);
     if (!dateIsValid) {
       Alert.alert(t('Invalid appointment date'), t('Please choose a date from today through the next 14 days.'));
       setTime(null);
@@ -145,7 +149,9 @@ export function DoctorBookingScreen() {
         setDocumentUploadError(documentUploadFailed ? documentUploadError : null);
       }
     } catch (error) {
-      Alert.alert(t('Could not confirm appointment'), error instanceof HttpError ? error.message : t('Please try again.'));
+      const msg = error instanceof HttpError ? error.message : t('Please try again.');
+      setBookingError(msg);
+      Alert.alert(t('Could not confirm appointment'), msg);
       // Refresh capacity after a conflict so a sold-out slot cannot be retried.
       if (error instanceof HttpError && error.status === 409) {
         setTime(null);
@@ -198,6 +204,7 @@ export function DoctorBookingScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel={t("Open patient profile")} onPress={() => router.push('/(patient)/profile')} style={styles.profileButton}>
             <DesignImage name="profile" size={18} color={C.white} />
           </Pressable>
+          <LanguageSwitcher tone="light" />
         </View>
       </View>
 
@@ -325,6 +332,9 @@ export function DoctorBookingScreen() {
           </ScrollView>
 
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+            {bookingError ? (
+              <Text accessibilityRole="alert" style={styles.bookingErrorText}>{bookingError}</Text>
+            ) : null}
             <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canSubmit, busy: submitting }} disabled={!canSubmit} onPress={submit} style={({ pressed }) => [styles.cta, !canSubmit && styles.ctaDisabled, pressed && styles.pressed]}>
               {submitting ? <ActivityIndicator color={C.white} /> : <><Text style={styles.ctaLabel}>{rescheduling ? t('Confirm New Appointment') : t('Confirm Appointment')}</Text><BookingIcon name="check" size={18} color={C.white} /></>}
             </Pressable>
@@ -459,6 +469,7 @@ const styles = StyleSheet.create({
   confirmationSecondary: { minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.primary },
   confirmationSecondaryText: { color: C.primary, fontSize: 14, fontWeight: '700' },
   footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: C.background, boxShadow: '0 -4px 20px -2px rgba(14,30,35,0.06)' },
+  bookingErrorText: { color: '#a12626', fontSize: 13, lineHeight: 18, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
   cta: { minHeight: 52, borderRadius: 30, backgroundColor: C.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
   ctaDisabled: { opacity: 0.45 },
   ctaLabel: { color: C.white, fontSize: 14, lineHeight: 18, fontWeight: '600' },
