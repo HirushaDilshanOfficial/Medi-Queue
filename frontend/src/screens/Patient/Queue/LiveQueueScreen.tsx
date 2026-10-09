@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -166,6 +167,7 @@ export function LiveQueueScreen() {
       <View style={styles.grow}><Text style={styles.eyebrow}>{t("NATIONAL OPD")}</Text><Text style={styles.headerTitle}>{t("Live Queue Pass")}</Text></View>
       <Pressable accessibilityRole="button" accessibilityLabel={t("Queue notifications")} onPress={() => message(t('Queue notifications'), activePass ? t("Queue {value0}: {value1}. This screen updates automatically while you wait.", { value0: String(activePass.tokenNumber), value1: t(activePass.status) }) : t('Check in for an appointment to receive your live queue pass.'))} style={styles.iconButton}><ProfileIcon name="bell" size={22} color={C.muted} /></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={t("Open patient profile")} onPress={() => router.push('/(patient)/profile')} style={styles.profileButton}><ProfileIcon name="profile" size={18} color={C.surface} /></Pressable>
+      <LanguageSwitcher tone="light" />
     </View></View>
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={Boolean(pass.data) && (pass.loading || upcoming.loading)} onRefresh={refresh} tintColor={C.primary} colors={[C.primary]} />}>

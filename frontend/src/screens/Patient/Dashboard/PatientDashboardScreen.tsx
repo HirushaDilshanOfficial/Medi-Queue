@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../../i18n/LanguageSwitcher';
 import { dayLabel } from '../../../utils/opdDates';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
@@ -121,6 +122,7 @@ export function PatientDashboardScreen() {
         )}
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={t("Open profile")} onPress={profile} style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}><DesignImage name="profile" size={20} color={C.primary} /></Pressable>
+      <LanguageSwitcher tone="light" />
     </View></View>
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={Boolean(data) && dashboard.loading} onRefresh={reload} tintColor={C.primary} colors={[C.primary]} />}>

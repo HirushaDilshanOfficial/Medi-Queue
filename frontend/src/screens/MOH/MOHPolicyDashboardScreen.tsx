@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
@@ -104,6 +105,7 @@ export default function MOHPolicyDashboardScreen() {
             <TouchableOpacity style={styles.notificationBtn}>
               <Ionicons name="notifications-outline" size={24} color={Colors.white} />
             </TouchableOpacity>
+            <LanguageSwitcher tone="dark" />
           </View>
 
           <View style={styles.headerTitleContainer}>
@@ -350,7 +352,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   tagText: { color: Colors.white, fontSize: 10, marginLeft: 5, fontWeight: '600' },
-  headerTitle: { color: Colors.white, fontSize: 24, fontWeight: '800', marginBottom: 5 },
+  headerTitle: { flexShrink: 1, color: Colors.white, fontSize: 24, fontWeight: '800', marginBottom: 5 },
   headerSubtitle: { color: Colors.white, fontSize: 12, opacity: 0.8, lineHeight: 18 },
   metricsContainer: {
     flexDirection: 'row',

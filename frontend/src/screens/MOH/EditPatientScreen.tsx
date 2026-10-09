@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
@@ -194,8 +195,8 @@ export default function EditPatientScreen() {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t("Edit Patient")}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+          <LanguageSwitcher tone="light" />
+        </View>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.stepContent}>
@@ -205,7 +206,7 @@ export default function EditPatientScreen() {
             <Text style={styles.label}>{t("Full Name*")}</Text>
             <TextInput
               style={styles.input}
-              placeholder="John Doe"
+              placeholder={t("John Doe")}
               value={formData.fullName}
               onChangeText={(text) => setFormData({ ...formData, fullName: text.replace(/[^a-zA-Z\s]/g, '') })}
             />
@@ -381,7 +382,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: Colors.textDark,
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 18,
     fontWeight: '700',
     color: Colors.textDark,

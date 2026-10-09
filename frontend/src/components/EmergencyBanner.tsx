@@ -1,5 +1,6 @@
+import { LocalizedText as Text } from '../i18n/LocalizedText';
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuthToken } from '../services/http';
 import { BASE_URL } from '../config';

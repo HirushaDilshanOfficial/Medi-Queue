@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -169,8 +170,8 @@ export default function AddHospitalScreen() {
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{isEditMode ? t('Edit Hospital') : t('Add New Hospital')}</Text>
-          <View style={{ width: 40 }} />
-        </View>
+            <LanguageSwitcher tone="light" />
+          </View>
 
         <KeyboardAvoidingView 
           style={{ flex: 1 }} 
@@ -360,7 +361,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: Colors.textDark,
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 18,
     fontWeight: '700',
     color: Colors.primaryDark,

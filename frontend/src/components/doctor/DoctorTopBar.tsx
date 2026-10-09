@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -16,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { DOCTOR_TOKENS as C } from './doctorTheme';
-import { useLanguage, LANGUAGES } from '../../i18n/LanguageContext';
+import { useLanguage } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme/ThemeContext';
 
 interface DoctorTopBarProps {
@@ -32,12 +33,11 @@ export const DoctorTopBar = ({
   roomSubtitle,
   unreadCount = 4,
 }: DoctorTopBarProps) => {
-  const { t, language, setLanguage } = useLanguage();
+  const { t } = useLanguage();
   const { isDark, toggleTheme } = useTheme();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
-  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -129,15 +129,7 @@ export const DoctorTopBar = ({
 
           {/* Right: Language chip "EN" + Bell button with red badge */}
           <View style={styles.actionsWrap}>
-            <TouchableOpacity
-              style={styles.langChip}
-              activeOpacity={0.75}
-              onPress={() => setIsLanguageModalOpen(true)}
-              accessibilityLabel={t('Change language')}
-            >
-              <Ionicons name="globe-outline" size={15} color="#FFFFFF" />
-              <Text style={styles.langChipText}>{(language || 'en').toUpperCase()}</Text>
-            </TouchableOpacity>
+            <LanguageSwitcher tone="dark" />
 
             <TouchableOpacity
               style={styles.themeChip}
@@ -299,62 +291,6 @@ export const DoctorTopBar = ({
         </View>
       </Modal>
 
-      {/* ========================================================= */}
-      {/* LANGUAGE SELECTOR MODAL */}
-      {/* ========================================================= */}
-      <Modal
-        visible={isLanguageModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsLanguageModalOpen(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsLanguageModalOpen(false)}
-        >
-          <View style={styles.langModalCard} onStartShouldSetResponder={() => true}>
-            <View style={styles.langModalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="globe-outline" size={20} color={C.tealDeep} style={{ marginRight: 8 }} />
-                <Text style={styles.langModalTitle}>{t('Language')}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsLanguageModalOpen(false)}>
-                <Ionicons name="close" size={20} color={C.sub} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.langModalSub}>{t('Choose your preferred language')}</Text>
-
-            <View style={{ gap: 8, marginTop: 6 }}>
-              {LANGUAGES.map((item) => {
-                const isSelected = language === item.code;
-                return (
-                  <TouchableOpacity
-                    key={item.code}
-                    style={[styles.langOptionRow, isSelected && styles.langOptionRowSelected]}
-                    onPress={async () => {
-                      await setLanguage(item.code);
-                      setIsLanguageModalOpen(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View>
-                      <Text style={[styles.langOptionName, isSelected && { color: C.tealDeep, fontWeight: '800' }]}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.langOptionCode}>{item.code.toUpperCase()}</Text>
-                    </View>
-                    <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                      {isSelected && <View style={styles.radioDot} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
 };

@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useRef, useState } from 'react';
@@ -198,6 +199,7 @@ export function DoctorBookingScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel={t("Open patient profile")} onPress={() => router.push('/(patient)/profile')} style={styles.profileButton}>
             <DesignImage name="profile" size={18} color={C.white} />
           </Pressable>
+          <LanguageSwitcher tone="light" />
         </View>
       </View>
 

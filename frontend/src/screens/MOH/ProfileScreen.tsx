@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useCallback } from 'react';
@@ -105,6 +106,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <Text style={styles.headerTitle}>{t("My Profile")}</Text>
               <View style={{ width: 36 }} />
+              <LanguageSwitcher tone="dark" />
             </View>
 
             <View style={styles.profileSection}>
@@ -233,7 +235,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconText: { color: Colors.white, fontSize: 18, fontWeight: 'bold' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: Colors.white },
+  headerTitle: { flexShrink: 1, fontSize: 18, fontWeight: '700', color: Colors.white },
   
   profileSection: {
     alignItems: 'center',

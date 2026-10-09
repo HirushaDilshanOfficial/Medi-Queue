@@ -1,3 +1,4 @@
+import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
 import {
   View,
@@ -41,10 +42,11 @@ export const DarkStrongPill: React.FC<{
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }> = ({ label, icon, pulse, onPress, style }) => {
+  const { t } = useLanguage();
   const content = (
     <View style={[styles.strongPill, style]}>
       {pulse && <View style={styles.mintPulseDot} />}
-      <Text style={styles.strongPillText}>{label}</Text>
+      <Text style={styles.strongPillText}>{t(label)}</Text>
       {icon && <View style={{ marginLeft: 5 }}>{icon}</View>}
     </View>
   );
@@ -68,6 +70,7 @@ export const DarkTranslucentChip: React.FC<{
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }> = ({ label, icon, onPress, style }) => {
+  const { t } = useLanguage();
   return (
     <TouchableOpacity
       style={[styles.translucentChip, style]}
@@ -75,7 +78,7 @@ export const DarkTranslucentChip: React.FC<{
       activeOpacity={0.8}
     >
       {icon && <View style={{ marginRight: 5 }}>{icon}</View>}
-      <Text style={styles.translucentChipText}>{label}</Text>
+      <Text style={styles.translucentChipText}>{t(label)}</Text>
     </TouchableOpacity>
   );
 };
@@ -89,6 +92,7 @@ export const DarkOutlineButton: React.FC<{
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }> = ({ title, icon, rightIcon, onPress, style }) => {
+  const { t } = useLanguage();
   return (
     <TouchableOpacity
       style={[styles.outlineBtn, style]}
@@ -97,7 +101,7 @@ export const DarkOutlineButton: React.FC<{
     >
       <View style={styles.outlineBtnInner}>
         {icon && <View style={{ marginRight: 8 }}>{icon}</View>}
-        <Text style={styles.outlineBtnText}>{title}</Text>
+        <Text style={styles.outlineBtnText}>{t(title)}</Text>
       </View>
       {rightIcon && <View style={{ marginLeft: 8 }}>{rightIcon}</View>}
     </TouchableOpacity>

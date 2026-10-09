@@ -1357,7 +1357,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                   >
                     {selectedHospitalId === 'all'
                       ? t("All hospitals")
-                      : HOSPITALS[selectedHospitalId]?.name || 'Hospital'}
+                      : HOSPITALS[selectedHospitalId]?.name || t('Hospital')}
                   </Text>
                 </View>
 
@@ -1432,8 +1432,8 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                       ]}
                     >
                       {dayAppointments.length === 1
-                        ? '1 patient'
-                        : `${dayAppointments.length} patients`}
+                        ? t('1 patient')
+                        : t("{value0} patients", { value0: dayAppointments.length })}
                     </Text>
                   </TouchableOpacity>
 
@@ -1493,7 +1493,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                             { color: hosp.accentColor },
                           ]}
                         >
-                          {count === 1 ? '1 patient' : `${count} patients`}
+                          {count === 1 ? t('1 patient') : t("{value0} patients", { value0: count })}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1837,7 +1837,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                                   )
                                 }
                                 accessibilityRole="button"
-                                accessibilityLabel="Take break options"
+                                accessibilityLabel={t("Take break options")}
                               >
                                 <MaterialCommunityIcons
                                   name={pillIconName}
@@ -1853,7 +1853,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                                 >
                                   {isThisShiftBreak && activeBreak
                                     ? `${activeBreak.label} (${activeBreak.type === 'tea' ? '15m' : '1h'})`
-                                    : 'Take break'}
+                                    : t('Take break')}
                                 </Text>
                                 <Ionicons
                                   name={
@@ -1921,7 +1921,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                                                 { color: theme.textDark },
                                               ]}
                                             >
-                                              {opt.label} ({opt.duration})
+                                              {t(opt.label)} ({opt.duration})
                                             </Text>
                                             <Text
                                               style={[
@@ -2014,8 +2014,8 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                       ]}
                     >
                       {showAllShiftsOverview
-                        ? 'Show current shift only'
-                        : `View all ${dayHospitals.length} shifts today (${dayHospitals.length - 1} upcoming)`}
+                        ? t('Show current shift only')
+                        : t("View all {value0} shifts today ({value1} upcoming)", { value0: dayHospitals.length, value1: dayHospitals.length - 1 })}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -2355,7 +2355,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                                 { color: statusColor },
                               ]}
                             >
-                              {appt.status}
+                              {t(appt.status)}
                             </Text>
                           </TouchableOpacity>
 
@@ -3004,7 +3004,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                         color: theme.textDark,
                       },
                     ]}
-                    placeholder="e.g. Kasun Perera"
+                    placeholder={t("e.g. Kasun Perera")}
                     placeholderTextColor={theme.textMuted}
                     value={walkInName}
                     onChangeText={(val) => {
@@ -3204,7 +3204,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                                 },
                               ]}
                             >
-                              {isFull ? t("Full") : `${remaining} slots left`}
+                              {isFull ? t("Full") : t("{value0} slots left", { value0: remaining })}
                             </Text>
                             <Ionicons
                               name="pencil"
@@ -3299,7 +3299,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                         color: theme.textDark,
                       },
                     ]}
-                    placeholder="Enter symptoms or consultation reason..."
+                    placeholder={t("Enter symptoms or consultation reason...")}
                     placeholderTextColor={theme.textMuted}
                     value={walkInReason}
                     multiline
@@ -3406,7 +3406,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 {walkInToDelete?.patientName} ({walkInToDelete?.token})
               </Text>{' '}
               {t("from the schedule? The walk-in allocation will be restored to")}{' '}
-              {HOSPITALS[walkInToDelete?.hospitalId || 'cgh']?.shortName || 'clinic'}.
+              {HOSPITALS[walkInToDelete?.hospitalId || 'cgh']?.shortName || t('clinic')}.
             </Text>
 
             <View style={styles.dialogButtonsRow}>
@@ -3435,7 +3435,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 }}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel="Confirm remove slot"
+                accessibilityLabel={t("Confirm remove slot")}
               >
                 <Ionicons name="trash-outline" size={16} color="#ffffff" style={{ marginRight: 4 }} />
                 <Text style={styles.dialogRemoveBtnText}>{t("Remove")}</Text>
@@ -3489,7 +3489,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 ]}
                 onPress={() => setIsEditSlotsModalVisible(false)}
                 accessibilityRole="button"
-                accessibilityLabel="Close edit slots modal"
+                accessibilityLabel={t("Close edit slots modal")}
               >
                 <Ionicons name="close" size={20} color={theme.textMedium} />
               </TouchableOpacity>
@@ -3672,7 +3672,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 disabled={editSlotsCount <= 0}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel="Decrease slots count"
+                accessibilityLabel={t("Decrease slots count")}
               >
                 <Ionicons
                   name="remove"
@@ -3712,7 +3712,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 onPress={() => setEditSlotsCount((prev) => Math.min(50, prev + 1))}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel="Increase slots count"
+                accessibilityLabel={t("Increase slots count")}
               >
                 <Ionicons
                   name="add"
@@ -3960,7 +3960,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                   >
                     <TextInput
                       style={[styles.walkInInput, { color: theme.textDark }]}
-                      placeholder="e.g. 03:51 PM"
+                      placeholder={t("e.g. 03:51 PM")}
                       placeholderTextColor={theme.textMuted}
                       value={editPatientTime}
                       onChangeText={setEditPatientTime}
@@ -4024,7 +4024,7 @@ showToast(t("✓ Removed walk-in slot ({value0}). Allocation restored.", { value
                 >
                   <TextInput
                     style={[styles.walkInInput, { color: theme.textDark }]}
-                    placeholder="Enter reason for visit"
+                    placeholder={t("Enter reason for visit")}
                     placeholderTextColor={theme.textMuted}
                     value={editPatientReason}
                     onChangeText={setEditPatientReason}

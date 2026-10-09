@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { router } from 'expo-router';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -262,7 +263,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
             onPress={() => refresh()}
             activeOpacity={0.7}
             disabled={loading}
-            accessibilityLabel="Refresh directory"
+            accessibilityLabel={t("Refresh directory")}
           >
             <Ionicons
               name="refresh"
@@ -272,6 +273,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
             />
           </TouchableOpacity>
         </View>
+        <LanguageSwitcher tone="dark" />
       </View>
 
       <ScrollView
@@ -375,7 +377,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
               onPress={() => setFilter('pre_booked')}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Filter pre-booked patients"
+              accessibilityLabel={t("Filter pre-booked patients")}
             >
               <Ionicons
                 name="calendar"
@@ -400,7 +402,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
               onPress={() => setFilter('walk_in')}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Filter walk-in patients"
+              accessibilityLabel={t("Filter walk-in patients")}
             >
               <Ionicons
                 name="walk"
@@ -1083,7 +1085,7 @@ const styles = StyleSheet.create({
   headerTitleWrap: {
     flex: 1,
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 20,
     fontWeight: '800',
     color: Colors.white,

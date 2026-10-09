@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState, useEffect } from 'react';
@@ -141,6 +142,7 @@ export default function EditProfileScreen() {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t("Edit Profile")}</Text>
           <View style={{ width: 36 }} />
+          <LanguageSwitcher tone="dark" />
         </View>
 
         {isFetching ? (
@@ -240,7 +242,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 18,
     fontWeight: '700',
     color: Colors.white,

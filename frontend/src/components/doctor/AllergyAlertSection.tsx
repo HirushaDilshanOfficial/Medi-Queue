@@ -402,7 +402,7 @@ export default function AllergyAlertSection({
                 <Ionicons name="warning" size={19} color="#dc2626" />
               </View>
               <Text style={[styles.alertHeaderTitle, isDark && { color: '#fca5a5' }]}>
-                {allergies.length === 1 ? 'Allergy alert' : `Allergy alerts (${allergies.length})`}
+                {allergies.length === 1 ? t('Allergy alert') : t("Allergy alerts ({value0})", { value0: allergies.length })}
               </Text>
             </View>
 
@@ -451,7 +451,7 @@ export default function AllergyAlertSection({
                               },
                             ]}
                           >
-                            {meta.label}
+                            {t(meta.label)}
                           </Text>
                         </View>
                       </View>
@@ -537,12 +537,12 @@ export default function AllergyAlertSection({
             <View style={styles.sheetHeaderRow}>
               <View>
                 <Text style={styles.sheetTitle}>
-                  {sheetMode === 'edit' ? 'Edit allergy' : t("Add allergy")}
+                  {sheetMode === 'edit' ? t('Edit allergy') : t("Add allergy")}
                 </Text>
                 <Text style={styles.sheetSubtitle}>
                   {sheetMode === 'edit'
-                    ? 'Update allergen profile & risk reaction'
-                    : 'Record new medical allergy for prescription safety'}
+                    ? t('Update allergen profile & risk reaction')
+                    : t('Record new medical allergy for prescription safety')}
                 </Text>
               </View>
 
@@ -550,7 +550,7 @@ export default function AllergyAlertSection({
                 style={styles.sheetCloseBtn}
                 onPress={() => setIsSheetOpen(false)}
                 accessibilityRole="button"
-                accessibilityLabel="Close bottom sheet"
+                accessibilityLabel={t("Close bottom sheet")}
               >
                 <Ionicons name="close" size={20} color="#64748b" />
               </TouchableOpacity>
@@ -582,7 +582,7 @@ export default function AllergyAlertSection({
                   <TextInput
                     ref={allergenInputRef}
                     style={styles.textInput}
-                    placeholder="e.g. Sulfa Drugs, Penicillin, Aspirin"
+                    placeholder={t("e.g. Sulfa Drugs, Penicillin, Aspirin")}
                     placeholderTextColor="#94a3b8"
                     value={formAllergen}
                     onChangeText={setFormAllergen}
@@ -706,7 +706,7 @@ export default function AllergyAlertSection({
                               isSelected && styles.segmentLabelSelected,
                             ]}
                           >
-                            {sev.label}
+                            {t(sev.label)}
                           </Text>
                           {isSelected && (
                             <Ionicons
@@ -742,7 +742,7 @@ export default function AllergyAlertSection({
                 >
                   <TextInput
                     style={styles.textArea}
-                    placeholder="e.g. Do not administer. Patient experienced severe swelling in 2024."
+                    placeholder={t("e.g. Do not administer. Patient experienced severe swelling in 2024.")}
                     placeholderTextColor="#94a3b8"
                     value={formNote}
                     onChangeText={setFormNote}
@@ -762,7 +762,7 @@ export default function AllergyAlertSection({
                   onPress={() => setIsSheetOpen(false)}
                   activeOpacity={0.7}
                   accessibilityRole="button"
-                  accessibilityLabel="Cancel allergy changes"
+                  accessibilityLabel={t("Cancel allergy changes")}
                 >
                   <Text style={styles.cancelBtnText}>{t("Cancel")}</Text>
                 </TouchableOpacity>
@@ -831,7 +831,7 @@ export default function AllergyAlertSection({
 
             <Text style={styles.dialogBody}>
               <Text style={{ fontWeight: '700', color: '#0f172a' }}>
-                {itemToDelete?.item.allergen || 'This allergy'}{' '}
+                {itemToDelete?.item.allergen || t('This allergy')}{' '}
               </Text>
               {t("will no longer show a warning when you prescribe. Only remove it if it was entered by mistake.")}
             </Text>
@@ -845,7 +845,7 @@ export default function AllergyAlertSection({
                 }}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel="Keep allergy"
+                accessibilityLabel={t("Keep allergy")}
               >
                 <Text style={styles.dialogKeepBtnText}>{t("Keep")}</Text>
               </TouchableOpacity>
@@ -855,7 +855,7 @@ export default function AllergyAlertSection({
                 onPress={handleConfirmDelete}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel="Remove allergy"
+                accessibilityLabel={t("Remove allergy")}
               >
                 <Text style={styles.dialogRemoveBtnText}>{t("Remove")}</Text>
               </TouchableOpacity>
@@ -898,7 +898,7 @@ export default function AllergyAlertSection({
               onPress={handleUndoDelete}
               activeOpacity={0.75}
               accessibilityRole="button"
-              accessibilityLabel="Undo allergy removal"
+              accessibilityLabel={t("Undo allergy removal")}
             >
               <Ionicons name="arrow-undo" size={14} color="#0891b2" style={{ marginRight: 4 }} />
               <Text style={styles.undoBtnText}>{t("Undo")}</Text>
@@ -909,7 +909,7 @@ export default function AllergyAlertSection({
               onPress={dismissToast}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
-              accessibilityLabel="Dismiss notification"
+              accessibilityLabel={t("Dismiss notification")}
             >
               <Ionicons name="close" size={16} color="#64748b" />
             </TouchableOpacity>

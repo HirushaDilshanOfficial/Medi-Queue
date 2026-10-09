@@ -276,7 +276,7 @@ export function EditProfileScreen() {
             label={t("District")}
             value={district}
             onChangeText={setDistrict}
-            placeholder="Colombo"
+            placeholder={"Colombo"}
             optional
             maxLength={80}
           />
@@ -288,7 +288,7 @@ export function EditProfileScreen() {
             label={t("Allergies")}
             value={allergies}
             onChangeText={setAllergies}
-            placeholder="Penicillin, Dust"
+            placeholder={"Penicillin, Dust"}
             hint={t("Separate each with a comma. Shown to your doctor at a visit.")}
             multiline
             optional
@@ -302,7 +302,7 @@ export function EditProfileScreen() {
             label={t("Name")}
             value={emergencyName}
             onChangeText={setEmergencyName}
-            placeholder="Kamala Perera"
+            placeholder={"Kamala Perera"}
             optional
             maxLength={120}
           />

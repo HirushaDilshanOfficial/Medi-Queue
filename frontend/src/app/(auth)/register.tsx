@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -148,6 +149,7 @@ export default function RegisterScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* ---- TEAL HEADER ---- */}
         <View style={styles.header}>
+<View style={{ position: 'absolute', top: 16, right: 16, zIndex: 2 }}><LanguageSwitcher tone="dark" /></View>
           <View style={styles.circleTopRight} />
           <View style={styles.circleBottomLeft} />
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -323,7 +325,7 @@ const styles = StyleSheet.create({
   },
   backButton: { marginBottom: 20 },
   backButtonText: { color: Colors.white, fontSize: 15, fontWeight: '600', opacity: 0.9 },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: Colors.white },
+  headerTitle: { flexShrink: 1, fontSize: 28, fontWeight: '800', color: Colors.white },
   headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 6 },
   formContainer: { 
     paddingHorizontal: 20, paddingTop: 30, paddingBottom: 50, 
