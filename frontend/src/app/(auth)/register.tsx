@@ -209,7 +209,7 @@ export default function RegisterScreen() {
               <Text style={birthday ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
                 {calendarDateLabel(birthday, locale) || 'YYYY-MM-DD'}
               </Text>
-              <Text style={styles.dropdownIcon}>📅</Text>
+              <AppIcon name="calendar" size={16} color={Colors.textMedium} />
             </TouchableOpacity>
           )}
 
@@ -238,7 +238,7 @@ export default function RegisterScreen() {
             <Text style={bloodGroup ? styles.dropdownButtonText : styles.dropdownButtonPlaceholder}>
               {bloodGroup || t('Select Blood Group')}
             </Text>
-            <Text style={styles.dropdownIcon}>▼</Text>
+            <AppIcon name="forward" size={12} color={Colors.textMedium} style={{ transform: [{ rotate: '90deg' }] }} />
           </TouchableOpacity>
 
           <Text style={styles.sectionLabel}>{t("Email Address")}</Text>

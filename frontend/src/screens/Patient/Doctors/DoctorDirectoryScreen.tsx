@@ -59,6 +59,20 @@ export function DoctorDirectoryScreen() {
   const clinics = useAsyncResource(() => clinicApi.list(), []);
   const directoryScope = JSON.stringify([department, hospitalId]);
 
+  const uniqueClinics = useMemo(() => {
+    if (!clinics.data?.clinics) return [];
+    const map = new Map<string, Clinic>();
+    for (const clinic of clinics.data.clinics) {
+      const rawName = clinic.department || clinic.name || '';
+      const cleanKey = rawName.replace(/ Clinic$/i, '').trim().toLowerCase();
+      if (!cleanKey) continue;
+      if (!map.has(cleanKey)) {
+        map.set(cleanKey, clinic);
+      }
+    }
+    return Array.from(map.values());
+  }, [clinics.data]);
+
   const doctors = useAsyncResource(
     () => doctorApi.list({ department: department || undefined, hospitalId: hospitalId || undefined })
       .then(result => ({ ...result, scope: directoryScope })),
@@ -233,18 +247,18 @@ export function DoctorDirectoryScreen() {
                   setClinic(null, null);
                 }}
               />
-              {(showAllClinics ? clinics.data?.clinics ?? [] : (clinics.data?.clinics ?? []).slice(0, 16)).map((clinic: Clinic) => (
+              {(showAllClinics ? uniqueClinics : uniqueClinics.slice(0, 16)).map((clinic: Clinic) => (
                 <Chip
                   key={clinic._id}
                   label={t(clinic.name.replace(/ Clinic$/, ''))}
-                  active={department === clinic.department && hospitalId === (clinic.hospital?._id ?? null)}
+                  active={department === clinic.department && (!hospitalId || hospitalId === (clinic.hospital?._id ?? null))}
                   onPress={() => {
-                    const active = department === clinic.department && hospitalId === (clinic.hospital?._id ?? null);
+                    const active = department === clinic.department && (!hospitalId || hospitalId === (clinic.hospital?._id ?? null));
                     setClinic(active ? null : clinic.department, active ? null : clinic.hospital?._id ?? null);
                   }}
                 />
               ))}
-              {(clinics.data?.clinics?.length ?? 0) > 16 ? (
+              {uniqueClinics.length > 16 ? (
                 <Chip
                   label={showAllClinics ? t('Featured clinics') : t('View all clinics')}
                   active={false}
@@ -256,7 +270,7 @@ export function DoctorDirectoryScreen() {
         ) : null}
       </View>
     ),
-    [clinics.data, department, hospitalId, search, setClinic, setSearch, showAllClinics, tab, t],
+    [uniqueClinics, department, hospitalId, search, setClinic, setSearch, showAllClinics, tab, t],
   );
 
   const doctorList = (
