@@ -19,6 +19,7 @@ import {
   LiveQueueScreen,
   PatientsScreen,
   ReportsScreen,
+  DoctorScheduleScreen,
 } from '../screens/Receptionist';
 import { ShiftProvider } from '../context/ShiftContext';
 
@@ -29,6 +30,7 @@ import { ShiftProvider } from '../context/ShiftContext';
 export type ReceptionistHomeStackParamList = {
   Home: undefined;
   Queue: undefined;
+  DoctorSchedule: undefined;
 };
 
 export type ReceptionistTabParamList = {
@@ -135,6 +137,7 @@ export function ReceptionistHomeStackNavigator() {
     <HomeStack.Navigator screenOptions={{ headerShown: false }}>
       <HomeStack.Screen name="Home" component={ReceptionistHomeScreen} />
       <HomeStack.Screen name="Queue" component={LiveQueueScreen} />
+      <HomeStack.Screen name="DoctorSchedule" component={DoctorScheduleScreen} />
     </HomeStack.Navigator>
   );
 }

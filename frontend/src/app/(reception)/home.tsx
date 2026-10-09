@@ -27,6 +27,11 @@ export default function HomeScreen() {
       case 'notifications':
         router.push('/notifications');
         break;
+      case 'DoctorSchedule':
+      case 'schedule':
+      case 'DocRoster':
+        router.push('/(reception)/schedule');
+        break;
       case 'Login':
       case 'login':
         router.replace('/(auth)/login');
