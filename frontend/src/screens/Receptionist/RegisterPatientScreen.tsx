@@ -197,6 +197,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
       '';
     const pNic = params.nic || params.patient?.nic || '';
     const pPhone = params.phone || params.patient?.phone || '';
+    const pAddress = params.address || params.patient?.address || '';
     const pAge =
       params.age !== undefined && params.age !== null
         ? String(params.age)
@@ -212,6 +213,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         fullName: pName || 'Patient',
         nic: pNic,
         phone: pPhone,
+        address: pAddress,
         age: pAge ? Number(pAge) : undefined,
         gender: (pGender as any) || undefined,
         registeredVia: 'reception',
@@ -225,6 +227,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         fullName: pName,
         nic: pNic,
         phone: pPhone,
+        address: pAddress,
         age: pAge,
         gender: (pGender as any) || '',
       });
@@ -494,6 +497,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             age: patient.age !== undefined && patient.age !== null ? String(patient.age) : '',
             gender: (patient.gender as any) || '',
             bloodGroup: (patient as any).bloodGroup || '',
+            address: (patient as any).address || '',
           });
 
           // Auto-suggest Senior if age is 60+
@@ -582,6 +586,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
             age: p.age ? String(p.age) : form.patient.age,
             gender: p.gender || form.patient.gender,
             bloodGroup: (p as any).bloodGroup || '',
+            address: (p as any).address || form.patient.address || '',
           });
           showToast(t("Existing record found for {value0}", { value0: String(p.fullName) }), 'info');
         }
@@ -714,7 +719,15 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         return;
       }
 
-      // 3. Auto-resolve Department, Doctor & Slot if not yet selected by receptionist
+      // 3. Verify Home Address
+      const cleanAddress = (form.patient.address || '').trim();
+      if (!form.existingPatientId && !cleanAddress) {
+        form.setField('address', '');
+        showToast(t("Please enter the patient home address."), 'error');
+        return;
+      }
+
+      // 4. Auto-resolve Department, Doctor & Slot if not yet selected by receptionist
       const resolvedDepartment = (form.department?.trim() || 'General OPD');
       if (!form.department) {
         form.setField('department', resolvedDepartment);
@@ -793,6 +806,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
         fullName: (selectedPreBooking?.patient?.fullName || form.patient.fullName).trim(),
         phone: (selectedPreBooking?.patient?.phone || form.patient.phone).trim(),
         nic: selectedPreBooking?.patient?.nic?.trim() || form.patient.nic?.trim() || undefined,
+        address: form.patient.address?.trim() || (selectedPreBooking?.patient as any)?.address?.trim() || undefined,
         dob: form.patient.dob?.trim() || undefined,
         age:
           selectedPreBooking?.patient?.age !== undefined && selectedPreBooking?.patient?.age !== null
@@ -1478,6 +1492,21 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                             </Text>
                           </View>
                         </View>
+
+                        {/* 5. Address */}
+                        {Boolean((matchedPatient as any)?.address || form.patient.address) && (
+                          <View style={[styles.patientDetailChip, { width: '100%', marginTop: 6 }]}>
+                            <View style={[styles.detailIconCircle, { backgroundColor: '#F0FDF4' }]}>
+                              <Ionicons name="home-outline" size={16} color="#16A34A" />
+                            </View>
+                            <View style={[styles.detailChipTexts, { flex: 1 }]}>
+                              <Text style={styles.detailChipLabel}>{t("Home Address")}</Text>
+                              <Text style={styles.detailChipValue} numberOfLines={1}>
+                                {(matchedPatient as any)?.address || form.patient.address}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
                       </View>
 
                       {/* Optional: Queue Pass Banner if scanned from a Queue Pass QR Code */}
@@ -1858,7 +1887,7 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
 
                     {/* NIC Number */}
                     <View style={styles.fieldGroup}>
-                      <Text style={styles.fieldLabel}>{t("NIC Number (Optional)")}</Text>
+                      <Text style={styles.fieldLabel}>{t("NIC Number")}</Text>
                       <TextInput
                         style={[
                           styles.textInput,
@@ -1991,6 +2020,28 @@ export const RegisterPatientScreen: React.FC<RegisterPatientScreenProps> = ({
                       />
                       {form.errors.phone ? (
                         <Text style={styles.errorText}>{form.errors.phone}</Text>
+                      ) : null}
+                    </View>
+
+                    {/* Home Address */}
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>
+                        {t("Home Address")}{' '}<Text style={styles.requiredAsterisk}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          form.errors.address ? styles.inputError : null,
+                        ]}
+                        placeholder="e.g. No. 45, Temple Road, Colombo"
+                        placeholderTextColor={Colors.textLight}
+                        value={form.patient.address || ''}
+                        onChangeText={(val) => form.setField('address', val)}
+                        accessibilityLabel={t("Home Address")}
+                        autoCapitalize="words"
+                      />
+                      {form.errors.address ? (
+                        <Text style={styles.errorText}>{form.errors.address}</Text>
                       ) : null}
                     </View>
 
