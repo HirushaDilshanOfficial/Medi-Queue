@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
+  Platform,
+  Modal,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -49,6 +51,8 @@ export default function PatientQueueScreen() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'priority' | 'walkin'>('all');
   const [patientUndoHistory, setPatientUndoHistory] = useState<any[]>([]);
 
+  const [isDayCompleteModalOpen, setIsDayCompleteModalOpen] = useState(false);
+
   const advanceQueueLocally = useCallback((targetTokenNumber?: number) => {
     setData((prev) => {
       const base = prev || {
@@ -64,9 +68,9 @@ export default function PatientQueueScreen() {
         },
         metrics: {
           currentCallingToken: 28,
-          waitingCount: 14,
+          waitingCount: 4,
           completedCount: 18,
-          totalToday: 32,
+          totalToday: 23,
           avgWaitMinutes: 15,
         },
         currentPatient: {
@@ -153,42 +157,23 @@ export default function PatientQueueScreen() {
           };
         }
       } else {
-        if (queue.length > 0) {
-          nextPat = queue.shift()!;
-        } else {
-          const lastNum = base.currentPatient?.tokenNumber || 28;
-          nextPat = {
-            tokenNumber: lastNum + 1,
-            patientName: 'Aurelia Sisca',
-            age: 32,
-            gender: 'Female',
-            priority: 'normal',
-            status: 'next',
-            reason: 'Post-op Inspection',
-            slotTime: '11:15 AM',
+        if (queue.length === 0) {
+          // All consultations completed!
+          const currentTotal = base.metrics?.totalToday || (base.metrics?.completedCount || 0) + 1;
+          return {
+            ...base,
+            metrics: {
+              ...base.metrics,
+              completedCount: currentTotal,
+              waitingCount: 0,
+              currentCallingToken: 0,
+              totalToday: currentTotal,
+            },
+            currentPatient: null,
+            upcomingQueue: [],
           };
         }
-      }
-
-      if (queue.length < 3) {
-        const highestToken = Math.max(
-          nextPat.tokenNumber,
-          ...queue.map((q) => q.tokenNumber),
-          30
-        );
-        const nextNames = ['Kasun Bandara', 'Nadeesha Silva', 'Ruwan Jayasinghe', 'Chathuri Perera', 'Dinesh Chandimal'];
-        const chosen = nextNames[(highestToken + 1) % nextNames.length];
-        queue.push({
-          tokenNumber: highestToken + 1,
-          patientName: chosen,
-          age: 28 + ((highestToken * 3) % 40),
-          gender: highestToken % 2 === 0 ? 'Female' : 'Male',
-          priority: highestToken % 3 === 0 ? 'elderly' : 'normal',
-          category: highestToken % 3 === 0 ? 'priority' : 'all',
-          status: 'Waiting',
-          reason: 'Routine Medical Checkup',
-          slotTime: '12:30 PM',
-        });
+        nextPat = queue.shift()!;
       }
 
       return {
@@ -271,17 +256,34 @@ export default function PatientQueueScreen() {
     if (data?.currentPatient) {
       setPatientUndoHistory((prev) => [...prev, { ...data.currentPatient }]);
     }
+    const hasNextPatient = (upcomingQueue.length > 0);
     try {
       const res = await callNextPatientApi();
       if (res && res.data) {
         setData(res.data);
+        if (res.allCompleted || !res.data.currentPatient || (res.data.upcomingQueue?.length === 0 && !hasNextPatient)) {
+          setIsDayCompleteModalOpen(true);
+          Alert.alert(t('Day Complete 🎉'), t('All consultations for today have been completed!'));
+        } else {
+          Alert.alert(t('Consultation Completed'), res?.message || t('Next patient called into room.'));
+        }
       } else {
         advanceQueueLocally();
+        if (!hasNextPatient) {
+          setIsDayCompleteModalOpen(true);
+          Alert.alert(t('Day Complete 🎉'), t('All consultations for today have been completed!'));
+        } else {
+          Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
+        }
       }
-      Alert.alert(t('Consultation Completed'), res?.message || t('Next patient called into room.'));
     } catch (err: any) {
       advanceQueueLocally();
-      Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
+      if (!hasNextPatient) {
+        setIsDayCompleteModalOpen(true);
+        Alert.alert(t('Day Complete 🎉'), t('All consultations for today have been completed!'));
+      } else {
+        Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -391,9 +393,14 @@ export default function PatientQueueScreen() {
   };
 
   const handleViewPatientRecords = async (patient: PatientQueueItem) => {
+    const pAny = patient as any;
+    const targetId = pAny.patientId || pAny._id ? String(pAny.patientId || pAny._id) : undefined;
     try {
       await AsyncStorage.setItem('active_record_patient_token', String(patient.tokenNumber));
       await AsyncStorage.setItem('active_record_patient_name', patient.patientName);
+      if (targetId) {
+        await AsyncStorage.setItem('active_record_patient_id', targetId);
+      }
     } catch (e) {
       // ignore
     }
@@ -404,6 +411,7 @@ export default function PatientQueueScreen() {
         params: {
           tokenNumber: String(patient.tokenNumber),
           patientName: patient.patientName,
+          patientId: targetId,
         },
       });
     } catch (e) {
@@ -423,7 +431,6 @@ export default function PatientQueueScreen() {
 
   const doctor = data?.doctor;
   const metrics = data?.metrics;
-  const currentPatient = data?.currentPatient;
   const upcomingQueue = data?.upcomingQueue || [];
 
   const filteredQueue = upcomingQueue.filter((item) => {
@@ -436,26 +443,37 @@ export default function PatientQueueScreen() {
     return true;
   });
 
-  const nextPatient = upcomingQueue[0];
-  const nextTokenDisplay = nextPatient ? `#${String(nextPatient.tokenNumber).padStart(3, '0')}` : '#801';
+  const isDayFinished = Boolean(
+    (data as any)?.allCompleted ||
+    (data && data.currentPatient === null && (data.upcomingQueue?.length ?? 0) === 0 && (data.metrics?.completedCount ?? 0) > 0)
+  );
+
   const fallbackHospData = getDoctorDashboardForHospital(currentHospital);
+  const currentPatient = isDayFinished
+    ? null
+    : (data ? data.currentPatient : fallbackHospData.currentPatient);
+
+  const nextPatient = upcomingQueue[0];
+  const nextTokenDisplay = nextPatient ? `#${String(nextPatient.tokenNumber).padStart(3, '0')}` : '';
   const hospitalName = doctor?.hospitalName || currentHospital || 'Colombo Teaching Hospital 1';
   const roomName = doctor?.room || fallbackHospData.doctor.room || 'Room 101';
   const avgWait = doctor?.avgConsultMinutes || metrics?.avgWaitMinutes || 15;
   const waitingCount = metrics?.waitingCount ?? upcomingQueue.length ?? fallbackHospData.metrics.waitingCount ?? 0;
+  const completedCount = metrics?.completedCount ?? 0;
+  const totalPatientsToday = (isDayFinished || (waitingCount === 0 && !currentPatient))
+    ? completedCount
+    : (completedCount + waitingCount + (currentPatient ? 1 : 0));
 
   const currentTokenStr = currentPatient?.tokenNumber
     ? String(currentPatient.tokenNumber).padStart(3, '0')
-    : String(fallbackHospData.currentPatient?.tokenNumber || '028').padStart(3, '0');
-  const currentNic = (currentPatient as any)?.nic || currentPatient?.fileRecord || fallbackHospData.currentPatient?.fileRecord || 'NIC 199892084778';
+    : '---';
+  const currentNic = (currentPatient as any)?.nic || currentPatient?.fileRecord || '---';
 
   if (loading && !data) {
     return (
       <View style={[styles.container, isDark && { backgroundColor: '#091012' }]}>
         <StatusBar barStyle="light-content" backgroundColor={C.teal} />
         <DoctorTopBar
-          doctorName="Dr. Palitha Perera"
-          roomSubtitle={`Room 101 · ${t('Online')}`}
           unreadCount={2}
         />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -475,7 +493,7 @@ export default function PatientQueueScreen() {
 
       {/* 1. SHARED TOP BAR */}
       <DoctorTopBar
-        doctorName={doctor?.name || 'Dr. Palitha Perera'}
+        doctorName={doctor?.name}
         roomSubtitle={`${roomName} · ${t('Online')}`}
         unreadCount={2}
       />
@@ -520,98 +538,153 @@ export default function PatientQueueScreen() {
           </View>
         </DoctorDarkHighlightBox>
 
-        {/* 3. NOW IN CONSULTATION CARD (White, 4px teal left border) */}
-        <View style={[styles.consultationCard, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
-          {/* Status pill & time pill */}
-          <View style={styles.cardPillsRow}>
-            <StatusPill label={t("Now in consultation")} />
-            <View style={styles.timePill}>
-              <Ionicons name="time-outline" size={13} color={C.sub} style={{ marginRight: 4 }} />
-              <Text style={styles.timePillText}>
-                {currentPatient?.calledAtTime || '08:47 AM'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Patient name & Token tile */}
-          <View style={styles.patientRow}>
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={[styles.patientName, isDark && { color: '#EEF8FA' }]} numberOfLines={1}>
-                {currentPatient?.patientName || 'Kamal Gunaratne'}
-              </Text>
-              <View style={styles.reasonRow}>
-                <MaterialCommunityIcons
-                  name="stethoscope"
-                  size={15}
-                  color={C.sub}
-                  style={{ marginRight: 5, marginTop: 1 }}
-                />
-                <Text style={styles.reasonText} numberOfLines={2}>
-                  {currentPatient?.reason || t('General OPD consultation')} ·{' '}
-                  {t(currentPatient?.gender ?? 'Male')}, {currentPatient?.age || 28} {t('yrs')}
+        {/* 3. NOW IN CONSULTATION CARD (White, 4px teal left border) OR DAY COMPLETE BANNER */}
+        {currentPatient ? (
+          <View style={[styles.consultationCard, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
+            {/* Status pill & time pill */}
+            <View style={styles.cardPillsRow}>
+              <StatusPill label={t("Now in consultation")} />
+              <View style={styles.timePill}>
+                <Ionicons name="time-outline" size={13} color={C.sub} style={{ marginRight: 4 }} />
+                <Text style={styles.timePillText}>
+                  {currentPatient?.calledAtTime || '08:47 AM'}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.tokenBox}>
-              <Text style={[styles.tokenLabel, isDark && { color: '#86A4A9' }]}>{t("Token")}</Text>
-              <Text style={[styles.tokenNumber, isDark && { color: '#3BD1DF' }]}>#{currentTokenStr}</Text>
+            {/* Patient name & Token tile */}
+            <View style={styles.patientRow}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={[styles.patientName, isDark && { color: '#EEF8FA' }]} numberOfLines={1}>
+                  {currentPatient?.patientName || 'Kamal Gunaratne'}
+                </Text>
+                <View style={styles.reasonRow}>
+                  <MaterialCommunityIcons
+                    name="stethoscope"
+                    size={15}
+                    color={C.sub}
+                    style={{ marginRight: 5, marginTop: 1 }}
+                  />
+                  <Text style={styles.reasonText} numberOfLines={2}>
+                    {currentPatient?.reason || t('General OPD consultation')} ·{' '}
+                    {t(currentPatient?.gender ?? 'Male')}, {currentPatient?.age || 28} {t('yrs')}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.tokenBox}>
+                <Text style={[styles.tokenLabel, isDark && { color: '#86A4A9' }]}>{t("Token")}</Text>
+                <Text style={[styles.tokenNumber, isDark && { color: '#3BD1DF' }]}>#{currentTokenStr}</Text>
+              </View>
+            </View>
+
+            {/* Fact Tiles: Blood pressure, Heart rate in teal, NIC (safely wraps, never cut off) */}
+            <View style={styles.factsRow}>
+              <View style={[styles.factTile, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+                <Text style={[styles.factLabel, isDark && { color: '#86A4A9' }]}>{t("Blood pressure")}</Text>
+                <Text style={[styles.factValueDark, isDark && { color: '#EEF8FA' }]}>
+                  {currentPatient?.bloodPressure || '120/80'}
+                </Text>
+              </View>
+
+              <View style={[styles.factTile, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+                <Text style={[styles.factLabel, isDark && { color: '#86A4A9' }]}>{t("Heart rate")}</Text>
+                <Text style={styles.factValueTeal}>
+                  {currentPatient?.heartRate || '76 bpm'}
+                </Text>
+              </View>
+
+              <View style={[styles.factTile, { flex: 1.15 }, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+                <Text style={[styles.factLabel, isDark && { color: '#86A4A9' }]}>{t("NIC")}</Text>
+                <Text style={[styles.factValueNic, isDark && { color: '#EEF8FA' }]} numberOfLines={2}>
+                  {currentNic}
+                </Text>
+              </View>
+            </View>
+
+            {/* Primary Action Button (Only ONE per card) */}
+            <View style={{ marginTop: 14 }}>
+              <PrimaryButton
+                title={
+                  nextPatient
+                    ? `${t("Complete & call token")} ${nextTokenDisplay}`
+                    : t("Complete consultation & finish shift")
+                }
+                icon={<Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />}
+                onPress={handleCompleteAndCallNext}
+                loading={isProcessing}
+              />
+            </View>
+
+            {/* Secondary Action Buttons side by side: Recall chime & Undo previous */}
+            <View style={styles.actionRowSecondary}>
+              <SecondaryButton
+                title={t("Recall chime")}
+                icon={<Ionicons name="volume-medium-outline" size={18} color={isDark ? '#3BD1DF' : C.tealDeep} />}
+                onPress={handleRingRoomChime}
+                style={[{ flex: 1 }, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
+                textStyle={isDark && { color: '#EEF8FA' }}
+              />
+              <SecondaryButton
+                title={t("Undo previous")}
+                icon={<Ionicons name="arrow-undo-outline" size={18} color={isDark ? '#3BD1DF' : C.tealDeep} />}
+                onPress={handleUndoPatient}
+                disabled={isProcessing || !data?.currentPatient || data.currentPatient.tokenNumber <= 1}
+                style={[{ flex: 1 }, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
+                textStyle={isDark && { color: '#EEF8FA' }}
+              />
             </View>
           </View>
-
-          {/* Fact Tiles: Blood pressure, Heart rate in teal, NIC (safely wraps, never cut off) */}
-          <View style={styles.factsRow}>
-            <View style={[styles.factTile, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
-              <Text style={[styles.factLabel, isDark && { color: '#86A4A9' }]}>{t("Blood pressure")}</Text>
-              <Text style={[styles.factValueDark, isDark && { color: '#EEF8FA' }]}>
-                {currentPatient?.bloodPressure || '120/80'}
+        ) : (
+          <View style={[styles.dayCompleteBannerCard, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
+            <View style={styles.dayCompleteBannerHeader}>
+              <View style={styles.dayCompletePill}>
+                <Ionicons name="checkmark-done-circle" size={16} color="#0D9488" style={{ marginRight: 6 }} />
+                <Text style={styles.dayCompletePillText}>{t("Shift Completed")}</Text>
+              </View>
+              <Text style={[styles.dayCompleteDateText, isDark && { color: '#86A4A9' }]}>
+                {completedCount} / {totalPatientsToday} {t("Done")}
               </Text>
             </View>
 
-            <View style={[styles.factTile, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
-              <Text style={[styles.factLabel, isDark && { color: '#86A4A9' }]}>{t("Heart rate")}</Text>
-              <Text style={styles.factValueTeal}>
-                {currentPatient?.heartRate || '76 bpm'}
-              </Text>
+            <View style={styles.dayCompleteBannerContent}>
+              <View style={[styles.dayCompleteBannerIconBox, isDark && { backgroundColor: '#18383E' }]}>
+                <Ionicons name="trophy" size={28} color="#0D9488" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.dayCompleteBannerTitle, isDark && { color: '#EEF8FA' }]}>
+                  {t("All Consultations Completed! 🎉")}
+                </Text>
+                <Text style={[styles.dayCompleteBannerSub, isDark && { color: '#86A4A9' }]}>
+                  {t("All scheduled patients for today have been attended to. No patients waiting in queue.")}
+                </Text>
+              </View>
             </View>
 
-            <View style={[styles.factTile, { flex: 1.15 }, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
-              <Text style={[styles.factLabel, isDark && { color: '#86A4A9' }]}>{t("NIC")}</Text>
-              <Text style={[styles.factValueNic, isDark && { color: '#EEF8FA' }]} numberOfLines={2}>
-                {currentNic}
-              </Text>
+            <View style={styles.dayCompleteActionsRow}>
+              <TouchableOpacity
+                style={[styles.dayCompleteActionBtn, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
+                onPress={() => router.push('/(doctor)' as any)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="home-outline" size={15} color={isDark ? '#3BD1DF' : C.tealDeep} />
+                <Text style={[styles.dayCompleteActionBtnText, isDark && { color: '#EEF8FA' }]}>
+                  {t("Dashboard")}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.dayCompleteActionBtn, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
+                onPress={() => router.push('/(doctor)/records' as any)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="folder-open-outline" size={15} color={isDark ? '#3BD1DF' : C.tealDeep} />
+                <Text style={[styles.dayCompleteActionBtnText, isDark && { color: '#EEF8FA' }]}>
+                  {t("Patient Records")}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
-
-          {/* Primary Action Button (Only ONE per card) */}
-          <View style={{ marginTop: 14 }}>
-            <PrimaryButton
-              title={`${t("Complete & call token")} ${nextTokenDisplay}`}
-              icon={<Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />}
-              onPress={handleCompleteAndCallNext}
-              loading={isProcessing}
-            />
-          </View>
-
-          {/* Secondary Action Buttons side by side: Recall chime & Undo previous */}
-          <View style={styles.actionRowSecondary}>
-            <SecondaryButton
-              title={t("Recall chime")}
-              icon={<Ionicons name="volume-medium-outline" size={18} color={isDark ? '#3BD1DF' : C.tealDeep} />}
-              onPress={handleRingRoomChime}
-              style={[{ flex: 1 }, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
-              textStyle={isDark && { color: '#EEF8FA' }}
-            />
-            <SecondaryButton
-              title={t("Undo previous")}
-              icon={<Ionicons name="arrow-undo-outline" size={18} color={isDark ? '#3BD1DF' : C.tealDeep} />}
-              onPress={handleUndoPatient}
-              disabled={isProcessing || !data?.currentPatient || data.currentPatient.tokenNumber <= 1}
-              style={[{ flex: 1 }, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
-              textStyle={isDark && { color: '#EEF8FA' }}
-            />
-          </View>
-        </View>
+        )}
 
         {/* 4. CATEGORY FILTER PILLS */}
         <View style={styles.filterPillsRow}>
@@ -733,6 +806,70 @@ export default function PatientQueueScreen() {
         </View>
       </ScrollView>
 
+      {/* DAY COMPLETE / SHIFT FINISHED CELEBRATION MODAL */}
+      <Modal
+        visible={isDayCompleteModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsDayCompleteModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setIsDayCompleteModalOpen(false)}
+        >
+          <View
+            style={[
+              styles.dayCompleteModalCard,
+              isDark && { backgroundColor: '#142528', borderColor: '#1F383C' },
+            ]}
+          >
+            <View style={styles.celebrationIconCircle}>
+              <Ionicons name="trophy" size={38} color="#0D9488" />
+            </View>
+
+            <Text style={[styles.dayCompleteModalTitle, isDark && { color: '#EEF8FA' }]}>
+              {t('All Consultations Completed! 🎉')}
+            </Text>
+
+            <Text style={[styles.dayCompleteModalSubtitle, isDark && { color: '#86A4A9' }]}>
+              {t('Great job Doctor! All patients scheduled for today have been attended to.')}
+            </Text>
+
+            <View style={[styles.dayCompleteSummaryBox, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+              <View style={styles.dayCompleteStatCol}>
+                <Text style={styles.dayCompleteStatLabel}>{t('Patients Consulted')}</Text>
+                <Text style={[styles.dayCompleteStatVal, isDark && { color: '#EEF8FA' }]}>
+                  {completedCount} / {completedCount}
+                </Text>
+              </View>
+              <View style={styles.dayCompleteDivider} />
+              <View style={styles.dayCompleteStatCol}>
+                <Text style={styles.dayCompleteStatLabel}>{t('Queue Status')}</Text>
+                <Text style={[styles.dayCompleteStatVal, { color: '#0D9488' }]}>
+                  {t('Finished')}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ width: '100%', marginTop: 20, gap: 10 }}>
+              <PrimaryButton
+                title={t('Awesome, Close')}
+                onPress={() => setIsDayCompleteModalOpen(false)}
+              />
+              <SecondaryButton
+                title={t('Go to Dashboard')}
+                icon={<Ionicons name="home-outline" size={16} color={C.tealDeep} />}
+                onPress={() => {
+                  setIsDayCompleteModalOpen(false);
+                  router.push('/(doctor)' as any);
+                }}
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* 7. SHARED BOTTOM NAVIGATION BAR */}
       <DoctorBottomNav activeTab="queue" />
     </View>
@@ -743,6 +880,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: C.bg,
+    ...Platform.select({
+      web: {
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      },
+    }),
   },
   center: {
     justifyContent: 'center',
@@ -1073,5 +1215,165 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: C.ok,
+  },
+
+  // Modal Backdrop
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+
+  // Day Complete Banner & Modal
+  dayCompleteBannerCard: {
+    backgroundColor: C.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderTopWidth: 4,
+    borderTopColor: C.teal,
+    marginBottom: 16,
+  },
+  dayCompleteBannerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  dayCompletePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.tint,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  dayCompletePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.tealDeep,
+  },
+  dayCompleteDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.sub,
+  },
+  dayCompleteBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 12,
+  },
+  dayCompleteBannerIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: C.tint,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayCompleteBannerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: C.ink,
+    letterSpacing: -0.3,
+  },
+  dayCompleteBannerSub: {
+    fontSize: 12.5,
+    color: C.sub,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  dayCompleteActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: C.line,
+  },
+  dayCompleteActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.line,
+    backgroundColor: C.bg,
+  },
+  dayCompleteActionBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: C.ink,
+  },
+  dayCompleteModalCard: {
+    width: '90%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  celebrationIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#CCFBF1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dayCompleteModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: C.ink,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  dayCompleteModalSubtitle: {
+    fontSize: 13,
+    color: C.sub,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 18,
+    paddingHorizontal: 8,
+  },
+  dayCompleteSummaryBox: {
+    flexDirection: 'row',
+    width: '100%',
+    backgroundColor: '#F0FDFA',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    alignItems: 'center',
+  },
+  dayCompleteStatCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dayCompleteStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: C.sub,
+    marginBottom: 4,
+  },
+  dayCompleteStatVal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: C.ink,
+  },
+  dayCompleteDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: C.line,
   },
 });

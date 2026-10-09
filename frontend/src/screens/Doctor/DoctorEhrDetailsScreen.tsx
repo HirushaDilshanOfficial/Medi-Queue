@@ -13,17 +13,21 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
+  Linking,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DoctorTopBar } from '../../components/doctor';
 import { useTheme } from '../../theme/ThemeContext';
+import { BASE_URL } from '../../config';
 import {
   PatientRecord,
   getHospitalRecords,
   fetchDoctorRecordsResponseApi,
   savePatientVitalsApi,
+  updateDoctorReportStatusApi,
 } from '../../services/patientRecordsService';
 import { fetchDoctorDashboard, callNextPatientApi } from '../../services/doctorService';
 
@@ -57,7 +61,7 @@ export default function DoctorEhrDetailsScreen() {
   const [patient, setPatient] = useState<PatientRecord | null>(null);
   const [currentHospital, setCurrentHospital] = useState('City General Hospital');
   const [doctorInfo, setDoctorInfo] = useState({
-    name: 'Dr. Palitha Perera',
+    name: 'Namal Perera',
     room: 'Room 3B · Online',
   });
 
@@ -84,6 +88,16 @@ export default function DoctorEhrDetailsScreen() {
   const [newMedDose, setNewMedDose] = useState('');
   const [newMedFreq, setNewMedFreq] = useState('');
 
+  // Medical report viewer modal state
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isUpdatingReportStatus, setIsUpdatingReportStatus] = useState(false);
+
+  // Past consultation history modal state
+  const [selectedVisit, setSelectedVisit] = useState<any | null>(null);
+  const [isVisitModalOpen, setIsVisitModalOpen] = useState(false);
+  const [showAllVisits, setShowAllVisits] = useState(false);
+
   // Live timer for consultation elapsed time: updates every minute, cleaned up on unmount
   useEffect(() => {
     const timer = setInterval(() => {
@@ -108,7 +122,7 @@ export default function DoctorEhrDetailsScreen() {
       try {
         const dash = await fetchDoctorDashboard(undefined, activeHosp);
         if (dash?.doctor) {
-          const dName = dash.doctor.name || 'Dr. Palitha Perera';
+          const dName = dash.doctor.name || 'Namal Perera';
           const dRoom = dash.doctor.room ? `${dash.doctor.room} · Online` : 'Room 3B · Online';
           setDoctorInfo({ name: dName, room: dRoom });
         }
@@ -321,11 +335,75 @@ export default function DoctorEhrDetailsScreen() {
     return { hasAllergy: false, name: '', reaction: '', instruction: '' };
   }, [patient]);
 
-  // Latest 3 visits
-  const latestVisits = useMemo(() => {
+  // Helper to open file/attachment URL
+  const handleOpenFileUrl = useCallback((url?: string) => {
+    if (!url) return;
+    const full = url.startsWith('http') ? url : `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    Linking.openURL(full).catch(() => {
+      Alert.alert(t('Cannot Open Document'), t('Could not launch the document viewer.'));
+    });
+  }, [t]);
+
+  // Handle toggling report status (reviewed / pending)
+  const handleToggleReportStatus = useCallback(async () => {
+    if (!selectedReport) return;
+    const currentStatus = selectedReport.status || 'pending';
+    const newStatus = currentStatus === 'reviewed' ? 'pending' : 'reviewed';
+    setIsUpdatingReportStatus(true);
+    try {
+      if (selectedReport.id && !selectedReport.id.startsWith('diag-img-')) {
+        await updateDoctorReportStatusApi(selectedReport.id, newStatus);
+      }
+      setSelectedReport((prev: any) => prev ? { ...prev, status: newStatus } : null);
+      if (patient) {
+        const updatedReports = (patient.reports || []).map((r: any) =>
+          r.id === selectedReport.id ? { ...r, status: newStatus } : r
+        );
+        setPatient({ ...patient, reports: updatedReports });
+      }
+    } catch (e) {
+      console.warn('Failed to update report status:', e);
+    } finally {
+      setIsUpdatingReportStatus(false);
+    }
+  }, [selectedReport, patient]);
+
+  // Unified reports list (combines patient reports and diagnostic imaging)
+  const reportsList = useMemo(() => {
+    if (!patient) return [];
+    const list: any[] = Array.isArray(patient.reports) ? [...patient.reports] : [];
+    if (patient.imaging?.hasImaging) {
+      const alreadyHas = list.some(
+        (r) => r.title === patient.imaging?.title || r.id === (patient.imaging as any).id
+      );
+      if (!alreadyHas) {
+        list.unshift({
+          id: (patient.imaging as any).id || 'diag-img-1',
+          title: patient.imaging.title || 'Diagnostic Imaging',
+          category: 'Radiology',
+          reportDate: (patient.imaging.subtitle || 'Recent').replace(/\s*•.*/, ''),
+          uploadDateTime: patient.imaging.subtitle || 'Recent',
+          fileName: (patient.imaging as any).fileName || 'Diagnostic_Imaging.jpg',
+          fileMimeType: (patient.imaging as any).fileMimeType || 'image/jpeg',
+          fileUrl: (patient.imaging as any).fileUrl || ((patient.imaging as any).id ? `/api/v1/doctor/reports/${(patient.imaging as any).id}/file` : undefined),
+          imageUrl: patient.imaging.imageUrl,
+          notes: patient.imaging.reportSummary || patient.imaging.description || '',
+          status: 'reviewed',
+        });
+      }
+    }
+    return list;
+  }, [patient?.reports, patient?.imaging]);
+
+  // All visits list and displayed visits
+  const allVisits = useMemo(() => {
     if (!patient?.recentVisits || patient.recentVisits.length === 0) return [];
-    return patient.recentVisits.slice(0, 3);
+    return patient.recentVisits;
   }, [patient?.recentVisits]);
+
+  const displayedVisits = useMemo(() => {
+    return showAllVisits ? allVisits : allVisits.slice(0, 3);
+  }, [allVisits, showAllVisits]);
 
   return (
     <SafeAreaView style={[styles.safeArea, isDark && { backgroundColor: '#091012' }]}>
@@ -539,36 +617,157 @@ export default function DoctorEhrDetailsScreen() {
               )}
             </View>
 
-            {/* 8. PREVIOUS VISITS */}
+            {/* 8. MEDICAL & LAB REPORTS */}
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeading}>{t('Previous visits')}</Text>
-              <TouchableOpacity
-                onPress={() => Alert.alert(t('Visits History'), t('Viewing all recorded past consultations.'))}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.seeAllText}>{t('See all')}</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <MaterialCommunityIcons name="file-document-outline" size={18} color={EHR_TOKENS.teal} style={{ marginRight: 6 }} />
+                <Text style={styles.sectionHeading}>{t('Medical & Lab Reports')}</Text>
+              </View>
+              {reportsList.length > 0 && (
+                <View style={styles.reportCountPill}>
+                  <Text style={styles.reportCountPillText}>
+                    {reportsList.length} {t(reportsList.length === 1 ? 'Report' : 'Reports')}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.cardContainer}>
-              {latestVisits.length > 0 ? (
+              {reportsList.length > 0 ? (
+                <View style={styles.reportsList}>
+                  {reportsList.map((rep: any, idx: number) => {
+                    const isPdf = Boolean(
+                      rep.fileMimeType?.includes('pdf') ||
+                      (rep.fileName && rep.fileName.toLowerCase().endsWith('.pdf'))
+                    );
+                    const isImg = Boolean(
+                      rep.fileMimeType?.startsWith('image/') ||
+                      (rep.fileName && /\.(png|jpg|jpeg|webp)$/i.test(rep.fileName)) ||
+                      rep.imageUrl
+                    );
+                    const isReviewed = rep.status === 'reviewed';
+
+                    return (
+                      <TouchableOpacity
+                        key={rep.id || idx}
+                        style={[styles.reportItemRow, idx > 0 && styles.medItemBorder]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setSelectedReport(rep);
+                          setIsReportModalOpen(true);
+                        }}
+                      >
+                        <View style={[styles.reportTypeIconBox, { backgroundColor: isPdf ? '#fee2e2' : (isImg ? '#e0f2fe' : '#f0fdfa') }]}>
+                          <Ionicons
+                            name={isPdf ? 'document-text' : (isImg ? 'image' : 'flask')}
+                            size={20}
+                            color={isPdf ? '#dc2626' : (isImg ? '#0284c7' : EHR_TOKENS.teal)}
+                          />
+                        </View>
+
+                        <View style={{ flex: 1, paddingRight: 6 }}>
+                          <View style={styles.reportTitleRow}>
+                            <Text style={styles.reportTitleText} numberOfLines={1}>
+                              {rep.title || t('Diagnostic Report')}
+                            </Text>
+                            <View style={[styles.categoryTag, { backgroundColor: isPdf ? '#fef2f2' : '#f0f9ff' }]}>
+                              <Text style={[styles.categoryTagText, { color: isPdf ? '#b91c1c' : '#0369a1' }]}>
+                                {t(rep.category || 'General')}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <Text style={styles.reportDateMeta} numberOfLines={1}>
+                            <Ionicons name="calendar-outline" size={11} color={EHR_TOKENS.sub} />{' '}
+                            {rep.reportDate || rep.uploadDateTime || t('Recent')} {rep.fileName ? `· ${rep.fileName}` : ''}
+                          </Text>
+
+                          {Boolean(rep.notes) && (
+                            <Text style={styles.reportNotesLine} numberOfLines={1}>
+                              {rep.notes}
+                            </Text>
+                          )}
+                        </View>
+
+                        <View style={styles.reportRightCol}>
+                          <View style={[styles.statusBadgePill, { backgroundColor: isReviewed ? '#dcfce7' : '#fef3c7' }]}>
+                            <Text style={[styles.statusBadgePillText, { color: isReviewed ? '#15803d' : '#b45309' }]}>
+                              {isReviewed ? t('Reviewed') : t('Pending')}
+                            </Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={15} color={EHR_TOKENS.sub} style={{ marginTop: 4, alignSelf: 'flex-end' }} />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.emptyReportsBox}>
+                  <Ionicons name="document-text-outline" size={28} color={EHR_TOKENS.sub} style={{ marginBottom: 4 }} />
+                  <Text style={styles.emptyCardText}>{t('No medical reports lodged by patient yet.')}</Text>
+                  <Text style={styles.emptyReportsSubText}>{t('Patient uploaded lab results, scans, and documents appear here when lodged.')}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* 9. PREVIOUS VISITS & MEDICAL HISTORY */}
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="time-outline" size={18} color={EHR_TOKENS.teal} style={{ marginRight: 6 }} />
+                <Text style={styles.sectionHeading}>{t('Previous visits & history')}</Text>
+              </View>
+              {allVisits.length > 3 && (
+                <TouchableOpacity
+                  onPress={() => setShowAllVisits((prev) => !prev)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.seeAllText}>
+                    {showAllVisits ? t('Show less') : t('See all ({value0})', { value0: String(allVisits.length) })}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.cardContainer}>
+              {displayedVisits.length > 0 ? (
                 <View style={styles.visitsList}>
-                  {latestVisits.map((vis: any, idx: number) => (
-                    <View key={vis.id || idx} style={[styles.visitItemRow, idx > 0 && styles.medItemBorder]}>
+                  {displayedVisits.map((vis: any, idx: number) => (
+                    <TouchableOpacity
+                      key={vis.id || idx}
+                      style={[styles.visitItemRow, idx > 0 && styles.medItemBorder]}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        setSelectedVisit(vis);
+                        setIsVisitModalOpen(true);
+                      }}
+                    >
                       <View style={styles.visitDotWrap}>
                         <View style={styles.visitDot} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.visitReasonText}>{vis.title || t('General OPD Consultation')}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <Text style={styles.visitReasonText}>{vis.title || t('General OPD Consultation')}</Text>
+                          {Boolean(vis.statusBadge) && (
+                            <View style={styles.visitStatusPill}>
+                              <Text style={styles.visitStatusPillText}>{t(vis.statusBadge)}</Text>
+                            </View>
+                          )}
+                        </View>
                         <Text style={styles.visitMetaText}>
                           {vis.date || '2026-10-01'} · {vis.details || currentHospital}
                         </Text>
+                        {Boolean(vis.clinicalNotes || vis.diagnosis) && (
+                          <Text style={styles.visitSnippetText} numberOfLines={1}>
+                            {vis.clinicalNotes || vis.diagnosis}
+                          </Text>
+                        )}
                       </View>
-                    </View>
+                      <Ionicons name="chevron-forward" size={15} color={EHR_TOKENS.sub} style={{ marginLeft: 6 }} />
+                    </TouchableOpacity>
                   ))}
                 </View>
               ) : (
-                <Text style={styles.emptyCardText}>{t('No prior visit records.')}</Text>
+                <Text style={styles.emptyCardText}>{t('No prior consultation records.')}</Text>
               )}
             </View>
 
@@ -766,6 +965,262 @@ export default function DoctorEhrDetailsScreen() {
                 <Text style={styles.modalSaveText}>{t('Add medication')}</Text>
               </TouchableOpacity>
             </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* MEDICAL REPORT DETAILS MODAL */}
+      <Modal
+        visible={isReportModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsReportModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setIsReportModalOpen(false)}
+        >
+          <TouchableOpacity
+            style={[styles.modalContent, { maxHeight: '90%' }]}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeaderRowBetween}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.modalReportTitle} numberOfLines={2}>
+                  {selectedReport?.title || t('Medical Report')}
+                </Text>
+                <View style={styles.modalCategoryRow}>
+                  <View style={styles.modalCategoryBadge}>
+                    <Text style={styles.modalCategoryBadgeText}>
+                      {t(selectedReport?.category || 'General')}
+                    </Text>
+                  </View>
+                  <Text style={styles.modalReportDate}>
+                    {selectedReport?.reportDate || selectedReport?.uploadDateTime || 'Recent'}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setIsReportModalOpen(false)}
+              >
+                <Ionicons name="close" size={20} color={EHR_TOKENS.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 12 }}>
+              {/* Status & Review Toggle */}
+              <View style={styles.reportStatusCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons
+                      name={selectedReport?.status === 'reviewed' ? 'checkmark-circle' : 'time-outline'}
+                      size={20}
+                      color={selectedReport?.status === 'reviewed' ? '#15803d' : '#b45309'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: EHR_TOKENS.ink }}>
+                      {selectedReport?.status === 'reviewed' ? t('Report Reviewed by Clinician') : t('Pending Review')}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleReviewBtn,
+                      selectedReport?.status === 'reviewed' ? styles.toggleReviewedActive : styles.togglePendingActive,
+                    ]}
+                    onPress={handleToggleReportStatus}
+                    disabled={isUpdatingReportStatus}
+                    activeOpacity={0.8}
+                  >
+                    {isUpdatingReportStatus ? (
+                      <ActivityIndicator size="small" color={EHR_TOKENS.teal} />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.toggleReviewBtnText,
+                          { color: selectedReport?.status === 'reviewed' ? '#15803d' : EHR_TOKENS.tealDeep },
+                        ]}
+                      >
+                        {selectedReport?.status === 'reviewed' ? t('Mark Pending') : t('Mark Reviewed ✓')}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Document / File Preview Section */}
+              {Boolean(
+                selectedReport?.imageUrl ||
+                (selectedReport?.fileMimeType?.startsWith('image/') && selectedReport?.fileUrl) ||
+                (/\.(png|jpg|jpeg|webp)$/i.test(selectedReport?.fileName || '') && selectedReport?.fileUrl)
+              ) ? (
+                <View style={styles.reportImageContainer}>
+                  <Text style={styles.previewSectionTitle}>{t('Image / Scan Preview')}</Text>
+                  <Image
+                    source={{
+                      uri: selectedReport.imageUrl
+                        ? selectedReport.imageUrl
+                        : selectedReport.fileUrl.startsWith('http')
+                        ? selectedReport.fileUrl
+                        : `${BASE_URL}${selectedReport.fileUrl.startsWith('/') ? '' : '/'}${selectedReport.fileUrl}`,
+                    }}
+                    style={styles.reportImagePreview}
+                    resizeMode="contain"
+                  />
+                </View>
+              ) : null}
+
+              {/* PDF Document action banner */}
+              {Boolean(
+                selectedReport?.fileUrl ||
+                selectedReport?.fileMimeType?.includes('pdf') ||
+                selectedReport?.fileName?.toLowerCase().endsWith('.pdf')
+              ) && (
+                <View style={styles.documentActionBox}>
+                  <View style={styles.pdfIconCircle}>
+                    <Ionicons name="document-text" size={24} color="#dc2626" />
+                  </View>
+                  <View style={{ flex: 1, paddingHorizontal: 10 }}>
+                    <Text style={styles.docFileName} numberOfLines={1}>
+                      {selectedReport?.fileName || `${selectedReport?.title}.pdf`}
+                    </Text>
+                    <Text style={styles.docFileMeta}>
+                      {selectedReport?.fileMimeType || 'application/pdf'} · {t('Official Clinical Report')}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.openDocBtn}
+                    onPress={() => handleOpenFileUrl(selectedReport?.fileUrl || `/api/v1/doctor/reports/${selectedReport?.id}/file`)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="open-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.openDocBtnText}>{t('Open')}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Clinical Notes / Patient Lodgement Notes */}
+              <View style={styles.reportNotesCard}>
+                <Text style={styles.reportNotesHeading}>{t('Clinical Observations & Notes')}</Text>
+                <Text style={styles.reportNotesBody}>
+                  {selectedReport?.notes
+                    ? selectedReport.notes
+                    : t('No additional clinical notes attached. Uploaded by patient for doctor consultation review.')}
+                </Text>
+              </View>
+
+              {/* Metadata Details */}
+              <View style={styles.metaInfoGrid}>
+                <View style={styles.metaInfoCol}>
+                  <Text style={styles.metaInfoLabel}>{t('Lodged Date')}</Text>
+                  <Text style={styles.metaInfoValue}>
+                    {selectedReport?.uploadDateTime || selectedReport?.reportDate || '10/09/2026'}
+                  </Text>
+                </View>
+                <View style={styles.metaInfoCol}>
+                  <Text style={styles.metaInfoLabel}>{t('Category')}</Text>
+                  <Text style={styles.metaInfoValue}>{selectedReport?.category || 'Lab Result'}</Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.closeFullBtn}
+              onPress={() => setIsReportModalOpen(false)}
+            >
+              <Text style={styles.closeFullBtnText}>{t('Done')}</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* PAST VISIT CONSULTATION DETAILS MODAL */}
+      <Modal
+        visible={isVisitModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsVisitModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setIsVisitModalOpen(false)}
+        >
+          <TouchableOpacity
+            style={[styles.modalContent, { maxHeight: '85%' }]}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeaderRowBetween}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.modalReportTitle} numberOfLines={2}>
+                  {selectedVisit?.title || t('Past OPD Consultation')}
+                </Text>
+                <Text style={styles.modalReportDate}>
+                  <Ionicons name="calendar-outline" size={12} color={EHR_TOKENS.sub} />{' '}
+                  {selectedVisit?.date || 'Past Visit'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setIsVisitModalOpen(false)}
+              >
+                <Ionicons name="close" size={20} color={EHR_TOKENS.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 14 }}>
+              {/* Facility & Attending Doctor Info */}
+              <View style={styles.visitMetaCard}>
+                <View style={styles.visitMetaRow}>
+                  <Ionicons name="business-outline" size={16} color={EHR_TOKENS.teal} style={{ marginRight: 8 }} />
+                  <Text style={styles.visitMetaKey}>{t('Facility / Dept:')}</Text>
+                  <Text style={styles.visitMetaVal} numberOfLines={1}>
+                    {selectedVisit?.details || currentHospital}
+                  </Text>
+                </View>
+                <View style={[styles.visitMetaRow, { marginTop: 8 }]}>
+                  <Ionicons name="medkit-outline" size={16} color={EHR_TOKENS.teal} style={{ marginRight: 8 }} />
+                  <Text style={styles.visitMetaKey}>{t('Status:')}</Text>
+                  <Text style={[styles.visitMetaVal, { color: EHR_TOKENS.teal, fontWeight: '700' }]}>
+                    {t(selectedVisit?.statusBadge || 'Consultation Completed')}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Consultation Details & Advice */}
+              <View style={styles.reportNotesCard}>
+                <Text style={styles.reportNotesHeading}>{t('Diagnosis & Care Provided')}</Text>
+                <Text style={styles.reportNotesBody}>
+                  {selectedVisit?.details
+                    ? selectedVisit.details
+                    : t('Clinical examination completed. Medication regimen prescribed and patient advised on symptoms monitoring.')}
+                </Text>
+              </View>
+
+              {Boolean(selectedVisit?.clinicalNotes) && (
+                <View style={styles.reportNotesCard}>
+                  <Text style={styles.reportNotesHeading}>{t('Doctor Notes')}</Text>
+                  <Text style={styles.reportNotesBody}>{selectedVisit.clinicalNotes}</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.closeFullBtn}
+              onPress={() => setIsVisitModalOpen(false)}
+            >
+              <Text style={styles.closeFullBtnText}>{t('Close Details')}</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -1319,4 +1774,322 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+
+  // Medical Reports Section Styles
+  reportCountPill: {
+    backgroundColor: EHR_TOKENS.tint,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  reportCountPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: EHR_TOKENS.tealDeep,
+  },
+  reportsList: {
+    flexDirection: 'column',
+  },
+  reportItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  reportTypeIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  reportTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 2,
+  },
+  reportTitleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: EHR_TOKENS.ink,
+    maxWidth: '75%',
+  },
+  categoryTag: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  categoryTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  reportDateMeta: {
+    fontSize: 12,
+    color: EHR_TOKENS.sub,
+    marginBottom: 2,
+  },
+  reportNotesLine: {
+    fontSize: 11,
+    color: '#475569',
+    fontStyle: 'italic',
+  },
+  reportRightCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingLeft: 4,
+  },
+  statusBadgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  statusBadgePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  emptyReportsBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+  },
+  emptyReportsSubText: {
+    fontSize: 12,
+    color: EHR_TOKENS.sub,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+
+  // Visit items enhancements
+  visitStatusPill: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  visitStatusPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  visitSnippetText: {
+    fontSize: 11,
+    color: EHR_TOKENS.sub,
+    marginTop: 2,
+  },
+
+  // Modal Report Details
+  modalHeaderRowBetween: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: EHR_TOKENS.line,
+  },
+  modalReportTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: EHR_TOKENS.ink,
+  },
+  modalCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  modalCategoryBadge: {
+    backgroundColor: EHR_TOKENS.tint,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  modalCategoryBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: EHR_TOKENS.tealDeep,
+  },
+  modalReportDate: {
+    fontSize: 12,
+    color: EHR_TOKENS.sub,
+    fontWeight: '500',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F6F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reportStatusCard: {
+    backgroundColor: '#F8FAFB',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: EHR_TOKENS.line,
+    padding: 12,
+    marginBottom: 12,
+  },
+  toggleReviewBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  toggleReviewedActive: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+  },
+  togglePendingActive: {
+    backgroundColor: '#f0fdfa',
+    borderColor: '#99f6e4',
+  },
+  toggleReviewBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  reportImageContainer: {
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  previewSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+    marginBottom: 6,
+    alignSelf: 'flex-start',
+    textTransform: 'uppercase',
+  },
+  reportImagePreview: {
+    width: '100%',
+    height: 220,
+    borderRadius: 10,
+  },
+  documentActionBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  pdfIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#fee2e2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  docFileName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#991b1b',
+  },
+  docFileMeta: {
+    fontSize: 11,
+    color: '#b91c1c',
+    marginTop: 2,
+  },
+  openDocBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  openDocBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  reportNotesCard: {
+    backgroundColor: '#F8FAFB',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: EHR_TOKENS.line,
+    padding: 12,
+    marginBottom: 12,
+  },
+  reportNotesHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: EHR_TOKENS.ink,
+    marginBottom: 4,
+  },
+  reportNotesBody: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 18,
+  },
+  metaInfoGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  metaInfoCol: {
+    flex: 1,
+    backgroundColor: '#F8FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: EHR_TOKENS.line,
+    padding: 10,
+  },
+  metaInfoLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: EHR_TOKENS.sub,
+    marginBottom: 2,
+  },
+  metaInfoValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: EHR_TOKENS.ink,
+  },
+  closeFullBtn: {
+    backgroundColor: EHR_TOKENS.teal,
+    height: 46,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  closeFullBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  visitMetaCard: {
+    backgroundColor: '#F8FAFB',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: EHR_TOKENS.line,
+    padding: 12,
+    marginBottom: 12,
+  },
+  visitMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  visitMetaKey: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: EHR_TOKENS.ink,
+    marginRight: 6,
+  },
+  visitMetaVal: {
+    fontSize: 12,
+    color: '#334155',
+    flex: 1,
+  },
 });
+

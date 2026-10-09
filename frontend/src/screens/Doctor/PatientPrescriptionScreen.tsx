@@ -58,6 +58,22 @@ export default function PatientPrescriptionScreen() {
 
   const [data, setData] = useState<PatientPrescriptionDetails>(() => {
     const base = isAurelia ? { ...aureliaPrescriptionData } : { ...blankPrescriptionData };
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const uStr = window.localStorage.getItem('user');
+        if (uStr) {
+          const u = JSON.parse(uStr);
+          if (u.fullName || u.name) {
+            base.doctor = {
+              ...base.doctor,
+              name: u.fullName || u.name,
+              room: u.room || 'Room 3B',
+            };
+          }
+        }
+      }
+    } catch (e) {}
+
     if (params?.patientName) {
       base.patient = {
         ...base.patient,
@@ -233,6 +249,32 @@ export default function PatientPrescriptionScreen() {
             return prev;
           });
         }
+
+        // Sync doctor info from logged in user and dashboard
+        let loggedDocName = '';
+        let loggedDocRoom = '';
+        const userStr = await AsyncStorage.getItem('user');
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          loggedDocName = u.fullName || u.name || '';
+          loggedDocRoom = u.room || '';
+        }
+        if (!loggedDocName && dash?.doctor?.name) {
+          loggedDocName = dash.doctor.name;
+        }
+        if (!loggedDocRoom && dash?.doctor?.room) {
+          loggedDocRoom = dash.doctor.room;
+        }
+        if (loggedDocName || loggedDocRoom) {
+          setData((prev) => ({
+            ...prev,
+            doctor: {
+              ...prev.doctor,
+              ...(loggedDocName ? { name: loggedDocName } : {}),
+              ...(loggedDocRoom ? { room: loggedDocRoom } : {}),
+            },
+          }));
+        }
       } catch (e) {}
 
       if (!tokenNum && !patientName && !patientId) {
@@ -264,7 +306,16 @@ export default function PatientPrescriptionScreen() {
           const parsed = JSON.parse(raw);
           if (parsed && Array.isArray(parsed.diagnoses) && Array.isArray(parsed.prescriptions)) {
             const cachedPName = parsed.patient?.name || '';
-            const isStaleWalkin = cachedPName.toLowerCase().includes('walkin') || cachedPName === 'Patient Normal';
+            const isNameMismatch = Boolean(
+              patientName &&
+              cachedPName &&
+              !cachedPName.toLowerCase().includes(patientName.toLowerCase()) &&
+              !patientName.toLowerCase().includes(cachedPName.toLowerCase())
+            );
+            const isStaleWalkin =
+              cachedPName.toLowerCase().includes('walkin') ||
+              cachedPName === 'Patient Normal' ||
+              isNameMismatch;
             if (!isStaleWalkin) {
               setData(parsed);
               if (parsed.clinicalNotes !== undefined) {
@@ -809,8 +860,8 @@ export default function PatientPrescriptionScreen() {
       <View style={[styles.safeContainer, isDark && { backgroundColor: '#091012' }]}>
         <StatusBar barStyle="light-content" backgroundColor="#0E7C86" />
         <DoctorTopBar
-          doctorName={doctor.name || 'Dr. Palitha Perera'}
-          room={doctor.room || 'Room 101'}
+          doctorName={doctor.name}
+          room={doctor.room}
           unreadCount={4}
         />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -830,8 +881,8 @@ export default function PatientPrescriptionScreen() {
 
       {/* SHARED TOP BAR */}
       <DoctorTopBar
-        doctorName={doctor.name || 'Dr. Palitha Perera'}
-        room={doctor.room || 'Room 101'}
+        doctorName={doctor.name}
+        room={doctor.room}
         unreadCount={4}
       />
 
@@ -2207,6 +2258,11 @@ const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
     backgroundColor: '#f4f9fc',
+    ...Platform.select({
+      web: {
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      },
+    }),
   },
   keyboardWrap: {
     flex: 1,

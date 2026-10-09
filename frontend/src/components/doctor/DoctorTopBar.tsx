@@ -27,8 +27,8 @@ interface DoctorTopBarProps {
 }
 
 export const DoctorTopBar = ({
-  doctorName = 'Dr. Palitha Perera',
-  room = 'Room 101',
+  doctorName,
+  room,
   roomSubtitle,
   unreadCount = 4,
 }: DoctorTopBarProps) => {
@@ -39,21 +39,141 @@ export const DoctorTopBar = ({
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
 
+  const [loggedInDoctorName, setLoggedInDoctorName] = useState<string | null>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const u = window.localStorage.getItem('user');
+        if (u) {
+          const parsed = JSON.parse(u);
+          const n = parsed.fullName || parsed.name;
+          if (n && typeof n === 'string') return n.trim();
+        }
+      }
+    } catch (e) {}
+    return null;
+  });
+
+  const [loggedInRoom, setLoggedInRoom] = useState<string | null>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const u = window.localStorage.getItem('user');
+        if (u) {
+          const parsed = JSON.parse(u);
+          if (parsed.room) return parsed.room;
+        }
+      }
+    } catch (e) {}
+    return null;
+  });
+
   useEffect(() => {
-    (async () => {
+    let isMounted = true;
+    const loadDoctorUser = async () => {
       try {
-        const stored = await AsyncStorage.getItem('@doctor_profile_photo');
-        if (stored) setProfilePhoto(stored);
+        let nameFound = '';
+        let roomFound = '';
+        let userStr = await AsyncStorage.getItem('user');
+        if (!userStr && typeof window !== 'undefined' && window.localStorage) {
+          userStr = window.localStorage.getItem('user');
+        }
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          const rawName = u.fullName || u.name;
+          if (rawName && typeof rawName === 'string') {
+            nameFound = rawName.trim();
+          }
+          if (u.room) roomFound = u.room;
+        }
+
+        if (nameFound && isMounted) {
+          setLoggedInDoctorName(nameFound);
+        }
+        if (roomFound && isMounted) {
+          setLoggedInRoom(roomFound);
+        }
       } catch (e) {}
-    })();
+    };
+
+    loadDoctorUser();
+
+    if (typeof window !== 'undefined') {
+      const handleStorageUpdate = () => loadDoctorUser();
+      window.addEventListener('storage', handleStorageUpdate);
+      window.addEventListener('user_updated', handleStorageUpdate);
+      return () => {
+        isMounted = false;
+        window.removeEventListener('storage', handleStorageUpdate);
+        window.removeEventListener('user_updated', handleStorageUpdate);
+      };
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const effectiveDoctorName = React.useMemo(() => {
+    if (loggedInDoctorName) {
+      if (!doctorName || doctorName === 'Dr. Palitha Perera') {
+        return loggedInDoctorName;
+      }
+      return doctorName;
+    }
+    return doctorName || 'Namal Perera';
+  }, [doctorName, loggedInDoctorName]);
+
+  const effectiveRoom = React.useMemo(() => {
+    if (loggedInRoom) {
+      if (!room || room === 'Room 101') {
+        return loggedInRoom;
+      }
+      return room;
+    }
+    return room || 'Room 3B';
+  }, [room, loggedInRoom]);
+
+  useEffect(() => {
+    const loadPhoto = async () => {
+      try {
+        let stored = await AsyncStorage.getItem('@doctor_profile_photo');
+        if (!stored && typeof window !== 'undefined' && window.localStorage) {
+          stored = window.localStorage.getItem('@doctor_profile_photo');
+        }
+        if (stored) {
+          // If stored is an expired blob URL from a previous session, test and discard if broken
+          if (stored.startsWith('blob:') && typeof window !== 'undefined') {
+            try {
+              const test = await fetch(stored);
+              if (!test.ok) throw new Error();
+            } catch (err) {
+              await AsyncStorage.removeItem('@doctor_profile_photo');
+              if (window.localStorage) window.localStorage.removeItem('@doctor_profile_photo');
+              stored = null;
+            }
+          }
+          if (stored) setProfilePhoto(stored);
+        }
+      } catch (e) {}
+    };
+
+    loadPhoto();
+
+    if (typeof window !== 'undefined') {
+      const handleUpdate = () => loadPhoto();
+      window.addEventListener('doctor_photo_updated', handleUpdate);
+      window.addEventListener('storage', handleUpdate);
+      return () => {
+        window.removeEventListener('doctor_photo_updated', handleUpdate);
+        window.removeEventListener('storage', handleUpdate);
+      };
+    }
   }, []);
 
   const doctorInitials = React.useMemo(() => {
-    const clean = doctorName.replace(/^Dr\.\s*/i, '').trim();
+    const clean = effectiveDoctorName.replace(/^Dr\.\s*/i, '').trim();
     const parts = clean.split(' ');
     if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return clean.slice(0, 2).toUpperCase() || 'PP';
-  }, [doctorName]);
+    return clean.slice(0, 2).toUpperCase() || 'DR';
+  }, [effectiveDoctorName]);
 
   const handleChangePhoto = async () => {
     setIsProfileMenuOpen(false);
@@ -63,9 +183,38 @@ export const DoctorTopBar = ({
         copyToCacheDirectory: true,
       });
       if (!res.canceled && res.assets && res.assets.length > 0) {
-        const uri = res.assets[0].uri;
-        setProfilePhoto(uri);
-        await AsyncStorage.setItem('@doctor_profile_photo', uri);
+        const asset = res.assets[0];
+        let persistentUri = asset.uri;
+
+        // Convert file or blob to permanent Base64 Data URL so it never revokes on reload
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          if ((asset as any).file) {
+            persistentUri = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => resolve(asset.uri);
+              reader.readAsDataURL((asset as any).file);
+            });
+          } else if (asset.uri.startsWith('blob:') || asset.uri.startsWith('http')) {
+            try {
+              const resp = await fetch(asset.uri);
+              const blob = await resp.blob();
+              persistentUri = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = () => resolve(asset.uri);
+                reader.readAsDataURL(blob);
+              });
+            } catch (e) {}
+          }
+        }
+
+        setProfilePhoto(persistentUri);
+        await AsyncStorage.setItem('@doctor_profile_photo', persistentUri);
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem('@doctor_profile_photo', persistentUri);
+          window.dispatchEvent(new Event('doctor_photo_updated'));
+        }
       }
     } catch (e) {
       Alert.alert(t('Error'), t('Could not select profile photo.'));
@@ -76,6 +225,10 @@ export const DoctorTopBar = ({
     setIsProfileMenuOpen(false);
     try {
       await AsyncStorage.removeItem('@doctor_profile_photo');
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('@doctor_profile_photo');
+        window.dispatchEvent(new Event('doctor_photo_updated'));
+      }
       setProfilePhoto(null);
     } catch (e) {}
   };
@@ -105,7 +258,17 @@ export const DoctorTopBar = ({
           >
             <View style={styles.avatarWrap}>
               {profilePhoto ? (
-                <Image source={{ uri: profilePhoto }} style={styles.avatarImg} />
+                <Image
+                  source={{ uri: profilePhoto }}
+                  style={styles.avatarImg}
+                  onError={() => {
+                    setProfilePhoto(null);
+                    AsyncStorage.removeItem('@doctor_profile_photo').catch(() => {});
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                      window.localStorage.removeItem('@doctor_profile_photo');
+                    }
+                  }}
+                />
               ) : (
                 <View style={styles.avatarCircle}>
                   <Text style={styles.avatarInitialsText}>{doctorInitials}</Text>
@@ -117,12 +280,12 @@ export const DoctorTopBar = ({
             <View style={styles.doctorInfoCol}>
               <View style={styles.doctorNameRow}>
                 <Text style={styles.doctorNameText} numberOfLines={1}>
-                  {doctorName}
+                  {effectiveDoctorName}
                 </Text>
                 <Ionicons name="chevron-down" size={13} color="#FFFFFF" style={{ marginLeft: 4 }} />
               </View>
               <Text style={styles.roomText} numberOfLines={1}>
-                {roomSubtitle || `${room} · ${t('Online')}`}
+                {roomSubtitle || `${effectiveRoom} · ${t('Online')}`}
               </Text>
             </View>
           </TouchableOpacity>
@@ -183,7 +346,13 @@ export const DoctorTopBar = ({
             <View style={styles.menuHeader}>
               <View style={styles.menuAvatarWrap}>
                 {profilePhoto ? (
-                  <Image source={{ uri: profilePhoto }} style={styles.menuAvatarImg} />
+                  <Image
+                    source={{ uri: profilePhoto }}
+                    style={styles.menuAvatarImg}
+                    onError={() => {
+                      setProfilePhoto(null);
+                    }}
+                  />
                 ) : (
                   <View style={styles.menuAvatarCircle}>
                     <Text style={styles.menuAvatarInitials}>{doctorInitials}</Text>
@@ -192,10 +361,10 @@ export const DoctorTopBar = ({
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.menuDoctorName} numberOfLines={1}>
-                  {doctorName}
+                  {effectiveDoctorName}
                 </Text>
                 <Text style={styles.menuRoomText}>
-                  {room} · {t('OPD Clinic')}
+                  {effectiveRoom} · {t('OPD Clinic')}
                 </Text>
               </View>
             </View>

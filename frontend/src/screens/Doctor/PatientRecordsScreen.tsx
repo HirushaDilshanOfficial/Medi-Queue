@@ -96,15 +96,15 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     };
   }, [isDark]);
 
-  // Inject Google Font Lexend on web
+  // Inject Google Font Inter on web
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      if (!document.getElementById('lexend-google-font')) {
+      if (!document.getElementById('inter-google-font')) {
         const link = document.createElement('link');
-        link.id = 'lexend-google-font';
+        link.id = 'inter-google-font';
         link.rel = 'stylesheet';
         link.href =
-          'https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap';
+          'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap';
         document.head.appendChild(link);
       }
     }
@@ -119,9 +119,9 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     return params?.patientId || '';
   });
   const [doctorInfo, setDoctorInfo] = useState({
-    name: 'Dr. Palitha Perera',
-    room: 'Room 101 online',
-    initials: 'PP',
+    name: 'Namal Perera',
+    room: 'Room 3B online',
+    initials: 'NP',
   });
   const [currentHospital, setCurrentHospital] = useState('City General Hospital');
   const [searchQuery, setSearchQuery] = useState('');
@@ -183,40 +183,125 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
       }
       activeHosp = activeHosp || 'Colombo Teaching Hospital 1';
 
-      // 1. Fetch doctor dashboard in parallel to know real doctor details & room for this hospital
-      fetchDoctorDashboard(undefined, activeHosp)
-        .then((dash) => {
-          if (dash?.doctor) {
-            const dName = dash.doctor.name || 'Dr. Palitha Perera';
-            const dRoom = dash.doctor.room ? `${dash.doctor.room} online` : 'Room 101 online';
-            const clean = dName.replace(/^Dr\.\s*/i, '').trim();
-            const parts = clean.split(' ');
-            const initials =
-              parts.length > 1
-                ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
-                : clean.slice(0, 2).toUpperCase();
-            setDoctorInfo({
-              name: dName,
-              room: dRoom,
-              initials: initials || 'DR',
-            });
-          }
-        })
-        .catch(() => {});
-
       try {
         setLoading(true);
-        const response = await fetchDoctorRecordsResponseApi(
-          query !== undefined ? query : searchQuery,
-          activeHosp
-        );
-        if (response?.records && response.records.length > 0) {
-          const records = response.records;
+        // Fetch doctor dashboard and records in parallel to get live currentPatient
+        const [dash, response] = await Promise.all([
+          fetchDoctorDashboard(undefined, activeHosp).catch(() => null),
+          fetchDoctorRecordsResponseApi(
+            query !== undefined ? query : searchQuery,
+            activeHosp
+          ),
+        ]);
+
+        if (dash?.doctor) {
+          const dName = dash.doctor.name || 'Namal Perera';
+          const dRoom = dash.doctor.room ? `${dash.doctor.room} online` : 'Room 3B online';
+          const clean = dName.replace(/^Dr\.\s*/i, '').trim();
+          const parts = clean.split(' ');
+          const initials =
+            parts.length > 1
+              ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+              : clean.slice(0, 2).toUpperCase();
+          setDoctorInfo({
+            name: dName,
+            room: dRoom,
+            initials: initials || 'DR',
+          });
+        }
+
+        let records = response?.records || [];
+
+        // If dash has an active currentPatient, make sure they are present and marked 'In consultation'
+        let dashMatchedPatient: PatientRecord | undefined;
+        if (dash?.currentPatient) {
+          const cp = dash.currentPatient;
+          let existingIdx = records.findIndex(
+            (p) =>
+              (cp.patientId && (p.id === cp.patientId || p.patientId === cp.patientId)) ||
+              (cp.tokenNumber && p.tokenNumber === cp.tokenNumber) ||
+              (cp.patientName && p.name.toLowerCase() === cp.patientName.toLowerCase())
+          );
+
+          if (existingIdx !== -1) {
+            records[existingIdx] = {
+              ...records[existingIdx],
+              status: 'In consultation',
+              vitals: {
+                ...records[existingIdx].vitals,
+                ...(cp.bloodPressure && records[existingIdx].vitals.bloodPressure === '--/--' ? { bloodPressure: cp.bloodPressure } : {}),
+                ...(cp.heartRate && records[existingIdx].vitals.heartRate === '--' ? { heartRate: cp.heartRate } : {}),
+              },
+            };
+            dashMatchedPatient = records[existingIdx];
+            // Move to first position so they are the primary current patient
+            const activePat = records.splice(existingIdx, 1)[0];
+            records = [activePat, ...records];
+          } else {
+            const newCpRecord: PatientRecord = {
+              id: cp.patientId || cp.appointmentId || `dash-cp-${cp.tokenNumber}`,
+              patientId: cp.patientId,
+              appointmentId: cp.appointmentId,
+              name: cp.patientName,
+              shortName: cp.patientName.split(' ')[0],
+              verified: Boolean(cp.nic),
+              age: cp.age || 28,
+              gender: cp.gender || 'Unknown',
+              bloodGroup: (cp as any).bloodGroup || 'O+',
+              tokenNumber: cp.tokenNumber,
+              tokenFormatted: `#${String(cp.tokenNumber).padStart(3, '0')}`,
+              nic: cp.nic || '',
+              registeredTime: cp.checkedInTime || '08:45 AM',
+              status: 'In consultation',
+              hospitalName: activeHosp,
+              photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+              allergy: {
+                hasAllergy: Boolean(cp.allergy || (cp.allergies && cp.allergies.length > 0)),
+                isHighRisk: false,
+                title: cp.allergy || 'No known drug allergies (NKDA)',
+                description: cp.allergy || 'No known adverse reactions.',
+              },
+              chronicConditions: cp.reason ? [cp.reason] : ['General OPD Consultation'],
+              medications: [],
+              hasVitals: Boolean(cp.bloodPressure || cp.heartRate),
+              vitals: {
+                triageTime: 'Triage: Today',
+                bloodPressure: cp.bloodPressure || '120/80',
+                bloodPressureUnit: 'mmHg',
+                heartRate: cp.heartRate ? cp.heartRate.replace(/[^0-9]/g, '') : '72',
+                heartRateUnit: 'bpm',
+                bodyTemp: '36.8 °C',
+                bodyTempUnit: '°C',
+                spO2: '99%',
+                spO2Status: 'Normal',
+                weight: '68 kg',
+                height: '170 cm',
+                systolic: cp.bloodPressure ? parseInt(cp.bloodPressure.split('/')[0]) || 120 : 120,
+                diastolic: cp.bloodPressure ? parseInt(cp.bloodPressure.split('/')[1]) || 80 : 80,
+                heartRateNum: cp.heartRate ? parseInt(cp.heartRate.replace(/[^0-9]/g, '')) || 72 : 72,
+                tempNum: 36.8,
+                spO2Num: 99,
+                weightNum: 68,
+                heightNum: 170,
+                bmi: '23.5',
+                bmiNum: 23.5,
+              },
+              vitalsHistory: [],
+              recentVisits: [],
+              imaging: { hasImaging: false, title: 'No imaging', subtitle: '', description: '' },
+              reports: [],
+            };
+            records = [newCpRecord, ...records];
+            dashMatchedPatient = newCpRecord;
+          }
+        }
+
+        if (records.length > 0) {
           setPatients(records);
 
-          if (response.doctor) {
-            const dName = response.doctor.name || 'Dr. Palitha Perera';
-            const dRoom = response.doctor.room ? `${response.doctor.room} online` : 'Room 101 online';
+          if (response?.doctor) {
+            const dName = response.doctor.name || 'Namal Perera';
+            const dRoom = response.doctor.room ? `${response.doctor.room} online` : 'Room 3B online';
             const clean = dName.replace(/^Dr\.\s*/i, '').trim();
             const parts = clean.split(' ');
             const initials =
@@ -234,37 +319,63 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
           const pName = params?.patientName ? params.patientName.trim().toLowerCase() : null;
           const pId = params?.patientId;
 
-          let matched = records.find(
-            (p) =>
-              (pId && p.id === pId) ||
-              (pName &&
-                (p.name.toLowerCase().includes(pName) || p.shortName.toLowerCase().includes(pName))) ||
-              (pToken && p.tokenNumber === pToken)
-          );
-
-          if (!matched) {
-            try {
-              const storedName = await AsyncStorage.getItem('active_record_patient_name');
-              const storedToken = await AsyncStorage.getItem('active_record_patient_token');
-              if (storedName) {
-                matched = records.find((p) =>
-                  p.name.toLowerCase().includes(storedName.trim().toLowerCase())
-                );
-              }
-              if (!matched && storedToken) {
-                matched = records.find((p) => p.tokenNumber === Number(storedToken));
-              }
-            } catch (e) {}
+          let matched: PatientRecord | undefined;
+          // Priority 1: Match explicit token number if coming from queue click
+          if (pToken) {
+            matched = records.find((p) => p.tokenNumber === pToken && (!pId || p.id === pId || p.patientId === pId));
+            if (!matched) matched = records.find((p) => p.tokenNumber === pToken);
+          }
+          // Priority 2: Match patient ID
+          if (!matched && pId) {
+            matched = records.find((p) => p.id === pId || p.patientId === pId || (p as any).appointmentId === pId);
+          }
+          // Priority 3: Match name
+          if (!matched && pName) {
+            matched = records.find(
+              (p) =>
+                p.name.toLowerCase().includes(pName) ||
+                pName.includes(p.name.toLowerCase()) ||
+                p.shortName.toLowerCase().includes(pName)
+            );
           }
 
-          // If not matched by query or storage, prioritize the patient currently in consultation of this hospital
+          if (!matched && !pToken && !pId && !pName) {
+            // Priority 1: Choose the live current patient from doctor dashboard if active
+            if (dashMatchedPatient) {
+              matched = dashMatchedPatient;
+            } else {
+              matched = records.find((p) => p.status === 'In consultation');
+            }
+
+            // Only fallback to AsyncStorage if there is NO patient in consultation
+            if (!matched) {
+              try {
+                const storedToken = await AsyncStorage.getItem('active_record_patient_token');
+                const storedId = await AsyncStorage.getItem('active_record_patient_id');
+                const storedName = await AsyncStorage.getItem('active_record_patient_name');
+                if (storedId) {
+                  matched = records.find((p) => p.id === storedId || p.patientId === storedId);
+                }
+                if (!matched && storedToken) {
+                  matched = records.find((p) => p.tokenNumber === Number(storedToken));
+                }
+                if (!matched && storedName) {
+                  matched = records.find((p) =>
+                    p.name.toLowerCase().includes(storedName.trim().toLowerCase())
+                  );
+                }
+              } catch (e) {}
+            }
+          }
+
+          // If still not matched, fallback to In consultation or first record
           if (!matched) {
             matched = records.find((p) => p.status === 'In consultation') || records[0];
           }
 
           const targetId = matched?.id || response?.currentPatientId || records[0]?.id;
           if (targetId) {
-            setCurrentPatientId((prev) => (prev !== targetId ? targetId : prev));
+            setCurrentPatientId(targetId);
           }
         } else {
           const fallbackList = getHospitalRecords(activeHosp);
@@ -319,8 +430,12 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     if (!pToken && !pName && !pId) return;
 
     let matched: PatientRecord | undefined;
-    if (pId) {
-      matched = patients.find((p) => p.id === pId);
+    if (pToken) {
+      matched = patients.find((p) => p.tokenNumber === pToken && (!pId || p.id === pId || p.patientId === pId));
+      if (!matched) matched = patients.find((p) => p.tokenNumber === pToken);
+    }
+    if (!matched && pId) {
+      matched = patients.find((p) => p.id === pId || p.patientId === pId || (p as any).appointmentId === pId);
     }
     if (!matched && pName) {
       matched = patients.find(
@@ -330,9 +445,6 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
           p.shortName.toLowerCase().includes(pName) ||
           pName.includes(p.shortName.toLowerCase())
       );
-    }
-    if (!matched && pToken) {
-      matched = patients.find((p) => p.tokenNumber === pToken);
     }
 
     if (matched) {
@@ -475,22 +587,37 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     try {
       await AsyncStorage.removeItem('active_record_patient_token');
       await AsyncStorage.removeItem('active_record_patient_name');
+      await AsyncStorage.removeItem('active_record_patient_id');
+    } catch (e) {}
+
+    try {
+      router.setParams({ tokenNumber: '', patientName: '', patientId: '' });
     } catch (e) {}
 
     try {
       const dash = await fetchDoctorDashboard();
       if (dash?.currentPatient) {
         const cp = dash.currentPatient;
-        const matched = patients.find(
-          (p) =>
-            (cp.patientId && p.id === cp.patientId) ||
-            p.tokenNumber === cp.tokenNumber ||
-            p.name.toLowerCase().includes(cp.patientName.toLowerCase())
-        );
+        // Find exact patient: First check 'In consultation', then ID match, then name match
+        let matched = patients.find((p) => p.status === 'In consultation');
+        if (!matched && cp.patientId) {
+          matched = patients.find((p) => p.id === cp.patientId || p.patientId === cp.patientId);
+        }
+        if (!matched && cp.patientName) {
+          matched = patients.find((p) =>
+            p.name.toLowerCase().includes(cp.patientName.toLowerCase()) ||
+            cp.patientName.toLowerCase().includes(p.name.toLowerCase())
+          );
+        }
+        if (!matched && cp.tokenNumber) {
+          matched = patients.find(
+            (p) => p.tokenNumber === cp.tokenNumber && p.status === 'In consultation'
+          );
+        }
         if (matched) {
           setCurrentPatientId(matched.id);
           setSearchQuery('');
-          showToast(`Refreshed: ${matched.name} (${matched.tokenFormatted})`);
+          showToast(t("Switched to current patient: {value0} ({value1})", { value0: String(matched.name), value1: String(matched.tokenFormatted) }));
           scrollViewRef.current?.scrollTo({ y: 0, animated: true });
           return;
         }
@@ -501,11 +628,13 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     const inConsultationPatient =
       patients.find((p) => p.status === 'In consultation') || patients[0];
 
-    setCurrentPatientId(inConsultationPatient.id);
-    setSearchQuery('');
-    showToast(t("Refreshed: {value0} ({value1})", { value0: String(inConsultationPatient.name), value1: String(inConsultationPatient.tokenFormatted) }));
-    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-  }, [patients, showToast, triggerSpin]);
+    if (inConsultationPatient) {
+      setCurrentPatientId(inConsultationPatient.id);
+      setSearchQuery('');
+      showToast(t("Switched to current patient: {value0} ({value1})", { value0: String(inConsultationPatient.name), value1: String(inConsultationPatient.tokenFormatted) }));
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }
+  }, [patients, showToast, triggerSpin, t]);
 
   // ─────────────────────────────────────────────────────────
   // 1. ADD MEDICATION BOTTOM SHEET STATE & LOGIC
@@ -686,8 +815,17 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   const heightInputRef = useRef<TextInput>(null);
 
   const hasVitals = Boolean(
-    currentPatient?.hasVitals ||
-    (currentPatient?.vitals && currentPatient.vitals.systolic > 0 && currentPatient.vitals.bloodPressure !== '--/--')
+    currentPatient?.hasVitals &&
+    currentPatient?.vitals &&
+    (
+      (currentPatient.vitals.systolic && currentPatient.vitals.systolic > 0) ||
+      (currentPatient.vitals.heartRateNum && currentPatient.vitals.heartRateNum > 0) ||
+      (currentPatient.vitals.weightNum && currentPatient.vitals.weightNum > 0) ||
+      (currentPatient.vitals.bloodPressure &&
+        currentPatient.vitals.bloodPressure !== '--/--' &&
+        currentPatient.vitals.bloodPressure !== '--' &&
+        currentPatient.vitals.bloodPressure !== '')
+    )
   );
 
   const handleOpenEditVitals = () => {
@@ -796,11 +934,19 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
     const finalHeight = !isNaN(heightVal) ? heightVal : (currentPatient.vitals.heightNum || 170);
     const bmiCalc = calculateBMI(finalWeight, finalHeight);
 
+    const now = new Date();
+    const dateFormatted = now.toLocaleDateString('en-CA');
+    const timeFormatted = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const fullDateTime = `${dateFormatted} at ${timeFormatted}`;
+
     // New history item
     const newHistoryItem: VitalHistoryReading = {
       id: `vh-${Date.now()}`,
-      dateLabel: 'Now',
-      timestamp: 'Today, Just now',
+      dateLabel: timeFormatted,
+      timestamp: fullDateTime,
+      recordedDate: dateFormatted,
+      recordedTime: timeFormatted,
+      recordedAt: now.toISOString(),
       systolic: sys,
       diastolic: dia,
       heartRate: hr,
@@ -816,9 +962,10 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
           // Keep last 5 history readings
           const historyArr = p.vitalsHistory || [];
           const updatedHistory = [
-            ...historyArr.map((item) =>
-              item.dateLabel === 'Now' ? { ...item, dateLabel: 'Prev' } : item
-            ),
+            ...historyArr.map((item) => ({
+              ...item,
+              dateLabel: item.recordedTime || (item.dateLabel === 'Now' ? (item.timestamp?.split('at ')[1] || 'Prev') : item.dateLabel),
+            })),
             newHistoryItem,
           ].slice(-5);
 
@@ -828,7 +975,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
             vitals: {
               ...p.vitals,
               hasVitals: true,
-              triageTime: 'Triage: Just now',
+              triageTime: `Triage: ${timeFormatted}`,
               bloodPressure: `${sys}/${dia}`,
               heartRate: String(hr),
               bodyTemp: temp.toFixed(1),
@@ -856,6 +1003,8 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
 
     savePatientVitalsApi({
       patientId: currentPatient.id,
+      patientDbId: (currentPatient as any).patientId || (currentPatient as any)._id,
+      nic: currentPatient.nic,
       tokenNumber: currentPatient.tokenNumber,
       bloodPressure: `${sys}/${dia}`,
       heartRate: `${hr} bpm`,
@@ -951,25 +1100,45 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
   };
 
   // Calculated vital status labels
-  const bpStatus = getBPStatus(currentPatient.vitals.systolic, currentPatient.vitals.diastolic);
-  const hrStatus = getHRStatus(currentPatient.vitals.heartRateNum);
-  const currentTempC = formatTempCelsius(currentPatient.vitals.tempNum);
-  const tempStatus = getTempStatus(currentTempC.tempC);
-  const spO2Status = getSpO2Status(currentPatient.vitals.spO2Num);
+  const bpStatus = hasVitals && currentPatient?.vitals?.systolic
+    ? getBPStatus(currentPatient.vitals.systolic, currentPatient.vitals.diastolic)
+    : { label: 'Not recorded', isAbnormal: false };
+  const hrStatus = hasVitals && currentPatient?.vitals?.heartRateNum
+    ? getHRStatus(currentPatient.vitals.heartRateNum)
+    : { label: 'Not recorded', isAbnormal: false };
+  const currentTempC = hasVitals && currentPatient?.vitals?.tempNum
+    ? formatTempCelsius(currentPatient.vitals.tempNum)
+    : { tempC: 0, display: '--' };
+  const tempStatus = hasVitals && currentTempC.tempC > 0
+    ? getTempStatus(currentTempC.tempC)
+    : { label: 'Not recorded', isAbnormal: false };
+  const spO2Status = hasVitals && currentPatient?.vitals?.spO2Num
+    ? getSpO2Status(currentPatient.vitals.spO2Num)
+    : { label: 'Not recorded', isAbnormal: false };
 
   // Weight and BMI calculations
-  const currentWeightNum =
-    currentPatient.vitals.weightNum ||
-    (currentPatient.vitals.weight ? parseFloat(currentPatient.vitals.weight.replace(/[^0-9.]/g, '')) : 65);
-  const currentHeightNum =
-    currentPatient.vitals.heightNum ||
-    (currentPatient.vitals.height ? parseFloat(currentPatient.vitals.height.replace(/[^0-9.]/g, '')) : 170);
+  const currentWeightNum = hasVitals
+    ? (currentPatient?.vitals?.weightNum ||
+       (currentPatient?.vitals?.weight && currentPatient.vitals.weight !== '--'
+         ? parseFloat(currentPatient.vitals.weight.replace(/[^0-9.]/g, '')) || 0
+         : 0))
+    : 0;
+  const currentHeightNum = hasVitals
+    ? (currentPatient?.vitals?.heightNum ||
+       (currentPatient?.vitals?.height && currentPatient.vitals.height !== '--'
+         ? parseFloat(currentPatient.vitals.height.replace(/[^0-9.]/g, '')) || 0
+         : 0))
+    : 0;
 
-  const fallbackBmi = calculateBMI(currentWeightNum, currentHeightNum);
-  const bmiDisplay = currentPatient.vitals.bmi || fallbackBmi.bmi.toFixed(1);
-  const bmiStatusResult = currentPatient.vitals.bmiNum
+  const fallbackBmi = (currentWeightNum > 0 && currentHeightNum > 0)
+    ? calculateBMI(currentWeightNum, currentHeightNum)
+    : { bmi: 0, status: { label: 'Not recorded', isAbnormal: false } };
+  const bmiDisplay = hasVitals && currentPatient?.vitals?.bmi && currentPatient.vitals.bmi !== '--'
+    ? currentPatient.vitals.bmi
+    : (fallbackBmi.bmi > 0 ? fallbackBmi.bmi.toFixed(1) : '--');
+  const bmiStatusResult = hasVitals && currentPatient?.vitals?.bmiNum
     ? getBMIStatus(currentPatient.vitals.bmiNum)
-    : fallbackBmi.status;
+    : (fallbackBmi.bmi > 0 ? fallbackBmi.status : { label: 'Not recorded', isAbnormal: false });
 
   // Trend summary helper
   const trendInfo = useMemo(() => {
@@ -1140,8 +1309,8 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
         >
           {/* SHARED TOP BAR */}
           <DoctorTopBar
-            doctorName={doctorInfo.name || 'Dr. Palitha Perera'}
-            room={doctorInfo.room ? doctorInfo.room.replace(/\s*online/i, '').trim() : 'Room 101'}
+            doctorName={doctorInfo.name || 'Namal Perera'}
+            room={doctorInfo.room ? doctorInfo.room.replace(/\s*online/i, '').trim() : 'Room 3B'}
             unreadCount={4}
           />
 
@@ -1157,30 +1326,40 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 <Text style={[styles.recordsScreenTitle, { color: theme.textDark }]}>
                   {t('Patient records')}
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
-                  <Ionicons name="business" size={13} color={theme.accent} style={{ marginRight: 4 }} />
-                  <Text style={{ fontSize: 13, color: theme.textMuted, fontWeight: '600' }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginTop: 6,
+                    backgroundColor: isDark ? '#143138' : '#e0f2fe',
+                    paddingHorizontal: 10,
+                    paddingVertical: 4.5,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: isDark ? '#1e4852' : '#bae6fd',
+                    alignSelf: 'flex-start',
+                  }}
+                >
+                  <Ionicons
+                    name="business"
+                    size={13}
+                    color={isDark ? '#38bdf8' : '#0284c7'}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 12.5,
+                      color: isDark ? '#38bdf8' : '#0369a1',
+                      fontWeight: '700',
+                      letterSpacing: 0.2,
+                    }}
+                  >
                     {currentHospital}
                   </Text>
                 </View>
               </View>
 
-<TouchableOpacity
-                style={[
-                  styles.topRefreshButton,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: theme.cardBorder,
-                  },
-                ]}
-                activeOpacity={0.7}
-                onPress={handleResetToCurrentPatient}
-                accessibilityLabel="Refresh Current Patient"
-              >
-                <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
-<Ionicons name="refresh-outline" size={20} color={theme.accent} />
-                  </Animated.View>
-                </TouchableOpacity>
+
             </View>
 
             {/* ─────────────────────────────────────────────────────────
@@ -1233,7 +1412,11 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
               <View style={styles.sectionHeaderRow}>
                 <Text
                   style={[styles.sectionHeadingTitle, { color: theme.textDark }]}
-                >{t("CURRENT PATIENT")}</Text>
+                >
+                  {currentPatient.status === 'In consultation'
+                    ? t("CURRENT PATIENT")
+                    : t("UPCOMING PATIENT RECORD")}
+                </Text>
 
                 <View
                   style={[
@@ -1271,6 +1454,28 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   </Text>
                 </View>
               </View>
+
+              {currentPatient.status !== 'In consultation' && (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isDark ? '#192b2f' : '#e0f2fe',
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 10,
+                    marginBottom: 10,
+                    justifyContent: 'space-between',
+                  }}
+                  activeOpacity={0.8}
+                  onPress={handleResetToCurrentPatient}
+                >
+                  <Text style={{ fontSize: 12, color: theme.accent, fontWeight: '600', flex: 1, marginRight: 8 }}>
+                    {t("Viewing upcoming record • Tap ↺ to return to active patient")}
+                  </Text>
+                  <Ionicons name="refresh" size={14} color={theme.accent} />
+                </TouchableOpacity>
+              )}
 
               {/* b. Patient Card */}
               <View
@@ -2034,18 +2239,55 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                               styles.imagingTitle,
                               { color: theme.textDark },
                             ]}
+                            numberOfLines={1}
                           >
                             {t(rpt.title)}
                           </Text>
-                          <Text
-                            style={[
-                              styles.imagingDesc,
-                              { color: theme.textMuted },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {rpt.category || 'Lab report'} • {rpt.fileName || rpt.reportDate || 'Uploaded Document'}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5, flexWrap: 'wrap', gap: 6 }}>
+                            <View
+                              style={{
+                                backgroundColor: isDark ? '#163338' : '#e0f2fe',
+                                paddingHorizontal: 7,
+                                paddingVertical: 2.5,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: isDark ? '#1e4852' : '#bae6fd',
+                              }}
+                            >
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#38bdf8' : '#0369a1' }}>
+                                {rpt.category || 'Lab report'}
+                              </Text>
+                            </View>
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: isDark ? '#142c26' : '#ecfdf5',
+                                paddingHorizontal: 8,
+                                paddingVertical: 2.5,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: isDark ? '#1b4d3e' : '#a7f3d0',
+                                gap: 4,
+                              }}
+                            >
+                              <Ionicons name="time-outline" size={12} color={isDark ? '#4ade80' : '#059669'} />
+                              <Text style={{ fontSize: 11.5, color: isDark ? '#86efac' : '#047857', fontWeight: '700' }}>
+                                {rpt.uploadDateTime || (rpt.createdAt ? `${new Date(rpt.createdAt).toLocaleDateString('en-CA')} at ${new Date(rpt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : (rpt.reportDate || 'Uploaded recently'))}
+                              </Text>
+                            </View>
+                          </View>
+                          {rpt.fileName ? (
+                            <Text
+                              style={[
+                                styles.imagingDesc,
+                                { color: theme.textMuted, marginTop: 2 },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {rpt.fileName}
+                            </Text>
+                          ) : null}
                         </View>
                       </View>
 
@@ -2829,15 +3071,30 @@ setSelectedReportToView(currentPatient.imaging)
                               : String(val1)}
                           </Text>
 
-                          {/* Date Label */}
+                          {/* Date & Time Label on Chart */}
                           <Text
                             style={[
                               styles.chartDateLabel,
-                              { color: isLatest ? theme.primaryDeep : theme.textMuted },
+                              {
+                                color: isLatest ? theme.primaryDeep : theme.textMuted,
+                                fontSize: 10,
+                                textAlign: 'center',
+                              },
                               isLatest && { fontWeight: '800' },
                             ]}
                           >
-                            {item.dateLabel}
+                            {(() => {
+                              if (item.recordedTime) return item.recordedTime;
+                              if (item.dateLabel && item.dateLabel !== 'Now' && item.dateLabel !== 'Prev') return item.dateLabel;
+                              const matchId = String(item.id || '').match(/vh-(\d{12,14})/);
+                              if (matchId) {
+                                const d = new Date(parseInt(matchId[1], 10));
+                                if (!isNaN(d.getTime())) {
+                                  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                                }
+                              }
+                              return isLatest ? 'Now' : 'Prev';
+                            })()}
                           </Text>
                         </View>
                       );
@@ -2875,7 +3132,7 @@ setSelectedReportToView(currentPatient.imaging)
                         styles.trendStatusBadgeText,
                         {
                           color: trendInfo.statusResult.isAbnormal
-                            ? '#ef4444'
+                            ? '#dc2626'
                             : '#059669',
                         },
                       ]}
@@ -2905,6 +3162,35 @@ setSelectedReportToView(currentPatient.imaging)
                 >
                   {[...currentPatient.vitalsHistory].reverse().map((r, idx) => {
                     const isLast = idx === currentPatient.vitalsHistory.length - 1;
+                    const isLatest = idx === 0;
+
+                    // Resolve exact Date & Time
+                    let displayDateTime = '';
+                    if (r.recordedDate && r.recordedTime) {
+                      displayDateTime = `${r.recordedDate} at ${r.recordedTime}`;
+                    } else if (r.recordedAt) {
+                      const d = new Date(r.recordedAt);
+                      if (!isNaN(d.getTime())) {
+                        displayDateTime = `${d.toLocaleDateString('en-CA')} at ${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+                      }
+                    } else if (r.timestamp && /\d{4}-\d{2}-\d{2}/.test(r.timestamp)) {
+                      displayDateTime = r.timestamp;
+                    } else {
+                      const matchId = String(r.id || '').match(/vh-(\d{12,14})/);
+                      if (matchId) {
+                        const d = new Date(parseInt(matchId[1], 10));
+                        if (!isNaN(d.getTime())) {
+                          displayDateTime = `${d.toLocaleDateString('en-CA')} at ${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+                        }
+                      }
+                    }
+
+                    if (!displayDateTime) {
+                      const now = new Date();
+                      const offsetMins = idx * 4;
+                      const d = new Date(now.getTime() - offsetMins * 60 * 1000);
+                      displayDateTime = `${d.toLocaleDateString('en-CA')} at ${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+                    }
 
                     let readingVal = `${r.systolic}/${r.diastolic} mmHg`;
                     let isAbnormal =
@@ -2931,7 +3217,7 @@ setSelectedReportToView(currentPatient.imaging)
 
                     return (
                       <View
-                        key={r.id}
+                        key={r.id || `vh-${idx}`}
                         style={[
                           styles.historyReadingRow,
                           !isLast && [
@@ -2940,24 +3226,48 @@ setSelectedReportToView(currentPatient.imaging)
                           ],
                         ]}
                       >
-                        <View>
-                          <Text
-                            style={[styles.readingTimestamp, { color: theme.textDark }]}
-                          >
-                            {r.timestamp}
-                          </Text>
-                          <Text
-                            style={[styles.readingLabelSub, { color: theme.textMuted }]}
-                          >
-                            {r.dateLabel}
-                          </Text>
+                        <View style={{ flex: 1, paddingRight: 10 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 3 }}>
+                            <Ionicons name="time-outline" size={14} color="#0e8a96" style={{ marginRight: 5 }} />
+                            <Text
+                              style={[
+                                styles.readingTimestamp,
+                                { color: theme.textDark, fontWeight: '700', fontSize: 13 },
+                              ]}
+                            >
+                              {displayDateTime}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 1 }}>
+                            <View
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: 3,
+                                backgroundColor: isLatest ? '#0e8a96' : theme.textMuted,
+                                marginRight: 6,
+                              }}
+                            />
+                            <Text
+                              style={[
+                                styles.readingLabelSub,
+                                {
+                                  color: isLatest ? '#0e8a96' : theme.textMuted,
+                                  fontWeight: isLatest ? '700' : '500',
+                                  fontSize: 11,
+                                },
+                              ]}
+                            >
+                              {isLatest ? 'Latest reading (Current)' : `Previous reading #${currentPatient.vitalsHistory.length - idx}`}
+                            </Text>
+                          </View>
                         </View>
 
                         <View style={styles.readingValueRight}>
                           <Text
                             style={[
                               styles.readingValueText,
-                              { color: theme.textDark },
+                              { color: theme.textDark, fontWeight: '700' },
                             ]}
                           >
                             {readingVal}
@@ -2973,7 +3283,7 @@ setSelectedReportToView(currentPatient.imaging)
                             <Text
                               style={[
                                 styles.readingStatusPillText,
-                                { color: isAbnormal ? '#dc2626' : '#16a34a' },
+                                { color: isAbnormal ? '#dc2626' : '#16a34a', fontWeight: '700' },
                               ]}
                             >
                               {isAbnormal ? 'Alert' : t("Normal")}
@@ -3403,198 +3713,266 @@ setSelectedReportToView(currentPatient.imaging)
         >
           <View
             style={{
-              backgroundColor: theme.sheetBg,
-              borderColor: theme.cardBorder,
+              backgroundColor: isDark ? '#16272a' : '#ffffff',
+              borderColor: isDark ? '#233f44' : '#e2e8f0',
               borderWidth: 1,
-              maxWidth: 460,
+              maxWidth: 440,
               width: '92%',
-              padding: 20,
-              borderRadius: 16,
+              padding: 22,
+              borderRadius: 24,
               maxHeight: '90%',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: isDark ? 0.4 : 0.15,
+              shadowRadius: 20,
+              elevation: 10,
             }}
           >
+            {/* Top pill drag handle indicator matching Picture 2 */}
+            <View
+              style={{
+                width: 44,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: isDark ? '#334155' : '#e2e8f0',
+                alignSelf: 'center',
+                marginBottom: 16,
+              }}
+            />
+
+            {/* Header row: subtitle + title on left, circular close button on right */}
             <View
               style={{
                 flexDirection: 'row',
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 justifyContent: 'space-between',
-                marginBottom: 14,
+                marginBottom: 4,
               }}
             >
-              <Text
-                style={{ color: theme.textDark, marginBottom: 0, fontSize: 17, fontWeight: '700' }}
-              >
-                {selectedReportToView?.title || 'Medical Report'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setSelectedReportToView(null)}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Ionicons name="close" size={22} color={theme.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
-              <View
-                style={{
-                  backgroundColor: theme.tint,
-                  padding: 12,
-                  borderRadius: 10,
-                  marginBottom: 14,
-                }}
-              >
+              <View style={{ flex: 1, marginRight: 12 }}>
                 <Text
                   style={{
                     fontSize: 13,
-                    fontWeight: '700',
-                    color: theme.primaryDeep,
-                    marginBottom: 4,
+                    color: theme.textMuted,
+                    fontWeight: '600',
+                    marginBottom: 3,
                   }}
                 >
-                  {selectedReportToView?.category || 'Lab Result'}
+                  {t(selectedReportToView?.category ? `${selectedReportToView.category} report` : 'Lab report')}
                 </Text>
-                <Text style={{ fontSize: 12, color: theme.textMedium }}>
-                  Date: {selectedReportToView?.reportDate || selectedReportToView?.date || 'Recorded recently'}
+                <Text
+                  style={{
+                    color: theme.textDark,
+                    fontSize: 22,
+                    fontWeight: '800',
+                    letterSpacing: -0.3,
+                  }}
+                  numberOfLines={2}
+                >
+                  {selectedReportToView?.title || 'Medical Report'}
                 </Text>
-                {selectedReportToView?.fileName ? (
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: theme.textMedium,
-                      marginTop: 4,
-                      fontWeight: '500',
-                    }}
-                  >
-                    File: {selectedReportToView.fileName}
-                  </Text>
-                ) : null}
               </View>
 
-              {/* PDF Document Box */}
-              {selectedReportToView ? (
-                <TouchableOpacity
+              <TouchableOpacity
+                onPress={() => setSelectedReportToView(null)}
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  borderWidth: 1,
+                  borderColor: isDark ? '#334155' : '#e2e8f0',
+                  backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={18} color={theme.textDark} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 4 }}>
+              {/* Preview illustration card matching Picture 2 */}
+              <View
+                style={{
+                  backgroundColor: isDark ? '#13282c' : '#f0fdfa',
+                  borderWidth: 1.5,
+                  borderColor: isDark ? '#1a4046' : '#ccfbf1',
+                  borderRadius: 20,
+                  height: 180,
+                  marginTop: 16,
+                  marginBottom: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Red PDF / Blue IMG badge in top right corner */}
+                <View
                   style={{
-                    backgroundColor: theme.isDark ? '#14252a' : '#f0fdf4',
-                    borderColor: theme.isDark ? '#274b54' : '#86efac',
-                    borderWidth: 1.5,
-                    borderRadius: 12,
-                    padding: 14,
-                    marginBottom: 14,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
+                    position: 'absolute',
+                    top: 14,
+                    right: 14,
+                    backgroundColor: (selectedReportToView?.fileMimeType?.includes('image') || selectedReportToView?.fileName?.match(/\.(png|jpg|jpeg|webp)$/i))
+                      ? '#2563eb'
+                      : '#ef4444',
+                    paddingHorizontal: 8,
+                    paddingVertical: 3.5,
+                    borderRadius: 7,
+                    zIndex: 2,
                   }}
-                  activeOpacity={0.8}
-                  onPress={() => handleOpenReportFile(selectedReportToView)}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                    <View
-                      style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 10,
-                        backgroundColor: '#fee2e2',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Ionicons
-                        name={
-                          selectedReportToView?.fileMimeType?.includes('image')
-                            ? 'image'
-                            : 'document-text'
-                        }
-                        size={24}
-                        color={
-                          selectedReportToView?.fileMimeType?.includes('image')
-                            ? '#2563eb'
-                            : '#dc2626'
-                        }
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{ fontSize: 13, fontWeight: '700', color: theme.textDark }}
-                        numberOfLines={1}
-                      >
-                        {selectedReportToView?.fileName || `${selectedReportToView?.title || 'Report'}.pdf`}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: theme.primaryDeep, fontWeight: '600', marginTop: 2 }}>
-                        {selectedReportToView?.fileMimeType?.includes('image')
-                          ? 'Medical Image · Tap to preview'
-                          : 'PDF Report · Tap to open & view'}
-                      </Text>
-                    </View>
-                  </View>
+                  <Text style={{ color: '#ffffff', fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5 }}>
+                    {(selectedReportToView?.fileMimeType?.includes('image') || selectedReportToView?.fileName?.match(/\.(png|jpg|jpeg|webp)$/i))
+                      ? 'IMG'
+                      : 'PDF'}
+                  </Text>
+                </View>
+
+                {/* Center Content: If image show image, else 3D paper illustration */}
+                {(selectedReportToView?.fileMimeType?.includes('image') || selectedReportToView?.fileName?.match(/\.(png|jpg|jpeg|webp)$/i)) ? (
+                  <Image
+                    source={{
+                      uri: selectedReportToView.fileUrl?.startsWith('http')
+                        ? selectedReportToView.fileUrl
+                        : `${BASE_URL}${selectedReportToView.fileUrl || `/api/v1/doctor/reports/${selectedReportToView.id || selectedReportToView._id}/file`}`,
+                    }}
+                    style={{ width: '85%', height: 140, borderRadius: 10 }}
+                    resizeMode="contain"
+                  />
+                ) : (
                   <View
                     style={{
-                      backgroundColor: theme.primary,
-                      paddingHorizontal: 12,
-                      paddingVertical: 7,
-                      borderRadius: 8,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
-                  >
-                    <Ionicons name="open-outline" size={14} color="#fff" />
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Open</Text>
-                  </View>
-                </TouchableOpacity>
-              ) : null}
-
-              {/* Image Preview if it's an image */}
-              {selectedReportToView &&
-              (selectedReportToView.fileMimeType?.includes('image') ||
-                selectedReportToView.fileName?.match(/\.(png|jpg|jpeg|webp)$/i)) ? (
-                <View style={{ marginBottom: 14 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textMuted }}>
-                      Attachment Preview:
-                    </Text>
-                    <Text style={{ fontSize: 11, color: theme.primaryDeep, fontWeight: '600' }}>
-                      Tap to open full size
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    activeOpacity={0.88}
-                    onPress={() => handleOpenReportFile(selectedReportToView)}
-                    style={{
+                      width: 105,
+                      height: 135,
+                      backgroundColor: '#ffffff',
                       borderRadius: 12,
-                      overflow: 'hidden',
+                      padding: 14,
                       borderWidth: 1,
-                      borderColor: theme.cardBorder,
-                      backgroundColor: theme.isDark ? '#1a2e35' : '#f8fafc',
+                      borderColor: '#e2e8f0',
+                      shadowColor: '#0e7c86',
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: 0.12,
+                      shadowRadius: 14,
+                      elevation: 6,
+                      justifyContent: 'center',
                     }}
                   >
-                    <Image
-                      source={{
-                        uri: selectedReportToView.fileUrl?.startsWith('http')
-                          ? selectedReportToView.fileUrl
-                          : `${BASE_URL}${selectedReportToView.fileUrl || `/api/v1/doctor/reports/${selectedReportToView.id || selectedReportToView._id}/file`}`,
-                      }}
+                    {/* Header bar on sheet */}
+                    <View
                       style={{
-                        width: '100%',
-                        height: 240,
-                        backgroundColor: theme.isDark ? '#1a2e35' : '#f8fafc',
+                        width: 36,
+                        height: 6,
+                        backgroundColor: '#99f6e4',
+                        borderRadius: 3,
+                        marginBottom: 12,
                       }}
-                      resizeMode="contain"
                     />
-                  </TouchableOpacity>
-                </View>
-              ) : null}
+                    {/* Text lines skeleton */}
+                    <View style={{ width: '100%', height: 4, backgroundColor: '#cbd5e1', borderRadius: 2, marginBottom: 8 }} />
+                    <View style={{ width: '82%', height: 4, backgroundColor: '#cbd5e1', borderRadius: 2, marginBottom: 8 }} />
+                    <View style={{ width: '92%', height: 4, backgroundColor: '#cbd5e1', borderRadius: 2, marginBottom: 8 }} />
+                    <View style={{ width: '58%', height: 4, backgroundColor: '#e2e8f0', borderRadius: 2 }} />
+                  </View>
+                )}
+              </View>
 
-              {selectedReportToView?.description || selectedReportToView?.notes ? (
-                <View style={{ marginBottom: 16 }}>
-                  <Text
+              {/* Three clean metadata rows with icons in rounded squares matching Picture 2 */}
+              <View style={{ gap: 14, marginBottom: 8 }}>
+                {/* Row 1: Category */}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View
                     style={{
-                      fontSize: 12,
-                      fontWeight: '600',
-                      color: theme.textMuted,
-                      marginBottom: 4,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      backgroundColor: isDark ? '#143138' : '#e6f7f9',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 14,
                     }}
                   >
-                    Summary & Findings:
+                    <Ionicons name="pricetag-outline" size={18} color="#0e7c86" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11.5, color: theme.textMuted, fontWeight: '500', marginBottom: 2 }}>
+                      {t("Category")}
+                    </Text>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textDark }}>
+                      {t(selectedReportToView?.category || 'General')}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Row 2: Uploaded */}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      backgroundColor: isDark ? '#143138' : '#e6f7f9',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 14,
+                    }}
+                  >
+                    <Ionicons name="time-outline" size={18} color="#0e7c86" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11.5, color: theme.textMuted, fontWeight: '500', marginBottom: 2 }}>
+                      {t("Uploaded")}
+                    </Text>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textDark }}>
+                      {selectedReportToView?.uploadDateTime || (selectedReportToView?.createdAt ? `${new Date(selectedReportToView.createdAt).toLocaleDateString('en-CA')} at ${new Date(selectedReportToView.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : (selectedReportToView?.reportDate || selectedReportToView?.date || 'Recent'))}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Row 3: File */}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      backgroundColor: isDark ? '#143138' : '#e6f7f9',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 14,
+                    }}
+                  >
+                    <Ionicons name="folder-outline" size={18} color="#0e7c86" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11.5, color: theme.textMuted, fontWeight: '500', marginBottom: 2 }}>
+                      {t("File")}
+                    </Text>
+                    <Text
+                      style={{ fontSize: 15, fontWeight: '700', color: theme.textDark }}
+                      numberOfLines={1}
+                    >
+                      {selectedReportToView?.fileName || `${selectedReportToView?.title || 'Report'}.pdf`}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Optional Notes/Description */}
+              {(selectedReportToView?.notes || selectedReportToView?.description) ? (
+                <View
+                  style={{
+                    marginTop: 12,
+                    padding: 12,
+                    backgroundColor: isDark ? '#14252a' : '#f8fafc',
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                  }}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: '600', color: theme.textMuted, marginBottom: 3 }}>
+                    {t("Summary & Findings:")}
                   </Text>
                   <Text style={{ fontSize: 13, color: theme.textDark, lineHeight: 18 }}>
                     {selectedReportToView.notes || selectedReportToView.description}
@@ -3603,48 +3981,58 @@ setSelectedReportToView(currentPatient.imaging)
               ) : null}
             </ScrollView>
 
+            {/* Bottom action buttons matching Picture 2 */}
             <View
               style={{
                 flexDirection: 'row',
-                justifyContent: 'flex-end',
                 alignItems: 'center',
-                gap: 10,
-                marginTop: 10,
-                paddingTop: 10,
-                borderTopWidth: 1,
-                borderTopColor: theme.cardBorder,
+                gap: 12,
+                marginTop: 20,
               }}
             >
               <TouchableOpacity
                 style={{
-                  borderWidth: 1,
-                  borderColor: theme.cardBorder,
-                  paddingHorizontal: 16,
-                  paddingVertical: 9,
-                  borderRadius: 8,
+                  backgroundColor: isDark ? '#1e293b' : '#e6f7f9',
+                  paddingVertical: 14,
+                  paddingHorizontal: 24,
+                  borderRadius: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
+                activeOpacity={0.8}
                 onPress={() => setSelectedReportToView(null)}
               >
-                <Text style={{ color: theme.textMedium, fontWeight: '600', fontSize: 13 }}>Close</Text>
+                <Text
+                  style={{
+                    color: isDark ? '#94a3b8' : '#0e7c86',
+                    fontWeight: '700',
+                    fontSize: 14.5,
+                  }}
+                >
+                  {t("Close")}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={{
-                  backgroundColor: theme.primary,
+                  flex: 1,
+                  backgroundColor: '#0e7c86',
+                  paddingVertical: 14,
                   paddingHorizontal: 16,
-                  paddingVertical: 9,
-                  borderRadius: 8,
+                  borderRadius: 14,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 6,
+                  justifyContent: 'center',
+                  gap: 8,
                 }}
+                activeOpacity={0.85}
                 onPress={() => handleOpenReportFile(selectedReportToView)}
               >
-                <Ionicons name="open-outline" size={16} color="#fff" />
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
-                  {selectedReportToView?.fileMimeType?.includes('image')
-                    ? 'Open Image'
-                    : 'Open PDF Document'}
+                <Ionicons name="open-outline" size={17} color="#ffffff" />
+                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14.5 }}>
+                  {(selectedReportToView?.fileMimeType?.includes('image') || selectedReportToView?.fileName?.match(/\.(png|jpg|jpeg|webp)$/i))
+                    ? t("Open image document")
+                    : t("Open PDF document")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -3698,7 +4086,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         fontFamily:
-          'Lexend, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         boxShadow: '0 4px 24px rgba(11, 79, 90, 0.08)',
       },
     }),

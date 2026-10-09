@@ -24,9 +24,22 @@ export function LocalizedText({ style, children, ...props }: TextProps) {
     <RNText
       {...props}
       style={[
+        {
+          fontFamily: Platform.select({
+            web: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            ios: 'Inter',
+            android: 'Inter',
+            default: 'Inter',
+          }),
+        },
         style,
         language !== 'en' && {
-          fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+          fontFamily: Platform.select({
+            web: "'Noto Sans Sinhala', 'Noto Sans Tamil', 'Inter', -apple-system, sans-serif",
+            ios: 'System',
+            android: 'sans-serif',
+            default: 'sans-serif',
+          }),
           letterSpacing: 0,
         },
       ]}

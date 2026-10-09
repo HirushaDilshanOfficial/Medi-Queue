@@ -37,6 +37,7 @@ const {
   generatePrescriptionPdfApi,
   removeScheduleAppointment,
   getDoctorReportFile,
+  updateDoctorReportStatus,
 } = require('../controllers/doctorController');
 
 router.get('/dashboard', getDoctorDashboard);
@@ -59,6 +60,7 @@ router.post('/prescription/pdf', generatePrescriptionPdfApi);
 router.post('/referral', referPatient);
 router.get('/records', getPatientRecords);
 router.get('/reports/:id/file', getDoctorReportFile);
+router.patch('/reports/:id/status', updateDoctorReportStatus);
 router.post('/vitals', updatePatientVitals);
 
 module.exports = router;

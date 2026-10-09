@@ -1,8 +1,9 @@
+import React, { useEffect } from 'react';
+import { Platform, View, Text } from 'react-native';
 import { Stack, useSegments } from 'expo-router';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import { ThemeProvider } from '../theme/ThemeContext';
 import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
-import { View, Text } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 // @ts-ignore
 import Toast from 'react-native-toast-message';
@@ -75,6 +76,29 @@ function GlobalSafeArea() {
 
 // Root layout - Expo Router
 export default function RootLayout() {
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      if (!document.getElementById('inter-google-font')) {
+        const link = document.createElement('link');
+        link.id = 'inter-google-font';
+        link.rel = 'stylesheet';
+        link.href =
+          'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap';
+        document.head.appendChild(link);
+      }
+      if (!document.getElementById('inter-global-style')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'inter-global-style';
+        styleEl.textContent = `
+          * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          }
+        `;
+        document.head.appendChild(styleEl);
+      }
+    }
+  }, []);
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>

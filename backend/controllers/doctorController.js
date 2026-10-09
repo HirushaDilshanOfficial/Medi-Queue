@@ -129,9 +129,9 @@ const getMockDashboardData = () => {
     },
     metrics: {
       currentCallingToken: 28,
-      waitingCount: 14,
+      waitingCount: 6,
       completedCount: 18,
-      totalToday: 32,
+      totalToday: 25,
       avgWaitMinutes: 9,
       estimatedWaitTime: '42m',
     },
@@ -468,6 +468,43 @@ const formatSlotTimeToAmPm = (slotTime) => {
   return slotTime;
 };
 
+const parseSlotTimeToMinutes = (slotTime) => {
+  if (!slotTime) return null;
+  if (slotTime instanceof Date) {
+    return slotTime.getHours() * 60 + slotTime.getMinutes();
+  }
+  const clean = String(slotTime).trim();
+  if (clean.includes('T') && !isNaN(Date.parse(clean))) {
+    const d = new Date(clean);
+    return d.getHours() * 60 + d.getMinutes();
+  }
+  const match = clean.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+  if (!match) return null;
+  let hour = parseInt(match[1], 10);
+  const min = parseInt(match[2], 10);
+  const ampm = match[3] ? match[3].toUpperCase() : null;
+
+  if (ampm === 'PM' && hour < 12) hour += 12;
+  if (ampm === 'AM' && hour === 12) hour = 0;
+  return hour * 60 + min;
+};
+
+const getColomboCurrentMinutes = () => {
+  try {
+    const colomboTimeStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Colombo',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    }).format(new Date());
+    const [h, m] = colomboTimeStr.split(':').map(Number);
+    return h * 60 + m;
+  } catch (e) {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  }
+};
+
 // @desc    Get Doctor Home Dashboard data
 // @route   GET /api/v1/doctor/dashboard
 // @access  Public or Protected
@@ -517,19 +554,20 @@ const getDoctorDashboard = async (req, res) => {
 
     const activeStatuses = ['in_consultation', 'called', 'serving', 'checked_in', 'waiting', 'booked'];
 
-    const [rawOpdAppts, rawDocAppts, completedApptCount, completedOpdCount] = await Promise.all([
+    const [rawOpdAppts, rawDocAppts, completedDocAppts, completedOpdAppts] = await Promise.all([
       OpdAppointment.find({
         $or: [
           { doctor: doctor._id },
           { doctorName: new RegExp(cleanDocName, 'i') },
         ],
+        date: today,
         status: { $in: activeStatuses },
       })
         .populate({
           path: 'profile',
           populate: { path: 'patient' },
         })
-        .sort({ date: 1, tokenNumber: 1, slotTime: 1 })
+        .sort({ tokenNumber: 1, slotTime: 1 })
         .lean()
         .catch(() => []),
 
@@ -537,33 +575,46 @@ const getDoctorDashboard = async (req, res) => {
         $or: [
           { doctor: doctor._id },
         ],
+        date: today,
         status: { $in: activeStatuses },
       })
         .populate('patient')
-        .sort({ date: 1, tokenNumber: 1, slotTime: 1 })
+        .sort({ tokenNumber: 1, slotTime: 1 })
         .lean()
         .catch(() => []),
 
-      Appointment.countDocuments({
-        $or: [
-          { doctor: doctor._id, status: 'completed' },
-          { status: 'completed', date: today },
-        ],
-      }).catch(() => 0),
+      Appointment.find({
+        doctor: doctor._id,
+        date: today,
+        status: 'completed',
+      }).select('tokenNumber patient').lean().catch(() => []),
 
-      OpdAppointment.countDocuments({
+      OpdAppointment.find({
         $or: [
-          { doctor: doctor._id, status: 'completed' },
-          { doctorName: new RegExp(cleanDocName, 'i'), status: 'completed' },
+          { doctor: doctor._id },
+          { doctorName: new RegExp(cleanDocName, 'i') },
         ],
-      }).catch(() => 0),
+        date: today,
+        status: 'completed',
+      }).select('tokenNumber profile').lean().catch(() => []),
     ]);
+
+    const completedTokenSet = new Set();
+    for (const a of completedDocAppts) {
+      completedTokenSet.add(a.tokenNumber || String(a._id));
+    }
+    for (const o of completedOpdAppts) {
+      completedTokenSet.add(o.tokenNumber || String(o._id));
+    }
+    const completedApptCount = completedTokenSet.size;
+    const completedOpdCount = 0;
 
     // If no direct appointments for doctor, check department-wide appointments
     let fallbackDeptAppts = [];
     if (rawOpdAppts.length === 0 && rawDocAppts.length === 0 && doctor.department) {
       fallbackDeptAppts = await Appointment.find({
         department: { $regex: new RegExp(`^${doctor.department.trim()}$`, 'i') },
+        date: today,
         status: { $in: activeStatuses },
       })
         .populate('patient')
@@ -674,26 +725,65 @@ const getDoctorDashboard = async (req, res) => {
     }
 
     if (distinctList.length > 0) {
+      const nowColomboMinutes = getColomboCurrentMinutes();
+
       // Find in-consultation / called patient
       const servingIdx = distinctList.findIndex(p => ['in_consultation', 'called', 'serving'].includes(p.rawStatus));
       let currentPatient = null;
-      let upcomingQueue = [];
+      let rawQueue = [];
 
       if (servingIdx !== -1) {
         currentPatient = distinctList[servingIdx];
-        upcomingQueue = distinctList.filter((_, idx) => idx !== servingIdx);
+        rawQueue = distinctList.filter((_, idx) => idx !== servingIdx);
       } else {
         currentPatient = distinctList[0];
-        upcomingQueue = distinctList.slice(1);
+        rawQueue = distinctList.slice(1);
       }
+
+      const upcomingQueue = rawQueue;
 
       const totalCompleted = completedApptCount + completedOpdCount;
       const waitingCount = upcomingQueue.length;
       const totalToday = waitingCount + totalCompleted + (currentPatient ? 1 : 0);
 
+      if (!currentPatient && upcomingQueue.length === 0) {
+        return res.status(200).json({
+          success: true,
+          source: 'database_completed',
+          allCompleted: true,
+          message: 'All consultations for today have been completed!',
+          data: {
+            doctor: {
+              _id: doctor._id,
+              name: doctor.name || 'Dr. Palitha Perera',
+              specialization: doctor.specialization || 'General Physician',
+              department: doctor.department || 'General OPD',
+              room: HOSPITAL_DATA_MAP[hospitalName]?.room || doctor.room || 'Room 101',
+              hospitalName,
+              hospital: doctor.hospital || null,
+              status: doctor.status || 'active',
+              dailyCapacity: doctor.dailyCapacity || 30,
+              avgConsultMinutes: doctor.avgConsultMinutes || 10,
+              workingHours: doctor.workingHours || { start: '08:00', end: '16:00' },
+            },
+            metrics: {
+              currentCallingToken: 0,
+              waitingCount: 0,
+              completedCount: totalCompleted,
+              totalToday: totalCompleted,
+              avgWaitMinutes: 0,
+              estimatedWaitTime: '0m',
+            },
+            currentPatient: null,
+            upcomingQueue: [],
+          },
+        });
+      }
+
       return res.status(200).json({
         success: true,
         source: 'database',
+        allCompleted: false,
         data: {
           doctor: {
             _id: doctor._id,
@@ -722,7 +812,43 @@ const getDoctorDashboard = async (req, res) => {
       });
     }
 
-    // 2. If NO real appointments exist in DB for this doctor, fall back to hospital preset
+    // 2. Check if all real appointments for this doctor have been completed today
+    const totalCompleted = completedApptCount + completedOpdCount;
+    if (totalCompleted > 0 && distinctList.length === 0) {
+      return res.status(200).json({
+        success: true,
+        source: 'database_completed',
+        allCompleted: true,
+        message: 'All consultations for today have been completed!',
+        data: {
+          doctor: {
+            _id: doctor._id,
+            name: doctor.name || 'Dr. Palitha Perera',
+            specialization: doctor.specialization || 'General Physician',
+            department: doctor.department || 'General OPD',
+            room: HOSPITAL_DATA_MAP[hospitalName]?.room || doctor.room || 'Room 101',
+            hospitalName,
+            hospital: doctor.hospital || null,
+            status: doctor.status || 'active',
+            dailyCapacity: doctor.dailyCapacity || 30,
+            avgConsultMinutes: doctor.avgConsultMinutes || 10,
+            workingHours: doctor.workingHours || { start: '08:00', end: '16:00' },
+          },
+          metrics: {
+            currentCallingToken: 0,
+            waitingCount: 0,
+            completedCount: totalCompleted,
+            totalToday: totalCompleted,
+            avgWaitMinutes: 0,
+            estimatedWaitTime: '0m',
+          },
+          currentPatient: null,
+          upcomingQueue: [],
+        },
+      });
+    }
+
+    // 3. If NO real appointments exist in DB for this doctor, fall back to hospital preset
     if (HOSPITAL_DATA_MAP[hospitalName]) {
       const hData = HOSPITAL_DATA_MAP[hospitalName];
       return res.status(200).json({
@@ -877,6 +1003,8 @@ const callNextPatient = async (req, res) => {
         }
 
         return getDoctorDashboard(req, res);
+      } else {
+        return getDoctorDashboard(req, res);
       }
     }
 
@@ -921,9 +1049,11 @@ const callNextPatient = async (req, res) => {
       currentSessionState.currentPatient = null;
       currentSessionState.metrics.waitingCount = 0;
       currentSessionState.metrics.currentCallingToken = 0;
+      currentSessionState.metrics.totalToday = currentSessionState.metrics.completedCount;
 
       return res.status(200).json({
         success: true,
+        allCompleted: true,
         message: 'All patients completed today! Queue is empty.',
         calledToken: null,
         data: currentSessionState,
@@ -947,29 +1077,136 @@ const callNextPatient = async (req, res) => {
 const undoPatientConsultation = async (req, res) => {
   try {
     const doctor = await resolveDoctor(req);
+    const OpdAppointment = require('../models/OpdAppointment');
+    const cleanDocName = (doctor?.name || '').replace(/^Dr\.\s*/i, '').trim();
 
-    if (doctor?._id) {
-      const activeAppt = await Appointment.findOne({
-        doctor: doctor._id,
-        status: { $in: ['called', 'in_consultation'] },
-      });
+    const docOrFilter = [
+      ...(doctor?._id ? [{ doctor: doctor._id }] : []),
+      ...(cleanDocName ? [{ doctorName: new RegExp(cleanDocName, 'i') }] : []),
+    ];
+
+    if (doctor?._id || cleanDocName) {
+      // 1. Find currently active consultation in OpdAppointment or Appointment
+      const [activeOpd, activeAppt] = await Promise.all([
+        docOrFilter.length > 0
+          ? OpdAppointment.findOne({
+              $or: docOrFilter,
+              status: { $in: ['called', 'in_consultation', 'serving'] },
+            })
+          : null,
+        doctor?._id
+          ? Appointment.findOne({
+              doctor: doctor._id,
+              status: { $in: ['called', 'in_consultation', 'serving'] },
+            })
+          : null,
+      ]);
+
+      const currentServingToken = activeOpd?.tokenNumber || activeAppt?.tokenNumber;
+
+      // Guard: already at Token #001
+      if (currentServingToken && currentServingToken <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Already at Token #001. Cannot undo further.',
+          isFirstPatient: true,
+        });
+      }
+
+      // 2. Find the last completed appointment to restore
+      const [lastCompletedOpd, lastCompletedAppt] = await Promise.all([
+        docOrFilter.length > 0
+          ? OpdAppointment.findOne({
+              $or: docOrFilter,
+              status: 'completed',
+              ...(currentServingToken ? { tokenNumber: { $lt: currentServingToken } } : {}),
+            }).sort({ tokenNumber: -1, updatedAt: -1 })
+          : null,
+        doctor?._id
+          ? Appointment.findOne({
+              doctor: doctor._id,
+              status: 'completed',
+              ...(currentServingToken ? { tokenNumber: { $lt: currentServingToken } } : {}),
+            }).sort({ tokenNumber: -1, updatedAt: -1 })
+          : null,
+      ]);
+
+      let targetToRestore = null;
+      if (lastCompletedOpd && lastCompletedAppt) {
+        targetToRestore =
+          (lastCompletedOpd.tokenNumber || 0) >= (lastCompletedAppt.tokenNumber || 0)
+            ? lastCompletedOpd
+            : lastCompletedAppt;
+      } else {
+        targetToRestore = lastCompletedOpd || lastCompletedAppt;
+      }
+
+      // If no completed appointment found with token < current, check ANY completed appointment
+      if (!targetToRestore) {
+        const [anyCompletedOpd, anyCompletedAppt] = await Promise.all([
+          docOrFilter.length > 0
+            ? OpdAppointment.findOne({ $or: docOrFilter, status: 'completed' }).sort({
+                tokenNumber: -1,
+                updatedAt: -1,
+              })
+            : null,
+          doctor?._id
+            ? Appointment.findOne({ doctor: doctor._id, status: 'completed' }).sort({
+                tokenNumber: -1,
+                updatedAt: -1,
+              })
+            : null,
+        ]);
+        if (anyCompletedOpd && anyCompletedAppt) {
+          targetToRestore =
+            (anyCompletedOpd.tokenNumber || 0) >= (anyCompletedAppt.tokenNumber || 0)
+              ? anyCompletedOpd
+              : anyCompletedAppt;
+        } else {
+          targetToRestore = anyCompletedOpd || anyCompletedAppt;
+        }
+      }
+
+      // If still not found, check if an earlier appointment (tokenNumber = currentServingToken - 1) exists with any status
+      if (!targetToRestore && currentServingToken && currentServingToken > 1) {
+        const prevTokenNum = currentServingToken - 1;
+        const [prevOpd, prevAppt] = await Promise.all([
+          docOrFilter.length > 0
+            ? OpdAppointment.findOne({ $or: docOrFilter, tokenNumber: prevTokenNum })
+            : null,
+          doctor?._id
+            ? Appointment.findOne({ doctor: doctor._id, tokenNumber: prevTokenNum })
+            : null,
+        ]);
+        targetToRestore = prevOpd || prevAppt;
+      }
+
+      // Revert active consultation back to 'checked_in'
+      if (activeOpd) {
+        activeOpd.status = 'checked_in';
+        activeOpd.calledAt = null;
+        await activeOpd.save().catch(() => null);
+      }
       if (activeAppt) {
         activeAppt.status = 'checked_in';
+        activeAppt.calledAt = null;
         await activeAppt.save().catch(() => null);
       }
 
-      const lastCompleted = await Appointment.findOne({
-        doctor: doctor._id,
-        status: 'completed',
-      }).sort({ updatedAt: -1 });
+      // Restore target previous appointment to 'in_consultation'
+      if (targetToRestore) {
+        targetToRestore.status = 'in_consultation';
+        targetToRestore.calledAt = new Date();
+        await targetToRestore.save().catch(() => null);
+        return getDoctorDashboard(req, res);
+      }
 
-      if (lastCompleted) {
-        lastCompleted.status = 'in_consultation';
-        await lastCompleted.save().catch(() => null);
+      if (activeOpd || activeAppt) {
         return getDoctorDashboard(req, res);
       }
     }
 
+    // In-memory fallback if no DB appointments
     const currentToken = currentSessionState.currentPatient?.tokenNumber;
     if (currentToken && currentToken <= 1) {
       return res.status(400).json({
@@ -1220,11 +1457,11 @@ const getRealtimeWeekDaysBackend = (baseDate = new Date()) => {
   return result;
 };
 
-// Realistic mock schedule session state matching Figma design with Real-time dates
+// Default schedule session state with Real-time dates
 let scheduleSessionState = {
   doctor: {
-    name: 'Dr. Emilia Emelson',
-    room: 'Room 3B Online',
+    name: 'Dr. Palitha Perera',
+    room: 'Room 101',
     status: 'active',
     avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
   },
@@ -1233,96 +1470,17 @@ let scheduleSessionState = {
   weekDays: getRealtimeWeekDaysBackend(new Date()),
   shift: {
     title: 'Morning OPD Shift',
-    timeRange: '08:30 AM – 01:00 PM',
-    room: 'Room 3B Ortho',
+    timeRange: '08:00 AM – 12:30 PM',
+    room: 'Room 101',
     status: 'In Progress',
-    consultedCount: 18,
-    waitingCount: 14,
-    totalCapacity: 32,
-    avgMinutesPerPatient: 9,
-    remainingWalkinSlots: 4,
+    consultedCount: 0,
+    waitingCount: 0,
+    totalCapacity: 30,
+    avgMinutesPerPatient: 10,
+    remainingWalkinSlots: 5,
     isOnBreak: false,
   },
-  timeline: [
-    {
-      id: 'slot-1',
-      time: '09:00 AM',
-      timeHour: '09:00',
-      timePeriod: 'AM',
-      patientName: 'Priyantha Silva',
-      reason: 'Fever & Cough • Token #026',
-      tokenNumber: 26,
-      status: 'done',
-    },
-    {
-      id: 'slot-2',
-      time: '09:30 AM',
-      timeHour: '09:30',
-      timePeriod: 'AM',
-      patientName: 'Aurelia Sisca',
-      reason: 'Post-op Check • Token #027',
-      tokenNumber: 27,
-      status: 'done',
-    },
-    {
-      id: 'slot-3',
-      time: '10:00 AM',
-      timeHour: '10:00',
-      timePeriod: 'AM',
-      patientName: 'Kamal Gunaratne',
-      reason: 'Spine checkup • 10:00 AM',
-      tokenNumber: 28,
-      status: 'now_attending',
-      isNowAttending: true,
-      elapsedMinutes: 6,
-      locationStatus: 'In Room',
-      age: 48,
-      gender: 'Male',
-      vitals: {
-        bloodPressure: '124/82',
-        heartRate: '76 bpm',
-        temperature: '98.6°F',
-        spO2: '98%',
-      },
-      fileRecord: 'REC-841',
-    },
-    {
-      id: 'slot-4',
-      time: '10:30 AM',
-      timeHour: '10:30',
-      timePeriod: 'AM',
-      patientName: 'Rohan Mendis',
-      reason: 'Hypertension review • Token #030',
-      tokenNumber: 30,
-      status: 'waiting',
-      age: 54,
-      gender: 'Male',
-    },
-    {
-      id: 'slot-5',
-      time: '11:00 AM',
-      timeHour: '11:00',
-      timePeriod: 'AM',
-      patientName: 'Dilshan Madushanka',
-      reason: 'Acute knee sprain • Token #031',
-      tokenNumber: 31,
-      status: 'waiting',
-      age: 28,
-      gender: 'Male',
-    },
-    {
-      id: 'slot-6',
-      time: '11:30 AM',
-      timeHour: '11:30',
-      timePeriod: 'AM',
-      patientName: 'Sanduni Perera',
-      reason: 'Routine Ortho • Token #032',
-      tokenNumber: 32,
-      status: 'scheduled',
-      age: 41,
-      gender: 'Female',
-    },
-  ],
+  timeline: [],
 };
 
 // @desc    Get Doctor Schedule for calendar day
@@ -1343,13 +1501,19 @@ const getDoctorSchedule = async (req, res) => {
       const OpdAppointment = require('../models/OpdAppointment');
       const cleanDocName = (doctor.name || '').replace(/^Dr\.\s*/i, '').trim();
 
+      const validFilter = {
+        status: { $nin: ['cancelled', 'no_show', 'canceled'] },
+        isActive: { $ne: false },
+      };
+
       const [apptDates, opdDates] = await Promise.all([
-        Appointment.distinct('date', { doctor: doctor._id }).catch(() => []),
+        Appointment.distinct('date', { doctor: doctor._id, ...validFilter }).catch(() => []),
         OpdAppointment.distinct('date', {
           $or: [
             { doctor: doctor._id },
             { doctorName: new RegExp(cleanDocName, 'i') },
           ],
+          ...validFilter,
         }).catch(() => []),
       ]);
 
@@ -1359,6 +1523,7 @@ const getDoctorSchedule = async (req, res) => {
         Appointment.find({
           doctor: doctor._id,
           date: targetKey,
+          ...validFilter,
         })
           .populate('patient')
           .sort({ tokenNumber: 1, slotTime: 1 })
@@ -1371,6 +1536,7 @@ const getDoctorSchedule = async (req, res) => {
             { doctorName: new RegExp(cleanDocName, 'i') },
           ],
           date: targetKey,
+          ...validFilter,
         })
           .populate({ path: 'profile', populate: { path: 'patient' } })
           .sort({ tokenNumber: 1, slotTime: 1 })
@@ -1381,9 +1547,11 @@ const getDoctorSchedule = async (req, res) => {
       const allList = [];
 
       for (const opd of opdAppts) {
+        const rawStatus = (opd.status || '').toLowerCase();
+        if (['cancelled', 'no_show', 'canceled'].includes(rawStatus)) continue;
+
         const prof = opd.profile || {};
         const pat = prof.patient || {};
-        const rawStatus = (opd.status || '').toLowerCase();
         let status = 'Scheduled';
         if (rawStatus === 'completed') status = 'Done';
         else if (rawStatus === 'in_consultation' || rawStatus === 'called') status = 'Now attending';
@@ -1403,7 +1571,13 @@ const getDoctorSchedule = async (req, res) => {
           reason: opd.reason || opd.department || 'Consultation',
           token: `Token #${String(opd.tokenNumber || 1).padStart(3, '0')}`,
           status,
-          hospitalId: 'cgh',
+          hospitalId: (() => {
+            const mins = parseSlotTimeToMinutes(opd.slotTime || formattedTime);
+            if (mins === null || isNaN(mins)) return 'cgh';
+            if (mins < 13 * 60) return 'cgh';
+            if (mins < 17 * 60 + 15) return 'lakeview';
+            return 'st-lucia';
+          })(),
           age,
           sex: gender,
           bloodGroup: prof.bloodGroup || pat.bloodGroup || 'O+',
@@ -1416,6 +1590,8 @@ const getDoctorSchedule = async (req, res) => {
 
       for (const appt of appts) {
         const rawStatus = (appt.status || '').toLowerCase();
+        if (['cancelled', 'no_show', 'canceled'].includes(rawStatus)) continue;
+
         let status = 'Scheduled';
         if (rawStatus === 'completed') status = 'Done';
         else if (rawStatus === 'in_consultation' || rawStatus === 'called') status = 'Now attending';
@@ -1450,7 +1626,13 @@ const getDoctorSchedule = async (req, res) => {
           reason: appt.notes || appt.department || 'Consultation',
           token: `Token #${String(appt.tokenNumber || 1).padStart(3, '0')}`,
           status,
-          hospitalId: 'cgh',
+          hospitalId: (() => {
+            const mins = parseSlotTimeToMinutes(appt.slotTime || formattedTime);
+            if (mins === null || isNaN(mins)) return 'cgh';
+            if (mins < 13 * 60) return 'cgh';
+            if (mins < 17 * 60 + 15) return 'lakeview';
+            return 'st-lucia';
+          })(),
           age,
           sex: gender,
           bloodGroup: appt.patient?.bloodGroup || 'O+',
@@ -1464,10 +1646,31 @@ const getDoctorSchedule = async (req, res) => {
         });
       }
 
-      mappedAppointments = allList;
+      // Deduplicate: same patient or same token for this doctor on this day
+      const seenScheduleMap = new Map();
+      const distinctSchedule = [];
+      for (const item of allList) {
+        const cleanName = (item.patientName || '').toLowerCase().trim();
+        const cleanTime = (item.time || '').trim();
+        const tokenNum = parseInt(item.token.replace(/\D/g, ''), 10) || 0;
+
+        const nameTimeKey = cleanName ? `${cleanName}_${cleanTime}` : null;
+        const nameKey = cleanName ? `name_${cleanName}` : null;
+        const tokenKey = tokenNum ? `token_${tokenNum}` : null;
+
+        if (nameTimeKey && seenScheduleMap.has(nameTimeKey)) continue;
+        if (nameKey && seenScheduleMap.has(nameKey)) continue;
+        if (tokenKey && seenScheduleMap.has(tokenKey)) continue;
+
+        if (nameTimeKey) seenScheduleMap.set(nameTimeKey, true);
+        if (nameKey) seenScheduleMap.set(nameKey, true);
+        if (tokenKey) seenScheduleMap.set(tokenKey, true);
+        distinctSchedule.push(item);
+      }
+      mappedAppointments = distinctSchedule;
     }
 
-    const hospitals = mappedAppointments.length > 0 ? ['cgh'] : [];
+    const hospitals = ['cgh', 'lakeview', 'st-lucia'];
 
     const [y, m, d] = targetKey.split('-').map(Number);
     const selectedDate = (!isNaN(y) && !isNaN(m) && !isNaN(d)) ? new Date(y, m - 1, d) : new Date();
@@ -1888,52 +2091,143 @@ const getPrescriptionDetails = async (req, res) => {
     const OpdAppointment = require('../models/OpdAppointment');
     const OpdPatientProfile = require('../models/OpdPatientProfile');
 
-    let opdMatch = null;
-    let apptMatch = null;
+    const notCancelledFilter = {
+      status: { $nin: ['cancelled', 'no_show', 'canceled'] },
+      isActive: { $ne: false },
+    };
+    const servingStatuses = ['in_consultation', 'called', 'serving'];
 
-    // 1. If explicit query parameters are provided, match patient
+    // 1. Check for CURRENTLY ACTIVE consultation (in_consultation / called / serving)
+    let activeAppt = null;
+    let activeOpd = null;
+
+    if (doctor?._id) {
+      activeAppt = await Appointment.findOne({
+        doctor: doctor._id,
+        status: { $in: servingStatuses },
+        isActive: { $ne: false },
+      })
+        .populate('patient')
+        .populate('doctor')
+        .sort({ updatedAt: -1 })
+        .lean()
+        .catch(() => null);
+    }
+
+    activeOpd = await OpdAppointment.findOne({
+      $or: [
+        ...(doctor?._id ? [{ doctor: doctor._id }] : []),
+        { doctorName: new RegExp(cleanDocName, 'i') },
+      ],
+      status: { $in: servingStatuses },
+      isActive: { $ne: false },
+    })
+      .populate({
+        path: 'profile',
+        populate: { path: 'patient' },
+      })
+      .sort({ updatedAt: -1 })
+      .lean()
+      .catch(() => null);
+
+    // If active consultation exists, check if it matches request or if request is general
+    if (activeAppt && activeAppt.patient) {
+      const apptPatName = (activeAppt.patient.fullName || activeAppt.patient.name || '').toLowerCase().trim();
+      const isTokenMatch = tokenNumber && Number(tokenNumber) === activeAppt.tokenNumber;
+      const isNameMatch = patientName && apptPatName.includes(patientName.toLowerCase().trim());
+      const noExplicitTarget = !tokenNumber && !patientName && !patientId;
+
+      if (noExplicitTarget || isTokenMatch || isNameMatch) {
+        return res.status(200).json({
+          success: true,
+          source: 'appt_current_serving',
+          data: formatAppointmentPrescriptionData(activeAppt, doctor),
+        });
+      }
+    }
+
+    if (activeOpd && activeOpd.profile) {
+      const prof = activeOpd.profile || {};
+      const opdPatName = (prof.fullName || '').toLowerCase().trim();
+      const isTokenMatch = tokenNumber && Number(tokenNumber) === activeOpd.tokenNumber;
+      const isNameMatch = patientName && opdPatName.includes(patientName.toLowerCase().trim());
+      const noExplicitTarget = !tokenNumber && !patientName && !patientId;
+
+      if (noExplicitTarget || isTokenMatch || isNameMatch) {
+        return res.status(200).json({
+          success: true,
+          source: 'opd_current_serving',
+          data: formatOpdPrescriptionData(activeOpd, doctor),
+        });
+      }
+    }
+
+    // 2. If explicit query parameters are provided (targeted patient lookup)
     if (tokenNumber || patientName || patientId) {
-      // 1.1 Match in OpdAppointment (patient app bookings)
-      if (tokenNumber) {
-        opdMatch = await OpdAppointment.findOne({
-          $or: [
-            ...(doctor?._id ? [{ doctor: doctor._id, tokenNumber: Number(tokenNumber) }] : []),
-            { doctorName: new RegExp(cleanDocName, 'i'), tokenNumber: Number(tokenNumber) },
-            { tokenNumber: Number(tokenNumber) },
-          ],
-        })
-          .populate({
-            path: 'profile',
-            populate: { path: 'patient' },
-          })
-          .sort({ updatedAt: -1 })
-          .lean()
-          .catch(() => null);
-      }
+      let opdMatch = null;
+      let apptMatch = null;
 
-      if (!opdMatch && patientId && mongoose.isValidObjectId(patientId)) {
-        opdMatch = await OpdAppointment.findOne({
+      // 2.1 Match by patientName if provided
+      if (patientName) {
+        const cleanReqName = patientName.trim();
+        const matchingPatients = await Patient.find({
           $or: [
-            { profile: patientId },
-            { _id: patientId },
+            { fullName: new RegExp(cleanReqName, 'i') },
+            { name: new RegExp(cleanReqName, 'i') },
           ],
-        })
-          .populate({
-            path: 'profile',
-            populate: { path: 'patient' },
-          })
-          .sort({ updatedAt: -1 })
-          .lean()
-          .catch(() => null);
-      }
-
-      if (!opdMatch && patientName) {
-        const matchingProfiles = await OpdPatientProfile.find({
-          fullName: new RegExp(patientName.trim(), 'i'),
         }).select('_id').lean().catch(() => []);
-        if (matchingProfiles.length > 0) {
+
+        if (matchingPatients.length > 0) {
+          apptMatch = await Appointment.findOne({
+            patient: { $in: matchingPatients.map((p) => p._id) },
+            ...(tokenNumber ? { tokenNumber: Number(tokenNumber) } : {}),
+            ...notCancelledFilter,
+          })
+            .populate('patient')
+            .populate('doctor')
+            .sort({ updatedAt: -1 })
+            .lean()
+            .catch(() => null);
+        }
+
+        if (!apptMatch) {
+          const matchingProfiles = await OpdPatientProfile.find({
+            fullName: new RegExp(cleanReqName, 'i'),
+          }).select('_id').lean().catch(() => []);
+
+          if (matchingProfiles.length > 0) {
+            opdMatch = await OpdAppointment.findOne({
+              profile: { $in: matchingProfiles.map((p) => p._id) },
+              ...(tokenNumber ? { tokenNumber: Number(tokenNumber) } : {}),
+              ...notCancelledFilter,
+            })
+              .populate({
+                path: 'profile',
+                populate: { path: 'patient' },
+              })
+              .sort({ updatedAt: -1 })
+              .lean()
+              .catch(() => null);
+          }
+        }
+      }
+
+      // 2.2 Match by patientId if provided
+      if (!apptMatch && !opdMatch && patientId && mongoose.isValidObjectId(patientId)) {
+        apptMatch = await Appointment.findOne({
+          $or: [{ patient: patientId }, { _id: patientId }],
+          ...notCancelledFilter,
+        })
+          .populate('patient')
+          .populate('doctor')
+          .sort({ updatedAt: -1 })
+          .lean()
+          .catch(() => null);
+
+        if (!apptMatch) {
           opdMatch = await OpdAppointment.findOne({
-            profile: { $in: matchingProfiles.map(p => p._id) },
+            $or: [{ profile: patientId }, { _id: patientId }],
+            ...notCancelledFilter,
           })
             .populate({
               path: 'profile',
@@ -1945,57 +2239,32 @@ const getPrescriptionDetails = async (req, res) => {
         }
       }
 
-      if (opdMatch && opdMatch.profile) {
-        return res.status(200).json({
-          success: true,
-          source: 'opd_database',
-          data: formatOpdPrescriptionData(opdMatch, doctor),
-        });
-      }
-
-      // 1.2 Match in Appointment (walk-ins / receptionist)
-      if (tokenNumber && doctor?._id) {
+      // 2.3 Match by tokenNumber (with notCancelledFilter: NEVER cancelled/inactive)
+      if (!apptMatch && !opdMatch && tokenNumber) {
         apptMatch = await Appointment.findOne({
-          doctor: doctor._id,
+          ...(doctor?._id ? { doctor: doctor._id } : {}),
           tokenNumber: Number(tokenNumber),
+          ...notCancelledFilter,
         })
           .populate('patient')
           .populate('doctor')
           .sort({ updatedAt: -1 })
           .lean()
           .catch(() => null);
-      }
-      if (!apptMatch && tokenNumber) {
-        apptMatch = await Appointment.findOne({
-          tokenNumber: Number(tokenNumber),
-        })
-          .populate('patient')
-          .populate('doctor')
-          .sort({ updatedAt: -1 })
-          .lean()
-          .catch(() => null);
-      }
 
-      if (!apptMatch && patientId && mongoose.isValidObjectId(patientId)) {
-        const p = await Patient.findById(patientId).lean().catch(() => null);
-        if (p) {
-          apptMatch = await Appointment.findOne({ patient: p._id })
-            .populate('patient')
-            .populate('doctor')
-            .sort({ updatedAt: -1 })
-            .lean()
-            .catch(() => null);
-        }
-      }
-
-      if (!apptMatch && patientName) {
-        const p = await Patient.findOne({
-          fullName: new RegExp(patientName.trim(), 'i'),
-        }).lean().catch(() => null);
-        if (p) {
-          apptMatch = await Appointment.findOne({ patient: p._id })
-            .populate('patient')
-            .populate('doctor')
+        if (!apptMatch) {
+          opdMatch = await OpdAppointment.findOne({
+            $or: [
+              ...(doctor?._id ? [{ doctor: doctor._id, tokenNumber: Number(tokenNumber) }] : []),
+              { doctorName: new RegExp(cleanDocName, 'i'), tokenNumber: Number(tokenNumber) },
+              { tokenNumber: Number(tokenNumber) },
+            ],
+            ...notCancelledFilter,
+          })
+            .populate({
+              path: 'profile',
+              populate: { path: 'patient' },
+            })
             .sort({ updatedAt: -1 })
             .lean()
             .catch(() => null);
@@ -2009,57 +2278,17 @@ const getPrescriptionDetails = async (req, res) => {
           data: formatAppointmentPrescriptionData(apptMatch, doctor),
         });
       }
+
+      if (opdMatch && opdMatch.profile) {
+        return res.status(200).json({
+          success: true,
+          source: 'opd_database',
+          data: formatOpdPrescriptionData(opdMatch, doctor),
+        });
+      }
     }
 
-    // 2. Default: fetch the doctor's CURRENTLY ACTIVE patient (in_consultation, called, serving)
-    // Priority 2.1: OpdAppointment currently in consultation
-    const servingStatuses = ['in_consultation', 'called', 'serving'];
-    let activeOpd = await OpdAppointment.findOne({
-      $or: [
-        ...(doctor?._id ? [{ doctor: doctor._id }] : []),
-        { doctorName: new RegExp(cleanDocName, 'i') },
-      ],
-      status: { $in: servingStatuses },
-    })
-      .populate({
-        path: 'profile',
-        populate: { path: 'patient' },
-      })
-      .sort({ updatedAt: -1 })
-      .lean()
-      .catch(() => null);
-
-    if (activeOpd && activeOpd.profile) {
-      return res.status(200).json({
-        success: true,
-        source: 'opd_current_serving',
-        data: formatOpdPrescriptionData(activeOpd, doctor),
-      });
-    }
-
-    // Priority 2.2: Appointment currently in consultation
-    let activeAppt = null;
-    if (doctor?._id) {
-      activeAppt = await Appointment.findOne({
-        doctor: doctor._id,
-        status: { $in: servingStatuses },
-      })
-        .populate('patient')
-        .populate('doctor')
-        .sort({ updatedAt: -1 })
-        .lean()
-        .catch(() => null);
-    }
-
-    if (activeAppt && activeAppt.patient) {
-      return res.status(200).json({
-        success: true,
-        source: 'appt_current_serving',
-        data: formatAppointmentPrescriptionData(activeAppt, doctor),
-      });
-    }
-
-    // Priority 2.3: Next ready/checked-in patient for this doctor
+    // 3. Fallback: Next ready/checked-in patient for this doctor
     const readyStatuses = ['checked_in', 'waiting', 'booked'];
     activeOpd = await OpdAppointment.findOne({
       $or: [
@@ -2067,6 +2296,7 @@ const getPrescriptionDetails = async (req, res) => {
         { doctorName: new RegExp(cleanDocName, 'i') },
       ],
       status: { $in: readyStatuses },
+      isActive: { $ne: false },
     })
       .populate({
         path: 'profile',
@@ -2088,6 +2318,7 @@ const getPrescriptionDetails = async (req, res) => {
       activeAppt = await Appointment.findOne({
         doctor: doctor._id,
         status: { $in: readyStatuses },
+        isActive: { $ne: false },
       })
         .populate('patient')
         .populate('doctor')
@@ -2755,11 +2986,19 @@ const getPatientRecords = async (req, res) => {
     const OpdMedicalReport = require('../models/OpdMedicalReport');
     const OpdPatientProfile = require('../models/OpdPatientProfile');
 
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Colombo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
     const [dbOpdAppts, dbAppts, allReports, allOpdProfiles] = await Promise.all([
       OpdAppointment.find({
         $or: [
           ...(doctor?._id ? [{ doctor: doctor._id }] : []),
           ...(cleanDocName ? [{ doctorName: new RegExp(cleanDocName, 'i') }] : []),
+          { date: today, status: { $in: ['in_consultation', 'called', 'serving'] } },
         ],
       })
         .populate({ path: 'profile', populate: { path: 'patient' } })
@@ -2768,7 +3007,11 @@ const getPatientRecords = async (req, res) => {
         .catch(() => []),
 
       Appointment.find({
-        ...(doctor?._id ? { doctor: doctor._id } : {}),
+        $or: [
+          ...(doctor?._id ? [{ doctor: doctor._id }] : []),
+          ...(doctor?.department ? [{ department: new RegExp(`^${doctor.department.trim()}$`, 'i') }] : [{ department: 'General OPD' }]),
+          { date: today, status: { $in: ['in_consultation', 'called', 'serving'] } },
+        ],
       })
         .populate('patient')
         .sort({ date: -1, tokenNumber: 1 })
@@ -2786,15 +3029,33 @@ const getPatientRecords = async (req, res) => {
     ]);
 
     const realRecords = [];
-    const seenPatientKeys = new Set();
+    const seenApptKeys = new Set();
+
+    // Helper to find reports for a given profile / patient
+    const resolvePatientReports = (prof, pat) => {
+      const matchingProfileIds = (allOpdProfiles || [])
+        .filter((p) =>
+          (prof._id && String(p._id) === String(prof._id)) ||
+          (pat._id && String(p.patient) === String(pat._id)) ||
+          (prof.nic && p.nic && p.nic.toLowerCase() === prof.nic.toLowerCase()) ||
+          (pat.nic && p.nic && p.nic.toLowerCase() === pat.nic.toLowerCase())
+        )
+        .map((p) => String(p._id));
+
+      return (allReports || []).filter((r) =>
+        matchingProfileIds.includes(String(r.profile)) ||
+        (prof._id && String(r.profile) === String(prof._id)) ||
+        (pat._id && String(r.profile) === String(pat._id))
+      );
+    };
 
     for (const opd of dbOpdAppts) {
       const prof = opd.profile || {};
       const pat = prof.patient || {};
       const pName = prof.fullName || 'Patient';
-      const key = prof._id ? String(prof._id) : pName;
-      if (seenPatientKeys.has(key)) continue;
-      seenPatientKeys.add(key);
+      const apptKey = `opd_${opd._id}_token_${opd.tokenNumber}`;
+      if (seenApptKeys.has(apptKey)) continue;
+      seenApptKeys.add(apptKey);
 
       const age = prof.birthday
         ? Math.max(1, Math.floor((Date.now() - new Date(prof.birthday).getTime()) / (365.25 * 24 * 3600 * 1000)))
@@ -2803,11 +3064,7 @@ const getPatientRecords = async (req, res) => {
         ? (prof.gender.charAt(0).toUpperCase() + prof.gender.slice(1))
         : (pat.gender ? pat.gender.charAt(0).toUpperCase() + pat.gender.slice(1) : 'Female');
 
-      // Find real patient reports uploaded from patient app
-      const patientReports = allReports.filter(
-        (r) => String(r.profile) === String(prof._id)
-      );
-
+      const patientReports = resolvePatientReports(prof, pat);
       const topReport = patientReports.length > 0 ? patientReports[0] : null;
       const imaging = topReport
         ? {
@@ -2841,7 +3098,7 @@ const getPatientRecords = async (req, res) => {
               title: v.reason || `${v.department || doctor?.department || 'General OPD'} Consultation`,
               date: v.date || '2026-10-08',
               details: `${v.department || doctor?.department || 'General OPD'} · ${v.doctorName || doctor?.name || 'Dr. Palitha Perera'}`,
-              statusBadge: v.status === 'completed' ? 'Completed' : (v.status === 'in_consultation' ? 'In consultation' : 'Booked'),
+              statusBadge: v.status === 'completed' ? 'Completed' : (['in_consultation', 'called'].includes(v.status) ? 'In consultation' : 'Booked'),
               icon: 'calendar',
             }))
           : [
@@ -2850,13 +3107,86 @@ const getPatientRecords = async (req, res) => {
                 title: opd.reason || 'General OPD Consultation',
                 date: opd.date || '2026-10-08',
                 details: `${opd.department || doctor?.department || 'General OPD'} · ${opd.doctorName || doctor?.name || 'Dr. Palitha Perera'}`,
-                statusBadge: opd.status === 'completed' ? 'Completed' : (opd.status === 'in_consultation' ? 'In consultation' : 'Booked'),
+                statusBadge: opd.status === 'completed' ? 'Completed' : (['in_consultation', 'called'].includes(opd.status) ? 'In consultation' : 'Booked'),
                 icon: 'calendar',
               },
             ];
 
+      const resolvedVitals = (prof.vitals && (prof.vitals.bloodPressure || prof.vitals.heartRate || prof.vitals.temperature || prof.vitals.weight || prof.vitals.spO2))
+        ? prof.vitals
+        : (pat.vitals || {});
+
+      const hasRealVitals = Boolean(
+        resolvedVitals &&
+        (resolvedVitals.bloodPressure || resolvedVitals.heartRate || resolvedVitals.temperature || resolvedVitals.weight || resolvedVitals.spO2 || resolvedVitals.systolic)
+      );
+
+      let systolicNum = 0;
+      let diastolicNum = 0;
+      if (hasRealVitals && resolvedVitals?.bloodPressure) {
+        const parts = String(resolvedVitals.bloodPressure).split('/');
+        if (parts.length === 2) {
+          systolicNum = parseInt(parts[0], 10) || 0;
+          diastolicNum = parseInt(parts[1], 10) || 0;
+        }
+      }
+      const hrNum = hasRealVitals && resolvedVitals?.heartRate ? (parseInt(String(resolvedVitals.heartRate).replace(/[^0-9]/g, ''), 10) || 0) : 0;
+      const tempVal = hasRealVitals && resolvedVitals?.temperature ? (parseFloat(String(resolvedVitals.temperature).replace(/[^0-9.]/g, '')) || 0) : 0;
+      const spO2Val = hasRealVitals && resolvedVitals?.spO2 ? (parseInt(String(resolvedVitals.spO2).replace(/[^0-9]/g, ''), 10) || 0) : 0;
+      const weightVal = hasRealVitals && resolvedVitals?.weight ? (parseFloat(String(resolvedVitals.weight).replace(/[^0-9.]/g, '')) || 0) : 0;
+      const heightVal = hasRealVitals && resolvedVitals?.height ? (parseFloat(String(resolvedVitals.height).replace(/[^0-9.]/g, '')) || 0) : 0;
+      const bmiVal = (weightVal > 0 && heightVal > 0) ? (weightVal / Math.pow(heightVal / 100, 2)).toFixed(1) : '--';
+
+      const vitalsObj = hasRealVitals
+        ? {
+            hasVitals: true,
+            triageTime: resolvedVitals.recordedAt ? `Triage: ${new Date(resolvedVitals.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : (opd.slotTime ? `Triage: ${formatSlotTimeToAmPm(opd.slotTime)}` : 'Triage: Today'),
+            bloodPressure: resolvedVitals?.bloodPressure || '--/--',
+            bloodPressureUnit: 'mmHg',
+            heartRate: hrNum ? `${hrNum} bpm` : '--',
+            heartRateUnit: 'bpm',
+            bodyTemp: tempVal ? `${tempVal} °C` : '--',
+            bodyTempUnit: '°C',
+            spO2: spO2Val ? `${spO2Val}%` : '--',
+            weight: weightVal ? `${weightVal} kg` : '--',
+            height: heightVal ? `${heightVal} cm` : '--',
+            systolic: systolicNum,
+            diastolic: diastolicNum,
+            heartRateNum: hrNum,
+            tempNum: tempVal,
+            spO2Num: spO2Val,
+            weightNum: weightVal,
+            heightNum: heightVal,
+            bmi: bmiVal !== '--' ? `${bmiVal}` : '--',
+            bmiNum: bmiVal !== '--' ? parseFloat(bmiVal) : 0,
+          }
+        : {
+            hasVitals: false,
+            triageTime: 'Triage: Not recorded',
+            bloodPressure: '--/--',
+            bloodPressureUnit: 'mmHg',
+            heartRate: '--',
+            heartRateUnit: 'bpm',
+            bodyTemp: '--',
+            bodyTempUnit: '°C',
+            spO2: '--',
+            weight: '--',
+            height: '--',
+            systolic: 0,
+            diastolic: 0,
+            heartRateNum: 0,
+            tempNum: 0,
+            spO2Num: 0,
+            weightNum: 0,
+            heightNum: 0,
+            bmi: '--',
+            bmiNum: 0,
+          };
+
       realRecords.push({
-        id: String(prof._id || opd._id),
+        id: String(opd._id || prof._id),
+        patientId: prof._id ? String(prof._id) : String(opd._id),
+        appointmentId: String(opd._id),
         name: pName,
         shortName: pName.split(' ')[0],
         verified: Boolean(prof.nic),
@@ -2867,7 +3197,7 @@ const getPatientRecords = async (req, res) => {
         tokenFormatted: `#${String(opd.tokenNumber || 1).padStart(3, '0')}`,
         nic: prof.nic || pat.nic || '199892084778',
         registeredTime: opd.slotTime ? formatSlotTimeToAmPm(opd.slotTime) : '08:45 AM',
-        status: opd.status === 'in_consultation' ? 'In consultation' : (opd.status === 'completed' ? 'Completed' : 'Waiting'),
+        status: (['in_consultation', 'called', 'serving'].includes(opd.status) && (opd.date === today || !opd.date)) ? 'In consultation' : (opd.status === 'completed' ? 'Completed' : 'Waiting'),
         hospitalName: activeHospital,
         photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
         allergy: {
@@ -2878,37 +3208,50 @@ const getPatientRecords = async (req, res) => {
         },
         chronicConditions: opd.reason ? [opd.reason] : [`${doctor?.department || 'General OPD'} Review`],
         medications: [],
-        hasVitals: true,
-        vitals: {
-          bloodPressure: pat.vitals?.bloodPressure || '120/80',
-          heartRate: pat.vitals?.heartRate ? (String(pat.vitals.heartRate).includes('bpm') ? pat.vitals.heartRate : `${pat.vitals.heartRate} bpm`) : '74 bpm',
-          bodyTemp: pat.vitals?.temperature ? `${pat.vitals.temperature} °C` : '36.8 °C',
-          spO2: pat.vitals?.spO2 ? `${String(pat.vitals.spO2).replace('%', '')}%` : '99%',
-          weight: pat.vitals?.weight ? `${pat.vitals.weight} kg` : '58 kg',
-          height: pat.vitals?.height ? `${pat.vitals.height} cm` : '165 cm',
-        },
-        vitalsHistory: [
-          {
-            date: 'Today',
-            time: opd.slotTime ? formatSlotTimeToAmPm(opd.slotTime) : '08:45 AM',
-            bp: pat.vitals?.bloodPressure || '120/80',
-            hr: 74,
-            temp: 36.8,
-            spo2: 99,
-            bmi: 21.3,
-          },
-        ],
+        hasVitals: hasRealVitals,
+        vitals: vitalsObj,
+        vitalsHistory: hasRealVitals
+          ? [
+              {
+                id: `vh-${opd._id || prof._id}-1`,
+                dateLabel: resolvedVitals.recordedAt ? new Date(resolvedVitals.recordedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : (opd.slotTime ? formatSlotTimeToAmPm(opd.slotTime) : '08:45 AM'),
+                timestamp: resolvedVitals.recordedAt
+                  ? `${new Date(resolvedVitals.recordedAt).toLocaleDateString('en-CA')} at ${new Date(resolvedVitals.recordedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+                  : `${new Date().toLocaleDateString('en-CA')} at ${opd.slotTime ? formatSlotTimeToAmPm(opd.slotTime) : '08:45 AM'}`,
+                recordedDate: resolvedVitals.recordedAt ? new Date(resolvedVitals.recordedAt).toLocaleDateString('en-CA') : new Date().toLocaleDateString('en-CA'),
+                recordedTime: resolvedVitals.recordedAt ? new Date(resolvedVitals.recordedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : (opd.slotTime ? formatSlotTimeToAmPm(opd.slotTime) : '08:45 AM'),
+                recordedAt: resolvedVitals.recordedAt || new Date().toISOString(),
+                systolic: systolicNum,
+                diastolic: diastolicNum,
+                heartRate: hrNum,
+                bodyTemp: tempVal,
+                spO2: spO2Val,
+                weight: weightVal,
+                bmi: bmiVal !== '--' ? parseFloat(bmiVal) : 0,
+              },
+            ]
+          : [],
         imaging,
-        reports: patientReports.map((r) => ({
-          id: String(r._id),
-          title: r.title,
-          category: r.category || 'Lab result',
-          reportDate: r.reportDate ? new Date(r.reportDate).toLocaleDateString() : new Date(r.createdAt).toLocaleDateString(),
-          fileName: r.fileName || 'Report document',
-          fileMimeType: r.fileMimeType,
-          fileUrl: `/api/v1/doctor/reports/${r._id}/file`,
-          notes: r.notes || '',
-        })),
+        reports: patientReports.map((r) => {
+          const dateObj = r.createdAt ? new Date(r.createdAt) : (r.reportDate ? new Date(r.reportDate) : new Date());
+          const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('en-CA') : 'Recent';
+          const timeStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+          const uploadDateTime = timeStr ? `${dateStr} at ${timeStr}` : dateStr;
+          return {
+            id: String(r._id),
+            title: r.title,
+            category: r.category || 'Lab result',
+            reportDate: r.reportDate ? new Date(r.reportDate).toLocaleDateString() : dateStr,
+            uploadDate: dateStr,
+            uploadTime: timeStr,
+            uploadDateTime,
+            createdAt: r.createdAt,
+            fileName: r.fileName || 'Report document',
+            fileMimeType: r.fileMimeType,
+            fileUrl: `/api/v1/doctor/reports/${r._id}/file`,
+            notes: r.notes || '',
+          };
+        }),
         recentVisits,
       });
     }
@@ -2916,15 +3259,113 @@ const getPatientRecords = async (req, res) => {
     for (const appt of dbAppts) {
       const pat = appt.patient || {};
       const pName = pat.fullName || pat.name || 'Patient';
-      const key = pat._id ? String(pat._id) : pName;
-      if (seenPatientKeys.has(key)) continue;
-      seenPatientKeys.add(key);
+      const apptKey = `appt_${appt._id}_token_${appt.tokenNumber}`;
+      if (seenApptKeys.has(apptKey)) continue;
+      seenApptKeys.add(apptKey);
 
       const age = pat.age || (pat.dob ? Math.max(1, Math.floor((Date.now() - new Date(pat.dob).getTime()) / (365.25 * 24 * 3600 * 1000))) : 32);
       const gender = pat.gender ? (pat.gender.charAt(0).toUpperCase() + pat.gender.slice(1)) : 'Male';
 
+      const patientReports = resolvePatientReports({}, pat);
+      const topReport = patientReports.length > 0 ? patientReports[0] : null;
+      let topUploadDateStr = '';
+      if (topReport) {
+        const topDateObj = topReport.createdAt ? new Date(topReport.createdAt) : (topReport.reportDate ? new Date(topReport.reportDate) : new Date());
+        const dStr = !isNaN(topDateObj.getTime()) ? topDateObj.toLocaleDateString('en-CA') : 'Recent';
+        const tStr = !isNaN(topDateObj.getTime()) ? topDateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+        topUploadDateStr = tStr ? `${dStr} at ${tStr}` : dStr;
+      }
+      const imaging = topReport
+        ? {
+            hasImaging: true,
+            id: String(topReport._id),
+            title: topReport.title,
+            subtitle: `${topReport.category || 'Lab result'} • ${topUploadDateStr || (topReport.reportDate ? new Date(topReport.reportDate).toLocaleDateString() : 'Recent')}`,
+            description: topReport.fileName ? `File: ${topReport.fileName}` : (topReport.notes || 'Patient uploaded medical report'),
+            fileName: topReport.fileName || `${topReport.title}.pdf`,
+            fileMimeType: topReport.fileMimeType || 'application/pdf',
+            imageUrl: (topReport.fileMimeType || '').startsWith('image/')
+              ? `/api/v1/doctor/reports/${topReport._id}/file`
+              : undefined,
+            reportSummary: topReport.notes || `${topReport.title} uploaded by patient for consultation review.`,
+            fileUrl: `/api/v1/doctor/reports/${topReport._id}/file`,
+          }
+        : {
+            hasImaging: false,
+            title: 'No diagnostic imaging',
+            subtitle: 'None',
+            description: 'No diagnostic imaging records found',
+          };
+
+      const hasRealApptVitals = Boolean(
+        pat.vitals &&
+        (pat.vitals.bloodPressure || pat.vitals.heartRate || pat.vitals.temperature || pat.vitals.weight || pat.vitals.spO2 || pat.vitals.systolic)
+      );
+
+      let apptSystolicNum = 0;
+      let apptDiastolicNum = 0;
+      if (hasRealApptVitals && pat.vitals?.bloodPressure) {
+        const parts = String(pat.vitals.bloodPressure).split('/');
+        if (parts.length === 2) {
+          apptSystolicNum = parseInt(parts[0], 10) || 0;
+          apptDiastolicNum = parseInt(parts[1], 10) || 0;
+        }
+      }
+      const apptHrNum = hasRealApptVitals && pat.vitals?.heartRate ? (parseInt(String(pat.vitals.heartRate).replace(/[^0-9]/g, ''), 10) || 0) : 0;
+      const apptTempVal = hasRealApptVitals && pat.vitals?.temperature ? (parseFloat(String(pat.vitals.temperature).replace(/[^0-9.]/g, '')) || 0) : 0;
+      const apptSpO2Val = hasRealApptVitals && pat.vitals?.spO2 ? (parseInt(String(pat.vitals.spO2).replace(/[^0-9]/g, ''), 10) || 0) : 0;
+      const apptWeightVal = hasRealApptVitals && pat.vitals?.weight ? (parseFloat(String(pat.vitals.weight).replace(/[^0-9.]/g, '')) || 0) : 0;
+      const apptHeightVal = hasRealApptVitals && pat.vitals?.height ? (parseFloat(String(pat.vitals.height).replace(/[^0-9.]/g, '')) || 0) : 0;
+      const apptBmiVal = (apptWeightVal > 0 && apptHeightVal > 0) ? (apptWeightVal / Math.pow(apptHeightVal / 100, 2)).toFixed(1) : '--';
+
+      const apptVitalsObj = hasRealApptVitals
+        ? {
+            triageTime: appt.slotTime ? `Triage: ${formatSlotTimeToAmPm(appt.slotTime)}` : 'Triage: Today',
+            bloodPressure: pat.vitals?.bloodPressure || '--/--',
+            bloodPressureUnit: 'mmHg',
+            heartRate: apptHrNum ? `${apptHrNum} bpm` : '--',
+            heartRateUnit: 'bpm',
+            bodyTemp: apptTempVal ? `${apptTempVal} °C` : '--',
+            bodyTempUnit: '°C',
+            spO2: apptSpO2Val ? `${apptSpO2Val}%` : '--',
+            weight: apptWeightVal ? `${apptWeightVal} kg` : '--',
+            height: apptHeightVal ? `${apptHeightVal} cm` : '--',
+            systolic: apptSystolicNum,
+            diastolic: apptDiastolicNum,
+            heartRateNum: apptHrNum,
+            tempNum: apptTempVal,
+            spO2Num: apptSpO2Val,
+            weightNum: apptWeightVal,
+            heightNum: apptHeightVal,
+            bmi: apptBmiVal !== '--' ? `${apptBmiVal}` : '--',
+            bmiNum: apptBmiVal !== '--' ? parseFloat(apptBmiVal) : 0,
+          }
+        : {
+            triageTime: 'Triage: Not recorded',
+            bloodPressure: '--/--',
+            bloodPressureUnit: 'mmHg',
+            heartRate: '--',
+            heartRateUnit: 'bpm',
+            bodyTemp: '--',
+            bodyTempUnit: '°C',
+            spO2: '--',
+            weight: '--',
+            height: '--',
+            systolic: 0,
+            diastolic: 0,
+            heartRateNum: 0,
+            tempNum: 0,
+            spO2Num: 0,
+            weightNum: 0,
+            heightNum: 0,
+            bmi: '--',
+            bmiNum: 0,
+          };
+
       realRecords.push({
-        id: String(pat._id || appt._id),
+        id: String(appt._id || pat._id),
+        patientId: pat._id ? String(pat._id) : String(appt._id),
+        appointmentId: String(appt._id),
         name: pName,
         shortName: pName.split(' ')[0],
         verified: Boolean(pat.nicVerified),
@@ -2935,7 +3376,7 @@ const getPatientRecords = async (req, res) => {
         tokenFormatted: `#${String(appt.tokenNumber || 1).padStart(3, '0')}`,
         nic: pat.nic || '199892084778',
         registeredTime: appt.slotTime ? formatSlotTimeToAmPm(appt.slotTime) : '08:45 AM',
-        status: appt.status === 'in_consultation' ? 'In consultation' : (appt.status === 'completed' ? 'Completed' : 'Waiting'),
+        status: (['in_consultation', 'called', 'serving'].includes(appt.status) && (appt.date === today || !appt.date)) ? 'In consultation' : (appt.status === 'completed' ? 'Completed' : 'Waiting'),
         hospitalName: activeHospital,
         photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
         allergy: {
@@ -2946,82 +3387,69 @@ const getPatientRecords = async (req, res) => {
         },
         chronicConditions: appt.notes ? [appt.notes] : [`${doctor?.department || 'General OPD'} Review`],
         medications: [],
-        hasVitals: true,
-        vitals: {
-          bloodPressure: pat.vitals?.bloodPressure || '120/80',
-          heartRate: pat.vitals?.heartRate ? (String(pat.vitals.heartRate).includes('bpm') ? pat.vitals.heartRate : `${pat.vitals.heartRate} bpm`) : '74 bpm',
-          bodyTemp: pat.vitals?.temperature ? `${pat.vitals.temperature} °C` : '36.7 °C',
-          spO2: pat.vitals?.spO2 ? `${String(pat.vitals.spO2).replace('%', '')}%` : '98%',
-          weight: pat.vitals?.weight ? `${pat.vitals.weight} kg` : '65 kg',
-          height: pat.vitals?.height ? `${pat.vitals.height} cm` : '170 cm',
-        },
-        vitalsHistory: [],
-        imaging: (() => {
-          const matchingProfiles = (allOpdProfiles || []).filter(
-            (p) => (pat._id && String(p.patient) === String(pat._id)) ||
-                   (pat.nic && p.nic && p.nic.toLowerCase() === pat.nic.toLowerCase())
-          );
-          const matchedProfileIds = matchingProfiles.map((p) => String(p._id));
-          const patReports = (allReports || []).filter((r) =>
-            matchedProfileIds.includes(String(r.profile)) ||
-            (pat._id && String(r.profile) === String(pat._id))
-          );
-          const topPatReport = patReports.length > 0 ? patReports[0] : null;
-          return topPatReport
-            ? {
-                hasImaging: true,
-                id: String(topPatReport._id),
-                title: topPatReport.title,
-                subtitle: `${topPatReport.category || 'Lab result'} • ${topPatReport.reportDate ? new Date(topPatReport.reportDate).toLocaleDateString() : 'Recent'}`,
-                description: topPatReport.fileName ? `File: ${topPatReport.fileName}` : (topPatReport.notes || 'Patient uploaded medical report'),
-                fileName: topPatReport.fileName || `${topPatReport.title}.pdf`,
-                fileMimeType: topPatReport.fileMimeType || 'application/pdf',
-                imageUrl: (topPatReport.fileMimeType || '').startsWith('image/')
-                  ? `/api/v1/doctor/reports/${topPatReport._id}/file`
-                  : undefined,
-                reportSummary: topPatReport.notes || `${topPatReport.title} uploaded by patient for consultation review.`,
-                fileUrl: `/api/v1/doctor/reports/${topPatReport._id}/file`,
-              }
-            : {
-                hasImaging: false,
-                title: 'No diagnostic imaging',
-                subtitle: 'None',
-                description: 'No diagnostic imaging records found',
-              };
-        })(),
-        reports: (() => {
-          const matchingProfiles = (allOpdProfiles || []).filter(
-            (p) => (pat._id && String(p.patient) === String(pat._id)) ||
-                   (pat.nic && p.nic && p.nic.toLowerCase() === pat.nic.toLowerCase())
-          );
-          const matchedProfileIds = matchingProfiles.map((p) => String(p._id));
-          const patReports = (allReports || []).filter((r) =>
-            matchedProfileIds.includes(String(r.profile)) ||
-            (pat._id && String(r.profile) === String(pat._id))
-          );
-          return patReports.map((r) => ({
+        hasVitals: hasRealApptVitals,
+        vitals: apptVitalsObj,
+        vitalsHistory: hasRealApptVitals
+          ? [
+              {
+                id: `vh-appt-${appt._id}-1`,
+                dateLabel: pat.vitals?.recordedAt ? new Date(pat.vitals.recordedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : (appt.slotTime ? formatSlotTimeToAmPm(appt.slotTime) : '08:45 AM'),
+                timestamp: pat.vitals?.recordedAt
+                  ? `${new Date(pat.vitals.recordedAt).toLocaleDateString('en-CA')} at ${new Date(pat.vitals.recordedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+                  : `${new Date().toLocaleDateString('en-CA')} at ${appt.slotTime ? formatSlotTimeToAmPm(appt.slotTime) : '08:45 AM'}`,
+                recordedDate: pat.vitals?.recordedAt ? new Date(pat.vitals.recordedAt).toLocaleDateString('en-CA') : new Date().toLocaleDateString('en-CA'),
+                recordedTime: pat.vitals?.recordedAt ? new Date(pat.vitals.recordedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : (appt.slotTime ? formatSlotTimeToAmPm(appt.slotTime) : '08:45 AM'),
+                recordedAt: pat.vitals?.recordedAt || new Date().toISOString(),
+                systolic: apptSystolicNum,
+                diastolic: apptDiastolicNum,
+                heartRate: apptHrNum,
+                bodyTemp: apptTempVal,
+                spO2: apptSpO2Val,
+                weight: apptWeightVal,
+                bmi: apptBmiVal !== '--' ? parseFloat(apptBmiVal) : 0,
+              },
+            ]
+          : [],
+        imaging,
+        reports: patientReports.map((r) => {
+          const dateObj = r.createdAt ? new Date(r.createdAt) : (r.reportDate ? new Date(r.reportDate) : new Date());
+          const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('en-CA') : 'Recent';
+          const timeStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+          const uploadDateTime = timeStr ? `${dateStr} at ${timeStr}` : dateStr;
+          return {
             id: String(r._id),
             title: r.title,
             category: r.category || 'Lab result',
-            reportDate: r.reportDate ? new Date(r.reportDate).toLocaleDateString() : new Date(r.createdAt).toLocaleDateString(),
+            reportDate: r.reportDate ? new Date(r.reportDate).toLocaleDateString() : dateStr,
+            uploadDate: dateStr,
+            uploadTime: timeStr,
+            uploadDateTime,
+            createdAt: r.createdAt,
             fileName: r.fileName || 'Report document',
             fileMimeType: r.fileMimeType,
             fileUrl: `/api/v1/doctor/reports/${r._id}/file`,
             notes: r.notes || '',
-          }));
-        })(),
+          };
+        }),
         recentVisits: [
           {
             id: `vis-appt-${appt._id}`,
             title: appt.notes || 'General OPD Consultation',
             date: appt.date || '2026-10-08',
             details: `${appt.department || doctor?.department || 'General OPD'} · ${appt.doctor?.name || doctor?.name || 'Dr. Palitha Perera'}`,
-            statusBadge: appt.status === 'completed' ? 'Completed' : (appt.status === 'in_consultation' ? 'In consultation' : 'Booked'),
+            statusBadge: appt.status === 'completed' ? 'Completed' : (['in_consultation', 'called'].includes(appt.status) ? 'In consultation' : 'Booked'),
             icon: 'calendar',
           },
         ],
       });
     }
+
+    // Sort: In consultation patients first, then lowest token number
+    realRecords.sort((a, b) => {
+      if (a.status === 'In consultation' && b.status !== 'In consultation') return -1;
+      if (b.status === 'In consultation' && a.status !== 'In consultation') return 1;
+      return (a.tokenNumber || 0) - (b.tokenNumber || 0);
+    });
 
     if (realRecords.length > 0) {
       let filtered = realRecords;
@@ -3034,7 +3462,74 @@ const getPatientRecords = async (req, res) => {
             String(p.tokenNumber).includes(qLower) ||
             p.tokenFormatted.toLowerCase().includes(qLower)
         );
+
+        // Also search any other patients in DB matching query
+        const existingIds = new Set(filtered.map(p => String(p.id)));
+        for (const prof of (allOpdProfiles || [])) {
+          if (
+            (prof.fullName && prof.fullName.toLowerCase().includes(qLower)) ||
+            (prof.nic && prof.nic.toLowerCase().includes(qLower))
+          ) {
+            if (!existingIds.has(String(prof._id))) {
+              const profReports = resolvePatientReports(prof, {});
+              const topR = profReports[0] || null;
+              filtered.push({
+                id: String(prof._id),
+                patientId: String(prof._id),
+                name: prof.fullName,
+                shortName: prof.fullName.split(' ')[0],
+                verified: Boolean(prof.nic),
+                age: prof.birthday ? Math.max(1, Math.floor((Date.now() - new Date(prof.birthday).getTime()) / (365.25 * 24 * 3600 * 1000))) : 28,
+                gender: prof.gender ? (prof.gender.charAt(0).toUpperCase() + prof.gender.slice(1)) : 'Unknown',
+                bloodGroup: prof.bloodGroup || 'O+',
+                tokenNumber: 999,
+                tokenFormatted: '#999',
+                nic: prof.nic || '',
+                registeredTime: 'Online Profile',
+                status: 'Waiting',
+                hospitalName: activeHospital,
+                photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+                allergy: { hasAllergy: false, isHighRisk: false, title: 'No known allergies', description: '' },
+                chronicConditions: ['General Profile'],
+                medications: [],
+                hasVitals: false,
+                vitals: { bloodPressure: '120/80', heartRate: '74 bpm', bodyTemp: '36.8 °C', spO2: '99%', weight: '58 kg', height: '165 cm' },
+                vitalsHistory: [],
+                imaging: topR ? {
+                  hasImaging: true,
+                  id: String(topR._id),
+                  title: topR.title,
+                  subtitle: `${topR.category || 'Lab result'} • Recent`,
+                  description: topR.fileName || 'Patient uploaded medical report',
+                  fileUrl: `/api/v1/doctor/reports/${topR._id}/file`,
+                } : { hasImaging: false, title: 'No diagnostic imaging', subtitle: 'None', description: '' },
+                reports: profReports.map(r => ({
+                  id: String(r._id),
+                  title: r.title,
+                  category: r.category || 'Lab result',
+                  reportDate: r.reportDate ? new Date(r.reportDate).toLocaleDateString() : new Date(r.createdAt).toLocaleDateString(),
+                  fileName: r.fileName || 'Report document',
+                  fileMimeType: r.fileMimeType,
+                  fileUrl: `/api/v1/doctor/reports/${r._id}/file`,
+                  notes: r.notes || '',
+                })),
+                recentVisits: [],
+              });
+            }
+          }
+        }
       }
+
+      filtered.sort((a, b) => {
+        if (a.status === 'In consultation' && b.status !== 'In consultation') return -1;
+        if (b.status === 'In consultation' && a.status !== 'In consultation') return 1;
+        if (a.status === 'Waiting' && b.status === 'Completed') return -1;
+        if (b.status === 'Waiting' && a.status === 'Completed') return 1;
+        return (a.tokenNumber || 0) - (b.tokenNumber || 0);
+      });
+
+      const activeServing = filtered.find(p => p.status === 'In consultation') || filtered[0];
+
       return res.status(200).json({
         success: true,
         query,
@@ -3044,7 +3539,7 @@ const getPatientRecords = async (req, res) => {
           room: HOSPITAL_DATA_MAP[activeHospital]?.room || doctor?.room || 'Room 101',
           department: doctor?.department || 'General OPD',
         },
-        currentPatientId: filtered[0]?.id,
+        currentPatientId: activeServing?.id,
         data: filtered,
       });
     }
@@ -3075,13 +3570,6 @@ const getPatientRecords = async (req, res) => {
         data: records,
       });
     }
-
-    const today = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Colombo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date());
 
     const activeStatuses = ['in_consultation', 'called', 'checked_in', 'waiting'];
 
@@ -3382,32 +3870,154 @@ const getDoctorHospitals = async (req, res) => {
 // @route   POST /api/v1/doctor/vitals
 const updatePatientVitals = async (req, res) => {
   try {
-    const { patientId, tokenNumber, bloodPressure, heartRate, temperature, spO2, weight, height } = req.body;
+    const {
+      patientId,
+      patientDbId,
+      nic,
+      tokenNumber,
+      bloodPressure,
+      heartRate,
+      temperature,
+      spO2,
+      weight,
+      height,
+    } = req.body;
+
+    const vitalsData = {
+      bloodPressure: bloodPressure || '120/80',
+      heartRate: heartRate ? String(heartRate).replace(/\D/g, '') + ' bpm' : '74 bpm',
+      temperature: Number(temperature) || 36.8,
+      spO2: Number(spO2) || 99,
+      weight: Number(weight) || 65,
+      height: Number(height) || 168,
+      recordedAt: new Date(),
+    };
+
+    let updated = false;
+    const OpdPatientProfile = require('../models/OpdPatientProfile');
+    const OpdAppointment = require('../models/OpdAppointment');
+
     let patient = null;
+    let opdProfile = null;
+
+    // 1. Find by patientId / patientDbId in Patient
     if (patientId && mongoose.isValidObjectId(patientId)) {
-      patient = await Patient.findById(patientId);
+      patient = await Patient.findById(patientId).catch(() => null);
     }
-    if (!patient && tokenNumber) {
-      const appt = await Appointment.findOne({ tokenNumber }).populate('patient');
-      if (appt && appt.patient) {
-        patient = await Patient.findById(appt.patient._id || appt.patient);
+    if (!patient && patientDbId && mongoose.isValidObjectId(patientDbId)) {
+      patient = await Patient.findById(patientDbId).catch(() => null);
+    }
+
+    // 2. Find by patientId / patientDbId in OpdPatientProfile
+    if (patientId && mongoose.isValidObjectId(patientId)) {
+      opdProfile = await OpdPatientProfile.findById(patientId).catch(() => null);
+    }
+    if (!opdProfile && patientDbId && mongoose.isValidObjectId(patientDbId)) {
+      opdProfile = await OpdPatientProfile.findById(patientDbId).catch(() => null);
+    }
+
+    // 3. If patientId is an Appointment or OpdAppointment ID
+    if (!patient && !opdProfile && patientId && mongoose.isValidObjectId(patientId)) {
+      const opdAppt = await OpdAppointment.findById(patientId).populate('profile').catch(() => null);
+      if (opdAppt?.profile) {
+        opdProfile = await OpdPatientProfile.findById(opdAppt.profile._id || opdAppt.profile).catch(() => null);
+      }
+      if (!opdProfile) {
+        const genAppt = await Appointment.findById(patientId).populate('patient').catch(() => null);
+        if (genAppt?.patient) {
+          patient = await Patient.findById(genAppt.patient._id || genAppt.patient).catch(() => null);
+        }
       }
     }
-    if (patient) {
-      patient.vitals = {
-        bloodPressure: bloodPressure || '120/80',
-        heartRate: heartRate ? String(heartRate).replace(/\D/g, '') + ' bpm' : '74 bpm',
-        temperature: Number(temperature) || 36.8,
-        spO2: Number(spO2) || 99,
-        weight: Number(weight) || 65,
-        height: Number(height) || 168,
-        recordedAt: new Date(),
-      };
-      await patient.save();
-      return res.status(200).json({ success: true, message: 'Vitals saved successfully', data: patient.vitals });
+
+    // 4. Find by tokenNumber
+    if (!patient && !opdProfile && tokenNumber) {
+      const numToken = Number(tokenNumber);
+      const opdAppt = await OpdAppointment.findOne({ tokenNumber: numToken })
+        .sort({ createdAt: -1 })
+        .populate('profile')
+        .catch(() => null);
+      if (opdAppt?.profile) {
+        opdProfile = await OpdPatientProfile.findById(opdAppt.profile._id || opdAppt.profile).catch(() => null);
+      }
+      if (!opdProfile) {
+        const genAppt = await Appointment.findOne({ tokenNumber: numToken })
+          .sort({ createdAt: -1 })
+          .populate('patient')
+          .catch(() => null);
+        if (genAppt?.patient) {
+          patient = await Patient.findById(genAppt.patient._id || genAppt.patient).catch(() => null);
+        }
+      }
     }
-    return res.status(200).json({ success: true, message: 'Vitals saved locally' });
+
+    // 5. Find by NIC
+    if (!patient && !opdProfile && nic && String(nic).trim() && String(nic).toUpperCase() !== 'N/A') {
+      const nicRegex = new RegExp(`^${String(nic).trim()}$`, 'i');
+      opdProfile = await OpdPatientProfile.findOne({ nic: nicRegex }).catch(() => null);
+      patient = await Patient.findOne({ nic: nicRegex }).catch(() => null);
+    }
+
+    // Persist to Patient
+    if (patient) {
+      patient.vitals = vitalsData;
+      await patient.save();
+      updated = true;
+
+      if (patient.nic) {
+        await OpdPatientProfile.updateMany(
+          { nic: new RegExp(`^${patient.nic}$`, 'i') },
+          { $set: { vitals: vitalsData } }
+        ).catch(() => {});
+      }
+    }
+
+    // Persist to OpdPatientProfile
+    if (opdProfile) {
+      opdProfile.vitals = vitalsData;
+      await opdProfile.save();
+      updated = true;
+
+      if (opdProfile.patient) {
+        await Patient.findByIdAndUpdate(opdProfile.patient, { vitals: vitalsData }).catch(() => {});
+      } else if (opdProfile.nic) {
+        await Patient.updateMany(
+          { nic: new RegExp(`^${opdProfile.nic}$`, 'i') },
+          { $set: { vitals: vitalsData } }
+        ).catch(() => {});
+      }
+    }
+
+    // Also update in-memory patientRecordsDatabase (demo data)
+    for (const key of Object.keys(patientRecordsDatabase)) {
+      const rec = patientRecordsDatabase[key];
+      if (
+        (patientId && rec.id === patientId) ||
+        (tokenNumber && rec.tokenNumber === Number(tokenNumber)) ||
+        (nic && rec.nic === nic)
+      ) {
+        rec.hasVitals = true;
+        rec.vitals = {
+          ...rec.vitals,
+          bloodPressure: vitalsData.bloodPressure,
+          heartRate: vitalsData.heartRate,
+          bodyTemp: `${vitalsData.temperature} °C`,
+          spO2: `${vitalsData.spO2}%`,
+          weight: `${vitalsData.weight} kg`,
+          height: `${vitalsData.height} cm`,
+          triageTime: 'Triage: Just now',
+        };
+        updated = true;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: updated ? 'Vitals saved successfully' : 'Vitals recorded',
+      data: vitalsData,
+    });
   } catch (error) {
+    console.error('Error updating patient vitals:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -3915,12 +4525,40 @@ const getDoctorReportFile = async (req, res) => {
   }
 };
 
+// @desc    Update medical report status (e.g. reviewed / pending)
+// @route   PATCH /api/v1/doctor/reports/:id/status
+// @access  Public / Protected
+const updateDoctorReportStatus = async (req, res) => {
+  try {
+    const OpdMedicalReport = require('../models/OpdMedicalReport');
+    const { status = 'reviewed' } = req.body;
+    const report = await OpdMedicalReport.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+    if (!report) {
+      return res.status(404).json({ success: false, message: 'Report not found' });
+    }
+    return res.status(200).json({
+      success: true,
+      message: `Report status updated to ${status}`,
+      data: report,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getDoctors,
   listDoctors,
   listDepartments,
   getDoctor,
   getReceptionDoctors: getDoctors,
+  updateDoctorReportStatus,
+  getDoctorReportFile,
+
   getDoctorDashboard,
   updateDoctorStatus,
   updateDoctorHospital,
