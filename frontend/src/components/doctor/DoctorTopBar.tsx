@@ -96,7 +96,7 @@ export const DoctorTopBar = ({
 
     loadDoctorUser();
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handleStorageUpdate = () => loadDoctorUser();
       window.addEventListener('storage', handleStorageUpdate);
       window.addEventListener('user_updated', handleStorageUpdate);
@@ -157,7 +157,7 @@ export const DoctorTopBar = ({
 
     loadPhoto();
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handleUpdate = () => loadPhoto();
       window.addEventListener('doctor_photo_updated', handleUpdate);
       window.addEventListener('storage', handleUpdate);
