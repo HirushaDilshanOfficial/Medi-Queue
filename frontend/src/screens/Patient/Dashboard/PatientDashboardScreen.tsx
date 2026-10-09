@@ -211,7 +211,7 @@ export function PatientDashboardScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.activeQueueTitle}>{pass ? t(pass.department) : t("Orthopedic Clinic Queue")}</Text>
                     <Text style={styles.activeQueueSubline}>
-                      {pass ? (ahead === null ? t("Follow your live queue") : t("Current Queue {pos} of {total}", { pos: pass.position, total: pass.totalAllocated || 17 })) : t("Current Queue 3 of 17")}
+                      {pass ? (ahead === null ? t("Follow your live queue") : t("Current Queue {pos} of {total}", { pos: String(pass.position ?? 1), total: 17 })) : t("Current Queue 3 of 17")}
                     </Text>
                   </View>
                   <Pressable onPress={queue} style={styles.activeQueueArrowBtn}>
@@ -385,7 +385,7 @@ export function PatientDashboardScreen() {
                   <View style={styles.eventBody}>
                     <Text style={styles.eventTitle}>{t(event.title)}</Text>
                     <Text style={styles.eventDescription}>{t(event.description)}</Text>
-                    <View style={styles.cardMeta}><DesignImage name="calendar" size={13} color={C.secondary} /><Text style={styles.eventSchedule}>{t(event.schedule)}</Text></View>
+                    <View style={styles.metaRow}><DesignImage name="calendar" size={13} color={C.secondary} /><Text style={styles.eventSchedule}>{t(event.schedule)}</Text></View>
                   </View>
                 </Pressable>
               ))}
