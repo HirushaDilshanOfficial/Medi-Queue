@@ -87,7 +87,9 @@ export default function WelcomeScreen() {
 
         {/* ---- FEATURE CARDS ---- */}
         <View style={styles.featureCard}>
-          <AppIcon name="clock" size={24} color={Colors.primaryDark} style={{ marginRight: 14 }} />
+          <View style={styles.featureIconContainer}>
+            <AppIcon name="clock" size={24} color={Colors.primaryDark} />
+          </View>
           <View style={styles.featureText}>
             <Text style={styles.featureTitle}>{t("Live Token Tracking")}</Text>
             <Text style={styles.featureDesc}>{t("Real-time queue notifications & estimated arrival time")}</Text>
@@ -95,7 +97,9 @@ export default function WelcomeScreen() {
         </View>
 
         <View style={styles.featureCard}>
-          <AppIcon name="clipboard" size={24} color={Colors.primaryDark} style={{ marginRight: 14 }} />
+          <View style={styles.featureIconContainer}>
+            <AppIcon name="clipboard" size={24} color={Colors.primaryDark} />
+          </View>
           <View style={styles.featureText}>
             <Text style={styles.featureTitle}>{t("Paperless Digital Pass")}</Text>
             <Text style={styles.featureDesc}>{t("Instant QR verification at outpatient consultation rooms")}</Text>
@@ -129,9 +133,11 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
   header: {
-    backgroundColor: Colors.primary,
-    paddingTop: 60, paddingBottom: 50, paddingHorizontal: 24,
+    backgroundColor: Colors.primaryDark,
+    paddingTop: 80, paddingBottom: 60, paddingHorizontal: 24,
     alignItems: 'center', overflow: 'hidden', position: 'relative',
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
   },
   circleTopRight: {
     position: 'absolute', top: -40, right: -40,
@@ -208,14 +214,25 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, height: 30, backgroundColor: Colors.divider },
   featureCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.white, marginHorizontal: 16, marginTop: 12,
-    borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.white, marginHorizontal: 20, marginTop: 16,
+    borderRadius: 20, padding: 16, 
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 15,
+    elevation: 3,
   },
-  featureIcon: { fontSize: 24, marginRight: 14 },
+  featureIconContainer: {
+    width: 50, height: 50, borderRadius: 25,
+    backgroundColor: Colors.tint,
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: 16,
+  },
+  featureIcon: { fontSize: 24 },
   featureText: { flex: 1 },
-  featureTitle: { fontSize: 14, fontWeight: '700', color: Colors.textDark },
-  featureDesc: { fontSize: 12, color: Colors.textMedium, marginTop: 3, lineHeight: 17 },
-  formContainer: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
+  featureTitle: { fontSize: 15, fontWeight: '700', color: Colors.textDark, marginBottom: 4 },
+  featureDesc: { fontSize: 13, color: Colors.textMedium, lineHeight: 18 },
+  formContainer: { paddingHorizontal: 20, paddingTop: 30, paddingBottom: 50 },
   input: {
     backgroundColor: Colors.background, borderRadius: 12,
     borderWidth: 1, borderColor: Colors.border,
@@ -223,13 +240,20 @@ const styles = StyleSheet.create({
     fontSize: 15, color: Colors.textDark, marginBottom: 12,
   },
   loginButton: {
-    backgroundColor: Colors.primaryDark, borderRadius: 14,
-    paddingVertical: 16, alignItems: 'center', marginTop: 6, elevation: 5,
+    backgroundColor: Colors.primaryDark, 
+    borderRadius: 16,
+    paddingVertical: 18, 
+    alignItems: 'center', 
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 6,
   },
   loginButtonText: { color: Colors.white, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
   registerButton: {
-    alignItems: 'center', marginTop: 16, paddingVertical: 12,
-    borderRadius: 14, borderWidth: 1.5, borderColor: Colors.border,
+    alignItems: 'center', marginTop: 20, paddingVertical: 16,
+    borderRadius: 16, backgroundColor: Colors.tint,
   },
-  registerButtonText: { color: Colors.primary, fontSize: 14, fontWeight: '600' },
+  registerButtonText: { color: Colors.primaryDark, fontSize: 15, fontWeight: '700' },
 });
