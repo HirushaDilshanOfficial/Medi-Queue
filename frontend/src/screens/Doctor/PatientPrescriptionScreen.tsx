@@ -1212,7 +1212,7 @@ export default function PatientPrescriptionScreen() {
                       setShowSuggestions(false);
                     }}
                     style={{ padding: 4 }}
-                    accessibilityLabel="Clear medicine search"
+                    accessibilityLabel={t("Clear medicine search")}
                   >
                     <Ionicons name="close-circle" size={18} color="#94a3b8" />
                   </TouchableOpacity>
@@ -1411,9 +1411,7 @@ export default function PatientPrescriptionScreen() {
                       isDark && styles.todCardTimeDark,
                     ]}
                     numberOfLines={1}
-                  >
-                    8:00 AM
-                  </Text>
+                  >{t("8:00 AM")}</Text>
                 </TouchableOpacity>
 
                 {/* 2. Afternoon */}
@@ -1456,9 +1454,7 @@ export default function PatientPrescriptionScreen() {
                       isDark && styles.todCardTimeDark,
                     ]}
                     numberOfLines={1}
-                  >
-                    1:00 PM
-                  </Text>
+                  >{t("1:00 PM")}</Text>
                 </TouchableOpacity>
 
                 {/* 3. Night */}
@@ -1501,9 +1497,7 @@ export default function PatientPrescriptionScreen() {
                       isDark && styles.todCardTimeDark,
                     ]}
                     numberOfLines={1}
-                  >
-                    9:00 PM
-                  </Text>
+                  >{t("9:00 PM")}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -1588,13 +1582,13 @@ export default function PatientPrescriptionScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.liveSummaryLabel}>{t("PRESCRIPTION PREVIEW")}</Text>
                   <Text style={styles.liveSummaryText} numberOfLines={2}>
-                    {`${searchQuery.trim()} – ${selectedFrequency}, ${mealTiming.toLowerCase()} (${[
-                      takeMorning && 'Morning',
-                      takeAfternoon && 'Afternoon',
-                      takeNight && 'Night',
+                    {t("{value0} – {value1}, {value2} ({value3}); Duration: {value4} {value5}", { value0: searchQuery.trim(), value1: t(selectedFrequency), value2: t(mealTiming), value3: [
+                      takeMorning && t('Morning'),
+                      takeAfternoon && t('Afternoon'),
+                      takeNight && t('Night'),
                     ]
                       .filter(Boolean)
-                      .join(', ') || 'no times'}), ${selectedDuration} day${selectedDuration > 1 ? 's' : ''}`}
+                      .join(', ') || t('no times'), value4: selectedDuration, value5: t(selectedDuration === 1 ? 'day' : 'days') })}
                   </Text>
                 </View>
               </View>

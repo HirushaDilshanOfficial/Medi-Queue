@@ -1,7 +1,8 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { router } from 'expo-router';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -19,7 +20,7 @@ import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-ic
 import { Colors } from '../../constants/Colors';
 import { Patient, PatientVisitHistoryItem } from '../../types';
 import { usePatients, PatientListFilter } from '../../hooks';
-import { verifyNic, getErrorMessage } from '../../services/api';
+import { verifyNic, getErrorMessage, markTokenUrgent } from '../../services/api';
 import {
   PatientCard,
   LoadingState,
@@ -43,6 +44,21 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
 }) => {
   const { t, locale } = useLanguage();
 
+  const [isPriorityQueueEnabled, setIsPriorityQueueEnabled] = useState(true);
+  
+  useEffect(() => {
+    const fetchPolicy = async () => {
+      try {
+        const data = await getPolicies();
+        if (data && typeof data.priorityQueue !== 'undefined') {
+          setIsPriorityQueueEnabled(data.priorityQueue !== false);
+        }
+      } catch (err) {
+        console.log('Error fetching policy', err);
+      }
+    };
+    fetchPolicy();
+  }, []);
   const handleGoHome = () => {
     if (onNavigate) {
       onNavigate('Home');
@@ -136,6 +152,20 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
       await selectPatient(patientId);
     }
     await refresh();
+  };
+
+  
+  const handleMarkUrgent = async (tokenId: string) => {
+    try {
+      await markTokenUrgent(tokenId);
+      showToast(t('Patient marked as urgent successfully'), 'success');
+      await refresh();
+      if (selected && selected._id) {
+        await selectPatient(selected._id);
+      }
+    } catch (error) {
+      showToast(getErrorMessage(error), 'error');
+    }
   };
 
   const handleBookFutureSlot = () => {
@@ -262,7 +292,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
             onPress={() => refresh()}
             activeOpacity={0.7}
             disabled={loading}
-            accessibilityLabel="Refresh directory"
+            accessibilityLabel={t("Refresh directory")}
           >
             <Ionicons
               name="refresh"
@@ -272,6 +302,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
             />
           </TouchableOpacity>
         </View>
+        <LanguageSwitcher tone="dark" />
       </View>
 
       <ScrollView
@@ -375,7 +406,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
               onPress={() => setFilter('pre_booked')}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Filter pre-booked patients"
+              accessibilityLabel={t("Filter pre-booked patients")}
             >
               <Ionicons
                 name="calendar"
@@ -400,7 +431,7 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
               onPress={() => setFilter('walk_in')}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Filter walk-in patients"
+              accessibilityLabel={t("Filter walk-in patients")}
             >
               <Ionicons
                 name="walk"
@@ -725,6 +756,29 @@ export const PatientsScreen: React.FC<PatientsScreenProps> = ({
                       </View>
                     </View>
                   </View>
+
+
+                    {/* Make Urgent Button for Active Visit */}
+                    {isPriorityQueueEnabled && activeTodayVisit && activeTodayVisit._id && (
+                      <TouchableOpacity
+                        style={[
+                          styles.bookFutureSlotButton, 
+                          { 
+                            borderColor: activeTodayVisit.priority === 'urgent' ? '#9CA3AF' : '#DC2626', 
+                            marginTop: 8,
+                            opacity: activeTodayVisit.priority === 'urgent' ? 0.6 : 1
+                          }
+                        ]}
+                        onPress={() => handleMarkUrgent(activeTodayVisit._id!)}
+                        activeOpacity={0.8}
+                        disabled={activeTodayVisit.priority === 'urgent'}
+                      >
+                        <Ionicons name="warning-outline" size={16} color={activeTodayVisit.priority === 'urgent' ? '#9CA3AF' : '#DC2626'} style={{ marginRight: 6 }} />
+                        <Text style={[styles.bookFutureSlotButtonText, { color: activeTodayVisit.priority === 'urgent' ? '#9CA3AF' : '#DC2626' }]}>
+                          {activeTodayVisit.priority === 'urgent' ? t("Marked as Urgent") : t("Mark as Urgent")}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
 
                   {/* Two Action Buttons */}
                   <View style={styles.quickDeskButtonsRow}>
@@ -1083,7 +1137,7 @@ const styles = StyleSheet.create({
   headerTitleWrap: {
     flex: 1,
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 20,
     fontWeight: '800',
     color: Colors.white,

@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React from 'react';
@@ -45,6 +46,7 @@ export function ScreenHeader({ title, subtitle, showBack = false, action }: Prop
       </View>
 
       {action}
+      <LanguageSwitcher tone="light" />
     </View>
   );
 }

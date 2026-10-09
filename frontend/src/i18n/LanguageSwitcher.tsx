@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useSegments } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LANGUAGES, useLanguage, type Language } from './LanguageContext';
 import { LocalizedText as Text } from './LocalizedText';
 import { ProfileIcon } from '../components/patient/ProfileIcon';
 
 /** Available before sign-in and throughout every role's navigation. */
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
   const { language, ready, setLanguage, t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
@@ -22,16 +21,9 @@ export function LanguageSwitcher() {
     finally { setSaving(false); }
   };
 
-  const segments = useSegments();
-  const isDark = ['(moh)', '(doctor)', '(reception)', 'notifications'].includes(segments[0]);
-  const bgColor = isDark ? '#0a6e7e' : '#f3faff';
+  const isDark = tone === 'dark';
   const textColor = isDark ? '#ffffff' : '#004c5b';
   
-  const firstSeg = segments[0] as string | undefined;
-  if (firstSeg === '(auth)' || firstSeg === 'index' || segments.length === 0 || firstSeg === '(doctor)') {
-    return null;
-  }
-
   return <>
     <Pressable accessibilityRole="button" accessibilityLabel={t('Change language')}
       accessibilityState={{ disabled: !ready, expanded: open }} disabled={!ready}
@@ -77,8 +69,7 @@ export function LanguageSwitcher() {
 }
 
 const styles = StyleSheet.create({
-  toolbar: { alignItems: 'flex-end', paddingTop: 10, paddingRight: 10 },
-  control: { paddingHorizontal: 10, paddingVertical: 6 },
+  control: { minHeight: 44, alignSelf: 'center', flexShrink: 0, justifyContent: 'center', paddingHorizontal: 4 },
   pillContainer: { 
     flexDirection: 'row', alignItems: 'center', gap: 4, 
     paddingHorizontal: 8, paddingVertical: 4, 

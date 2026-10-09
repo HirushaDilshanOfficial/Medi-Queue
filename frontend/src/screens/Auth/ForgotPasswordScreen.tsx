@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
 import React, { useState } from 'react';
@@ -16,6 +17,7 @@ import { router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { BASE_URL } from '../../config';
 import { Alert, ActivityIndicator } from 'react-native';
+import { AppIcon } from '../../components/AppIcon';
 
 export default function ForgotPasswordScreen() {
   const { t } = useLanguage();
@@ -63,6 +65,7 @@ export default function ForgotPasswordScreen() {
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
         {/* ---- TEAL HEADER ---- */}
         <View style={styles.header}>
+          <View style={{ position: 'absolute', top: 16, right: 16, zIndex: 2 }}><LanguageSwitcher tone="dark" /></View>
           <View style={styles.circleTopRight} />
           <View style={styles.circleBottomLeft} />
 
@@ -73,7 +76,7 @@ export default function ForgotPasswordScreen() {
 
           {/* Icon */}
           <View style={styles.logoSmall}>
-            <Text style={styles.logoSmallIcon}>🔑</Text>
+            <AppIcon name="lock" size={24} color={Colors.primaryDark} />
           </View>
 
           <Text style={styles.headerTitle}>{t("Forgot Password?")}</Text>
@@ -88,7 +91,7 @@ export default function ForgotPasswordScreen() {
           {/* Email Field */}
           <Text style={styles.fieldLabel}>{t("Email Address")}</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>✉️</Text>
+            <AppIcon name="mail" size={18} color={Colors.textMedium} style={{ marginRight: 10 }} />
             <TextInput
               style={styles.input}
               placeholder="you@example.com"

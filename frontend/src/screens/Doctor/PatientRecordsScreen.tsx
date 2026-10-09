@@ -1359,7 +1359,22 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                 </View>
               </View>
 
-
+                <TouchableOpacity
+                  style={[
+                    styles.topRefreshButton,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={handleResetToCurrentPatient}
+                  accessibilityLabel={t("Refresh Current Patient")}
+                >
+                  <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
+                    <Ionicons name="refresh-outline" size={20} color={theme.accent} />
+                  </Animated.View>
+                </TouchableOpacity>
             </View>
 
             {/* ─────────────────────────────────────────────────────────
@@ -1450,7 +1465,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       },
                     ]}
                   >
-                    {currentPatient.status}
+                    {t(currentPatient.status)}
                   </Text>
                 </View>
               </View>
@@ -1535,7 +1550,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                         { color: theme.textMuted },
                       ]}
                     >
-                      {currentPatient.age}{' '}{t("yrs •")}{' '}{currentPatient.gender}{' '}{t("• Blood:")}{' '}
+                      {currentPatient.age}{' '}{t("yrs •")}{' '}{t(currentPatient.gender)}{' '}{t("• Blood:")}{' '}
                       {currentPatient.bloodGroup}
                     </Text>
                   </View>
@@ -1664,9 +1679,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       ))}
                     </View>
                   ) : (
-                    <Text style={[styles.noneRecordedText, { color: theme.textMuted }]}>
-                      None recorded.
-                    </Text>
+                    <Text style={[styles.noneRecordedText, { color: theme.textMuted }]}>{t("None recorded.")}</Text>
                   );
                 })()}
 
@@ -1805,7 +1818,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   <Text
                     style={[styles.triageTimeLabel, { color: theme.textMuted }]}
                   >
-                    {hasVitals ? (currentPatient.vitals.triageTime || 'Triage: Today') : 'Triage: Not recorded'}
+                    {hasVitals ? (currentPatient.vitals.triageTime || t('Triage: Today')) : t('Triage: Not recorded')}
                   </Text>
                 </View>
 
@@ -1877,9 +1890,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       marginBottom: 4,
                       textAlign: 'center',
                     }}
-                  >
-                    No triage vitals recorded
-                  </Text>
+                  >{t("No triage vitals recorded")}</Text>
                   <Text
                     style={{
                       fontSize: 13,
@@ -1888,9 +1899,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       marginBottom: 15,
                       lineHeight: 18,
                     }}
-                  >
-                    Blood pressure, heart rate, or temperature have not been recorded for this patient yet.
-                  </Text>
+                  >{t("Blood pressure, heart rate, or temperature have not been recorded for this patient yet.")}</Text>
                   <TouchableOpacity
                     style={[
                       styles.editVitalsPill,
@@ -1916,9 +1925,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                         styles.editVitalsText,
                         { color: theme.primaryDeep, fontWeight: '700', fontSize: 13 },
                       ]}
-                    >
-                      Record Triage Vitals
-                    </Text>
+                    >{t("Record Triage Vitals")}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -1961,7 +1968,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: bpStatus.isAbnormal ? '#ef4444' : '#10b981' },
                     ]}
                   >
-                    {bpStatus.label}
+                    {t(bpStatus.label)}
                   </Text>
                 </TouchableOpacity>
 
@@ -1997,7 +2004,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: hrStatus.isAbnormal ? '#ef4444' : '#10b981' },
                     ]}
                   >
-                    {hrStatus.label}
+                    {t(hrStatus.label)}
                   </Text>
                 </TouchableOpacity>
 
@@ -2037,7 +2044,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: tempStatus.isAbnormal ? '#ef4444' : '#10b981' },
                     ]}
                   >
-                    {tempStatus.label}
+                    {t(tempStatus.label)}
                   </Text>
                 </TouchableOpacity>
 
@@ -2078,7 +2085,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: spO2Status.isAbnormal ? '#ef4444' : '#10b981' },
                     ]}
                   >
-                    {spO2Status.label}
+                    {t(spO2Status.label)}
                   </Text>
                 </TouchableOpacity>
 
@@ -2110,7 +2117,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
                     {currentWeightNum}{' '}
-                    <Text style={styles.vitalUnit}>kg</Text>
+                    <Text style={styles.vitalUnit}>{t("kg")}</Text>
                   </Text>
                   <Text
                     style={[
@@ -2118,8 +2125,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: theme.textMuted },
                     ]}
                   >
-                    {t("Ht:")}{' '}{currentHeightNum} cm
-                  </Text>
+                    {t("Ht:")}{' '}{currentHeightNum}{t("cm")}</Text>
                 </TouchableOpacity>
 
                 {/* 6. BMI (Body Mass Index) */}
@@ -2152,7 +2158,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                   </View>
                   <Text style={[styles.vitalValue, { color: theme.textDark }]}>
                     {bmiDisplay}{' '}
-                    <Text style={styles.vitalUnit}>kg/m²</Text>
+                    <Text style={styles.vitalUnit}>{t("kg/m²")}</Text>
                   </Text>
                   <Text
                     style={[
@@ -2160,7 +2166,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                       { color: bmiStatusResult.isAbnormal ? '#ef4444' : '#10b981' },
                     ]}
                   >
-                    {bmiStatusResult.label}
+                    {t(bmiStatusResult.label)}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2309,9 +2315,7 @@ export default function PatientRecordsScreen({ navigation }: { navigation?: any 
                             styles.viewReportText,
                             { color: theme.primaryDeep },
                           ]}
-                        >
-                          View report
-                        </Text>
+                        >{t("View report")}</Text>
                       </TouchableOpacity>
                     </TouchableOpacity>
                   ))
@@ -2770,7 +2774,7 @@ setSelectedReportToView(currentPatient.imaging)
                       color: theme.textDark,
                     },
                   ]}
-                  placeholder="e.g. Paracetamol, Amoxicillin, Bactrim..."
+                  placeholder={t("e.g. Paracetamol, Amoxicillin, Bactrim...")}
                   placeholderTextColor={theme.textMuted}
                   value={medDrugName}
                   onChangeText={(val) => {
@@ -2798,7 +2802,7 @@ setSelectedReportToView(currentPatient.imaging)
                       color: theme.textDark,
                     },
                   ]}
-                  placeholder="e.g. 500 mg"
+                  placeholder={t("e.g. 500 mg")}
                   placeholderTextColor={theme.textMuted}
                   value={medDose}
                   onChangeText={setMedDose}
@@ -2865,7 +2869,7 @@ setSelectedReportToView(currentPatient.imaging)
                       color: theme.textDark,
                     },
                   ]}
-                  placeholder="e.g. 5 days, 1 week, Ongoing"
+                  placeholder={t("e.g. 5 days, 1 week, Ongoing")}
                   placeholderTextColor={theme.textMuted}
                   value={medDuration}
                   onChangeText={setMedDuration}
@@ -2910,8 +2914,8 @@ setSelectedReportToView(currentPatient.imaging)
                   <Text style={styles.sheetSaveBtnText}>
                     {allergyCheck.status === 'conflict'
                       ? hasAllergyConflictAcknowledged
-                        ? 'Confirm Override & Add'
-                        : 'Add anyway'
+                        ? t('Confirm Override & Add')
+                        : t('Add anyway')
                       : t("Add medication")}
                   </Text>
                 </TouchableOpacity>
@@ -3137,7 +3141,7 @@ setSelectedReportToView(currentPatient.imaging)
                         },
                       ]}
                     >
-                      {trendInfo.statusResult.label}
+                      {t(trendInfo.statusResult.label)}
                     </Text>
                   </View>
                 </View>
@@ -3286,7 +3290,7 @@ setSelectedReportToView(currentPatient.imaging)
                                 { color: isAbnormal ? '#dc2626' : '#16a34a', fontWeight: '700' },
                               ]}
                             >
-                              {isAbnormal ? 'Alert' : t("Normal")}
+                              {isAbnormal ? t('Alert') : t("Normal")}
                             </Text>
                           </View>
                         </View>
@@ -3646,8 +3650,7 @@ setSelectedReportToView(currentPatient.imaging)
                       }}
                     >
                       <Text style={{ fontSize: 12, color: theme.primaryDeep, fontWeight: '600' }}>
-                        {t("Calculated BMI:")}{' '}{preview.bmi} kg/m²
-                      </Text>
+                        {t("Calculated BMI:")}{' '}{preview.bmi}{t("kg/m²")}</Text>
                       <Text
                         style={{
                           fontSize: 12,
@@ -3655,7 +3658,7 @@ setSelectedReportToView(currentPatient.imaging)
                           color: preview.status.isAbnormal ? '#ef4444' : '#059669',
                         }}
                       >
-                        {preview.status.label}
+                        {t(preview.status.label)}
                       </Text>
                     </View>
                   );

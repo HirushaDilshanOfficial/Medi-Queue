@@ -4,47 +4,36 @@ import { useLanguage } from './LanguageContext';
 
 // Inter contains Latin glyphs only. Use the platform font for Sinhala and Tamil.
 export function LocalizedText({ style, children, ...props }: TextProps) {
-  const { language, t } = useLanguage();
-  const resolvedStyle = StyleSheet.flatten(style);
+  const { language } = useLanguage();
+  
+  const resolvedStyle = StyleSheet.flatten(style) || {};
+  let fontFamily = 'Inter_400Regular';
+  
+  if (language === 'en') {
+    const fw = String(resolvedStyle.fontWeight || '400');
+    if (fw === 'bold' || fw === '700') fontFamily = 'Inter_700Bold';
+    else if (fw === '600') fontFamily = 'Inter_600SemiBold';
+    else if (fw === '800' || fw === '900') fontFamily = 'Inter_800ExtraBold';
+    else if (fw === '500') fontFamily = 'Inter_500Medium';
+  } else {
+    fontFamily = Platform.OS === 'ios' ? 'System' : 'sans-serif';
+  }
 
-  const translateNode = (node: React.ReactNode): React.ReactNode => {
-    if (typeof node === 'string') {
-      if (!node.trim()) return node;
-      return t(node);
-    }
-    if (Array.isArray(node)) {
-      return React.Children.map(node, translateNode);
-    }
-    return node;
-  };
-
-  const localizedChildren = language === 'en' ? children : React.Children.map(children, translateNode);
+  // We should remove fontWeight from the style to prevent RN from trying to apply it to a custom font, which sometimes causes issues on Android
+  const { fontWeight, ...safeStyle } = resolvedStyle;
 
   return (
     <RNText
       {...props}
-      style={[
-        {
-          fontFamily: Platform.select({
-            web: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-            ios: 'Inter',
-            android: 'Inter',
-            default: 'Inter',
-          }),
+        safeStyle,
+        { fontFamily },
+        Platform.OS === 'web' && language !== 'en' && {
+          fontFamily: "'Noto Sans Sinhala', 'Noto Sans Tamil', 'Inter', -apple-system, sans-serif",
         },
-        style,
-        language !== 'en' && {
-          fontFamily: Platform.select({
-            web: "'Noto Sans Sinhala', 'Noto Sans Tamil', 'Inter', -apple-system, sans-serif",
-            ios: 'System',
-            android: 'sans-serif',
-            default: 'sans-serif',
-          }),
-          letterSpacing: 0,
-        },
+        language !== 'en' && { letterSpacing: 0 },
       ]}
     >
-      {localizedChildren}
+      {children}
     </RNText>
   );
 }

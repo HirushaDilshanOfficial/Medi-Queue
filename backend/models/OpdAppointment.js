@@ -64,6 +64,7 @@ const opdAppointmentSchema = new mongoose.Schema(
       ref: 'OpdQueueEntry',
       default: null,
     },
+    priority: { type: String, enum: ['urgent', 'senior', 'normal'], default: 'normal' },
     tokenNumber: { type: Number, default: null },
 
     reason: { type: String, trim: true, maxlength: 300 },

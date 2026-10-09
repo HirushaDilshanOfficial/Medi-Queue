@@ -1,79 +1,115 @@
 import { StyleSheet } from 'react-native';
 
-// Preserve the existing patient dashboard palette.
-export const C = { background: '#f3faff', primary: '#004c5b', teal: '#176577', secondary: '#00696e', aqua: '#84f4fb', pale: '#e6f6ff', icon: '#e0f0f9', text: '#0e1e23', muted: '#3f484b' };
+export const C = {
+  background: '#f3faff',
+  primary: '#004c5b',
+  teal: '#176577',
+  secondary: '#00696e',
+  aqua: '#84f4fb',
+  pale: '#e6f6ff',
+  icon: '#e0f0f9',
+  text: '#0e1e23',
+  muted: '#3f484b',
+};
+
 const regular = 'ProfileInter400';
 const medium = 'ProfileInter500';
 const semibold = 'ProfileInter600';
 const bold = 'ProfileInter700';
-const shadow = '0 4px 18px rgba(0,76,91,0.04)';
+const shadow = '0 4px 18px rgba(0,76,91,0.06)';
 
 export const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.background },
-  headerSafe: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: C.icon },
-  header: { width: '100%', maxWidth: 1120, alignSelf: 'center', height: 72, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  scrollContent: { paddingBottom: 40 },
+
+  // Full-width Screen Hero Header Backdrop
+  fullHeroHeaderContainer: { width: '100%', overflow: 'hidden', backgroundColor: C.primary },
+  heroBannerImage: { width: '100%', height: '100%' },
+  fullHeroOverlay: { width: '100%', paddingBottom: 24 },
+  
+  // Header controls on full hero backdrop
+  header: { width: '100%', maxWidth: 1120, alignSelf: 'center', height: 64, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 12 },
   grow: { flex: 1, minWidth: 0 },
-  logo: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { fontFamily: semibold, fontSize: 10, lineHeight: 14, letterSpacing: 1.2, color: C.secondary },
-  headerTitle: { fontFamily: bold, fontSize: 17, lineHeight: 22, color: C.text },
-  iconButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, borderColor: C.icon, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  avatar: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: C.pale },
-  content: { width: '100%', maxWidth: 1120, alignSelf: 'center', padding: 20, paddingBottom: 40, gap: 28 },
-  intro: { gap: 8 },
-  introTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
-  overline: { fontFamily: semibold, fontSize: 11, lineHeight: 16, letterSpacing: 1.5, color: C.secondary },
-  greeting: { fontFamily: bold, fontSize: 28, lineHeight: 36, letterSpacing: -0.8, color: C.text },
-  subtitle: { fontFamily: regular, color: C.muted, fontSize: 13, lineHeight: 20 },
-  datePill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: C.pale },
-  dateText: { fontFamily: medium, color: C.primary, fontSize: 11, lineHeight: 16 },
-  search: { minHeight: 50, borderRadius: 16, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: C.icon },
-  searchText: { flex: 1, fontFamily: regular, fontSize: 13, lineHeight: 20, color: C.muted },
-  stats: { flexDirection: 'row', gap: 10 },
-  stat: { flex: 1, minWidth: 0, padding: 14, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: C.icon, gap: 8, boxShadow: shadow },
-  statIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: C.pale },
-  statValue: { fontFamily: bold, fontSize: 25, lineHeight: 32, letterSpacing: -0.6, color: C.primary },
-  statLabel: { fontFamily: medium, fontSize: 11, lineHeight: 16, color: C.muted },
-  status: { borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.pale },
-  statusText: { flexShrink: 1, fontFamily: regular, fontSize: 13, lineHeight: 20, color: C.muted },
-  error: { padding: 16, borderRadius: 16, backgroundColor: '#ffdad6', gap: 6 },
-  errorTitle: { fontFamily: semibold, color: '#93000a', fontSize: 14, lineHeight: 20 },
-  link: { fontFamily: semibold, color: C.secondary, fontSize: 12, lineHeight: 18 },
-  textButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
+  logo: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
+  eyebrowLight: { fontFamily: semibold, fontSize: 9, lineHeight: 12, letterSpacing: 1.2, color: C.aqua },
+  headerTitleLight: { fontFamily: bold, fontSize: 16, lineHeight: 20, color: '#fff' },
+  headerIconBtnLight: { width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  avatarLight: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.2)' },
+  
+  // Hero Content Floating over backdrop
+  heroContentContainer: { width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 12, gap: 14 },
+  topHeroHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topHeroGreeting: { fontFamily: bold, fontSize: 24, lineHeight: 30, color: '#fff' },
+  topHeroSubtitle: { fontFamily: regular, fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.85)' },
+  topHeroIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  activeQueueEyebrow: { fontFamily: semibold, fontSize: 10, lineHeight: 14, letterSpacing: 1.2, color: C.aqua, marginTop: 4 },
+  
+  // Glass Active Queue Card over Hero
+  glassActiveQueueCard: { backgroundColor: 'rgba(255, 255, 255, 0.16)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.35)', borderRadius: 22, padding: 18, gap: 12 },
+  activeQueueContainer: { gap: 12 },
+  activeQueueHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  activeQueueBadge: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  activeQueueTitle: { fontFamily: bold, fontSize: 15, lineHeight: 20, color: '#fff' },
+  activeQueueSubline: { fontFamily: regular, fontSize: 11, lineHeight: 15, color: 'rgba(255,255,255,0.8)' },
+  activeQueueArrowBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  whitePassBox: { backgroundColor: '#fff', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', boxShadow: shadow },
+  whitePassTitle: { fontFamily: bold, fontSize: 25, lineHeight: 30, color: C.text, letterSpacing: -0.5 },
+  whitePassTime: { fontFamily: medium, fontSize: 11, lineHeight: 16, color: C.muted },
+  roomTag: { backgroundColor: C.pale, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  roomTagText: { fontFamily: semibold, fontSize: 11, lineHeight: 15, color: C.primary },
+
+  // Main Dashboard Content Container
+  mainContainer: { width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 10, gap: 20 },
+
+  // Book Doctor Appointment Card
+  bookAppointmentCard: { backgroundColor: '#0a5a67', borderRadius: 20, padding: 18, gap: 12, boxShadow: shadow },
+  bookCardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  instantPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)' },
+  instantPillText: { fontFamily: semibold, fontSize: 10, lineHeight: 14, color: C.aqua },
+  liveSlotsTag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: C.aqua },
+  liveSlotsText: { fontFamily: bold, fontSize: 10, lineHeight: 14, color: C.primary },
+  bookCardTitle: { fontFamily: bold, fontSize: 18, lineHeight: 24, color: '#fff' },
+  bookCardBody: { fontFamily: regular, fontSize: 12, lineHeight: 17, color: 'rgba(255,255,255,0.85)', maxWidth: 440 },
+  bookCardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginTop: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  metaText: { fontFamily: medium, fontSize: 11, lineHeight: 15, color: C.aqua },
+  bookSlotButton: { backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  bookSlotButtonText: { fontFamily: bold, fontSize: 11, lineHeight: 15, color: C.primary },
+
+  // Search Bar
+  pillSearch: { minHeight: 48, borderRadius: 24, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: C.icon, boxShadow: shadow },
+  pillSearchText: { flex: 1, fontFamily: regular, fontSize: 13, lineHeight: 18, color: C.muted },
+
+  // Next Medical Checkup Bar
+  checkupBar: { backgroundColor: C.primary, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  checkupIconCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  checkupText: { fontFamily: semibold, fontSize: 13, lineHeight: 18, color: '#fff', flex: 1 },
+  tomorrowBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: C.aqua },
+  tomorrowBadgeText: { fontFamily: bold, fontSize: 11, lineHeight: 15, color: C.primary },
+
+  // Quick Actions 5 Tile Row
+  quickActionsGrid: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 4 },
+  quickActionTile: { alignItems: 'center', gap: 6, flex: 1 },
+  quickActionIconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1, borderColor: C.icon, alignItems: 'center', justifyContent: 'center', boxShadow: shadow },
+  quickActionTileText: { fontFamily: semibold, fontSize: 10, lineHeight: 13, color: C.text, textAlign: 'center' },
+
+  // Hospital Clinics 4 Column Circular Grid
+  specialtiesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
+  specialtyCircleTile: { alignItems: 'center', gap: 6, width: '22%', minWidth: 68 },
+  specialtyCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: C.pale, alignItems: 'center', justifyContent: 'center' },
+  specialtyCircleLabel: { fontFamily: medium, fontSize: 11, lineHeight: 15, color: C.text, textAlign: 'center' },
+
+  // General helpers
   section: { gap: 14 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   sectionTitle: { fontFamily: bold, color: C.text, fontSize: 18, lineHeight: 26, letterSpacing: -0.3, flexShrink: 1 },
   sectionCaption: { fontFamily: regular, color: C.muted, fontSize: 12, lineHeight: 18 },
-  booking: { borderRadius: 20, padding: 22, gap: 16, overflow: 'hidden' },
-  bookingDecoration: { position: 'absolute', width: 210, height: 210, borderRadius: 105, borderWidth: 32, borderColor: 'rgba(255,255,255,0.06)', right: -75, bottom: -95 },
-  bookingTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bookingEyebrow: { flexShrink: 1, fontFamily: semibold, fontSize: 10, lineHeight: 16, letterSpacing: 1.4, color: C.aqua },
-  bookingTitle: { fontFamily: bold, fontSize: 23, lineHeight: 30, letterSpacing: -0.5, color: '#fff' },
-  bookingBody: { fontFamily: regular, color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 20, maxWidth: 480 },
-  bookingFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' },
-  bookingMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  bookingMetaText: { fontFamily: medium, fontSize: 11, lineHeight: 16, color: C.aqua },
-  bookButton: { minHeight: 44, paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  bookButtonLabel: { fontFamily: semibold, color: C.primary, fontSize: 12, lineHeight: 18 },
-  overview: { gap: 14 }, wideRow: { flexDirection: 'row' },
-  careCard: { padding: 18, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: C.icon, gap: 16, boxShadow: shadow },
-  wideCard: { flex: 1 },
-  cardTop: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  cardType: { fontFamily: semibold, fontSize: 10, lineHeight: 16, color: C.secondary, letterSpacing: 1 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: C.pale },
-  badgeLabel: { fontFamily: medium, fontSize: 10, lineHeight: 14, color: C.secondary },
-  careHeading: { fontFamily: bold, fontSize: 17, lineHeight: 24, color: C.text, letterSpacing: -0.2 },
-  careNumber: { fontFamily: bold, fontSize: 34, lineHeight: 42, color: C.primary, letterSpacing: -1 },
-  careDescription: { flexShrink: 1, fontFamily: regular, fontSize: 12, lineHeight: 18, color: C.muted },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardFooter: { borderTopWidth: 1, borderTopColor: C.icon, paddingTop: 12, marginTop: 'auto', minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  actionScroll: { marginHorizontal: -20 }, actionContent: { paddingHorizontal: 20, gap: 10, paddingBottom: 4 },
-  action: { width: 140, minHeight: 128, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: C.icon, backgroundColor: '#fff', gap: 14 },
-  actionIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: C.pale, alignItems: 'center', justifyContent: 'center' },
-  actionLabel: { fontFamily: semibold, color: C.text, fontSize: 13, lineHeight: 18 },
-  specialties: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  specialty: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: C.icon },
-  specialtyIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: C.pale, justifyContent: 'center', alignItems: 'center' },
-  specialtyLabel: { flex: 1, fontFamily: medium, fontSize: 12, lineHeight: 18, color: C.text },
+  link: { fontFamily: semibold, color: C.secondary, fontSize: 12, lineHeight: 18 },
+  textButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
+  status: { borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.pale },
+  statusText: { flexShrink: 1, fontFamily: regular, fontSize: 13, lineHeight: 20, color: C.muted },
+  error: { padding: 16, borderRadius: 16, backgroundColor: '#ffdad6', gap: 6 },
+  errorTitle: { fontFamily: semibold, color: '#93000a', fontSize: 14, lineHeight: 20 },
   activityCard: { borderWidth: 1, borderColor: C.icon, backgroundColor: '#fff', borderRadius: 18, overflow: 'hidden' },
   activityRow: { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   activityTitle: { fontFamily: semibold, color: C.text, fontSize: 13, lineHeight: 18 },

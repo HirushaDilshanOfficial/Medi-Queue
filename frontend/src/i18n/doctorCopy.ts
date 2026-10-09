@@ -240,7 +240,6 @@ yrs|අවු|ஆண்டு
 Electronic health record|විද්‍යුත් සෞඛ්‍ය වාර්තාව|மின்னணு சுகாதாரப் பதிவு
 Patient record|රෝගී වාර්තාව|நோயாளி பதிவு
 Temperature|උෂ්ණත්වය|வெப்பநிலை
-SpO₂|SpO₂|SpO₂
 Previous visits|පෙර හමුවීම්|முந்தைய வருகைகள்
 Clinical notes|සායනික සටහන්|மருத்துவக் குறிப்புகள்
 Start prescription|ඖෂධ නියම කිරීම අරඹන්න|மருந்துச் சீட்டைத் தொடங்கவும்
@@ -269,14 +268,12 @@ No prior visit records.|පෙර හමුවීම් වාර්තා න�
 Blood Pressure (mmHg)|රුධිර පීඩනය (mmHg)|இரத்த அழுத்தம் (mmHg)
 Heart Rate (bpm)|හෘද ස්පන්දන වේගය (bpm)|இதயத் துடிப்பு (bpm)
 Temperature (°C)|උෂ්ණත්වය (°C)|வெப்பநிலை (°C)
-SpO2 (%)|SpO2 (%)|SpO2 (%)
 Record Vitals|ජීව ලක්ෂණ සටහන් කරන්න|உயிரளவுகளைப் பதிவு செய்க
 Save vitals|ජීව ලක්ෂණ සුරකින්න|உயිරளவுகளைச் சேමිக்கவும்
 Add Current Medication|වත්මන් ඖෂධයක් එක් කරන්න|தற்போதைய மருந்தைச் சேர்க்கவும்
 Medication Name *|ඖෂධයේ නම *|மருந்தின் பெயர் *
 Dose|මාත්‍රාව|அளவு
 Frequency|වාර ගණන|அதிர்வெண்
-City General Hospital|සිටි ජෙනරල් රෝහල|சிட்டி ஜெனரல் மருத்துவமனை
 City General|සිටි ජෙනරල්|சிட்டி ஜெனரல்
 Room 3B|3B කාමරය|3B அறை
 Room 3B · Online|3B කාමරය · සක්‍රියයි|3B அறை · செயலில்
@@ -395,7 +392,6 @@ Dr. Palitha|වෛද්‍ය පාලිත|மருத்துவர் �
 Palitha Perera|පාලිත පෙරේරා|பாலித பெரேரா
 Palitha|පාලිත|பாலித
 Perera|පෙරේරා|பெரேரா
-Heshani Wickramasinghe|හේෂානි වික්‍රමසිංහ|ஹேஷானி விக்ரமசிங்க
 Heshani|හේෂානි|ஹேஷானி
 Wickramasinghe|වික්‍රමසිංහ|விக்ரமசிங்க
 Nimal Karunaratne Gunasekara|නිමල් කරුණාරත්න ගුණසේකර|நிமல் கருணாரத்ன குணசேகர
@@ -479,7 +475,6 @@ Menaka|මේනකා|மேனகா
 Hettiarachchi|හෙට්ටිආරච්චි|ஹெட்டியாராச்சி
 Sanath Jayasuriya|සනත් ජයසූරිය|சனத் ஜயசூரிய
 Sanath|සනත්|சனத்
-Kamal Gunaratne|කමල් ගුණරත්න|கமல் குணரத்ன
 Kamal|කමල්|கமல்
 Gunaratne|ගුණරත්න|குணரத்ன
 Rashmi Wickramasinghe|රශ්මි වික්‍රමසිංහ|ரஷ்மி விக்ரமசிங்க

@@ -1,7 +1,7 @@
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React from 'react';
-import { Image, Pressable, Switch, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, useWindowDimensions, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import QRCode from 'react-native-qrcode-svg';
 import { ProfileIcon } from '../../../components/patient/ProfileIcon';
@@ -25,9 +25,9 @@ function guidance(pass: QueuePass, t: ReturnType<typeof useLanguage>['t']) {
   return t('Scan this QR code at the {department} administration terminal when your name is announced or your number appears on the display.', { department: t(pass.department) });
 }
 
-export function QueuePassContent({ pass, patientName, doctor, countdown, liveError, onHome, onWallet, onShare, onContact }: {
+export function QueuePassContent({ pass, patientName, doctor, countdown, liveError, onHome, onShare, onContact }: {
   pass: QueuePass; patientName: string; doctor?: Doctor | null; countdown: number; liveError: string | null;
-  onHome: () => void; onWallet: () => void; onShare: () => void; onContact: () => void;
+  onHome: () => void; onShare: () => void; onContact: () => void;
 }) {
   const { t, locale } = useLanguage();
   const { width } = useWindowDimensions();
@@ -64,11 +64,6 @@ export function QueuePassContent({ pass, patientName, doctor, countdown, liveErr
         <View style={styles.metaItem}><Text style={styles.metaLabel}>{t("Reservation Date")}</Text><Text numberOfLines={1} style={styles.metaValue}>{longDayLabel(pass.queueDate, locale)}</Text></View>
       </View>
     </View>
-    <View style={styles.pharmacy}>
-      <View style={styles.grow}><View style={styles.inline}><ProfileIcon name="medical" size={18} color={C.secondary} /><Text style={styles.title}>{t("Pharmacy Queue")}</Text></View>
-        <Text style={styles.caption}>{t("Ask clinic staff to join the prescription queue after your check-up.")}</Text></View>
-      <Switch value={false} disabled accessibilityLabel={t("Automatic pharmacy queue registration is not available")} trackColor={{ false: '#bfc8cc', true: C.secondary }} thumbColor={C.surface} />
-    </View>
     <View style={styles.specialist}>
       {doctor?.avatarUrl ? <Image source={{ uri: doctor.avatarUrl }} style={styles.doctorAvatar} /> : <View style={styles.doctorAvatar}><ProfileIcon name="stethoscope" size={24} /></View>}
       <View style={styles.grow}><Text style={styles.specialistEyebrow}>{t("ATTENDING SPECIALIST")}</Text><Text style={styles.title}>{pass.doctorName ?? t('Assigned at the clinic')}</Text><Text style={styles.caption}>{t(doctor?.specialization ?? pass.department)}</Text></View>
@@ -76,10 +71,8 @@ export function QueuePassContent({ pass, patientName, doctor, countdown, liveErr
     </View>
     <View style={styles.actions}>
       <Pressable accessibilityRole="button" onPress={onHome} style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}><ProfileIcon name="home" color={C.surface} /><Text style={styles.homeLabel}>{t("Back to Home")}</Text></Pressable>
-      <View style={styles.secondaryActions}>
-        <Pressable accessibilityRole="button" onPress={onWallet} style={({ pressed }) => [styles.walletButton, pressed && styles.pressed]}><ProfileIcon name="wallet" size={18} color={C.secondary} /><Text style={styles.actionLabel}>{t("Add to Wallet")}</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("Share ticket")} onPress={onShare} style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]}><ProfileIcon name="share" size={18} color={C.text} /></Pressable>
-      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("Share ticket")} onPress={onShare} style={({ pressed }) => [styles.shareButtonRow, pressed && styles.pressed]}><ProfileIcon name="share" size={18} color={C.text} /><Text style={styles.actionLabel}>{t("Share ticket")}</Text></Pressable>
     </View>
   </>;
 }
+

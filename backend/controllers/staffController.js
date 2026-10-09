@@ -156,3 +156,41 @@ exports.toggleStaffStatus = async (req, res) => {
     res.status(500).json({ message: 'Server Error' });
   }
 };
+
+
+exports.getHospitalStaffSummary = async (req, res) => {
+  try {
+    const { hospitalId } = req.params;
+    const todayStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Colombo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
+    const staffMembers = await Staff.find({ hospital: hospitalId, isDeleted: false }).lean();
+    
+    // For doctors, we need to count today's patients
+    const Appointment = require('../models/Appointment');
+    const OpdAppointment = require('../models/OpdAppointment');
+    const Doctor = require('../models/Doctor');
+
+    const result = await Promise.all(staffMembers.map(async (staff) => {
+      let patientsToday = 0;
+      if (staff.role && staff.role.toLowerCase() === 'doctor') {
+        const doctor = await Doctor.findOne({ staffId: staff._id });
+        if (doctor) {
+          const walkInCount = await Appointment.countDocuments({ date: todayStr, doctor: doctor._id, status: { $ne: 'Cancelled' } });
+          const onlineCount = await OpdAppointment.countDocuments({ date: todayStr, doctor: doctor._id, status: { $ne: 'cancelled' } });
+          patientsToday = walkInCount + onlineCount;
+        }
+      }
+      return { ...staff, patientsToday };
+    }));
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error fetching hospital staff summary:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};

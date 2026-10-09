@@ -16,7 +16,6 @@ import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import type { VisitRecord } from '../../../types/patient';
 import { ScreenHeader } from '../../../components/patient/ScreenHeader';
 import { ScreenLoader, MessageState } from '../../../components/patient/ScreenStates';
-import { ReportRow } from '../../../components/patient/ReportRow';
 import { Badge } from '../../../components/patient/Badge';
 import { DesignImage } from '../../../components/patient/DesignImage';
 
@@ -58,7 +57,6 @@ export function VisitHistoryScreen() {
 
   const visits = (history.data?.visits ?? []).filter(visit => !status || visit.status === status);
   const summary = history.data?.summary;
-  const reports = history.data?.reports ?? [];
 
   return (
     <View style={styles.root}>
@@ -89,18 +87,6 @@ export function VisitHistoryScreen() {
               </View>
             ) : null}
             {status ? <Pressable accessibilityRole="button" onPress={() => router.setParams({ status: '' })} style={styles.allButton}><Text style={styles.allLabel}>{t('Show all appointments')}</Text></Pressable> : null}
-
-            {/* Reports filed against a visit live on that visit's row, so a patient
-                looking back at a consultation can see the paperwork that came out
-                of it. */}
-            {!status && reports.length ? (
-              <View style={styles.looseReports}>
-                <Text style={styles.looseTitle}>{t("Reports not linked to a visit")}</Text>
-                {reports.map((report) => (
-                  <ReportRow key={report.id} report={report} />
-                ))}
-              </View>
-            ) : null}
           </View>
         }
         renderItem={({ item }) => <VisitCard visit={item} />}
@@ -142,6 +128,7 @@ function SummaryTile({ value, label, selected, onPress }: { value: number; label
 
 function VisitCard({ visit }: { visit: VisitRecord }) {
   const { t, locale } = useLanguage();
+  const router = useRouter();
   const tone = STATUS_TONE[visit.status] ?? 'neutral';
   const label = STATUS_LABEL[visit.status] ?? visit.status;
 
@@ -175,11 +162,16 @@ function VisitCard({ visit }: { visit: VisitRecord }) {
       </View>
 
       {visit.reportCount > 0 ? (
-        <View style={styles.reportLink}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/(patient)/profile/reports')}
+          style={({ pressed }) => [styles.reportLink, pressed && { opacity: 0.7 }]}
+        >
           <DesignImage name="clipboard" size={12} color={PatientTheme.brandMid} />
           <Text style={styles.reportLinkText}>
-            {visit.reportCount} {visit.reportCount === 1 ? t('report') : t('reports')} {t("filed")}</Text>
-        </View>
+            {visit.reportCount} {visit.reportCount === 1 ? t('report') : t('reports')} {t("filed")}
+          </Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -228,14 +220,6 @@ const styles = StyleSheet.create({
     fontSize: PatientTheme.designType.caption,
     fontWeight: '600',
     color: PatientTheme.textSecondary,
-  },
-  looseReports: {
-    gap: PatientTheme.spaceSm,
-  },
-  looseTitle: {
-    fontSize: PatientTheme.designType.item,
-    fontWeight: '800',
-    color: PatientTheme.textPrimary,
   },
   separator: {
     height: PatientTheme.spaceMd,
@@ -302,3 +286,4 @@ const styles = StyleSheet.create({
     color: PatientTheme.brand,
   },
 });
+

@@ -6,6 +6,7 @@ import { receptionCopy } from './receptionCopy';
 import { templateCopy } from './templateCopy';
 import { clinicCopy } from './clinicCopy';
 import { additionalCopy } from './additionalCopy';
+import { uiCopy } from './uiCopy';
 export type Language = 'en' | 'si' | 'ta';
 export type TranslationValues = Record<string, string | number>;
 const normalizeLabel = (text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -26,6 +27,9 @@ export function translate(language: Language, text: string, values?: Translation
   }
 
   const idx = language === 'si' ? 0 : 1;
+  // Examples keep medicine names and personal names exactly as supplied.
+  const example = text.match(/^e\.g\.\s+(.+)$/i);
+  if (example && !translations[text]) return `${language === 'si' ? 'උදා:' : 'எ.கா.'} ${example[1]}`;
   const canonical = displayLabels[text.toLowerCase().replace(/ /g, '_')];
 
   // 1. Direct or normalized match
@@ -76,7 +80,7 @@ export function translate(language: Language, text: string, values?: Translation
   // 7. Pattern: "Allergy: {name}"
   const allergyMatch = text.match(/^Allergy:\s*(.+)$/i);
   if (allergyMatch) {
-    return `${translate(language, 'Allergy')}: ${translate(language, allergyMatch[1])}`;
+    return `${translate(language, 'Allergy')}: ${allergyMatch[1]}`;
   }
 
   // 8. Pattern: "Since {month} {day}"
@@ -102,8 +106,8 @@ export function translate(language: Language, text: string, values?: Translation
   // 10. Pattern: "Est. wait: {time}"
   const estMatch = text.match(/^Est\.\s*wait:\s*(.+)$/i);
   if (estMatch) {
-    const waitVal = estMatch[1].replace(/~0m/i, '~මිනි 0').replace(/~(\d+)\s*min/i, '~මිනි $1');
-    return language === 'si' ? `ඇස්තමේන්තුගත රැඳී සිටීම: ${waitVal}` : `மதிப்பிடப்பட்ட காத்திருப்பு: ${estMatch[1]}`;
+    const waitVal = estMatch[1].replace(/(\d+)\s*(?:mins?|m)\b/gi, (_, minutes) => `${minutes} ${translate(language, 'min')}`);
+    return `${translate(language, 'Est. wait')}: ${waitVal}`;
   }
 
   // 11. Pattern: "All ({count})"
@@ -161,24 +165,14 @@ export function translate(language: Language, text: string, values?: Translation
   if (drMatch) {
     const rest = drMatch[1].trim();
     const prefix = language === 'si' ? 'වෛද්‍ය ' : 'மருத்துவர் ';
-    return `${prefix}${translate(language, rest, values)}`;
-  }
-
-  // 16. Pattern: Multi-word names composed of known tokens
-  if (text.includes(' ') && !text.includes('\n')) {
-    const parts = text.split(/\s+/);
-    if (parts.length >= 2 && parts.length <= 4) {
-      const translatedParts = parts.map(p => (translations[p] ?? normalizedTranslations[normalizeLabel(p)])?.[idx]);
-      if (translatedParts.every(Boolean)) {
-        return (translatedParts as string[]).join(' ');
-      }
-    }
+    return `${prefix}${rest}`;
   }
 
   return values ? text.replace(/\{(\w+)\}/g, (match, key: string) => String(values[key] ?? match)) : text;
 }
 
 export const translations: Record<string, readonly [string, string]> = {
+  ...uiCopy,
   ...templateCopy,
   ...commonCopy,
   ...doctorCopy,

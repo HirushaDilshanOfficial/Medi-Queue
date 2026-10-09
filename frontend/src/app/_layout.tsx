@@ -5,9 +5,18 @@ import { LanguageProvider } from '../i18n/LanguageContext';
 import { ThemeProvider } from '../theme/ThemeContext';
 import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-// @ts-ignore
-import Toast from 'react-native-toast-message';
+import Toast from '../components/GlobalToast';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from '@expo-google-fonts/inter';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 
 const toastConfig = {
   success: ({ text1, text2 }: any) => (
@@ -61,6 +70,7 @@ const toastConfig = {
 };
 
 function GlobalSafeArea() {
+
   const segments = useSegments();
   const firstSeg = (segments as any)?.[0] as string | undefined;
   
@@ -75,7 +85,24 @@ function GlobalSafeArea() {
 }
 
 // Root layout - Expo Router
+// Prevent auto hide
+SplashScreen.preventAutoHideAsync();
+
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       if (!document.getElementById('inter-google-font')) {
@@ -99,18 +126,27 @@ export default function RootLayout() {
     }
   }, []);
 
+  const segments = useSegments();
+  const firstSeg = (segments as any)?.[0] as string | undefined;
+  const isDark = ['(moh)', '(reception)', 'notifications', '(patient)'].includes(firstSeg || '');
+  const rootBgColor = isDark ? '#0a6e7e' : '#f3faff';
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <LanguageProvider>
-          <View style={{ flex: 1 }}>
-            <LanguageSwitcher />
+          <View style={{ flex: 1, backgroundColor: rootBgColor }}>
             <GlobalSafeArea />
-            <Stack screenOptions={{ headerShown: false }}>
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(auth)/welcome" />
               <Stack.Screen name="(auth)/login" />
               <Stack.Screen name="(auth)/register" />
+              <Stack.Screen name="(auth)/onboarding" />
               <Stack.Screen name="(moh)/dashboard" />
               <Stack.Screen name="(patient)" />
               <Stack.Screen name="(reception)" />

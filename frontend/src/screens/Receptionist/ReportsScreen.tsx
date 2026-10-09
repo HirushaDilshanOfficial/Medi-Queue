@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../i18n/LanguageSwitcher';
 import { router } from 'expo-router';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -480,6 +481,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
             style={refreshing ? styles.rotatingIcon : undefined}
           />
         </TouchableOpacity>
+        <LanguageSwitcher tone="dark" />
       </View>
 
       {/* ── BODY CONTENT ── */}
@@ -1043,7 +1045,7 @@ const styles = StyleSheet.create({
   headerTitleWrap: {
     flex: 1,
   },
-  headerTitle: {
+  headerTitle: { flexShrink: 1,
     fontSize: 20,
     fontWeight: '800',
     color: Colors.white,

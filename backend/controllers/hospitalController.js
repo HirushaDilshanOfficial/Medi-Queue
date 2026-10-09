@@ -165,16 +165,26 @@ exports.getHospitalDashboardStats = async (req, res) => {
     const localDate = new Date(today.getTime() - (offset*60*1000));
     const todayStr = localDate.toISOString().split('T')[0];
     
-    const todayAppointments = await Appointment.find({ date: todayStr });
+    // Find all doctors for this hospital
+    const Doctor = require('../models/Doctor');
+    const hospitalDoctors = await Doctor.find({ hospital: id }).select('_id');
+    const doctorIds = hospitalDoctors.map(d => d._id);
+
+    const OpdAppointment = require('../models/OpdAppointment');
+
+    const walkInAppointments = await Appointment.find({ doctor: { $in: doctorIds }, date: todayStr });
+    const bookedAppointments = await OpdAppointment.find({ doctor: { $in: doctorIds }, date: todayStr });
     
-    let walkInCount = 0;
-    let bookedCount = 0;
+    let walkInCount = walkInAppointments.length;
+    let bookedCount = bookedAppointments.length;
     let completedCount = 0;
     let inSessionCount = 0;
     
-    todayAppointments.forEach(app => {
-      if (app.type === 'walk_in') walkInCount++;
-      if (app.type === 'pre_booked') bookedCount++;
+    walkInAppointments.forEach(app => {
+      if (app.status === 'completed') completedCount++;
+      if (app.status === 'in_consultation') inSessionCount++;
+    });
+    bookedAppointments.forEach(app => {
       if (app.status === 'completed') completedCount++;
       if (app.status === 'in_consultation') inSessionCount++;
     });
@@ -183,6 +193,7 @@ exports.getHospitalDashboardStats = async (req, res) => {
     const consultationProgress = totalTodayPatients > 0 ? Math.round((completedCount / totalTodayPatients) * 100) : 0;
     
     // 3. Queue & Wait Time Stats
+    // Wait time calculation might need fixing, but keeping it simple for now
     const activeQueuesData = await QueueEntry.distinct('department', { queueDate: todayStr });
     const activeQueuesCount = activeQueuesData.length;
     
@@ -199,7 +210,8 @@ exports.getHospitalDashboardStats = async (req, res) => {
     
     const avgWaitMins = validWaitCount > 0 ? Math.round((totalWaitMs / validWaitCount) / 60000) : 0;
     
-    // 4. Chart Data (Weekly)
+    // 4. Chart Data (Real Data)
+    // Weekly
     const weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const weeklyDataPromises = [];
     for (let i = 6; i >= 0; i--) {
@@ -208,13 +220,45 @@ exports.getHospitalDashboardStats = async (req, res) => {
       const dStr = d.toISOString().split('T')[0];
       const dayLabel = weekLabels[d.getDay()];
       weeklyDataPromises.push(
-        Appointment.countDocuments({ date: dStr }).then(count => ({
+        Promise.all([
+          Appointment.countDocuments({ doctor: { $in: doctorIds }, date: dStr }),
+          OpdAppointment.countDocuments({ doctor: { $in: doctorIds }, date: dStr })
+        ]).then(([count1, count2]) => ({
           label: dayLabel,
-          value: count
+          value: count1 + count2
         }))
       );
     }
     const weeklyData = await Promise.all(weeklyDataPromises);
+
+    // Monthly (last 4 weeks)
+    const monthlyData = [];
+    for (let w = 3; w >= 0; w--) {
+      let weekTotal = 0;
+      for (let d = 0; d < 7; d++) {
+        const dateObj = new Date(localDate);
+        dateObj.setDate(dateObj.getDate() - (w * 7 + d));
+        const dateStr = dateObj.toISOString().split('T')[0];
+        const count1 = await Appointment.countDocuments({ doctor: { $in: doctorIds }, date: dateStr });
+        const count2 = await OpdAppointment.countDocuments({ doctor: { $in: doctorIds }, date: dateStr });
+        weekTotal += (count1 + count2);
+      }
+      monthlyData.push({ label: `Week ${4 - w}`, value: weekTotal });
+    }
+
+    // 6 Months
+    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const sixMonthsData = [];
+    for (let m = 5; m >= 0; m--) {
+      const targetDate = new Date(localDate);
+      targetDate.setMonth(targetDate.getMonth() - m);
+      const monthPrefix = targetDate.toISOString().substring(0, 7); // "YYYY-MM"
+      
+      const count1 = await Appointment.countDocuments({ doctor: { $in: doctorIds }, date: { $regex: `^${monthPrefix}` } });
+      const count2 = await OpdAppointment.countDocuments({ doctor: { $in: doctorIds }, date: { $regex: `^${monthPrefix}` } });
+      
+      sixMonthsData.push({ label: monthLabels[targetDate.getMonth()], value: count1 + count2 });
+    }
 
     const dashboardData = {
       todayPatients: {
@@ -244,20 +288,8 @@ exports.getHospitalDashboardStats = async (req, res) => {
       },
       chartData: {
         weekly: weeklyData,
-        monthly: [
-          { label: 'Week 1', value: Math.floor(Math.random() * 100) },
-          { label: 'Week 2', value: Math.floor(Math.random() * 100) },
-          { label: 'Week 3', value: Math.floor(Math.random() * 100) },
-          { label: 'Week 4', value: Math.floor(Math.random() * 100) }
-        ],
-        sixMonths: [
-          { label: 'Jan', value: Math.floor(Math.random() * 100) },
-          { label: 'Feb', value: Math.floor(Math.random() * 100) },
-          { label: 'Mar', value: Math.floor(Math.random() * 100) },
-          { label: 'Apr', value: Math.floor(Math.random() * 100) },
-          { label: 'May', value: Math.floor(Math.random() * 100) },
-          { label: 'Jun', value: Math.floor(Math.random() * 100) }
-        ]
+        monthly: monthlyData,
+        sixMonths: sixMonthsData
       }
     };
     

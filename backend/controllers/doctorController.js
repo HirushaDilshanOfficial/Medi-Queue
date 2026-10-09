@@ -15,7 +15,7 @@ const ACTIVE_STATUSES = ['booked', 'checked_in', 'in_consultation'];
  * @access  Private — receptionist
  */
 const getDoctors = asyncHandler(async (req, res) => {
-  const { department, hospitalId, date } = req.query;
+  const { department, hospitalId, date, search } = req.query;
 
   const targetDate =
     date ||
@@ -27,9 +27,19 @@ const getDoctors = asyncHandler(async (req, res) => {
     }).format(new Date());
 
   const doctorFilter = {};
+  const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (typeof search === 'string' && search.trim()) {
+    // Every word must match a displayed field. Treat punctuation as literal text,
+    // and keep this separate from the hospital's $or so it cannot widen that scope.
+    doctorFilter.$and = search.trim().split(/\s+/).map(word => ({
+      $or: ['name', 'specialization', 'department'].map(field => ({
+        [field]: { $regex: new RegExp(escapeRegex(word), 'i') },
+      })),
+    }));
+  }
   if (department && department.trim()) {
     doctorFilter.department = {
-      $regex: new RegExp(`^${department.trim()}$`, 'i'),
+      $regex: new RegExp(`^${escapeRegex(department.trim())}$`, 'i'),
     };
   }
   const activeHospitals = await Hospital.find({ isDeleted: false, status: 'Active' }).select('_id').lean();

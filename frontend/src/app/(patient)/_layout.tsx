@@ -26,19 +26,22 @@ export default function PatientTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarShowLabel: true,
         tabBarActiveTintColor: '#004c5b',
-        tabBarInactiveTintColor: '#3f484b',
+        tabBarInactiveTintColor: '#6f797c',
         tabBarStyle: {
-          backgroundColor: '#f3faff',
-          borderTopWidth: 0,
-          height: 64 + insets.bottom,
-          paddingBottom: Math.max(8, insets.bottom),
-          paddingTop: 8,
-          boxShadow: '0 -2px 12px rgba(0,0,0,0.05)',
+          backgroundColor: '#ffffff',
+          borderTopWidth: 1,
+          borderTopColor: '#e0f0f9',
+          height: 62 + insets.bottom,
+          paddingBottom: Math.max(6, insets.bottom),
+          paddingTop: 6,
+          boxShadow: '0 -2px 12px rgba(0,76,91,0.06)',
         },
         tabBarLabelStyle: {
-          fontSize: PatientTheme.designType.caption,
-          fontWeight: '500',
+          fontSize: 11,
+          fontWeight: '600',
+          marginBottom: 2,
         },
       }}
     >
@@ -70,11 +73,12 @@ export default function PatientTabsLayout() {
           tabBarIcon: ProfileIcon,
           tabBarStyle: {
             backgroundColor: '#ffffff',
-            borderTopWidth: 0,
-            height: 64 + insets.bottom,
-            paddingBottom: Math.max(8, insets.bottom),
-            paddingTop: 8,
-            boxShadow: '0 -4px 20px -2px rgba(19,34,40,0.06)',
+            borderTopWidth: 1,
+            borderTopColor: '#e0f0f9',
+            height: 62 + insets.bottom,
+            paddingBottom: Math.max(6, insets.bottom),
+            paddingTop: 6,
+            boxShadow: '0 -2px 12px rgba(0,76,91,0.06)',
           },
         }}
       />

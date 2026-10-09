@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '../../../i18n/LanguageSwitcher';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -166,6 +167,7 @@ export function LiveQueueScreen() {
       <View style={styles.grow}><Text style={styles.eyebrow}>{t("NATIONAL OPD")}</Text><Text style={styles.headerTitle}>{t("Live Queue Pass")}</Text></View>
       <Pressable accessibilityRole="button" accessibilityLabel={t("Queue notifications")} onPress={() => message(t('Queue notifications'), activePass ? t("Queue {value0}: {value1}. This screen updates automatically while you wait.", { value0: String(activePass.tokenNumber), value1: t(activePass.status) }) : t('Check in for an appointment to receive your live queue pass.'))} style={styles.iconButton}><ProfileIcon name="bell" size={22} color={C.muted} /></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={t("Open patient profile")} onPress={() => router.push('/(patient)/profile')} style={styles.profileButton}><ProfileIcon name="profile" size={18} color={C.surface} /></Pressable>
+      <LanguageSwitcher tone="light" />
     </View></View>
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={Boolean(pass.data) && (pass.loading || upcoming.loading)} onRefresh={refresh} tintColor={C.primary} colors={[C.primary]} />}>
@@ -191,7 +193,6 @@ export function LiveQueueScreen() {
         {pass.error ? <View style={styles.stateCard}><Text style={styles.title}>{t("Could not reach the queue")}</Text><Text style={styles.error}>{pass.error}</Text><Pressable accessibilityRole="button" onPress={reloadPass} style={styles.walletButton}><Text style={styles.actionLabel}>{t("Try again")}</Text></Pressable></View> : null}
         {selectedPass ? <QueuePassContent pass={selectedPass} patientName={profile.data?.patient.fullName ?? '—'} doctor={doctor.data?.doctor}
           countdown={countdown} liveError={liveError} onHome={home} onShare={share}
-          onWallet={() => message(t('Add to Wallet'), t('Apple Wallet and Google Wallet integration is not available yet. Keep this live pass open at check-in, or use Share ticket to share your pass details.'))}
           onContact={() => message(t('Clinic contact'), t('Ask at the clinic reception desk for assistance with your queue or consulting room. A clinic phone number has not been provided.'))} /> :
           pass.loading || (upcoming.loading && !upcoming.data) ? <View style={styles.stateCard}><ActivityIndicator color={C.primary} /><Text style={styles.caption}>{t("Checking your queue pass and bookings…")}</Text></View> :
           pass.error ? null : todaysAppointment ? <View style={styles.stateCard}>
