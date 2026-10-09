@@ -2,7 +2,7 @@ import { LanguageSwitcher } from '../../../i18n/LanguageSwitcher';
 import { dayLabel } from '../../../utils/opdDates';
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -32,6 +32,22 @@ function SectionHeading({ title, action, onPress }: { title: string; action?: st
   const { t } = useLanguage();
   return <View style={styles.sectionHeading}><Text accessibilityRole="header" style={styles.sectionTitle}>{t(title ?? '')}</Text>{action && onPress ?
     <Pressable accessibilityRole="button" accessibilityLabel={`${action}: ${title}`} onPress={onPress} style={styles.textButton}><Text style={styles.link}>{action}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable> : null}</View>;
+}
+
+function getClinicIcon(department?: string, name?: string): DesignImageName {
+  const text = `${department || ''} ${name || ''}`.toLowerCase();
+  if (text.includes('cardio') || text.includes('heart')) return 'heart';
+  if (text.includes('neuro') || text.includes('brain')) return 'brain';
+  if (text.includes('paed') || text.includes('pediatr') || text.includes('child')) return 'child';
+  if (text.includes('eye') || text.includes('ophthalm')) return 'eye';
+  if (text.includes('ent') || text.includes('ear') || text.includes('throat')) return 'ear';
+  if (text.includes('ortho') || text.includes('spine') || text.includes('bone')) return 'spine';
+  if (text.includes('nephr') || text.includes('kidney') || text.includes('uro')) return 'kidney';
+  if (text.includes('psych') || text.includes('mind') || text.includes('mental')) return 'mind';
+  if (text.includes('pharm') || text.includes('pill')) return 'pill';
+  if (text.includes('screen') || text.includes('lab') || text.includes('pathol')) return 'screening';
+  if (text.includes('surg') || text.includes('medic') || text.includes('general')) return 'medical';
+  return 'stethoscope';
 }
 
 export function PatientDashboardScreen() {
@@ -83,8 +99,22 @@ export function PatientDashboardScreen() {
   const ahead = pass?.position == null ? null : Math.max(0, pass.position - 1);
   const called = pass?.status === 'called' || pass?.status === 'in_consultation';
   const wide = width >= 760;
-  const columns = wide ? 4 : 2;
+  const columns = width >= 900 ? 4 : width >= 600 ? 3 : 2;
   const specialtyWidth = (Math.min(width, 1120) - 40 - (columns - 1) * 10) / columns;
+
+  const uniqueClinics = useMemo(() => {
+    if (!clinics.data?.clinics) return [];
+    const map = new Map<string, typeof clinics.data.clinics[0]>();
+    for (const clinic of clinics.data.clinics) {
+      const rawName = clinic.department || clinic.name || '';
+      const cleanKey = rawName.replace(/ Clinic$/i, '').trim().toLowerCase();
+      if (!cleanKey) continue;
+      if (!map.has(cleanKey)) {
+        map.set(cleanKey, clinic);
+      }
+    }
+    return Array.from(map.values());
+  }, [clinics.data]);
   const openDirectory = (view = '') => router.push({ pathname: '/(patient)/doctors', params: { tab: 'directory', view, department: '', hospitalId: '', search: '' } });
   const doctors = () => openDirectory();
   const bookings = () => router.push({ pathname: '/(patient)/doctors', params: { tab: 'bookings' } });
@@ -178,7 +208,7 @@ export function PatientDashboardScreen() {
       <View style={styles.section}>
         <SectionHeading
           title={t("Hospital clinics")}
-          action={clinics.data && clinics.data.clinics.length > 16 ? (showAllClinics ? t('Show featured') : t('View all clinics')) : undefined}
+          action={uniqueClinics.length > 6 ? (showAllClinics ? t('Show featured') : t('View all clinics')) : undefined}
           onPress={() => setShowAllClinics((value) => !value)}
         />
         <Text style={styles.sectionCaption}>{t("Find the right specialist for your care.")}</Text>
@@ -186,8 +216,30 @@ export function PatientDashboardScreen() {
           <View style={styles.status}><ActivityIndicator color={C.primary} /><Text style={styles.statusText}>{t("Loading clinics…")}</Text></View>
         ) : clinics.error ? (
           <View style={styles.error}><Text style={styles.errorTitle}>{t("Could not load clinics")}</Text><Text style={styles.statusText}>{clinics.error}</Text><Pressable onPress={clinics.reload} style={styles.textButton}><Text style={styles.link}>{t("Try again")}</Text></Pressable></View>
-        ) : clinics.data?.clinics.length ? (
-          <View style={styles.specialties}>{(showAllClinics ? clinics.data.clinics : clinics.data.clinics.slice(0, 16)).map((clinic) => <Pressable key={clinic._id} accessibilityRole="button" accessibilityLabel={t(clinic.name)} onPress={() => router.push({ pathname: '/(patient)/doctors', params: { tab: 'directory', view: '', search: '', department: clinic.department, hospitalId: clinic.hospital?._id ?? '' } })} style={({ pressed }) => [styles.specialty, { width: specialtyWidth }, pressed && styles.pressed]}><View style={styles.specialtyIcon}><DesignImage name="stethoscope" size={20} color={C.secondary} /></View><Text style={styles.specialtyLabel}>{t(clinic.name.replace(/ Clinic$/, ''))}</Text><DesignImage name="arrow" size={12} color={C.secondary} /></Pressable>)}</View>
+        ) : uniqueClinics.length ? (
+          <View style={styles.specialties}>
+            {(showAllClinics ? uniqueClinics : uniqueClinics.slice(0, 6)).map((clinic) => {
+              const displayName = clinic.name.replace(/ Clinic$/i, '');
+              const iconName = getClinicIcon(clinic.department, clinic.name);
+              return (
+                <Pressable
+                  key={clinic._id}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(clinic.name)}
+                  onPress={() => router.push({ pathname: '/(patient)/doctors', params: { tab: 'directory', view: '', search: '', department: clinic.department, hospitalId: clinic.hospital?._id ?? '' } })}
+                  style={({ pressed }) => [styles.specialty, pressed && styles.pressed]}
+                >
+                  <View style={styles.specialtyIcon}>
+                    <DesignImage name={iconName} size={20} color={C.secondary} />
+                  </View>
+                  <Text style={styles.specialtyLabel} numberOfLines={1} ellipsizeMode="tail">
+                    {t(displayName)}
+                  </Text>
+                  <DesignImage name="arrow" size={14} color={C.secondary} />
+                </Pressable>
+              );
+            })}
+          </View>
         ) : (
           <View style={styles.emptyActivity}><Text style={styles.activityTitle}>{t("No clinics available")}</Text><Text style={styles.sectionCaption}>{t("Your hospital has not enabled any clinics yet.")}</Text></View>
         )}
