@@ -7,7 +7,6 @@ export interface WalkInPatientState {
   name?: string;
   nic: string;
   phone: string;
-  address?: string;
   dob?: string;
   age: string | number;
   gender: 'male' | 'female' | 'other' | '';
@@ -30,7 +29,6 @@ const INITIAL_PATIENT_STATE: WalkInPatientState = {
   fullName: '',
   nic: '',
   phone: '',
-  address: '',
   dob: '',
   age: '',
   gender: '',
@@ -84,7 +82,6 @@ export const useWalkInForm = (
     fullName?: string;
     nic?: string;
     phone?: string;
-    address?: string;
     age?: string | number;
     gender?: string;
     existingPatientId?: string | null;
@@ -101,7 +98,6 @@ export const useWalkInForm = (
       '';
     const resolvedNic = rawPatient.nic || initialValues?.nic || '';
     const resolvedPhone = rawPatient.phone || initialValues?.phone || '';
-    const resolvedAddress = rawPatient.address || initialValues?.address || '';
     const resolvedAge =
       rawPatient.age !== undefined && rawPatient.age !== null
         ? String(rawPatient.age)
@@ -124,7 +120,6 @@ export const useWalkInForm = (
         fullName: resolvedFullName,
         nic: resolvedNic,
         phone: resolvedPhone,
-        address: resolvedAddress,
         age: resolvedAge,
         gender: resolvedGender,
       },
@@ -152,7 +147,7 @@ export const useWalkInForm = (
       }
 
       // Direct patient field aliases
-      if (['fullName', 'name', 'nic', 'phone', 'address', 'dob', 'age', 'gender', 'bloodGroup'].includes(field)) {
+      if (['fullName', 'name', 'nic', 'phone', 'dob', 'age', 'gender', 'bloodGroup'].includes(field)) {
         const targetField = field === 'name' ? 'fullName' : field;
         delete newErrors[targetField];
         delete newErrors[field];
@@ -259,12 +254,7 @@ export const useWalkInForm = (
       newErrors.phone = 'Enter a valid Sri Lankan phone number (e.g. 0771234567)';
     }
 
-    // 3. Home address is required
-    if (!form.patient.address || !form.patient.address.trim()) {
-      newErrors.address = 'Home address is required';
-    }
-
-    // 4. NIC is optional, but if provided, must be valid
+    // 3. NIC is optional, but if provided, must be valid
     if (form.patient.nic && form.patient.nic.trim()) {
       if (!isValidNIC(form.patient.nic)) {
         newErrors.nic = 'Enter a valid NIC (9 digits + V/X or 12 digits)';
