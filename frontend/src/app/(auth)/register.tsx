@@ -10,7 +10,7 @@ import { Colors } from '../../constants/Colors';
 import { AppIcon } from '../../components/AppIcon';
 import { registerPatient } from '../../services/authService';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import Toast from 'react-native-toast-message';
+import Toast from '../../components/GlobalToast';
 
 // Register Screen - Expo Router version
 export default function RegisterScreen() {

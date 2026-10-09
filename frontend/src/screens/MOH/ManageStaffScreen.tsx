@@ -15,7 +15,7 @@ import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../../config';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
-import Toast from 'react-native-toast-message';
+import Toast from '../../components/GlobalToast';
 
 export default function ManageStaffScreen() {
   const { t } = useLanguage();

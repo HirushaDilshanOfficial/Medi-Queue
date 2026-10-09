@@ -4,8 +4,7 @@ import { ThemeProvider } from '../theme/ThemeContext';
 import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
 import { View, Text } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-// @ts-ignore
-import Toast from 'react-native-toast-message';
+import Toast from '../components/GlobalToast';
 import { Ionicons } from '@expo/vector-icons';
 
 const toastConfig = {

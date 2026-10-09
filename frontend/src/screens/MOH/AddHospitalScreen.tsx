@@ -13,7 +13,7 @@ import {
   StatusBar,
   Modal,
 } from 'react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../../components/GlobalToast';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { API_URL } from '../../config';

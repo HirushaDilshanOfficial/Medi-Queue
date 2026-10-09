@@ -10,7 +10,7 @@ import { BASE_URL } from '../../config';
 
 import { getAuthToken, clearAuthToken } from '../../services/http';
 import { MOHBottomNav } from '../../components/moh/MOHBottomNav';
-import Toast from 'react-native-toast-message';
+import Toast from '../../components/GlobalToast';
 
 export default function ProfileScreen() {
   const { t } = useLanguage();

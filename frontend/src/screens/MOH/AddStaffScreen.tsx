@@ -12,7 +12,7 @@ import {
   Modal,
   Alert,
 } from 'react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../../components/GlobalToast';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';

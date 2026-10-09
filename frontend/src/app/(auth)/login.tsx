@@ -21,7 +21,7 @@ import { AppIcon } from '../../components/AppIcon';
 import { login } from '../../services/authService';
 import { setAuthToken as setHttpAuthToken } from '../../services/http';
 import { setAuthToken as setApiAuthToken } from '../../services/api';
-import Toast from 'react-native-toast-message';
+import Toast from '../../components/GlobalToast';
 
 // Actual Login Form - Email & Password
 export default function LoginScreen() {
