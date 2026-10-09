@@ -19,17 +19,32 @@ export function LocalizedText({ style, children, ...props }: TextProps) {
     fontFamily = Platform.OS === 'ios' ? 'System' : 'sans-serif';
   }
 
+  if (Platform.OS === 'web') {
+    return (
+      <RNText
+        {...props}
+        style={[
+          resolvedStyle,
+          language !== 'en' && {
+            fontFamily: "'Noto Sans Sinhala', 'Noto Sans Tamil', 'Inter', -apple-system, sans-serif",
+            letterSpacing: 0,
+          },
+        ]}
+      >
+        {children}
+      </RNText>
+    );
+  }
+
   // We should remove fontWeight from the style to prevent RN from trying to apply it to a custom font, which sometimes causes issues on Android
   const { fontWeight, ...safeStyle } = resolvedStyle;
 
   return (
     <RNText
       {...props}
+      style={[
         safeStyle,
         { fontFamily },
-        Platform.OS === 'web' && language !== 'en' && {
-          fontFamily: "'Noto Sans Sinhala', 'Noto Sans Tamil', 'Inter', -apple-system, sans-serif",
-        },
         language !== 'en' && { letterSpacing: 0 },
       ]}
     >

@@ -16,7 +16,6 @@ import {
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
 
 const toastConfig = {
   success: ({ text1, text2 }: any) => (
@@ -86,7 +85,9 @@ function GlobalSafeArea() {
 
 // Root layout - Expo Router
 // Prevent auto hide
-SplashScreen.preventAutoHideAsync();
+if (Platform.OS !== 'web') {
+  SplashScreen.preventAutoHideAsync().catch(() => {});
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -99,7 +100,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded]);
 
@@ -131,7 +132,7 @@ export default function RootLayout() {
   const isDark = ['(moh)', '(reception)', 'notifications', '(patient)'].includes(firstSeg || '');
   const rootBgColor = isDark ? '#0a6e7e' : '#f3faff';
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded && Platform.OS !== 'web') {
     return null;
   }
 
