@@ -5,6 +5,16 @@ import { View, Text } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from '../components/GlobalToast';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from '@expo-google-fonts/inter';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 
 const toastConfig = {
   success: ({ text1, text2 }: any) => (
@@ -58,6 +68,7 @@ const toastConfig = {
 };
 
 function GlobalSafeArea() {
+
   const segments = useSegments();
   const firstSeg = (segments as any)?.[0] as string | undefined;
   
@@ -72,11 +83,32 @@ function GlobalSafeArea() {
 }
 
 // Root layout - Expo Router
+// Prevent auto hide
+SplashScreen.preventAutoHideAsync();
+
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
   const segments = useSegments();
   const firstSeg = (segments as any)?.[0] as string | undefined;
   const isDark = ['(moh)', '(reception)', 'notifications', '(patient)'].includes(firstSeg || '');
   const rootBgColor = isDark ? '#0a6e7e' : '#f3faff';
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
     <SafeAreaProvider>
