@@ -8,6 +8,7 @@ const Patient = require('../models/Patient');
 const Appointment = require('../models/Appointment');
 const QueueToken = require('../models/QueueToken');
 const Counter = require('../models/Counter');
+const DoctorSchedule = require('../models/DoctorSchedule');
 const { getNextToken } = require('./tokenGenerator');
 
 /**
@@ -20,12 +21,20 @@ async function seed() {
   // Connect via config/db.js
   await connectDB();
 
-  const todayString = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Colombo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
+  const getDateOffset = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Colombo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  };
+
+  const todayString = getDateOffset(0);
+  const tomorrowString = getDateOffset(1);
+  const dayAfterTomorrowString = getDateOffset(2);
 
   // 1. Seed Receptionist User
   const SEED_EMAIL = 'reception@mediqueue.lk';
@@ -256,13 +265,17 @@ async function seed() {
 
   await QueueToken.deleteMany({
     $or: [
-      { date: todayString, appointment: { $in: existingApptIds } },
-      { date: todayString, patient: { $in: existingSeedPatientIds } },
+      { date: todayString },
+      { appointment: { $in: existingApptIds } },
+      { patient: { $in: existingSeedPatientIds } },
     ],
   });
 
   await Appointment.deleteMany({
-    _id: { $in: existingApptIds },
+    $or: [
+      { date: todayString },
+      { _id: { $in: existingApptIds } },
+    ],
   });
 
   console.log(`Cleaning existing seed patients (${SEED_NICS.length} fixed NICs)...`);
@@ -417,8 +430,81 @@ async function seed() {
     );
   }
 
-  console.log('✓ Seeding complete.');
-  return { receptionist, doctors, patients, appointments, queueTokens };
+  // 5. Seed Doctor Schedules (Today, Tomorrow, and Day After Tomorrow)
+  console.log(`\nCleaning and seeding doctor schedules for ${todayString}, ${tomorrowString}, and ${dayAfterTomorrowString}...`);
+  const doctorIds = doctors.map((d) => d._id);
+  await DoctorSchedule.deleteMany({
+    doctor: { $in: doctorIds },
+    date: { $in: [todayString, tomorrowString, dayAfterTomorrowString] },
+  });
+
+  const schedulesToSeed = [];
+
+  // Today: all 3 doctors available (08:00 - 16:30)
+  for (const doc of doctors) {
+    schedulesToSeed.push({
+      doctor: doc._id,
+      date: todayString,
+      startTime: '08:00',
+      endTime: '16:30',
+      slotMinutes: 15,
+      maxPatients: doc.dailyCapacity || 30,
+      status: 'available',
+      notes: 'General OPD Session',
+      createdBy: receptionist._id,
+    });
+  }
+
+  // Tomorrow: all 3 doctors available (08:00 - 16:30)
+  for (const doc of doctors) {
+    schedulesToSeed.push({
+      doctor: doc._id,
+      date: tomorrowString,
+      startTime: '08:00',
+      endTime: '16:30',
+      slotMinutes: 15,
+      maxPatients: doc.dailyCapacity || 30,
+      status: 'available',
+      notes: 'General OPD Session',
+      createdBy: receptionist._id,
+    });
+  }
+
+  // Day after tomorrow: one doctor on "leave", remaining doctors available (08:00 - 16:30)
+  schedulesToSeed.push({
+    doctor: doctors[0]._id, // Dr. Aruna Perera on leave
+    date: dayAfterTomorrowString,
+    startTime: '08:00',
+    endTime: '16:30',
+    slotMinutes: 15,
+    maxPatients: 30,
+    status: 'leave',
+    notes: 'Approved Medical Leave',
+    createdBy: receptionist._id,
+  });
+
+  for (let i = 1; i < doctors.length; i++) {
+    schedulesToSeed.push({
+      doctor: doctors[i]._id,
+      date: dayAfterTomorrowString,
+      startTime: '08:00',
+      endTime: '16:30',
+      slotMinutes: 15,
+      maxPatients: doctors[i].dailyCapacity || 30,
+      status: 'available',
+      notes: 'General OPD Session',
+      createdBy: receptionist._id,
+    });
+  }
+
+  const doctorSchedules = await DoctorSchedule.insertMany(schedulesToSeed);
+  for (const s of doctorSchedules) {
+    const docName = doctors.find((d) => String(d._id) === String(s.doctor))?.name || 'Doctor';
+    console.log(`✓ Schedule created: ${docName} on ${s.date} [${s.startTime}-${s.endTime}, ${s.slotMinutes}m, Status: ${s.status.toUpperCase()}]`);
+  }
+
+  console.log('\n✓ Seeding complete.');
+  return { receptionist, doctors, patients, appointments, queueTokens, doctorSchedules };
 }
 
 if (require.main === module) {
