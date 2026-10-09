@@ -18,6 +18,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { BASE_URL } from '../../config';
 import { ActivityIndicator } from 'react-native';
+import { AppIcon } from '../../components/AppIcon';
 
 export default function ResetPasswordScreen() {
   const { t } = useLanguage();
@@ -84,7 +85,7 @@ export default function ResetPasswordScreen() {
 
           {/* Icon */}
           <View style={styles.logoSmall}>
-            <Text style={styles.logoSmallIcon}>🔒</Text>
+            <AppIcon name="lock" size={24} color={Colors.primaryDark} />
           </View>
 
           <Text style={styles.headerTitle}>{t("Create new password")}</Text>
@@ -99,7 +100,7 @@ export default function ResetPasswordScreen() {
           {/* New Password Field */}
           <Text style={styles.fieldLabel}>{t("New Password")}</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>🔒</Text>
+            <AppIcon name="lock" size={18} color={Colors.textMedium} style={{ marginRight: 10 }} />
             <TextInput
               style={styles.input}
               placeholder={t("Enter new password")}
@@ -109,14 +110,14 @@ export default function ResetPasswordScreen() {
               secureTextEntry={!showPassword}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-              <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
+              <AppIcon name={showPassword ? 'eyeOff' : 'eye'} size={18} color={Colors.textMedium} />
             </TouchableOpacity>
           </View>
 
           {/* Confirm Password Field */}
           <Text style={styles.fieldLabel}>{t("Confirm New Password")}</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>🔐</Text>
+            <AppIcon name="lock" size={18} color={Colors.textMedium} style={{ marginRight: 10 }} />
             <TextInput
               style={styles.input}
               placeholder={t("Re-enter new password")}
