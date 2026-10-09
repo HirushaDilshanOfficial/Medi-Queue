@@ -95,7 +95,9 @@ export default function MOHDashboardScreen() {
               <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/notifications')}>
                 <Ionicons name="notifications" size={20} color={Colors.white} />
               </TouchableOpacity>
-              <LanguageSwitcher />
+              <View style={{ marginLeft: -8, marginRight: -10 }}>
+                <LanguageSwitcher />
+              </View>
             </View>
           </View>
 
@@ -248,7 +250,7 @@ const styles = StyleSheet.create({
   },
   greetingText: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginBottom: 2 },
   userNameText: { fontSize: 18, fontWeight: '700', color: Colors.white },
-  headerIcons: { flexDirection: 'row', gap: 10 },
+  headerIcons: { flexDirection: 'row', gap: 4, alignItems: 'center' },
   iconButton: {
     width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center', alignItems: 'center'
