@@ -1,0 +1,1881 @@
+{
+  "info": {
+    "name": "Medi-Queue Patient API Tests",
+    "description": "Comprehensive Postman collection for testing all patient-related API endpoints in the Medi-Queue system. Covers patient registration, portal, reception desk, legacy MOH, walk-in, queue, and doctor-side endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5001"
+    },
+    {
+      "key": "patientToken",
+      "value": ""
+    },
+    {
+      "key": "receptionToken",
+      "value": ""
+    },
+    {
+      "key": "doctorToken",
+      "value": ""
+    },
+    {
+      "key": "patientId",
+      "value": ""
+    },
+    {
+      "key": "receptionPatientId",
+      "value": ""
+    },
+    {
+      "key": "reportId",
+      "value": ""
+    },
+    {
+      "key": "visitId",
+      "value": ""
+    },
+    {
+      "key": "departmentId",
+      "value": ""
+    },
+    {
+      "key": "doctorId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Auth & Registration",
+      "description": "Patient registration, login, and OTP verification endpoints",
+      "item": [
+        {
+          "name": "01.1 - Register Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Test Patient\",\n  \"email\": \"test.patient@example.com\",\n  \"password\": \"TestPass123!\",\n  \"nic\": \"200012345678\",\n  \"birthday\": \"2000-01-15\",\n  \"gender\": \"Male\",\n  \"phone\": \"0771234567\",\n  \"bloodGroup\": \"O+\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/patient/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "patient", "register"]
+            },
+            "description": "Public - Register a new patient account"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns patient data and token\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('_id');",
+                  "    pm.expect(jsonData).to.have.property('fullName');",
+                  "    pm.expect(jsonData).to.have.property('email');",
+                  "    pm.expect(jsonData).to.have.property('role', 'Patient');",
+                  "    pm.expect(jsonData).to.have.property('token');",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set(\"patientToken\", jsonData.token);",
+                  "    pm.collectionVariables.set(\"patientId\", jsonData._id);",
+                  "}",
+                  "",
+                  "pm.test(\"Response time is under 2000ms\", function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "01.2 - Login as Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.patient@example.com\",\n  \"password\": \"TestPass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Public - Login and obtain JWT token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns user data and token\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('token');",
+                  "    pm.expect(jsonData).to.have.property('email');",
+                  "    pm.expect(jsonData).to.have.property('role', 'Patient');",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set(\"patientToken\", jsonData.token);",
+                  "    pm.collectionVariables.set(\"patientId\", jsonData._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "01.3 - Send Patient OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"0771234567\",\n  \"patientName\": \"Test Patient\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/send-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "send-otp"]
+            },
+            "description": "Receptionist - Send 6-digit OTP to patient phone"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"OTP sent successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('otp');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "01.4 - Verify Patient OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"0771234567\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "verify-otp"]
+            },
+            "description": "Receptionist - Verify the 6-digit OTP"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"OTP verification response\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('verified', true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Patient Portal (/me/*)",
+      "description": "Patient self-service portal endpoints. Requires Patient JWT token.",
+      "item": [
+        {
+          "name": "02.1 - Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me"]
+            },
+            "description": "Patient only - Get the signed-in patient's OPD profile"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns patient profile\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('patient');",
+                  "    pm.expect(jsonData.patient).to.have.property('fullName');",
+                  "    pm.expect(jsonData.patient).to.have.property('nic');",
+                  "    pm.expect(jsonData.patient).to.have.property('phone');",
+                  "    pm.expect(jsonData.patient).to.have.property('email');",
+                  "});",
+                  "",
+                  "pm.test(\"Response time is under 2000ms\", function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.2 - Update My Profile (Valid)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"0779876543\",\n  \"email\": \"updated@example.com\",\n  \"address\": \"123 Main Street, Colombo\",\n  \"district\": \"Colombo\",\n  \"bloodGroup\": \"B+\",\n  \"allergies\": [\"Penicillin\", \"Dust\"],\n  \"favouriteDepartment\": \"Cardiology\",\n  \"remindersEnabled\": true,\n  \"emergencyContact\": {\n    \"name\": \"Emergency Contact\",\n    \"relationship\": \"Spouse\",\n    \"phone\": \"0771112223\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me"]
+            },
+            "description": "Patient only - Update own profile fields"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Profile updated with new values\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('patient');",
+                  "    pm.expect(jsonData.patient).to.have.property('phone', '0779876543');",
+                  "    pm.expect(jsonData.patient).to.have.property('email', 'updated@example.com');",
+                  "    pm.expect(jsonData.patient).to.have.property('address', '123 Main Street, Colombo');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.3 - Update My Profile (Rejected Fields)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Should Not Change\",\n  \"nic\": \"999999999999\",\n  \"user\": \"someid\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me"]
+            },
+            "description": "Negative test - Attempt to update non-editable fields (fullName, nic, user)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns error about non-editable fields\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('message');",
+                  "    pm.expect(jsonData.message).to.include('Cannot change');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.4 - Get Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me", "dashboard"]
+            },
+            "description": "Patient only - Dashboard aggregate with stats, next appointment, and recent activity"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns dashboard data\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('patient');",
+                  "    pm.expect(jsonData).to.have.property('stats');",
+                  "    pm.expect(jsonData.stats).to.have.property('totalDoctors');",
+                  "    pm.expect(jsonData.stats).to.have.property('activeDoctors');",
+                  "    pm.expect(jsonData).to.have.property('nextAppointment');",
+                  "    pm.expect(jsonData).to.have.property('recentActivity');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.5 - Get Visit History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me", "history"]
+            },
+            "description": "Patient only - Past and completed visits with summary"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns history data\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('visits');",
+                  "    pm.expect(jsonData).to.have.property('reports');",
+                  "    pm.expect(jsonData).to.have.property('summary');",
+                  "    pm.expect(jsonData.summary).to.have.property('totalVisits');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.6 - Export Visit PDF (All Visits)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me/history/pdf",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me", "history", "pdf"]
+            },
+            "description": "Patient only - Export all visit records as PDF"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Content-Type is application/pdf or JSON (if no visits)\", function () {",
+                  "    var contentType = pm.response.headers.get('Content-Type');",
+                  "    pm.expect(contentType).to.include('application/pdf');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.7 - Get Reports List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me/reports",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me", "reports"]
+            },
+            "description": "Patient only - List all medical reports"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns reports array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('reports');",
+                  "    pm.expect(jsonData.reports).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.8 - Create Report (with File Upload)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "Blood Test Report",
+                  "type": "text"
+                },
+                {
+                  "key": "category",
+                  "value": "Lab Report",
+                  "type": "text"
+                },
+                {
+                  "key": "reportDate",
+                  "value": "2026-10-01",
+                  "type": "text"
+                },
+                {
+                  "key": "notes",
+                  "value": "Fasting blood sugar test",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me/reports",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me", "reports"]
+            },
+            "description": "Patient only - Create a new medical report with optional file upload"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns created report\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('report');",
+                  "    pm.expect(jsonData.report).to.have.property('title');",
+                  "    pm.expect(jsonData.report).to.have.property('id');",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set(\"reportId\", jsonData.report.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.9 - Get Single Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me/reports/{{reportId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me", "reports", "{{reportId}}"]
+            },
+            "description": "Patient only - Get a specific report by ID"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test(\"Returns report data\", function () {",
+                  "        var jsonData = pm.response.json();",
+                  "        pm.expect(jsonData).to.have.property('report');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.10 - Update Report",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Blood Test Report\",\n  \"category\": \"Lab Report\",\n  \"notes\": \"Updated notes\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me/reports/{{reportId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me", "reports", "{{reportId}}"]
+            },
+            "description": "Patient only - Update an existing report"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test(\"Report updated\", function () {",
+                  "        var jsonData = pm.response.json();",
+                  "        pm.expect(jsonData).to.have.property('report');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.11 - Delete Report",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me/reports/{{reportId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me", "reports", "{{reportId}}"]
+            },
+            "description": "Patient only - Delete a report"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.12 - Get Report File",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me/reports/{{reportId}}/file",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me", "reports", "{{reportId}}", "file"]
+            },
+            "description": "Patient only - Download report file"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200, 302, or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 302, 404]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Reception Desk",
+      "description": "Reception/admin/doctor patient management endpoints. Requires receptionist/admin/doctor JWT.",
+      "item": [
+        {
+          "name": "03.1 - Search Patients (by NIC/phone/name)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/patients/search?q=test",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "patients", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "test"
+                }
+              ]
+            },
+            "description": "Receptionist/Admin/Doctor - Search patients by NIC, phone, fullName, passCode, token, or ObjectId"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns search results\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('found');",
+                  "    pm.expect(jsonData).to.have.property('patients');",
+                  "    pm.expect(jsonData.patients).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03.2 - Search Patients (Too Short Query)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/patients/search?q=ab",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "patients", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "ab"
+                }
+              ]
+            },
+            "description": "Negative test - Search query must be at least 3 characters"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns error about query length\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('message');",
+                  "    pm.expect(jsonData.message).to.include('at least 3 characters');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03.3 - Get Patients List (All)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/patients?filter=all&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "patients"],
+              "query": [
+                {
+                  "key": "filter",
+                  "value": "all"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Receptionist/Admin/Doctor - Get patient list with optional filter"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns patients array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03.4 - Get Patients List (Visited Today)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/patients?filter=visited_today",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "patients"],
+              "query": [
+                {
+                  "key": "filter",
+                  "value": "visited_today"
+                }
+              ]
+            },
+            "description": "Receptionist/Admin/Doctor - Get patients who visited today"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03.5 - Get Patients List (Invalid Filter)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/patients?filter=invalid",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "patients"],
+              "query": [
+                {
+                  "key": "filter",
+                  "value": "invalid"
+                }
+              ]
+            },
+            "description": "Negative test - Invalid filter value should return 400"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns error about invalid filter\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('message');",
+                  "    pm.expect(jsonData.message).to.include('Invalid filter');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03.6 - Get Patient By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/patients/{{receptionPatientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "patients", "{{receptionPatientId}}"]
+            },
+            "description": "Receptionist/Admin/Doctor - Get full patient profile with visit history"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test(\"Returns patient with visit history\", function () {",
+                  "        var jsonData = pm.response.json();",
+                  "        pm.expect(jsonData).to.have.property('fullName');",
+                  "        pm.expect(jsonData).to.have.property('visitHistory');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03.7 - Get Patient By ID (Invalid ID)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/patients/invalid_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "patients", "invalid_id"]
+            },
+            "description": "Negative test - Invalid ObjectId should return 404"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03.8 - Verify Patient NIC",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/patients/{{receptionPatientId}}/verify-nic",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "patients", "{{receptionPatientId}}", "verify-nic"]
+            },
+            "description": "Receptionist/Admin/Doctor - Verify patient's NIC (sets nicVerified = true)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200, 400, or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 404]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test(\"NIC verified\", function () {",
+                  "        var jsonData = pm.response.json();",
+                  "        pm.expect(jsonData).to.have.property('nicVerified', true);",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03.9 - Update Patient Profile (Reception)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{receptionToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"0771234567\",\n  \"address\": \"456 Hospital Road\",\n  \"district\": \"Gampaha\",\n  \"emergencyContact\": {\n    \"name\": \"Emergency Person\",\n    \"relationship\": \"Parent\",\n    \"phone\": \"0779876543\"\n  },\n  \"bloodGroup\": \"A+\",\n  \"allergies\": [\n    { \"name\": \"Aspirin\", \"severity\": \"moderate\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/patients/{{receptionPatientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "patients", "{{receptionPatientId}}"]
+            },
+            "description": "Receptionist/Admin/Doctor - Update patient fields (phone, address, district, emergencyContact, bloodGroup, allergies)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test(\"Patient profile updated\", function () {",
+                  "        var jsonData = pm.response.json();",
+                  "        pm.expect(jsonData).to.have.property('message', 'Patient profile updated successfully');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 - Legacy v1 MOH (Public - No Auth)",
+      "description": "Legacy MOH patient endpoints with NO authentication required. These are public endpoints.",
+      "item": [
+        {
+          "name": "04.1 - Get All Patients (Legacy MOH)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients"]
+            },
+            "description": "PUBLIC - Get all users with role Patient (legacy MOH endpoint, no auth required)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns patients array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "04.2 - Update Patient (Legacy MOH)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Updated Patient Name\",\n  \"mobile\": \"0771234567\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "{{patientId}}"]
+            },
+            "description": "PUBLIC - Update a patient (legacy MOH, no auth). Accepts 'mobile' field which maps to 'phone'."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "04.3 - Toggle Patient Status (Legacy MOH)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/{{patientId}}/toggle-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "{{patientId}}", "toggle-status"]
+            },
+            "description": "PUBLIC - Toggle patient status between Active/Inactive (legacy MOH, no auth)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "04.4 - Delete Patient (Legacy MOH)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "{{patientId}}"]
+            },
+            "description": "PUBLIC - Hard delete a patient (legacy MOH, no auth)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 - Queue (Patient-Side)",
+      "description": "Patient queue management endpoints. Requires Patient JWT token.",
+      "item": [
+        {
+          "name": "05.1 - Get Live Departments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue/departments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue", "departments"]
+            },
+            "description": "Patient only - Departments with a live queue right now"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns departments array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('queueDate');",
+                  "    pm.expect(jsonData).to.have.property('departments');",
+                  "    pm.expect(jsonData.departments).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "05.2 - Get Queue Board",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue/board?department=General OPD",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue", "board"],
+              "query": [
+                {
+                  "key": "department",
+                  "value": "General OPD"
+                }
+              ]
+            },
+            "description": "Patient only - Now serving board for a department"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 400\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "05.3 - Check In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appointmentId\": \"{{visitId}}\",\n  \"priority\": \"normal\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue/check-in",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue", "check-in"]
+            },
+            "description": "Patient only - Check in for today's appointment and collect queue token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200, 201, 400, 404, or 409\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 404, 409]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "05.4 - Get My Queue Pass",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue/my-pass",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue", "my-pass"]
+            },
+            "description": "Patient only - Get current active queue pass"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns pass data or null\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('pass');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "05.5 - Get Live Queue State",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue/my-pass/live",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue", "my-pass", "live"]
+            },
+            "description": "Patient only - Lightweight polling endpoint for live queue position"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns live state data\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('serverTime');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "05.6 - Leave Queue",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue/my-pass",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue", "my-pass"]
+            },
+            "description": "Patient only - Leave the queue (releases token if still waiting)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200, 400, or 404\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 404]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06 - Doctor-Side Patient",
+      "description": "Doctor-side patient management endpoints. Uses optional auth (token if available).",
+      "item": [
+        {
+          "name": "06.1 - Call Next Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/doctor/call-next",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "doctor", "call-next"]
+            },
+            "description": "Doctor - Call next patient in queue"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "06.2 - Undo Patient Consultation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/doctor/undo-patient",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "doctor", "undo-patient"]
+            },
+            "description": "Doctor - Undo previous consultation and restore previous patient"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "06.3 - Call Specific Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tokenNumber\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/doctor/call-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "doctor", "call-token"]
+            },
+            "description": "Doctor - Call specific patient into room by token number"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 400\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+                  "});",
+                  "",
+                  "pm.test(\"Requires tokenNumber\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (pm.response.code === 400) {",
+                  "        pm.expect(jsonData).to.have.property('message');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "06.4 - Refer Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"referralType\": \"Physiotherapy\",\n  \"notes\": \"Patient requires physio sessions\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/doctor/referral",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "doctor", "referral"]
+            },
+            "description": "Doctor - Refer patient to Physiotherapy or Laboratory"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns referral data\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('referral');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "06.5 - Get Patient Records (Doctor)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/doctor/records",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "doctor", "records"]
+            },
+            "description": "Doctor - Get patient health records by search query or list"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns records data\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "06.6 - Update Patient Vitals",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{receptionPatientId}}\",\n  \"bloodPressure\": \"120/80\",\n  \"heartRate\": 72,\n  \"temperature\": 36.8,\n  \"spO2\": 99,\n  \"weight\": 70,\n  \"height\": 170\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/doctor/vitals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "doctor", "vitals"]
+            },
+            "description": "Doctor - Update or record patient vitals"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Vitals saved\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "07 - Auth & Role Validation",
+      "description": "Negative tests for authentication and role-based access control",
+      "item": [
+        {
+          "name": "07.1 - Patient Portal Without Token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me"]
+            },
+            "description": "Negative test - Access patient portal without token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "07.2 - Reception with Patient Token (403)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reception/patients",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reception", "patients"]
+            },
+            "description": "Negative test - Patient token accessing reception endpoint should be forbidden"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 403\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "07.3 - Queue Board Without Token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue/board?department=General OPD",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue", "board"],
+              "query": [
+                {
+                  "key": "department",
+                  "value": "General OPD"
+                }
+              ]
+            },
+            "description": "Negative test - Queue board without token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 or 200 (protect middleware falls back to default receptionist if one exists)\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 200]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "07.4 - Invalid Token Format (401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/patients/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "patients", "me"]
+            },
+            "description": "Negative test - Malformed JWT token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}
