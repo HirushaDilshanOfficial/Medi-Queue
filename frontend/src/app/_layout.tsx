@@ -1,7 +1,9 @@
+import React, { useEffect } from 'react';
+import { Platform, View, Text } from 'react-native';
 import { Stack, useSegments } from 'expo-router';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import { ThemeProvider } from '../theme/ThemeContext';
-import { View, Text } from 'react-native';
+import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from '../components/GlobalToast';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +16,6 @@ import {
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
 
 const toastConfig = {
   success: ({ text1, text2 }: any) => (
@@ -84,7 +85,9 @@ function GlobalSafeArea() {
 
 // Root layout - Expo Router
 // Prevent auto hide
-SplashScreen.preventAutoHideAsync();
+if (Platform.OS !== 'web') {
+  SplashScreen.preventAutoHideAsync().catch(() => {});
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -97,16 +100,39 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      if (!document.getElementById('inter-google-font')) {
+        const link = document.createElement('link');
+        link.id = 'inter-google-font';
+        link.rel = 'stylesheet';
+        link.href =
+          'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap';
+        document.head.appendChild(link);
+      }
+      if (!document.getElementById('inter-global-style')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'inter-global-style';
+        styleEl.textContent = `
+          * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          }
+        `;
+        document.head.appendChild(styleEl);
+      }
+    }
+  }, []);
 
   const segments = useSegments();
   const firstSeg = (segments as any)?.[0] as string | undefined;
   const isDark = ['(moh)', '(reception)', 'notifications', '(patient)'].includes(firstSeg || '');
   const rootBgColor = isDark ? '#0a6e7e' : '#f3faff';
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded && Platform.OS !== 'web') {
     return null;
   }
 

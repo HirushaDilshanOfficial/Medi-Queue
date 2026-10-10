@@ -59,6 +59,7 @@ export default function DoctorDashboardScreen() {
   const [currentHospital, setCurrentHospital] = useState('City General Hospital');
   const [isHospitalModalOpen, setIsHospitalModalOpen] = useState(false);
   const [isBreakModalOpen, setIsBreakModalOpen] = useState(false);
+  const [isDayCompleteModalOpen, setIsDayCompleteModalOpen] = useState(false);
 
   // Walk-in modal state
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
@@ -116,41 +117,25 @@ export default function DoctorDashboardScreen() {
       };
 
       const queue = [...(base.upcomingQueue || [])];
-      let nextPat: PatientQueueItem;
 
-      if (queue.length > 0) {
-        nextPat = queue.shift()!;
-      } else {
-        const lastNum = base.currentPatient?.tokenNumber || 4;
-        nextPat = {
-          tokenNumber: lastNum + 1,
-          patientName: 'Nadeesha Silva',
-          age: 29,
-          gender: 'Female',
-          priority: 'normal',
-          status: 'next',
-          reason: 'Routine Medical Checkup',
-          slotTime: '09:30',
+      if (queue.length === 0) {
+        // All consultations completed!
+        const currentTotal = base.metrics?.totalToday || (base.metrics?.completedCount || 0) + 1;
+        return {
+          ...base,
+          metrics: {
+            ...base.metrics,
+            completedCount: currentTotal,
+            waitingCount: 0,
+            currentCallingToken: 0,
+            totalToday: currentTotal,
+          },
+          currentPatient: null,
+          upcomingQueue: [],
         };
       }
 
-      if (queue.length < 2) {
-        const highestToken = Math.max(nextPat.tokenNumber, ...queue.map((q) => q.tokenNumber), 4);
-        const nextNames = ['Ruwan Jayasinghe', 'Chathuri Perera', 'Dinesh Chandimal', 'Kumari Ranasinghe'];
-        const chosen = nextNames[(highestToken + 1) % nextNames.length];
-        queue.push({
-          tokenNumber: highestToken + 1,
-          patientName: chosen,
-          age: 25 + ((highestToken * 3) % 40),
-          gender: highestToken % 2 === 0 ? 'Female' : 'Male',
-          priority: 'normal',
-          category: 'all',
-          status: 'Waiting',
-          reason: 'Routine OPD Consultation',
-          slotTime: '10:00',
-        });
-      }
-
+      const nextPat = queue.shift()!;
       return {
         ...base,
         metrics: {
@@ -338,19 +323,36 @@ export default function DoctorDashboardScreen() {
 
   const handleCompleteAndNext = async () => {
     setIsProcessing(true);
+    const hasNextPatient = displayQueue.length > 0;
     try {
       const res = await callNextPatientApi();
       if (res && res.data) {
         setData(res.data);
+        if (res.allCompleted || !res.data.currentPatient || (res.data.upcomingQueue?.length === 0 && !hasNextPatient)) {
+          setIsDayCompleteModalOpen(true);
+          Alert.alert(t('Day Complete 🎉'), t('All consultations for today have been completed!'));
+        } else {
+          Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
+        }
       } else {
         advanceQueueLocally();
+        if (!hasNextPatient) {
+          setIsDayCompleteModalOpen(true);
+          Alert.alert(t('Day Complete 🎉'), t('All consultations for today have been completed!'));
+        } else {
+          Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
+        }
       }
       setTimerSeconds(0);
-      Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
     } catch (err: any) {
       advanceQueueLocally();
       setTimerSeconds(0);
-      Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
+      if (!hasNextPatient) {
+        setIsDayCompleteModalOpen(true);
+        Alert.alert(t('Day Complete 🎉'), t('All consultations for today have been completed!'));
+      } else {
+        Alert.alert(t('Consultation Completed'), t('Next patient called into room.'));
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -426,20 +428,42 @@ export default function DoctorDashboardScreen() {
   };
 
   const handleCallNext = async () => {
+    if (!currentPatient && displayQueue.length === 0) {
+      setIsDayCompleteModalOpen(true);
+      Alert.alert(t('Queue Completed'), t('All patients scheduled for today have already been attended to!'));
+      return;
+    }
     setIsProcessing(true);
+    const hasNextPatient = displayQueue.length > 0;
     try {
       const res = await callNextPatientApi();
       if (res && res.data) {
         setData(res.data);
+        if (res.allCompleted || !res.data.currentPatient || (res.data.upcomingQueue?.length === 0 && !hasNextPatient)) {
+          setIsDayCompleteModalOpen(true);
+          Alert.alert(t('Day Complete 🎉'), t('All consultations for today have been completed!'));
+        } else {
+          Alert.alert(t('Queue Called'), t('Next token called!'));
+        }
       } else {
         advanceQueueLocally();
+        if (!hasNextPatient) {
+          setIsDayCompleteModalOpen(true);
+          Alert.alert(t('Day Complete 🎉'), t('All consultations for today have been completed!'));
+        } else {
+          Alert.alert(t('Queue Called'), t('Next token called!'));
+        }
       }
       setTimerSeconds(0);
-      Alert.alert(t('Queue Called'), t('Next token called!'));
     } catch (err: any) {
       advanceQueueLocally();
       setTimerSeconds(0);
-      Alert.alert(t('Queue Called'), t('Next token called!'));
+      if (!hasNextPatient) {
+        setIsDayCompleteModalOpen(true);
+        Alert.alert(t('Day Complete 🎉'), t('All consultations for today have been completed!'));
+      } else {
+        Alert.alert(t('Queue Called'), t('Next token called!'));
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -562,37 +586,53 @@ export default function DoctorDashboardScreen() {
     [currentHospital]
   );
 
-  const currentPatient = data?.currentPatient ?? (displayQueue.length > 0 ? {
-    tokenNumber: displayQueue[0].tokenNumber,
-    patientName: displayQueue[0].patientName,
-    age: displayQueue[0].age,
-    gender: displayQueue[0].gender,
-    priority: displayQueue[0].priority === 'urgent' ? 'urgent' : 'normal',
-    status: 'next',
-    reason: displayQueue[0].reason || 'General OPD Consultation',
-    bloodPressure: '120/80',
-    heartRate: '76 bpm',
-    fileRecord: `REC-${displayQueue[0].tokenNumber}`,
-    checkedInTime: displayQueue[0].slotTime || '08:59',
-    calledAtTime: '08:59',
-    allergy: null,
-    patientId: (displayQueue[0] as any).patientId,
-    appointmentId: (displayQueue[0] as any).appointmentId,
-  } : defaultPatientForHosp);
+  const isDayFinished = Boolean(
+    (data as any)?.allCompleted ||
+    (data && data.currentPatient === null && (data.upcomingQueue?.length ?? 0) === 0 && (data.metrics?.completedCount ?? 0) > 0)
+  );
+
+  const currentPatient = isDayFinished
+    ? null
+    : (data?.currentPatient !== undefined
+        ? data.currentPatient
+        : (displayQueue.length > 0 ? {
+            tokenNumber: displayQueue[0].tokenNumber,
+            patientName: displayQueue[0].patientName,
+            age: displayQueue[0].age,
+            gender: displayQueue[0].gender,
+            priority: displayQueue[0].priority === 'urgent' ? 'urgent' : 'normal',
+            status: 'next',
+            reason: displayQueue[0].reason || 'General OPD Consultation',
+            bloodPressure: '120/80',
+            heartRate: '76 bpm',
+            fileRecord: `REC-${displayQueue[0].tokenNumber}`,
+            checkedInTime: displayQueue[0].slotTime || '08:59',
+            calledAtTime: '08:59',
+            allergy: null,
+            patientId: (displayQueue[0] as any).patientId,
+            appointmentId: (displayQueue[0] as any).appointmentId,
+          } : defaultPatientForHosp));
 
   const waitingCount = data?.metrics?.waitingCount ?? displayQueue.length;
   const completedCount = data?.metrics?.completedCount ?? 0;
-  const totalCapacity = data?.doctor?.dailyCapacity ?? 30;
+  const totalPatientsToday = useMemo(() => {
+    if (isDayFinished || (waitingCount === 0 && !currentPatient)) {
+      return completedCount;
+    }
+    const sum = completedCount + waitingCount + (currentPatient ? 1 : 0);
+    return sum > 0 ? sum : completedCount;
+  }, [isDayFinished, completedCount, waitingCount, currentPatient]);
   const avgWaitMinutes = data?.metrics?.avgWaitMinutes ?? 15;
 
-  const doctorDisplayName = data?.doctor?.name || 'Dr. Palitha Perera';
+  const doctorDisplayName = data?.doctor?.name;
   const doctorShortName = useMemo(() => {
+    if (!doctorDisplayName) return 'Doctor';
     const clean = doctorDisplayName.replace(/^Dr\.\s*/i, '').trim();
     const first = clean.split(' ')[0] || clean;
     return `Dr. ${first}`;
   }, [doctorDisplayName]);
 
-  const currentRoom = data?.doctor?.room || 'Room 101';
+  const currentRoom = data?.doctor?.room;
 
   // Dynamic greeting based on current time
   const { greetingText, greetingIcon } = useMemo(() => {
@@ -731,7 +771,6 @@ export default function DoctorDashboardScreen() {
             <Text style={[styles.statLabelText, isDark && { color: '#86A4A9' }]}>{t('Waiting')}</Text>
             <View style={styles.statNumberRow}>
               <Text style={[styles.statNumberText, isDark && { color: '#EEF8FA' }]}>{waitingCount}</Text>
-              <Text style={[styles.statSuffixText, isDark && { color: '#86A4A9' }]}>+3</Text>
             </View>
           </View>
 
@@ -739,7 +778,7 @@ export default function DoctorDashboardScreen() {
             <Text style={[styles.statLabelText, isDark && { color: '#86A4A9' }]}>{t('Completed')}</Text>
             <View style={styles.statNumberRow}>
               <Text style={[styles.statNumberText, isDark && { color: '#EEF8FA' }]}>{completedCount}</Text>
-              <Text style={[styles.statSuffixText, isDark && { color: '#86A4A9' }]}>/ {totalCapacity}</Text>
+              <Text style={[styles.statSuffixText, isDark && { color: '#86A4A9' }]}>/ {totalPatientsToday}</Text>
             </View>
           </View>
 
@@ -752,7 +791,7 @@ export default function DoctorDashboardScreen() {
           </View>
         </View>
 
-        {/* 4. "NOW SERVING" CARD (WHITE, 4PX TEAL LEFT BORDER) */}
+        {/* 4. "NOW SERVING" CARD (WHITE, 4PX TEAL LEFT BORDER) OR DAY COMPLETED BANNER */}
         {currentPatient ? (
           <View style={[styles.nowServingCard, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
             <View style={styles.nowServingHeader}>
@@ -844,7 +883,58 @@ export default function DoctorDashboardScreen() {
               />
             </View>
           </View>
-        ) : null}
+        ) : (
+          <View style={[styles.dayCompleteBannerCard, isDark && { backgroundColor: '#142528', borderColor: '#1F383C' }]}>
+            <View style={styles.dayCompleteBannerHeader}>
+              <View style={styles.dayCompletePill}>
+                <Ionicons name="checkmark-done-circle" size={15} color="#0D9488" style={{ marginRight: 5 }} />
+                <Text style={styles.dayCompletePillText}>{t('Shift Completed')}</Text>
+              </View>
+              <Text style={[styles.dayCompleteDateText, isDark && { color: '#86A4A9' }]}>
+                {currentTime.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+              </Text>
+            </View>
+
+            <View style={styles.dayCompleteBannerContent}>
+              <View style={[styles.dayCompleteBannerIconBox, isDark && { backgroundColor: '#18383E' }]}>
+                <Ionicons name="trophy" size={26} color="#0D9488" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.dayCompleteBannerTitle, isDark && { color: '#EEF8FA' }]}>
+                  {t('All Consultations Done')}
+                </Text>
+                <Text style={[styles.dayCompleteBannerSub, isDark && { color: '#86A4A9' }]}>
+                  {t('All {value0} patients attended to today. No waiting patients in the queue.', {
+                    value0: String(completedCount),
+                  })}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.dayCompleteActionsRow}>
+              <TouchableOpacity
+                style={[styles.dayCompleteActionBtn, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
+                onPress={handleOpenWalkInModal}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="person-add-outline" size={15} color={isDark ? '#3BD1DF' : C.tealDeep} />
+                <Text style={[styles.dayCompleteActionBtnText, isDark && { color: '#EEF8FA' }]}>
+                  {t('Add Walk-in')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.dayCompleteActionBtn, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}
+                onPress={() => router.push('/(doctor)/records' as any)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="folder-open-outline" size={15} color={isDark ? '#3BD1DF' : C.tealDeep} />
+                <Text style={[styles.dayCompleteActionBtnText, isDark && { color: '#EEF8FA' }]}>
+                  {t('View Records')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* 5. QUICK ACTIONS */}
         <View style={styles.quickActionsSection}>
@@ -1135,6 +1225,70 @@ export default function DoctorDashboardScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* DAY COMPLETE / SHIFT FINISHED CELEBRATION MODAL */}
+      <Modal
+        visible={isDayCompleteModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsDayCompleteModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setIsDayCompleteModalOpen(false)}
+        >
+          <View
+            style={[
+              styles.dayCompleteModalCard,
+              isDark && { backgroundColor: '#142528', borderColor: '#1F383C' },
+            ]}
+          >
+            <View style={styles.celebrationIconCircle}>
+              <Ionicons name="trophy" size={38} color="#0D9488" />
+            </View>
+
+            <Text style={[styles.dayCompleteTitle, isDark && { color: '#EEF8FA' }]}>
+              {t('All Consultations Completed! 🎉')}
+            </Text>
+
+            <Text style={[styles.dayCompleteSubtitle, isDark && { color: '#86A4A9' }]}>
+              {t('Great job Doctor! All patients scheduled for today have been attended to.')}
+            </Text>
+
+            <View style={[styles.dayCompleteSummaryBox, isDark && { backgroundColor: '#18383E', borderColor: '#23525B' }]}>
+              <View style={styles.dayCompleteStatCol}>
+                <Text style={styles.dayCompleteStatLabel}>{t('Patients Consulted')}</Text>
+                <Text style={[styles.dayCompleteStatVal, isDark && { color: '#EEF8FA' }]}>
+                  {completedCount} / {completedCount}
+                </Text>
+              </View>
+              <View style={styles.dayCompleteDivider} />
+              <View style={styles.dayCompleteStatCol}>
+                <Text style={styles.dayCompleteStatLabel}>{t('Queue Status')}</Text>
+                <Text style={[styles.dayCompleteStatVal, { color: '#0D9488' }]}>
+                  {t('Finished')}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ width: '100%', marginTop: 20, gap: 10 }}>
+              <PrimaryButton
+                label={t('Awesome, Close')}
+                onPress={() => setIsDayCompleteModalOpen(false)}
+              />
+              <SecondaryButton
+                label={t('+ Add Walk-in Patient')}
+                icon={<Ionicons name="person-add-outline" size={16} color={C.tealDeep} />}
+                onPress={() => {
+                  setIsDayCompleteModalOpen(false);
+                  handleOpenWalkInModal();
+                }}
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1143,6 +1297,11 @@ const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
     backgroundColor: C.bg,
+    ...Platform.select({
+      web: {
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      },
+    }),
   },
   scrollView: {
     flex: 1,
@@ -1719,5 +1878,156 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
     color: '#DC2626',
+  },
+
+  // Day Complete Banner & Modal
+  dayCompleteBannerCard: {
+    backgroundColor: C.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderTopWidth: 4,
+    borderTopColor: C.teal,
+    marginBottom: 16,
+  },
+  dayCompleteBannerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  dayCompletePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.tint,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  dayCompletePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.tealDeep,
+  },
+  dayCompleteDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.sub,
+  },
+  dayCompleteBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 12,
+  },
+  dayCompleteBannerIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: C.tint,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayCompleteBannerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: C.ink,
+    letterSpacing: -0.3,
+  },
+  dayCompleteBannerSub: {
+    fontSize: 12.5,
+    color: C.sub,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  dayCompleteActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: C.line,
+  },
+  dayCompleteActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.line,
+    backgroundColor: C.bg,
+  },
+  dayCompleteActionBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: C.ink,
+  },
+  dayCompleteModalCard: {
+    width: '90%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  celebrationIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#CCFBF1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dayCompleteTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: C.ink,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  dayCompleteSubtitle: {
+    fontSize: 13,
+    color: C.sub,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 18,
+    paddingHorizontal: 8,
+  },
+  dayCompleteSummaryBox: {
+    flexDirection: 'row',
+    width: '100%',
+    backgroundColor: '#F0FDFA',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    alignItems: 'center',
+  },
+  dayCompleteStatCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dayCompleteStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: C.sub,
+    marginBottom: 4,
+  },
+  dayCompleteStatVal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: C.ink,
+  },
+  dayCompleteDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: C.line,
   },
 });

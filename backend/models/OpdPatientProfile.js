@@ -75,6 +75,15 @@ const opdPatientProfileSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    vitals: {
+      bloodPressure: { type: String, trim: true },
+      heartRate: { type: String, trim: true },
+      temperature: { type: Number },
+      spO2: { type: Number },
+      weight: { type: Number },
+      height: { type: Number },
+      recordedAt: { type: Date },
+    },
   },
   {
     timestamps: true,

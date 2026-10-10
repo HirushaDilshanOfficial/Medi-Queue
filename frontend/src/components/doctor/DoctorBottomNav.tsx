@@ -3,6 +3,7 @@ import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { LocalizedText as Text } from '../../i18n/LocalizedText';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DOCTOR_TOKENS as C } from './doctorTheme';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme/ThemeContext';
@@ -29,6 +30,11 @@ export const DoctorBottomNav = ({ activeTab, onTabPress }: DoctorBottomNavProps)
     } else if (tab === 'queue') {
       try { router.push('/(doctor)/queue' as any); } catch (e) { router.push('/queue' as any); }
     } else if (tab === 'records') {
+      try {
+        AsyncStorage.removeItem('active_record_patient_token');
+        AsyncStorage.removeItem('active_record_patient_name');
+        AsyncStorage.removeItem('active_record_patient_id');
+      } catch (e) {}
       try { router.push('/(doctor)/records' as any); } catch (e) { router.push('/records' as any); }
     } else if (tab === 'schedule') {
       try { router.push('/(doctor)/schedule' as any); } catch (e) { router.push('/schedule' as any); }

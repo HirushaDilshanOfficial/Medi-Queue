@@ -30,8 +30,11 @@ export interface PatientVitalsRecord {
 
 export interface VitalHistoryReading {
   id: string;
-  dateLabel: string; // e.g. "Mar 02", "Jun 18", "Aug 20", "Oct 04", "Now"
-  timestamp: string; // e.g. "Nov 04, 2025" or "Today, 08:30 AM"
+  dateLabel: string; // e.g. "11:15 AM", "Mar 02", "Now"
+  timestamp: string; // e.g. "2026-10-09 at 11:15 AM"
+  recordedDate?: string;
+  recordedTime?: string;
+  recordedAt?: string;
   systolic: number;
   diastolic: number;
   heartRate: number;
@@ -95,6 +98,8 @@ export interface PatientVisitHistory {
 
 export interface PatientRecord {
   id: string;
+  patientId?: string;
+  appointmentId?: string;
   name: string;
   shortName: string;
   verified: boolean;
@@ -1787,20 +1792,85 @@ export const fetchDoctorRecordsResponseApi = async (
     if (response.ok) {
       const json = await response.json();
       if (Array.isArray(json.data) && json.data.length > 0) {
-        const matchingRecords = json.data
-          .filter((item: any) => !item.hospitalName || item.hospitalName === currentTargetHospital)
-          .map((item: any) => ({
-            ...item,
-            status: item.status || 'Waiting',
-            hasVitals: Boolean(item.hasVitals),
-            chronicConditions: item.chronicConditions || [],
-            medications: item.medications || [],
-            imaging: item.imaging || { hasImaging: false },
-            recentVisits: item.recentVisits || [],
-            vitalsHistory: Array.isArray(item.vitalsHistory) ? item.vitalsHistory : [],
-            hospitalName: item.hospitalName || currentTargetHospital,
-            reports: item.reports || [],
-          }));
+        const matchingRecords = await Promise.all(
+          json.data
+            .filter((item: any) => !item.hospitalName || item.hospitalName === currentTargetHospital)
+            .map(async (item: any) => {
+              let hasVitals = Boolean(item.hasVitals);
+              let vitals = item.vitals || {};
+
+              // Check if locally cached vitals exist for this patient
+              if (!hasVitals) {
+                try {
+                  const cachedStr =
+                    (await AsyncStorage.getItem(`@patient_vitals_${item.id}`)) ||
+                    (item.tokenNumber ? await AsyncStorage.getItem(`@patient_vitals_token_${item.tokenNumber}`) : null) ||
+                    (item.nic ? await AsyncStorage.getItem(`@patient_vitals_nic_${item.nic}`) : null);
+                  if (cachedStr) {
+                    const parsed = JSON.parse(cachedStr);
+                    if (parsed && parsed.bloodPressure) {
+                      hasVitals = true;
+                      vitals = {
+                        ...vitals,
+                        hasVitals: true,
+                        triageTime: parsed.triageTime || 'Triage: Just now',
+                        bloodPressure: parsed.bloodPressure,
+                        heartRate: parsed.heartRate,
+                        bodyTemp: String(parsed.temperature),
+                        bodyTempUnit: '°C',
+                        spO2: `${parsed.spO2}%`,
+                        weight: `${parsed.weight} kg`,
+                        height: `${parsed.height} cm`,
+                        systolic: parsed.systolic || parseInt(parsed.bloodPressure.split('/')[0], 10) || 120,
+                        diastolic: parsed.diastolic || parseInt(parsed.bloodPressure.split('/')[1], 10) || 80,
+                        heartRateNum: parseInt(String(parsed.heartRate).replace(/\D/g, ''), 10) || 72,
+                        tempNum: Number(parsed.temperature) || 36.8,
+                        spO2Num: Number(parsed.spO2) || 99,
+                        weightNum: Number(parsed.weight) || 65,
+                        heightNum: Number(parsed.height) || 168,
+                        bmi: (parsed.weight && parsed.height) ? (Number(parsed.weight) / Math.pow(Number(parsed.height) / 100, 2)).toFixed(1) : (vitals.bmi || '--'),
+                        bmiNum: (parsed.weight && parsed.height) ? Number((Number(parsed.weight) / Math.pow(Number(parsed.height) / 100, 2)).toFixed(1)) : (vitals.bmiNum || 0),
+                      };
+                    }
+                  }
+                } catch (e) {}
+              }
+
+              return {
+                ...item,
+                status: item.status || 'Waiting',
+                hasVitals,
+                vitals,
+                chronicConditions: item.chronicConditions || [],
+                medications: item.medications || [],
+                imaging: item.imaging || { hasImaging: false },
+                vitalsHistory:
+                  Array.isArray(item.vitalsHistory) && item.vitalsHistory.length > 0
+                    ? item.vitalsHistory
+                    : hasVitals
+                    ? [
+                        {
+                          id: `vh-${item.id}-now`,
+                          dateLabel: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                          timestamp: `${new Date().toLocaleDateString('en-CA')} at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`,
+                          recordedDate: new Date().toLocaleDateString('en-CA'),
+                          recordedTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                          recordedAt: new Date().toISOString(),
+                          systolic: vitals.systolic || 120,
+                          diastolic: vitals.diastolic || 80,
+                          heartRate: vitals.heartRateNum || 72,
+                          bodyTemp: vitals.tempNum || 36.8,
+                          spO2: vitals.spO2Num || 99,
+                          weight: vitals.weightNum || 65,
+                          bmi: vitals.bmiNum || 22.5,
+                        },
+                      ]
+                    : [],
+                hospitalName: item.hospitalName || currentTargetHospital,
+                reports: item.reports || [],
+              };
+            })
+        );
         if (matchingRecords.length > 0) {
           return {
             records: matchingRecords,
@@ -1827,6 +1897,8 @@ export const fetchPatientRecordsApi = async (
 
 export const savePatientVitalsApi = async (data: {
   patientId: string;
+  patientDbId?: string;
+  nic?: string;
   tokenNumber?: number;
   bloodPressure: string;
   heartRate: string;
@@ -1835,6 +1907,37 @@ export const savePatientVitalsApi = async (data: {
   weight: number;
   height: number;
 }): Promise<boolean> => {
+  // 1. Immediately cache locally so refreshes instantly preserve vitals
+  try {
+    const payload = {
+      ...data,
+      triageTime: 'Triage: Just now',
+      recordedAt: new Date().toISOString(),
+    };
+    const jsonStr = JSON.stringify(payload);
+    if (data.patientId) {
+      await AsyncStorage.setItem(`@patient_vitals_${data.patientId}`, jsonStr);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(`@patient_vitals_${data.patientId}`, jsonStr);
+      }
+    }
+    if (data.tokenNumber) {
+      await AsyncStorage.setItem(`@patient_vitals_token_${data.tokenNumber}`, jsonStr);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(`@patient_vitals_token_${data.tokenNumber}`, jsonStr);
+      }
+    }
+    if (data.nic && data.nic !== 'N/A') {
+      await AsyncStorage.setItem(`@patient_vitals_nic_${data.nic}`, jsonStr);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(`@patient_vitals_nic_${data.nic}`, jsonStr);
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to cache vitals locally:', e);
+  }
+
+  // 2. Persist to MongoDB backend
   try {
     const res = await fetch(`${API_URL}/doctor/vitals`, {
       method: 'POST',
@@ -1846,3 +1949,20 @@ export const savePatientVitalsApi = async (data: {
     return false;
   }
 };
+
+export const updateDoctorReportStatusApi = async (
+  reportId: string,
+  status: 'reviewed' | 'pending' = 'reviewed'
+): Promise<boolean> => {
+  try {
+    const res = await fetch(`${API_URL}/doctor/reports/${reportId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+};
+
