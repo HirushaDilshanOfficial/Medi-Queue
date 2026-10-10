@@ -51,10 +51,10 @@ export interface DaySchedule {
 export const HOSPITALS: Record<string, HospitalInfo> = {
   cgh: {
     id: 'cgh',
-    name: 'City General Hospital',
-    shortName: 'City General',
-    room: 'Room 3B',
-    address: 'No. 12 Regent Street, Colombo 08',
+    name: 'Colombo General Hospital',
+    shortName: 'Colombo General',
+    room: 'OPD Room 3B',
+    address: 'No. 01 Regent Street, Colombo 08',
     shiftName: 'Morning OPD Shift',
     shiftTime: '08:00 AM – 12:30 PM',
     shiftIcon: 'weather-sunset-up',
@@ -64,11 +64,11 @@ export const HOSPITALS: Record<string, HospitalInfo> = {
   },
   lakeview: {
     id: 'lakeview',
-    name: 'Lakeview Medical Centre',
-    shortName: 'Lakeview Medical',
-    room: 'OPD Suite 2',
-    address: 'No. 42 Lake Road, Rajagiriya',
-    shiftName: 'Afternoon Clinic',
+    name: 'Colombo General Hospital',
+    shortName: 'Colombo General',
+    room: 'OPD Room 3B',
+    address: 'No. 01 Regent Street, Colombo 08',
+    shiftName: 'Afternoon OPD Shift',
     shiftTime: '01:30 PM – 05:00 PM',
     shiftIcon: 'weather-sunny',
     accentColor: '#d97706', // Amber
@@ -77,11 +77,11 @@ export const HOSPITALS: Record<string, HospitalInfo> = {
   },
   'st-lucia': {
     id: 'st-lucia',
-    name: 'St. Lucia Private Hospital',
-    shortName: 'St. Lucia Private',
-    room: 'Cons. Rm 104',
-    address: 'No. 88 Havelock Road, Colombo 05',
-    shiftName: 'Evening Clinic',
+    name: 'Colombo General Hospital',
+    shortName: 'Colombo General',
+    room: 'OPD Room 3B',
+    address: 'No. 01 Regent Street, Colombo 08',
+    shiftName: 'Night OPD Shift',
     shiftTime: '05:30 PM – 08:30 PM',
     shiftIcon: 'weather-night',
     accentColor: '#7c3aed', // Purple
