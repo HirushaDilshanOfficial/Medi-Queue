@@ -169,6 +169,8 @@ const createBooking = async (req, res, next) => {
 
     queueEntry = await ensureBookingQueueEntry(appointment);
     appointment.queueEntry = queueEntry._id;
+    appointment.tokenNumber = queueEntry.tokenNumber;
+    allocatedToken = queueEntry.tokenNumber;
     await appointment.save();
 
     // Sync to shared Appointment & QueueToken so Receptionist & Doctor screens immediately see the booking
@@ -328,14 +330,12 @@ const cancelBooking = async (req, res, next) => {
     }
     await appointment.save();
 
-    // A waiting entry is released so the token returns to the pool. An entry the
-    // doctor has already called is left alone, because the token was seen.
-    let tokenReleased = false;
+    // Close the pass, retaining its number so a later booking cannot collide.
+    const tokenReleased = false;
     if (entry && entry.status === 'waiting') {
       entry.status = 'cancelled';
       await entry.save();
       await releaseTokenNumber(entry.department, entry.queueDate, entry.tokenNumber);
-      tokenReleased = true;
     }
 
     // Sync cancellation to shared Appointment and QueueToken
@@ -417,23 +417,22 @@ const rescheduleBooking = async (req, res, next) => {
       return slotTakenError(res);
     }
 
-    // Moving to a different day invalidates the token issued for the old day, so
-    // a still-waiting entry is released and the patient re-checks-in to collect a
-    // new one. Staying on the same day keeps the token.
     const entry = await OpdQueueEntry.findOne({ appointment: appointment._id });
-    let tokenPreserved = false;
-
-    if (entry) {
-      if (entry.status === 'waiting') {
-        entry.status = 'cancelled';
-        await entry.save();
-        await releaseTokenNumber(entry.department, entry.queueDate, entry.tokenNumber);
-        appointment.queueEntry = null;
-        appointment.tokenNumber = null;
-      } else {
-        tokenPreserved = true;
-      }
+    if (appointment.status === 'in_consultation' || (entry && ['called', 'in_consultation'].includes(entry.status))) {
+      return res.status(400).json({ message: 'You have already been called. Please speak to the front desk to reschedule.' });
     }
+    const sameDay = await OpdAppointment.findOne({
+      _id: { $ne: appointment._id }, profile: req.patientProfile._id,
+      doctor: appointment.doctor, date: String(date), status: { $in: ACTIVE_STATUSES },
+    }).lean();
+    if (sameDay) return res.status(409).json({ message: 'You already have a booking with this doctor on that date.' });
+
+    const previous = {
+      date: appointment.date, slotTime: appointment.slotTime, endsAt: appointment.endsAt,
+      room: appointment.room, status: appointment.status, rescheduledFrom: appointment.rescheduledFrom,
+      tokenNumber: appointment.tokenNumber, queueEntry: appointment.queueEntry,
+    };
+    const dayChanged = appointment.date !== String(date);
 
     if (appointment.date !== String(date)) {
       appointment.rescheduledFrom = appointment.date;
@@ -442,25 +441,54 @@ const rescheduleBooking = async (req, res, next) => {
     appointment.slotTime = String(slotTime);
     appointment.endsAt = match.slot.endsAt || null;
     if (match.schedule && match.schedule.room) appointment.room = match.schedule.room;
+    if (dayChanged) appointment.status = 'booked';
     await appointment.save();
+
+    let updatedEntry;
+    try {
+      updatedEntry = await ensureBookingQueueEntry(appointment);
+    } catch (error) {
+      Object.assign(appointment, previous);
+      await appointment.save();
+      throw error;
+    }
+    appointment.queueEntry = updatedEntry._id;
+    appointment.tokenNumber = updatedEntry.tokenNumber;
+    // A same-day move preserves the pass, but the consulting room may change.
+    if (updatedEntry.room !== appointment.room) {
+      updatedEntry.room = appointment.room;
+      await updatedEntry.save();
+    }
+    const tokenPreserved = Boolean(entry && !dayChanged && entry.tokenNumber === updatedEntry.tokenNumber);
 
     // Sync reschedule to shared Appointment
     try {
       const patientDoc = await ensurePatientForProfile(req.patientProfile);
       if (patientDoc) {
+        const sharedFilter = {
+          patient: patientDoc._id,
+          doctor: appointment.doctor,
+          date: previous.date,
+          slotTime: previous.slotTime,
+          status: { $nin: ['cancelled', 'no_show', 'completed'] },
+        };
+        const sharedAppointments = await Appointment.find(sharedFilter).select('_id').lean();
         await Appointment.updateMany(
-          {
-            patient: patientDoc._id,
-            doctor: appointment.doctor,
-            date: appointment.rescheduledFrom || appointment.date,
-          },
+          sharedFilter,
           {
             $set: {
               date: String(date),
               slotTime: String(slotTime),
+              tokenNumber: updatedEntry.tokenNumber,
+              status: dayChanged ? 'booked' : appointment.status,
               notes: `Rescheduled to ${date} ${slotTime}`,
             },
           }
+        );
+        await QueueToken.updateMany(
+          { appointment: { $in: sharedAppointments.map(row => row._id) } },
+          { $set: { date: String(date), tokenNumber: updatedEntry.tokenNumber,
+            tokenLabel: `A-${String(updatedEntry.tokenNumber).padStart(3, '0')}`, status: 'waiting' } },
         );
       }
     } catch (e) {}

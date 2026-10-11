@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { dateKey } = require('./receptionistFields');
 
-// One row per department per queue day. Guarantees a gap-free, strictly
+// One row per department per queue day. Guarantees a strictly
 // increasing token sequence even when several patients check in at once,
 // because the increment is a single atomic findOneAndUpdate.
 const opdQueueCounterSchema = new mongoose.Schema(
@@ -34,6 +34,25 @@ const OpdQueueCounter = mongoose.model('OpdQueueCounter', opdQueueCounterSchema)
 async function nextTokenNumber(department, queueDate) {
   const dept = (department && String(department).trim()) || 'General OPD';
   const date = (queueDate && String(queueDate).trim()) || new Date().toISOString().slice(0, 10);
+  // Older bookings and receptionist tokens may predate the counter. Cancelled
+  // rows still reserve their numbers in the unique indexes, too.
+  const [opdEntry, sharedToken, appointment] = await Promise.all([
+    require('./OpdQueueEntry').findOne({ department: dept, queueDate: date }).sort({ tokenNumber: -1 }).select('tokenNumber').lean(),
+    require('./QueueToken').findOne({ department: dept, date }).sort({ tokenNumber: -1 }).select('tokenNumber').lean(),
+    require('./OpdAppointment').findOne({ department: dept, date }).sort({ tokenNumber: -1 }).select('tokenNumber').lean(),
+  ]);
+  const highest = Math.max(0, opdEntry?.tokenNumber || 0, sharedToken?.tokenNumber || 0, appointment?.tokenNumber || 0);
+  try {
+    await OpdQueueCounter.updateOne(
+      { department: dept, queueDate: date },
+      { $max: { lastToken: highest } },
+      { upsert: true },
+    );
+  } catch (error) {
+    if (error.code !== 11000) throw error;
+    // A concurrent first reservation inserted the counter. Bring it up to date.
+    await OpdQueueCounter.updateOne({ department: dept, queueDate: date }, { $max: { lastToken: highest } });
+  }
   const counter = await OpdQueueCounter.findOneAndUpdate(
     { department: dept, queueDate: date },
     { $inc: { lastToken: 1 }, $setOnInsert: { department: dept, queueDate: date } },
@@ -44,19 +63,11 @@ async function nextTokenNumber(department, queueDate) {
 }
 
 /**
- * Release a token back to the pool when a patient cancels the most recent waiting
- * entry, so the counter keeps issuing a gap-free sequence.
- *
- * Guarded on `lastToken: tokenNumber` so an older token is never released: that
- * would hand the same number to a later patient who already saw it issued.
+ * Retained queue rows reserve their numbers even after cancellation. Never
+ * decrement the counter: reissuing that number violates the unique token index.
  */
 async function releaseTokenNumber(department, queueDate, tokenNumber) {
-  if (!Number.isSafeInteger(tokenNumber) || tokenNumber < 1) return;
-
-  await OpdQueueCounter.updateOne(
-    { department, queueDate, lastToken: tokenNumber },
-    { $inc: { lastToken: -1 } },
-  );
+  return;
 }
 
 module.exports = OpdQueueCounter;

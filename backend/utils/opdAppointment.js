@@ -59,7 +59,7 @@ function mapAppointment(appointment, { todayKey, live } = {}) {
     tokenNumber: appointment.tokenNumber ?? null,
     queueEntryId: appointment.queueEntry ? String(appointment.queueEntry) : null,
     reason: appointment.reason || null,
-    canReschedule: ACTIVE_STATUSES.includes(appointment.status),
+    canReschedule: ['booked', 'checked_in'].includes(appointment.status),
     canCancel: ACTIVE_STATUSES.includes(appointment.status),
     live: live || null,
     createdAt: appointment.createdAt ? appointment.createdAt.toISOString() : null,

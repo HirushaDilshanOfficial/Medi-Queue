@@ -125,7 +125,7 @@ export function DoctorBookingScreen() {
             const form = new FormData();
             form.append('title', selectedDocument.name || 'Medical document');
             form.append('category', 'General');
-            form.append('reportDate', date);
+            form.append('reportDate', todayKey());
             form.append('appointmentId', bookingResult.appointment.id);
             if (selectedDocument.file) {
               form.append('file', selectedDocument.file);

@@ -95,6 +95,12 @@ function cleanDate(value) {
   if (value === null || value === undefined || value === '') return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
+  return date;
+}
+
+function cleanPastDate(value) {
+  const date = cleanDate(value);
+  if (!date) return date;
   // A birthday in the future is a typo, not a real value.
   if (date.getTime() > Date.now()) return undefined;
   return date;
@@ -172,7 +178,7 @@ function buildProfilePatch(body) {
   }
 
   if ('birthday' in body) {
-    const birthday = cleanDate(body.birthday);
+    const birthday = cleanPastDate(body.birthday);
     if (birthday === undefined) return { error: 'Birthday is not a valid past date' };
     patch.birthday = birthday;
   }

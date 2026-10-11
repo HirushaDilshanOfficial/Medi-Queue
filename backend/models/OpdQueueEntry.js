@@ -6,8 +6,7 @@ const { options, ref, text, dateKey } = require('./receptionistFields');
 //
 // One row per appointment, so a patient never holds two active queue entries and
 // the token number they are given at check-in stays valid for the whole day. The
-// token is NOT reused after a cancel unless it is the most recent one, which is
-// handled by the counter rather than here.
+// token is never reused after a cancel: historical rows reserve their numbers.
 const opdQueueEntrySchema = new mongoose.Schema(
   {
     appointment: {
