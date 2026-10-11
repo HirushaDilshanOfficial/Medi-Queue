@@ -14,6 +14,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { doctorApi } from '../../../services/doctorApi';
 import { bookingApi } from '../../../services/bookingApi';
 import { patientApi } from '../../../services/patientApi';
+import { appendReportFile } from '../../../utils/appendReportFile';
 import { HttpError } from '../../../services/http';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import type { SlotOption } from '../../../types/patient';
@@ -127,15 +128,7 @@ export function DoctorBookingScreen() {
             form.append('category', 'General');
             form.append('reportDate', todayKey());
             form.append('appointmentId', bookingResult.appointment.id);
-            if (selectedDocument.file) {
-              form.append('file', selectedDocument.file);
-            } else {
-              form.append('file', {
-                uri: selectedDocument.uri,
-                name: selectedDocument.name || 'medical-document',
-                type: selectedDocument.mimeType || 'application/octet-stream',
-              } as unknown as Blob);
-            }
+            appendReportFile(form, selectedDocument);
             await patientApi.uploadReport(form);
           } catch (error) {
             documentUploadFailed = true;

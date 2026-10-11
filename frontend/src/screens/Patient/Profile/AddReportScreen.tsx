@@ -16,6 +16,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { PatientTheme } from '../../../constants/PatientTheme';
 import { patientApi } from '../../../services/patientApi';
+import { appendReportFile } from '../../../utils/appendReportFile';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
 import type { ReportDraft } from '../../../types/patient';
 import { ScreenHeader } from '../../../components/patient/ScreenHeader';
@@ -127,15 +128,7 @@ export function AddReportScreen() {
         Object.entries(draft).forEach(([key, value]) => {
           if (value !== undefined) form.append(key, value === null ? '' : String(value));
         });
-        if (selectedFile?.file) {
-          form.append('file', selectedFile.file);
-        } else if (selectedFile) {
-          form.append('file', {
-            uri: selectedFile.uri,
-            name: selectedFile.name || 'report',
-            type: selectedFile.mimeType || 'application/octet-stream',
-          } as unknown as Blob);
-        }
+        if (selectedFile) appendReportFile(form, selectedFile);
         if (reportId) await patientApi.updateReport(reportId, form);
         else await patientApi.uploadReport(form);
       } else {
