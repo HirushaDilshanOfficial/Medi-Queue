@@ -1,9 +1,9 @@
 import { LocalizedText as Text } from '../../../i18n/LocalizedText';
 import { useLanguage } from '../../../i18n/LanguageContext';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl, Pressable, Alert, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { PatientTheme } from '../../../constants/PatientTheme';
 import { patientApi } from '../../../services/patientApi';
 import { useAsyncResource } from '../../../hooks/useAsyncResource';
@@ -20,6 +20,13 @@ export function MedicalReportsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const reports = useAsyncResource(() => patientApi.getReports(), []);
+  const hasFocused = useRef(false);
+  const reloadReports = reports.reload;
+
+  useFocusEffect(useCallback(() => {
+    if (hasFocused.current) reloadReports();
+    hasFocused.current = true;
+  }, [reloadReports]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { PatientTheme } from '../../../constants/PatientTheme';
 import { patientApi } from '../../../services/patientApi';
 import { appendReportFile } from '../../../utils/appendReportFile';
@@ -162,7 +162,25 @@ export function AddReportScreen() {
   }, [t]);
 
   const openDatePicker = useCallback(() => {
-    if (reportDate) setPickerDate(new Date(`${reportDate}T12:00:00`));
+    const value = reportDate ? new Date(`${reportDate}T12:00:00`) : new Date();
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value,
+        mode: 'date',
+        maximumDate: new Date(),
+        onChange: (event, selectedDate) => {
+          if (event.type !== 'set' || !selectedDate) return;
+          const year = selectedDate.getFullYear();
+          const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(selectedDate.getDate()).padStart(2, '0');
+          setReportDate(`${year}-${month}-${day}`);
+          setPickerDate(selectedDate);
+          setError(null);
+        },
+      });
+      return;
+    }
+    setPickerDate(value);
     setDatePickerOpen(true);
   }, [reportDate]);
 
@@ -364,9 +382,9 @@ export function AddReportScreen() {
         {error ? <Text style={styles.inlineError}>{t(error ?? '')}</Text> : null}
       </ScrollView>
 
-      <Modal visible={Platform.OS !== 'web' && datePickerOpen} transparent animationType="slide" onRequestClose={() => setDatePickerOpen(false)}>
+      <Modal visible={Platform.OS === 'ios' && datePickerOpen} transparent animationType="slide" onRequestClose={() => setDatePickerOpen(false)}>
         <View style={styles.dateModalBackdrop}>
-          <View style={styles.dateModal}>
+          <View style={[styles.dateModal, { paddingBottom: insets.bottom + PatientTheme.spaceLg }]}>
             <View style={styles.dateModalActions}>
               <Pressable onPress={() => setDatePickerOpen(false)}><Text style={styles.dateAction}>{t("Cancel")}</Text></Pressable>
               <Pressable onPress={() => Platform.OS === 'web' ? setDatePickerOpen(false) : selectReportDate(pickerDate)}>
@@ -390,6 +408,9 @@ export function AddReportScreen() {
                 value={pickerDate}
                 mode="date"
                 display={Platform.OS === 'android' ? 'calendar' : 'spinner'}
+                themeVariant="light"
+                textColor={PatientTheme.textPrimary}
+                style={{ width: '100%', height: 216 }}
                 maximumDate={new Date()}
                 onChange={(_, value) => { if (value) setPickerDate(value); }}
               />

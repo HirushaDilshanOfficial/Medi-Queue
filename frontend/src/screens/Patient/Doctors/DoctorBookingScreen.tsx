@@ -7,7 +7,7 @@ import {
   Platform, Pressable, ScrollView, StyleSheet, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as DocumentPicker from 'expo-document-picker';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -69,6 +69,18 @@ export function DoctorBookingScreen() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const dateStrip = useRef<ScrollView>(null);
   const submissionPending = useRef(false);
+
+  // Native tab screens remain mounted after a booking. A new reschedule must
+  // not inherit the previous confirmation's disabled submit state.
+  useFocusEffect(useCallback(() => {
+    if (!rescheduling) return;
+    setBookingConfirmed(false);
+    setBookingPass(null);
+    setChosenDate(null);
+    setTime(null);
+    setMode('Hospital');
+    setBookingError(null);
+  }, [doctorId, rescheduling]));
 
   const doctor = useAsyncResource(() => doctorApi.getById(doctorId), [doctorId]);
   const days = useAsyncResource(() => bookingApi.bookableDays(doctorId), [doctorId]);
