@@ -40,7 +40,6 @@ async function provisionDoctorBookingSlots(doctor) {
   for (let offset = 0; offset <= BOOKING_HORIZON_DAYS; offset += 1) {
     const dateKey = addDays(startKey, offset);
     const dayStart = dateKeyToInstant(dateKey, startTime);
-    if (dayStart.getUTCDay() === 0) continue;
     const dayEnd = dateKeyToInstant(dateKey, endTime);
     if (dayEnd <= dayStart) continue;
     scheduleStarts.push({ dayStart, dayEnd });
